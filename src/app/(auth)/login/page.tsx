@@ -28,14 +28,14 @@ export default function LoginPage() {
 
   // If the middleware redirected here because the account was deactivated,
   // sign out the lingering session and show the error. Without the sign-out
-  // the middleware would redirect back to /dashboard on the next navigation.
+  // the middleware would redirect back to /home on the next navigation.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("error");
     const message = loginErrorFromParam(code);
     if (message) setError(message);
     // A deactivated account still has a session. Clear it here so the next
-    // click is not bounced back to the dashboard. A failed sign-out has
+    // click is not bounced back to home. A failed sign-out has
     // already cleared what it could; signing out again is not useful.
     if (code === "deactivated") {
       supabase.auth.signOut().catch(() => {});
@@ -90,21 +90,11 @@ export default function LoginPage() {
 
     setFailCount(0);
 
-    const { data: userRoles } = await supabase
-      .from("user_roles")
-      .select("roles(name)")
-      .eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "");
-
-    const adminRoles = ["super_admin", "admin", "events_admin", "program_leader", "team_leader", "staff", "finance_admin", "comms_admin", "mission_leader"];
-    const roles = (userRoles ?? []).flatMap((ur: any) =>
-      Array.isArray(ur.roles) ? ur.roles.map((r: any) => r.name) : ur.roles ? [ur.roles.name] : []
-    );
-    const isAdmin = roles.some((r: string) => adminRoles.includes(r));
-
+    // Every signed-in person, staff or portal, lands on /home unless they
+    // were trying to open a safe internal page. The shell's Home is /home
+    // for both variants; there is no separate portal home.
     const requested = new URLSearchParams(window.location.search).get("redirect");
-    const destination =
-      requested == null ? (isAdmin ? "/dashboard" : "/profile") : (loginDestination(requested) ?? "/home");
-    router.push(destination);
+    router.push(loginDestination(requested) ?? "/home");
     router.refresh();
   }
 

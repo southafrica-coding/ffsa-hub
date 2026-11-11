@@ -20,7 +20,7 @@ import { callerIsAdmin, getLedMinistryIds } from "./check-ministry-access";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
-/** Membership of the Leadership Team, via the role trigger-synced in 131. */
+/** Membership of the Leadership Team. sync_leadership_team_role() is defined in 131_booking_roles_and_leader_access.sql. */
 export async function isLeadershipTeam(
   supabase: Client,
   userId: string

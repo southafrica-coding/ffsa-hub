@@ -52,6 +52,13 @@ describe("placeholder pages are hidden from navigation", () => {
     expect(ids(getAccessibleModules(SYSTEM_MODULES, ["super_admin"]))).toEqual(ids(SYSTEM_MODULES));
   });
 
+  it("returns Ministries for Leadership Team and not for plain staff", () => {
+    const labels = (roles: string[]) =>
+      getAccessibleModules(ADMIN_MODULES, roles, new Set()).map((mod) => mod.label);
+    expect(labels(["leadership_team"])).toContain("Ministries");
+    expect(labels(["staff"])).not.toContain("Ministries");
+  });
+
   it("shows Staff decisions to Leadership Team and Super Admin, never to a plain admin", () => {
     const has = (roles: string[]) =>
       ids(getAccessibleModules(ADMIN_MODULES, roles, new Set())).includes("staff-decisions");

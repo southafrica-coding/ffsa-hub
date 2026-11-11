@@ -19,6 +19,11 @@ const rollback = readFileSync(
   path.join(ROOT, "supabase/rollbacks/318_321_departments_rollback.sql"),
   "utf8"
 );
+const doors = sql("326_service_catalogue_doors.sql");
+const doorsRollback = readFileSync(
+  path.join(ROOT, "supabase/rollbacks/326_service_catalogue_doors_rollback.sql"),
+  "utf8"
+);
 const all = [homes, services, rocks, budgets].join("\n");
 
 describe("departments migrations 318–321", () => {
@@ -146,5 +151,20 @@ describe("departments migrations 318–321", () => {
     expect(rollback).toMatch(/c\.confrelid = 'public\.staff_ministry_members'::regclass/);
     expect(rollback).toMatch(/supabase_migrations\.schema_migrations/);
     expect(rollback).toMatch(/DROP FUNCTION IF EXISTS public\.dept_is_ministry_member\(uuid, boolean\)/);
+  });
+
+  it("keeps 319's brand kit and gear doors, and corrects them in 326", () => {
+    expect(services).toMatch(/'brand_kit',\s*NULL,\s*'use'/);
+    expect(services).toContain("'/bookings/equipment'");
+    expect(doors).toMatch(/DELETE FROM public\.service_owners/);
+    expect(doors).toMatch(/service_key = 'brand_kit'/);
+    expect(doors).toMatch(/open_to_all/);
+    expect(doors).toMatch(/SET admin_href = '\/hire'/);
+    expect(doors).toMatch(/service_key = 'gear_hire'/);
+    expect(doors).not.toMatch(/^BEGIN;/m);
+    expect(doors).not.toMatch(/^COMMIT;/m);
+    expect(doorsRollback).toMatch(/'brand_kit', NULL, 'use'/);
+    expect(doorsRollback).toMatch(/so\.admin_href = '\/hire'/);
+    expect(doorsRollback).not.toMatch(/^BEGIN;/m);
   });
 });

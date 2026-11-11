@@ -20,6 +20,10 @@ interface AdminSidebarProps {
   /** One row per department the viewer leads or serves on. Hidden when empty. */
   departments?: { id: string; label: string; href: string }[];
   equipmentStaff?: boolean;
+  /** Portal replaces the staff groups with School, Finance, Prayer and Me. */
+  variant?: "staff" | "portal";
+  /** Tests open the account menu without a click. */
+  defaultMenuOpen?: boolean;
 }
 
 function SignOutForm({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -184,6 +188,7 @@ function SidebarBody({
   onRefresh,
   initials,
   onSearch,
+  defaultMenuOpen = false,
 }: {
   nav: ShellNav;
   pathname: string;
@@ -195,8 +200,9 @@ function SidebarBody({
   onRefresh?: () => void;
   initials: string;
   onSearch: () => void;
+  defaultMenuOpen?: boolean;
 }) {
-  const [meOpen, setMeOpen] = useState(false);
+  const [meOpen, setMeOpen] = useState(defaultMenuOpen);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={cn("flex items-center", collapsed ? "flex-col gap-1 px-1 pt-2" : "gap-1 pr-2")}>
@@ -237,12 +243,20 @@ function SidebarBody({
       ) : null}
 
       <nav aria-label="Primary" className="mt-2 flex-1 overflow-y-auto px-2 pb-3">
-        {nav.home ? <NavLink item={nav.home} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} /> : null}
-        {nav.inbox ? <NavLink item={nav.inbox} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} /> : null}
-        <Group id="services" label="Services" items={nav.services} pathname={pathname} collapsed={collapsed} open={groupsOpen.services !== false} onToggle={() => toggleGroup("services")} onNavigate={onNavigate} />
-        <Group id="departments" label="My departments" items={nav.departments} pathname={pathname} collapsed={collapsed} open={groupsOpen.departments !== false} onToggle={() => toggleGroup("departments")} onNavigate={onNavigate} />
-        <Group id="work" label="Work tools" items={nav.work} pathname={pathname} collapsed={collapsed} open={groupsOpen.work !== false} onToggle={() => toggleGroup("work")} onNavigate={onNavigate} />
-        <Group id="system" label="System" items={nav.system} pathname={pathname} collapsed={collapsed} open={groupsOpen.system !== false} onToggle={() => toggleGroup("system")} onNavigate={onNavigate} />
+        {nav.portalLinks.length > 0 ? (
+          nav.portalLinks.map((item) => (
+            <NavLink key={item.id} item={item} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} />
+          ))
+        ) : (
+          <>
+            {nav.home ? <NavLink item={nav.home} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} /> : null}
+            {nav.inbox ? <NavLink item={nav.inbox} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} /> : null}
+            <Group id="services" label="Services" items={nav.services} pathname={pathname} collapsed={collapsed} open={groupsOpen.services !== false} onToggle={() => toggleGroup("services")} onNavigate={onNavigate} />
+            <Group id="departments" label="My departments" items={nav.departments} pathname={pathname} collapsed={collapsed} open={groupsOpen.departments !== false} onToggle={() => toggleGroup("departments")} onNavigate={onNavigate} />
+            <Group id="work" label="Work tools" items={nav.work} pathname={pathname} collapsed={collapsed} open={groupsOpen.work !== false} onToggle={() => toggleGroup("work")} onNavigate={onNavigate} />
+            <Group id="system" label="System" items={nav.system} pathname={pathname} collapsed={collapsed} open={groupsOpen.system !== false} onToggle={() => toggleGroup("system")} onNavigate={onNavigate} />
+          </>
+        )}
       </nav>
 
       <div className="relative border-t border-white/15 p-2">
@@ -296,6 +310,8 @@ export function AdminSidebar({
   defaultGroupsClosed = false,
   departments,
   equipmentStaff = false,
+  variant = "staff",
+  defaultMenuOpen = false,
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -304,10 +320,10 @@ export function AdminSidebar({
       buildShellNav(
         userRoles,
         permittedModules,
-        (departments ?? []).map((department) => ({ ...department, icon: Building2 })),
-        { equipmentStaff }
+        variant === "portal" ? [] : (departments ?? []).map((department) => ({ ...department, icon: Building2 })),
+        { equipmentStaff, variant }
       ),
-    [userRoles, permittedModules, departments, equipmentStaff]
+    [userRoles, permittedModules, departments, equipmentStaff, variant]
   );
   const items = useMemo(() => flattenShellNav(nav), [nav]);
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -354,6 +370,7 @@ export function AdminSidebar({
     onRefresh: () => router.refresh(),
     initials: initials || "·",
     onSearch: () => setSearchOpen(true),
+    defaultMenuOpen,
   };
 
   return (

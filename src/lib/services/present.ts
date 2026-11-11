@@ -7,7 +7,7 @@
 
 import type { ServiceCapability } from "@/lib/departments/db.types";
 import type { HubService, ServiceAudience, ServiceDepartmentRole } from "@/lib/departments/ui-contract";
-import { audienceFromGrants } from "./access";
+import { audienceFromGrants, catalogueHref } from "./access";
 import { EVANGELISM_MODERATOR_SLUGS } from "./evangelism-moderators";
 import type { ServiceOwnerRow } from "./seed";
 
@@ -32,7 +32,8 @@ const MODULE_ID: Record<string, string> = {
 export function toHubService(
   service: { service_key: string; label: string; admin_href: string },
   grants: readonly ServiceOwnerRow[],
-  ministries: readonly { id: string; slug: string }[]
+  ministries: readonly { id: string; slug: string }[],
+  equipmentStaff = false
 ): HubService {
   const slugOf = new Map(ministries.map((ministry) => [ministry.id, ministry.slug]));
   const owners: HubService["owners"] = [];
@@ -60,7 +61,7 @@ export function toHubService(
     id: service.service_key,
     name: service.label,
     summary: "",
-    href: service.admin_href,
+    href: catalogueHref(service, grants, equipmentStaff),
     moduleId: MODULE_ID[service.service_key] ?? "",
     owners,
     audience: audienceFromGrants(grants) satisfies ServiceAudience,

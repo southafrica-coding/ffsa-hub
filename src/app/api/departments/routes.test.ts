@@ -269,6 +269,8 @@ describe("department visibility", () => {
     expect(Array.isArray(body)).toBe(true);
     const gear = body.find((row: { id: string }) => row.id === "gear_hire");
     expect(gear.audience).toBe("all_signed_in");
+    expect(gear.href).toBe("/hire");
+    expect(body.some((row: { id: string }) => row.id === "brand_kit")).toBe(false);
     expect(gear.owners.some((owner: { role: string }) => owner.role === "manager")).toBe(true);
   });
 });

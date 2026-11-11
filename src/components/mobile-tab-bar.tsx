@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, GraduationCap, Heart, LayoutDashboard, LayoutGrid, User, Wallet } from "lucide-react";
+import { Building2, LayoutDashboard, LayoutGrid, User } from "lucide-react";
+import { PORTAL_SHELL_LINKS } from "@/components/shell-nav";
 import { cn } from "@/lib/utils/cn";
 
 const TABS = [
@@ -12,12 +13,7 @@ const TABS = [
   { id: "me", label: "Me", href: "/profile", icon: User },
 ] as const;
 
-const PORTAL_TABS = [
-  { id: "school", label: "School", href: "/my-schools", icon: GraduationCap },
-  { id: "finance", label: "Finance", href: "/my-finance", icon: Wallet },
-  { id: "prayer", label: "Prayer", href: "/prayer-room", icon: Heart },
-  { id: "me", label: "Me", href: "/profile", icon: User },
-] as const;
+const PORTAL_TABS = PORTAL_SHELL_LINKS;
 
 export function MobileTabBar({
   showDepartments = false,

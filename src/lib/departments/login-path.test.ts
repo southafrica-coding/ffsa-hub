@@ -12,6 +12,24 @@ describe("loginPath", () => {
     );
   });
 
+  it("does not emit redirect=/ or an empty or unsafe redirect", () => {
+    for (const path of [
+      "/",
+      "",
+      "/login",
+      "/login?redirect=/",
+      "//evil.com",
+      "/\\evil",
+      "@evil.com",
+      "javascript:alert(1)",
+      "http://evil.com",
+      "https:",
+      "https://evil.com",
+    ]) {
+      expect(loginPath(path)).toBe("/login");
+    }
+  });
+
   it("drops a path that is not a single-slash relative path", () => {
     expect(loginPath("//evil.example")).toBe("/login");
     expect(loginPath("/departments\\finances_legal")).toBe("/login");

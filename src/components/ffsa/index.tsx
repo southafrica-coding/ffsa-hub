@@ -158,7 +158,7 @@ export function SectionBar({ title, meta }: { title: string; meta?: React.ReactN
 /* ── Status pill ──────────────────────────────────── */
 // Exported: screens map their own domain statuses onto these tones.
 export type Tone = "good" | "warn" | "quiet" | "bad";
-const TONE: Record<Tone, string> = {
+export const TONE: Record<Tone, string> = {
   good: "border-grass text-grass-text",
   warn: "border-amber-border text-amber",
   quiet: "border-rule-strong text-[#55524A]",

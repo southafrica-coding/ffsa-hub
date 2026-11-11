@@ -1,6 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { ADMIN_MODULES, HIDDEN_FROM_NAV, SYSTEM_MODULES } from "@/config/modules";
-import { buildShellNav, flattenShellNav } from "./shell-nav";
+import { buildShellNav, flattenShellNav, PORTAL_SHELL_LINKS, shellVariantForRoles } from "./shell-nav";
+
+describe("shellVariantForRoles", () => {
+  it("treats membership roles as portal-only and any other role as staff", () => {
+    expect(shellVariantForRoles(["student"])).toBe("portal");
+    expect(shellVariantForRoles(["community_member", "self_service"])).toBe("portal");
+    expect(shellVariantForRoles([])).toBe("portal");
+    expect(shellVariantForRoles(["staff"])).toBe("staff");
+    expect(shellVariantForRoles(["student", "staff"])).toBe("staff");
+    expect(shellVariantForRoles(["ministry_leader"])).toBe("staff");
+  });
+
+  it("gives a direct unscoped grant or a staff-role bundle the staff shell, and ignores a portal bundle", () => {
+    expect(shellVariantForRoles(["self_service"], { staffSignals: { directUnscopedGrant: true, staffRoleBundle: false, schoolsStaff: false } })).toBe("staff");
+    expect(shellVariantForRoles(["self_service"], { staffSignals: { directUnscopedGrant: false, staffRoleBundle: false, schoolsStaff: false } })).toBe("portal");
+    expect(shellVariantForRoles(["student"], { staffSignals: { directUnscopedGrant: false, staffRoleBundle: true, schoolsStaff: false } })).toBe("staff");
+    expect(shellVariantForRoles(["student"], { staffSignals: { directUnscopedGrant: false, staffRoleBundle: false, schoolsStaff: true } })).toBe("staff");
+  });
+
+  it("gives a student with a scoped role the staff shell", () => {
+    expect(shellVariantForRoles(["student", "program_leader"])).toBe("staff");
+  });
+
+  it("gives a student with a department the staff shell", () => {
+    expect(shellVariantForRoles(["student"], { departments: [{ slug: "media" }] })).toBe("staff");
+  });
+
+  it("keeps a student, and a person with no roles, on the portal", () => {
+    expect(shellVariantForRoles(["student"], { departments: [] })).toBe("portal");
+    expect(shellVariantForRoles([], { departments: [] })).toBe("portal");
+  });
+});
 
 describe("buildShellNav", () => {
   it("keeps every live module for a super admin, and drops placeholders", () => {
@@ -12,17 +43,59 @@ describe("buildShellNav", () => {
         expect(hrefs.has(mod.href)).toBe(false);
         continue;
       }
-      if (mod.id === "dashboard") {
-        expect(hrefs.has("/home")).toBe(true);
-        continue;
-      }
       expect(hrefs.has(mod.href), mod.id).toBe(true);
     }
+    expect(hrefs.has("/home")).toBe(true);
     expect(hrefs.has("/my-schools")).toBe(true);
     expect(hrefs.has("/my-mission")).toBe(false);
     expect(nav.services.map((item) => item.label)).toContain("Prayer room");
     expect(nav.services.map((item) => item.label)).toContain("Hire gear");
     expect(nav.departments).toEqual([]);
+    expect(nav.portalLinks).toEqual([]);
+  });
+
+  it("keeps Home on /home and puts Dashboard under Work tools", () => {
+    const nav = buildShellNav(["super_admin"]);
+    expect(nav.home).toMatchObject({ label: "Home", href: "/home" });
+    expect(nav.work[0]).toMatchObject({ id: "dashboard", label: "Dashboard", href: "/dashboard" });
+    expect(nav.work.some((item) => item.label === "Home")).toBe(false);
+    expect(flattenShellNav(nav).filter((item) => item.label === "Home").map((item) => item.href)).toEqual(["/home"]);
+  });
+
+  it("uses Finance for the staff office and keeps My finance in the avatar menu", () => {
+    const nav = buildShellNav(["staff"], new Set(["prayer-room"]));
+    expect(nav.work.some((item) => item.label === "Finance" && item.href === "/finance")).toBe(true);
+    expect(nav.me).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "My finance", href: "/my-finance" }),
+        expect.objectContaining({ label: "Finance", href: "/finance" }),
+      ])
+    );
+  });
+
+  it("gives the portal shell the phone tabs and keeps staff Finance off it", () => {
+    const nav = buildShellNav(["finance_admin"], new Set(["finance"]), [], { variant: "portal" });
+    expect(nav.portalLinks.map((item) => [item.label, item.href])).toEqual(
+      PORTAL_SHELL_LINKS.map((item) => [item.label, item.href])
+    );
+    expect(nav.services).toEqual([]);
+    expect(nav.work).toEqual([]);
+    expect(nav.system).toEqual([]);
+    expect(nav.departments).toEqual([]);
+    expect(nav.home).toBeNull();
+    const finance = nav.me.filter((item) => item.label === "Finance");
+    expect(finance.map((item) => item.href)).toEqual(["/my-finance"]);
+    expect(flattenShellNav(nav).some((item) => item.href === "/finance" || item.href === "/dashboard")).toBe(false);
+  });
+
+  it("shows Ministries to Leadership Team, hides it from a member, and leaves ministry leaders on the permission", () => {
+    const hrefs = (roles: string[], permitted?: Set<string>) =>
+      buildShellNav(roles, permitted).work.map((item) => item.href);
+
+    expect(hrefs(["leadership_team"])).toContain("/ministry");
+    expect(hrefs(["self_service"])).not.toContain("/ministry");
+    expect(hrefs(["ministry_leader"], new Set(["ministry"]))).toContain("/ministry");
+    expect(hrefs(["ministry_leader"])).not.toContain("/ministry");
   });
 
   it("hides work tools the viewer cannot open", () => {

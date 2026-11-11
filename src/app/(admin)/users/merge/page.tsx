@@ -18,7 +18,7 @@ export default async function MergeUsersPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // super_admin only, matching the API. Checked here as well so the screen
+  // super_admin and admin, matching the API. Checked here as well so the screen
   // is not merely a dead end for someone who can reach /users.
   const { data: adminCheck } = await supabase
     .from("user_roles")

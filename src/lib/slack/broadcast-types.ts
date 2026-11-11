@@ -27,7 +27,7 @@
 /** Module keys group broadcast types for the per-module mute toggle. */
 export const BROADCAST_MODULES = {
   prayer_room: {
-    label: "Prayer Room",
+    label: "Prayer room",
     description:
       "Block-outs and devo set relocations that affect the whole roster.",
   },

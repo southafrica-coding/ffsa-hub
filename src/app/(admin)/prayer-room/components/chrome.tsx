@@ -32,7 +32,7 @@ export default function PrayerRoomChrome({
 }) {
   return (
     <>
-      <Masthead context={context} title="Prayer Room" actions={actions} />
+      <Masthead context={context} title="Prayer room" actions={actions} />
       <ModuleTabs
         tabs={tabs}
         active={active}

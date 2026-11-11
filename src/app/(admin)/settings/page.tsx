@@ -14,7 +14,7 @@ export default async function SettingsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  if (!(await callerIsAdmin(supabase, user.id))) redirect("/dashboard");
+  if (!(await callerIsAdmin(supabase, user.id))) redirect("/home");
 
   const { data: lists } = await getAllListOptions(createAdminClient());
 

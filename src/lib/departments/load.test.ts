@@ -73,6 +73,7 @@ describe("viewer result mapping", () => {
               memberCount: 1,
               active: true,
               budgetOnly: false,
+              viewerMembership: "none",
               access: detail,
             },
             access: detail,

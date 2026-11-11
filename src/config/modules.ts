@@ -120,7 +120,7 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
   },
   {
     id: "prayer-room",
-    label: "Prayer Room",
+    label: "Prayer room",
     href: "/prayer-room",
     icon: Heart,
     description: "Weekly devo schedule, rosters, directory, and team applications",
@@ -140,7 +140,9 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     href: "/ministry",
     icon: HeartHandshake,
     description: "Ministries and their staff teams",
-    requiredRoles: ["super_admin", "admin", "ministry_leader"],
+    // Leadership Team is included below in getAccessibleModules, matching the
+    // ministry page. A ministry leader still needs the ministry.access bundle.
+    requiredRoles: ["super_admin", "admin", "ministry_leader", "leadership_team"],
   },
   {
     id: "okrs",
@@ -338,6 +340,9 @@ export function getAccessibleModules(
     if (isAdmin && !(!isSuperAdmin && SUPER_ADMIN_ONLY_MODULES.has(mod.id))) {
       return true;
     }
+    // Ministries: Leadership Team may open the list, same as the page.
+    // A ministry leader is unchanged and still needs the ministry permission.
+    if (mod.id === "ministry" && userRoles.includes("leadership_team")) return true;
     // Otherwise check the permissions-based set
     return permittedModules?.has(mod.id) ?? false;
   });

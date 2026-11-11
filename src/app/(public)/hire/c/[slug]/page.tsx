@@ -153,12 +153,12 @@ export default async function CategoryPage({
             <div className="flex flex-col gap-2.5">
               <div className="hire-label">Type</div>
               <Link href={href({ type: undefined })} className="flex items-center gap-2.5 text-[14px] text-[color:var(--hire-ink)]">
-                <span className={cn("h-4 w-4 rounded-[4px]", !type ? "bg-[color:var(--hire-accent)]" : "border border-[color:var(--hire-dim)]")} />
+                <span className={cn("h-4 w-4 rounded-[4px]", !type ? "bg-[color:var(--hire-accent)]" : "border border-[color:var(--hire-dim-edge)]")} />
                 All {category.name.toLowerCase()}
               </Link>
               {category.children.map((c) => (
                 <Link key={c.id} href={href({ type: c.slug })} className="flex items-center gap-2.5 text-[14px] text-[color:var(--hire-ink)]">
-                  <span className={cn("h-4 w-4 rounded-[4px]", type?.id === c.id ? "bg-[color:var(--hire-accent)]" : "border border-[color:var(--hire-dim)]")} />
+                  <span className={cn("h-4 w-4 rounded-[4px]", type?.id === c.id ? "bg-[color:var(--hire-accent)]" : "border border-[color:var(--hire-dim-edge)]")} />
                   {c.name}
                   <span className="ml-auto text-[color:var(--hire-muted)]">{typeCounts.get(c.id) ?? 0}</span>
                 </Link>

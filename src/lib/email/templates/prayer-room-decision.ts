@@ -25,7 +25,7 @@ export function prayerRoomDecisionEmailHtml({
         ${bodyParagraph(`Hi ${escapeHtml(applicantFirstName)}, you're approved to serve in the prayer room. You can now be rostered into sets, accept invitations, and create and own your own devo sets.`)}
         ${noteHtml}
       `,
-      cta: { label: "Open Prayer Room", url: `${siteUrl}/prayer-room` },
+      cta: { label: "Open Prayer room", url: `${siteUrl}/prayer-room` },
       siteUrl,
     });
   }

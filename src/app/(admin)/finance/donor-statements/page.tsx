@@ -16,7 +16,7 @@ export default async function DonorStatementsPage() {
   if (!user) redirect("/login");
   await requireModuleAccess(supabase, user.id, "finance");
   const auth = await authorizeDonorStatements();
-  if ("error" in auth) redirect("/finance");
+  if ("error" in auth) redirect("/finance?notice=statements-access");
 
   return (
     <div className="ffsa-screen">

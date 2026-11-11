@@ -6,7 +6,7 @@ import { isHiddenFromNav } from "@/config/modules";
 
 export default async function TeamsPage() {
   // Unbuilt placeholder — out of the menu, so send direct visits home.
-  if (isHiddenFromNav("teams")) redirect("/dashboard");
+  if (isHiddenFromNav("teams")) redirect("/home");
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");

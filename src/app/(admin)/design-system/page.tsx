@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSidebarAccess } from "@/lib/sidebar-access";
@@ -6,7 +7,8 @@ import { ServiceCard } from "@/components/ffsa/department-ui";
 import { MoneyCell } from "@/components/ffsa/money-cell";
 import { MoneyTablePage, ServicePage } from "@/components/ffsa/templates";
 
-/** Review gallery. Signed-in admins only. */
+/** Review gallery. Signed-in admins only. No shell item, so the title is the page metadata. */
+export const metadata: Metadata = { title: "Design system" };
 export default async function DesignSystemPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -19,10 +21,10 @@ export default async function DesignSystemPage() {
   return (
     <div className="pb-8">
       <ServicePage
-        title="Prayer room"
-        purpose="A quiet hour in the prayer room, led by someone on the team."
-        owner="Prayer"
-        steps={["Pick a set", "Arrive a few minutes early", "Stay for the hour"]}
+        title="Design system"
+        purpose="Samples of the pages, tables and figures used across the Hub."
+        owner="Hub"
+        steps={["Open a sample", "Check the type and the rules", "Say if something looks wrong"]}
         action={
           <button type="button" className="h-9 rounded-md bg-brand-black px-3 text-ui text-bg">
             Book

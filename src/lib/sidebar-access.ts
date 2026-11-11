@@ -1,12 +1,18 @@
+import { cache } from "react";
+import type { StaffSignals } from "@/components/shell-nav";
 import { grantCounts } from "@/lib/auth/grant-scope";
 import { getAccessibleSchoolsProgramIds } from "@/lib/auth/schools-program-access";
-import { getPermissionRowsForRoles } from "@/services/permissions";
+
+const MEMBERSHIP_ROLES = new Set(["student", "community_member", "self_service"]);
 
 export interface SidebarAccess {
-  /** Role names assigned to the user (e.g. "super_admin", "events_admin"). */
+  /** Unscoped role names. Module visibility still uses this list. */
   userRoles: string[];
+  /** Every role name, including program-scoped ones. The shell uses this. */
+  roleNames: string[];
   /** Module ids the user can reach, derived from direct + role-bundle permissions. */
   permittedModules: Set<string>;
+  staffSignals: StaffSignals;
   /**
    * True when the user IS authenticated but their roles/permissions could not be
    * loaded (after a retry). The sidebar should surface a visible "refresh" notice
@@ -45,38 +51,53 @@ async function readOrThrow<T>(
  *   - Reads: retried once. If they still fail for an authenticated user we set
  *     menuLoadFailed so the UI can prompt a refresh instead of hiding everything.
  */
-export async function getSidebarAccess(
+const emptySignals = (): StaffSignals => ({
+  directUnscopedGrant: false,
+  staffRoleBundle: false,
+  schoolsStaff: false,
+});
+
+const loadSidebarAccess = cache(async (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any
-): Promise<SidebarAccess> {
+  supabase: any,
+  knownUserId: string | null,
+  knownActive: boolean | null
+): Promise<SidebarAccess> => {
+  const known = knownUserId != null && knownActive != null
+    ? { userId: knownUserId, active: knownActive }
+    : undefined;
   const result: SidebarAccess = {
     userRoles: [],
+    roleNames: [],
     permittedModules: new Set<string>(),
+    staffSignals: emptySignals(),
     menuLoadFailed: false,
   };
 
   // 1) Who is this? Prefer getUser() (revalidated); fall back to the cookie
   //    session only if getUser errors, so an auth-server blip doesn't read as
   //    logged out. A clean null user means genuinely signed out → empty menu.
-  let userId: string | null = null;
-  try {
-    const { data, error } = await supabase.auth.getUser();
-    if (data?.user) {
-      userId = data.user.id;
-    } else if (error) {
-      const { data: sessionData } = await supabase.auth.getSession();
-      userId = sessionData?.session?.user?.id ?? null;
-    }
-  } catch {
+  let userId: string | null = known?.userId ?? null;
+  if (!known) {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      userId = sessionData?.session?.user?.id ?? null;
+      const { data, error } = await supabase.auth.getUser();
+      if (data?.user) {
+        userId = data.user.id;
+      } else if (error) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        userId = sessionData?.session?.user?.id ?? null;
+      }
     } catch {
-      userId = null;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        userId = sessionData?.session?.user?.id ?? null;
+      } catch {
+        userId = null;
+      }
     }
   }
 
-  if (!userId) return result; // signed out — a minimal menu is correct
+  if (!userId || known?.active === false) return result; // signed out — a minimal menu is correct
 
   // 2) Load roles + permitted modules. If this fails for an authenticated user,
   //    flag it so the sidebar shows a refresh prompt, not a phantom empty menu.
@@ -86,9 +107,11 @@ export async function getSidebarAccess(
     // Global nav keeps unscoped assignments. A program-scoped schools grant
     // still lights Training; other modules stay unscoped.
     const [userRow, roleRows] = await Promise.all([
-      readOrThrow<{ is_active: boolean | null } | null>(() =>
-        supabase.from("users").select("is_active").eq("id", userId).maybeSingle()
-      ),
+      known?.active === true
+        ? Promise.resolve({ is_active: true })
+        : readOrThrow<{ is_active: boolean | null } | null>(() =>
+            supabase.from("users").select("is_active").eq("id", userId).maybeSingle()
+          ),
       readOrThrow<
         Array<{
           role_id?: string;
@@ -110,12 +133,12 @@ export async function getSidebarAccess(
       grantCounts(row.scope_type, row.scope_id, undefined)
     );
 
-    result.userRoles = unscopedRoles
-      .map((r) => {
-        const role = Array.isArray(r.roles) ? r.roles[0] : r.roles;
-        return role?.name ?? null;
-      })
-      .filter(Boolean) as string[];
+    const nameOf = (row: { roles: { name: string } | { name: string }[] | null }) => {
+      const role = Array.isArray(row.roles) ? row.roles[0] : row.roles;
+      return role?.name ?? null;
+    };
+    result.roleNames = (roleRows ?? []).map(nameOf).filter((name): name is string => !!name);
+    result.userRoles = unscopedRoles.map(nameOf).filter((name): name is string => !!name);
 
     // Only super_admin can skip the per-permission lookup. A plain `admin`
     // sees every module except the SUPER_ADMIN_ONLY_MODULES carve-outs
@@ -129,7 +152,16 @@ export async function getSidebarAccess(
       const roleIds = unscopedRoles
         .map((r) => r.role_id)
         .filter((id): id is string => typeof id === "string");
-      const [permRows, roleDerived, staffSeat, schoolsAccess] = await Promise.all([
+      const staffRoleIds = new Set(
+        unscopedRoles
+          .filter((row) => {
+            const name = nameOf(row);
+            return !!name && !MEMBERSHIP_ROLES.has(name);
+          })
+          .map((row) => row.role_id)
+          .filter((id): id is string => typeof id === "string")
+      );
+      const [permRows, roleBundles, staffSeat, schoolsAccess] = await Promise.all([
         readOrThrow<
           Array<{
             scope_type?: string | null;
@@ -147,7 +179,16 @@ export async function getSidebarAccess(
         ),
         // Best-effort, as before: a failed bundle read contributes nothing
         // rather than flagging the whole menu.
-        getPermissionRowsForRoles(supabase, roleIds).catch(() => []),
+        roleIds.length === 0
+          ? Promise.resolve([] as Array<{ role_id?: string; permissions?: { module?: string; key?: string } | { module?: string; key?: string }[] | null }>)
+          : supabase
+              .from("role_permissions")
+              .select("role_id, permissions!inner(module, key)")
+              .in("role_id", roleIds)
+              .then((res: { data: Array<{ role_id?: string; permissions?: { module?: string; key?: string } | { module?: string; key?: string }[] | null }> | null; error: unknown }) =>
+                res.error ? [] : res.data ?? []
+              )
+              .catch(() => [] as Array<{ role_id?: string; permissions?: { module?: string; key?: string } | { module?: string; key?: string }[] | null }>),
         // program_staff (migration 304) is not a schools.* grant. A missing
         // table, before the migration is applied, must not blank the menu.
         supabase
@@ -160,12 +201,13 @@ export async function getSidebarAccess(
           )
           .catch(() => [] as { id: string }[]),
         // Program-scoped schools grants light Training without opening every module.
-        getAccessibleSchoolsProgramIds(supabase, userId),
+        getAccessibleSchoolsProgramIds(supabase, userId, known?.active === true ? { active: true } : undefined),
       ]);
 
       for (const row of permRows ?? []) {
         const perm = Array.isArray(row.permissions) ? row.permissions[0] : row.permissions;
         if (!perm?.module || !grantCounts(row.scope_type, row.scope_id, undefined, perm.key)) continue;
+        result.staffSignals.directUnscopedGrant = true;
         // Training itself is decided by getAccessibleSchoolsProgramIds, so a
         // lone schools.assignable_as_contact grant cannot light the entry.
         if (perm.module !== "schools") result.permittedModules.add(perm.module);
@@ -178,14 +220,20 @@ export async function getSidebarAccess(
       }
 
       // Also count modules reachable through assigned roles' bundles.
-      for (const perm of roleDerived) {
+      for (const row of roleBundles) {
+        const perm = Array.isArray(row.permissions) ? row.permissions[0] : row.permissions;
+        if (!perm?.module) continue;
         if (perm.module !== "schools") result.permittedModules.add(perm.module);
         if (perm.key === "schools.manage") result.permittedModules.add("users");
         if (perm.module === "vehicles" || perm.module === "equipment") result.permittedModules.add("bookings");
+        if (row.role_id && staffRoleIds.has(row.role_id)) result.staffSignals.staffRoleBundle = true;
       }
 
       if (schoolsAccess === "all" || schoolsAccess.length > 0) result.permittedModules.add("schools");
       if (staffSeat.length > 0) result.permittedModules.add("schools");
+      if (schoolsAccess === "all" || schoolsAccess.length > 0 || staffSeat.length > 0) {
+        result.staffSignals.schoolsStaff = true;
+      }
     }
   } catch {
     // Authenticated, but we couldn't load access. Don't render a misleading
@@ -194,4 +242,14 @@ export async function getSidebarAccess(
   }
 
   return result;
+});
+
+/** One sidebar read per request. `known` is keyed by user id, not by object identity. */
+export function getSidebarAccess(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  known?: { userId: string; active: boolean }
+): Promise<SidebarAccess> {
+  if (!known) return loadSidebarAccess(supabase, null, null);
+  return loadSidebarAccess(supabase, known.userId, known.active);
 }

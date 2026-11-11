@@ -23,7 +23,7 @@ export default async function BrandSettingsPage({
       "communications.manage_brand_kits",
     ]))
   ) {
-    redirect("/dashboard");
+    redirect("/home");
   }
 
   const params = await searchParams;

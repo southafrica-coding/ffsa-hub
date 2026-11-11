@@ -19,7 +19,7 @@ export default async function StaffDecisionsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  if (!(await canUseStaffDecisions(supabase, user.id))) redirect("/dashboard");
+  if (!(await canUseStaffDecisions(supabase, user.id))) redirect("/home");
 
   const admin = createAdminClient();
   const programs = await listLeadershipTrackPrograms(admin);

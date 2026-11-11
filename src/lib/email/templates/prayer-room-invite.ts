@@ -24,7 +24,7 @@ export function prayerRoomInviteEmailHtml({
     bodyHtml: `
       ${bodyParagraph(`Hi ${escapeHtml(inviteeFirstName)}, ${emphasis(escapeHtml(ownerName))} has invited you to serve as ${emphasis(escapeHtml(roleLabel))}.`)}
       ${bodyParagraph(`${emphasis(escapeHtml(setTitle))}<br/>${escapeHtml(setWhen)}`)}
-      ${bodyParagraph("Open the Prayer Room to accept or decline.")}
+      ${bodyParagraph("Open the Prayer room to accept or decline.")}
     `,
     cta: { label: "Respond to Invite", url: `${siteUrl}/prayer-room` },
     siteUrl,

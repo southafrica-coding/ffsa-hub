@@ -130,7 +130,7 @@ export function ItemCard({ item, range, label }: { item: StoreItem; range: Range
           </span>
         )}
         {booked && (
-          <span className="absolute left-3 top-3 hidden rounded-[4px] border border-[color:var(--hire-dim)] bg-[color:var(--hire-bg)] px-2 py-1 text-[12px] font-bold text-[color:var(--hire-ink)] md:block">
+          <span className="absolute left-3 top-3 hidden rounded-[4px] border border-[color:var(--hire-dim-edge)] bg-[color:var(--hire-bg)] px-2 py-1 text-[12px] font-bold text-[color:var(--hire-ink)] md:block">
             Booked on your dates
           </span>
         )}

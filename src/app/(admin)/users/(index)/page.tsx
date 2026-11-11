@@ -12,7 +12,7 @@ import { UsersTable } from "../users-table";
 import { InviteUserForm } from "../invite-user-form";
 import { PublicSignupLinkCard } from "../public-signup-link-card";
 import { headers } from "next/headers";
-import { Masthead } from "@/components/ffsa";
+import { Masthead, MastheadAction } from "@/components/ffsa";
 
 export default async function UsersPage() {
   const supabase = await createClient();
@@ -177,7 +177,17 @@ export default async function UsersPage() {
       <Masthead
         context={`System access · ${count ?? 0} user ${count === 1 ? "account" : "accounts"}`}
         title="Users"
-        actions={isSuperAdmin ? <InviteUserForm /> : undefined}
+        actions={
+          isSuperAdmin ? (
+            <>
+              {/* /users/merge allows the same two tiers this flag already
+                  covers: super_admin and admin. Other roles are sent back
+                  to /users, so the action stays off the masthead for them. */}
+              <MastheadAction href="/users/merge">Merge accounts</MastheadAction>
+              <InviteUserForm />
+            </>
+          ) : undefined
+        }
       />
 
       <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
