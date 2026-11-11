@@ -1,6 +1,6 @@
-import { loadServicesForViewer } from "@/lib/departments";
-import { sessionClient, settleViewerResult } from "@/lib/departments/load";
+import { loadCachedServicesForViewer, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
+import { getRequestViewer } from "@/lib/viewer-cache";
 
 /**
  * The 404 decision runs here, outside services/loading.tsx. A forbidden or
@@ -9,8 +9,8 @@ import { requireSignedIn } from "@/lib/departments/session";
 export default async function ServicesLayout({ children }: { children: React.ReactNode }) {
   const path = "/services";
   await requireSignedIn(path);
-  const supabase = await sessionClient();
-  const servicesResult = await loadServicesForViewer(supabase);
+  const viewer = await getRequestViewer();
+  const servicesResult = await loadCachedServicesForViewer(viewer.supabase);
   settleViewerResult(servicesResult, path);
   return children;
 }

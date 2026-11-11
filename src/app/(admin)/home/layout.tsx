@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
-import { loadHomeForViewer, loadServicesForViewer } from "@/lib/departments";
-import { settleViewerResult } from "@/lib/departments/load";
+import { loadCachedHomeForViewer, loadCachedServicesForViewer, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { getRequestViewer } from "@/lib/viewer-cache";
 
@@ -13,10 +12,10 @@ export default async function HomeLayout({ children }: { children: React.ReactNo
   const path = "/home";
   await requireSignedIn(path);
   const viewer = await getRequestViewer();
-  const homeResult = await loadHomeForViewer(viewer.supabase);
+  const homeResult = await loadCachedHomeForViewer(viewer.supabase);
   if (homeResult.kind === "ok") return children;
   if (homeResult.kind === "unauthenticated") settleViewerResult(homeResult, path);
   if (homeResult.kind === "not_found") notFound();
-  settleViewerResult(await loadServicesForViewer(viewer.supabase), path);
+  settleViewerResult(await loadCachedServicesForViewer(viewer.supabase), path);
   return children;
 }

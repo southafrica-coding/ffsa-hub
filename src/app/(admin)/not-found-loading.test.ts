@@ -118,6 +118,17 @@ describe("notFound loading boundaries", () => {
     }
   });
 
+  it("lets /home and /services redirect a signed-out viewer without calling notFound()", () => {
+    for (const rel of ["src/app/(admin)/home/page.tsx", "src/app/(admin)/services/page.tsx"]) {
+      const source = stripComments(readFileSync(path.join(ROOT, rel), "utf8"));
+      expect(source, rel).toMatch(/\bredirect\s*\(\s*loginPath\s*\(/);
+      expect(source, rel).not.toMatch(/\bnotFound\s*\(/);
+      expect(source, rel).not.toMatch(/\brequireSignedIn\s*\(/);
+      expect(source, rel).not.toMatch(/\bsettleViewerResult\s*\(/);
+      expect(loadingAncestors(path.join(ROOT, rel)).length, rel).toBeGreaterThan(0);
+    }
+  });
+
   it("keeps the admin skeleton on leaf routes that do not call notFound()", () => {
     const kept = [
       "src/app/(admin)/contacts/new/loading.tsx",

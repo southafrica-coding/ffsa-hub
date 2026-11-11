@@ -3,6 +3,8 @@ import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import {
   loadDepartmentsIndexForViewer,
+  loadHomeForViewer,
+  loadServicesForViewer,
   type DepartmentHome,
   type DepartmentHomeResult,
   type ViewerDepartmentMembership,
@@ -13,6 +15,12 @@ import { getViewer } from "@/lib/departments/session";
 
 /** One index read per request, shared by the shell layouts and the departments pages. */
 export const loadCachedDepartmentsIndex = cache(loadDepartmentsIndexForViewer);
+
+/** One home read per request, shared by the home layout and the home page. */
+export const loadCachedHomeForViewer = cache(loadHomeForViewer);
+
+/** One services read per request, shared by the services layout and the services page. */
+export const loadCachedServicesForViewer = cache(loadServicesForViewer);
 
 export type ShellDepartment = { id: string; label: string; href: string };
 

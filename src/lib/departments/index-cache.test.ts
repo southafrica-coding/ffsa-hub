@@ -23,6 +23,8 @@ vi.mock("react", async () => {
 
 vi.mock("@/lib/departments", () => ({
   loadDepartmentsIndexForViewer: (client: unknown) => readIndex(client),
+  loadHomeForViewer: async () => ({ kind: "ok", data: null }),
+  loadServicesForViewer: async () => ({ kind: "ok", data: [] }),
 }));
 
 import { loadCachedDepartmentsIndex } from "./load";

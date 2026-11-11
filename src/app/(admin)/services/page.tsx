@@ -1,24 +1,36 @@
 import type { Metadata } from "next";
-import { loadServicesForViewer } from "@/lib/departments";
+import { redirect } from "next/navigation";
 import { audienceLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
-import { DepartmentLoadError, loadCachedDepartmentsIndex, sessionClient } from "@/lib/departments/load";
+import {
+  DepartmentLoadError,
+  loadCachedDepartmentsIndex,
+  loadCachedServicesForViewer,
+} from "@/lib/departments/load";
+import { loginPath } from "@/lib/departments/login-path";
+import { getRequestViewer } from "@/lib/viewer-cache";
 import { EmptyNote, PageHeading, ServiceCard } from "../departments/local-ui";
 
 export const metadata: Metadata = { title: "Services" };
 
 export default async function ServicesPage() {
-  const supabase = await sessionClient();
+  const path = "/services";
+  const viewer = await getRequestViewer();
+  if (!viewer.user) redirect(loginPath(path));
+  if (!viewer.active) return null;
   const [servicesResult, departmentsResult] = await Promise.all([
-    loadServicesForViewer(supabase),
-    loadCachedDepartmentsIndex(supabase),
+    loadCachedServicesForViewer(viewer.supabase),
+    loadCachedDepartmentsIndex(viewer.supabase),
   ]);
+  if (servicesResult.kind === "unauthenticated") redirect(loginPath(path));
   if (servicesResult.kind === "error") {
     throw new DepartmentLoadError(
       servicesResult.error instanceof Error ? servicesResult.error.message : "Department data failed"
     );
   }
-  // Forbidden and missing catalogues 404 in the layout, outside the loading boundary.
-  const services = servicesResult.kind === "ok" ? servicesResult.data : [];
+  // Forbidden and missing catalogues 404 in the layout. Returning null here
+  // keeps this page from calling notFound() under its loading boundary.
+  if (servicesResult.kind !== "ok") return null;
+  const services = servicesResult.data;
   const departments = departmentsResult.kind === "ok" ? departmentsResult.data : [];
   const names = departmentNames(departments);
 

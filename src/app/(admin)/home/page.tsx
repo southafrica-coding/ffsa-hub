@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { shellVariantForRoles, type StaffSignals } from "@/components/shell-nav";
-import { loadHomeForViewer, loadServicesForViewer } from "@/lib/departments";
 import { clusterLabel, departmentNames, managingLabel } from "@/lib/departments/data";
-import { DepartmentLoadError, loadCachedDepartmentsIndex, myDepartments } from "@/lib/departments/load";
+import {
+  DepartmentLoadError,
+  loadCachedDepartmentsIndex,
+  loadCachedHomeForViewer,
+  loadCachedServicesForViewer,
+  myDepartments,
+} from "@/lib/departments/load";
+import { loginPath } from "@/lib/departments/login-path";
 import { getSidebarAccess } from "@/lib/sidebar-access";
 import { getRequestViewer } from "@/lib/viewer-cache";
 import { formatDayRange } from "@/lib/format/sa-time";
@@ -20,11 +27,14 @@ const ROCK_LABEL: Record<RockStatus, string> = {
 };
 
 export default async function HomePage() {
+  const path = "/home";
   const viewer = await getRequestViewer();
-  const known = viewer.user ? { userId: viewer.user.id, active: viewer.active } : undefined;
+  if (!viewer.user) redirect(loginPath(path));
+  if (!viewer.active) return null;
+  const known = { userId: viewer.user.id, active: viewer.active };
   const [access, homeResult, indexResult] = await Promise.all([
     getSidebarAccess(viewer.supabase, known),
-    loadHomeForViewer(viewer.supabase),
+    loadCachedHomeForViewer(viewer.supabase),
     loadCachedDepartmentsIndex(viewer.supabase),
   ]);
   const showAllDepartments = indexResult.kind === "ok" && indexResult.data.length > 0;
@@ -38,11 +48,13 @@ export default async function HomePage() {
   if (homeResult.kind === "ok") {
     return <HomeBody home={homeResult.data} departmentsNote={false} showAllDepartments={showAllDepartments} {...chrome} />;
   }
-  // Inactive and missing viewers are a real 404 from the layout, which runs
-  // outside this page's loading boundary.
-  if (homeResult.kind === "unauthenticated" || homeResult.kind === "not_found") return null;
+  if (homeResult.kind === "unauthenticated") redirect(loginPath(path));
+  // not_found is a real 404 from the layout. The page must not call notFound()
+  // under this segment's loading boundary.
+  if (homeResult.kind === "not_found") return null;
 
-  const servicesResult = await loadServicesForViewer(viewer.supabase);
+  const servicesResult = await loadCachedServicesForViewer(viewer.supabase);
+  if (servicesResult.kind === "unauthenticated") redirect(loginPath(path));
   if (servicesResult.kind === "error") {
     throw new DepartmentLoadError(
       servicesResult.error instanceof Error ? servicesResult.error.message : "Department data failed"

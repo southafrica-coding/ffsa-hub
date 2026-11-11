@@ -126,13 +126,15 @@ const summary = {
   },
 };
 
+const loads = vi.hoisted(() => ({
+  home: vi.fn(),
+  services: vi.fn(),
+}));
+
 vi.mock("@/lib/departments", () => ({
   loadDepartmentsIndexForViewer: async () => ({ kind: "ok", data: [summary] }),
-  loadHomeForViewer: async () => ({
-    kind: "ok",
-    data: { departments: [summary], services: [], rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] },
-  }),
-  loadServicesForViewer: async () => ({ kind: "ok", data: [] }),
+  loadHomeForViewer: (client: unknown) => loads.home(client),
+  loadServicesForViewer: (client: unknown) => loads.services(client),
   loadDepartmentHomeForViewer: async () => ({
     kind: "ok",
     data: {
@@ -153,8 +155,16 @@ vi.mock("@/app/(admin)/departments/[slug]/department-view", () => ({
   DepartmentView: () => <p>Department</p>,
 }));
 
+loads.home.mockImplementation(async () => ({
+  kind: "ok",
+  data: { departments: [summary], services: [], rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] },
+}));
+loads.services.mockImplementation(async () => ({ kind: "ok", data: [] }));
+
 import AdminLayout from "@/app/(admin)/layout";
+import HomeLayout from "@/app/(admin)/home/layout";
 import HomePage from "@/app/(admin)/home/page";
+import ServicesLayout from "@/app/(admin)/services/layout";
 import ServicesPage from "@/app/(admin)/services/page";
 import DepartmentsLayout from "@/app/(admin)/departments/layout";
 import DepartmentsPage from "@/app/(admin)/departments/page";
@@ -183,11 +193,29 @@ describe("viewer reads for one request", () => {
   });
 
   it("counts getUser and is_active on /home", async () => {
-    await expect(renderRoute(HomePage())).resolves.toEqual({ getUser: 1, isActive: 1 });
+    loads.home.mockClear();
+    loads.services.mockClear();
+    counts.getUser = 0;
+    counts.isActive = 0;
+    const page = await HomePage();
+    const body = await HomeLayout({ children: page });
+    renderToStaticMarkup(await AdminLayout({ children: body }));
+    expect(counts).toEqual({ getUser: 1, isActive: 1 });
+    expect(loads.home).toHaveBeenCalledTimes(1);
+    expect(loads.services).not.toHaveBeenCalled();
   });
 
   it("counts getUser and is_active on /services", async () => {
-    await expect(renderRoute(ServicesPage())).resolves.toEqual({ getUser: 1, isActive: 1 });
+    loads.home.mockClear();
+    loads.services.mockClear();
+    counts.getUser = 0;
+    counts.isActive = 0;
+    const page = await ServicesPage();
+    const body = await ServicesLayout({ children: page });
+    renderToStaticMarkup(await AdminLayout({ children: body }));
+    expect(counts).toEqual({ getUser: 1, isActive: 1 });
+    expect(loads.services).toHaveBeenCalledTimes(1);
+    expect(loads.home).not.toHaveBeenCalled();
   });
 
   it("counts getUser and is_active on /departments", async () => {

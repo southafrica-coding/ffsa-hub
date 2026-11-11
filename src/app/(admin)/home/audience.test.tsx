@@ -25,9 +25,15 @@ vi.mock("@/components/assistant/assistant-mount", () => ({
 vi.mock("@/lib/departments/session", () => ({
   requireSignedIn: async () => ({ id: "user" }),
 }));
+const loadHomeForViewer = vi.hoisted(() => vi.fn());
+const getSidebarAccess = vi.hoisted(() => vi.fn());
+
 vi.mock("@/lib/departments/load", () => ({
   sessionClient: async () => ({ kind: "session" }),
   loadCachedDepartmentsIndex: async () => ({ kind: "ok", data: [] }),
+  loadCachedHomeForViewer: (client: unknown) => loadHomeForViewer(client),
+  loadCachedServicesForViewer: async () => ({ kind: "ok", data: [] }),
+  DepartmentLoadError: class DepartmentLoadError extends Error {},
   myDepartments: (rows: { viewerMembership: string }[]) =>
     rows.filter((row) => row.viewerMembership === "member" || row.viewerMembership === "leader"),
   settleViewerResult: (result: { kind: string; data?: unknown }) => {
@@ -35,9 +41,6 @@ vi.mock("@/lib/departments/load", () => ({
     return result.data;
   },
 }));
-
-const loadHomeForViewer = vi.hoisted(() => vi.fn());
-const getSidebarAccess = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/departments", () => ({
   loadHomeForViewer: () => loadHomeForViewer(),

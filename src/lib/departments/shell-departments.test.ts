@@ -5,6 +5,8 @@ const readIndex = vi.hoisted(() => vi.fn());
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/departments", () => ({
   loadDepartmentsIndexForViewer: (client: unknown) => readIndex(client),
+  loadHomeForViewer: async () => ({ kind: "ok", data: null }),
+  loadServicesForViewer: async () => ({ kind: "ok", data: [] }),
 }));
 
 import { departmentsForShell, toShellDepartments } from "./load";
