@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadHomeForViewer, loadServicesForViewer } from "@/lib/departments";
 import { clusterLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
-import { sessionClient, settleViewerResult } from "@/lib/departments/load";
+import { loadCachedDepartmentsIndex, sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { formatDayRange } from "@/lib/format/sa-time";
 import type { HomeDashboard, RockStatus } from "@/lib/departments/ui-contract";
@@ -21,18 +21,38 @@ export default async function HomePage() {
   const path = "/home";
   await requireSignedIn(path);
   const supabase = await sessionClient();
-  const homeResult = await loadHomeForViewer(supabase);
-  if (homeResult.kind === "ok") return <HomeBody home={homeResult.data} departmentsNote={false} />;
+  const [homeResult, indexResult] = await Promise.all([
+    loadHomeForViewer(supabase),
+    loadCachedDepartmentsIndex(supabase),
+  ]);
+  const showAllDepartments = indexResult.kind === "ok" && indexResult.data.length > 0;
+  if (homeResult.kind === "ok") {
+    return <HomeBody home={homeResult.data} departmentsNote={false} showAllDepartments={showAllDepartments} />;
+  }
   if (homeResult.kind === "unauthenticated") {
     settleViewerResult(homeResult, path);
   }
   if (homeResult.kind === "not_found") notFound();
 
   const services = settleViewerResult(await loadServicesForViewer(supabase), path);
-  return <HomeBody home={{ departments: [], services, rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] }} departmentsNote />;
+  return (
+    <HomeBody
+      home={{ departments: [], services, rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] }}
+      departmentsNote
+      showAllDepartments={showAllDepartments}
+    />
+  );
 }
 
-function HomeBody({ home, departmentsNote }: { home: HomeDashboard; departmentsNote: boolean }) {
+function HomeBody({
+  home,
+  departmentsNote,
+  showAllDepartments,
+}: {
+  home: HomeDashboard;
+  departmentsNote: boolean;
+  showAllDepartments: boolean;
+}) {
   const names = departmentNames(home.departments);
 
   return (
@@ -61,6 +81,11 @@ function HomeBody({ home, departmentsNote }: { home: HomeDashboard; departmentsN
           />
         ))
       )}
+      {showAllDepartments ? (
+        <p className="px-5 py-3 text-sm md:px-8">
+          <Link href="/departments">All departments</Link>
+        </p>
+      ) : null}
 
       <SectionHeading title="Services you use" />
       {home.services.length === 0 ? (

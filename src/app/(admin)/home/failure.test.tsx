@@ -42,6 +42,7 @@ describe("home and services survive a failed department read", () => {
     loadHomeForViewer.mockReset();
     loadServicesForViewer.mockReset();
     loadDepartmentsIndexForViewer.mockReset();
+    loadDepartmentsIndexForViewer.mockResolvedValue({ kind: "ok", data: [] });
   });
 
   it("renders services on /home when the home read fails", async () => {
@@ -80,6 +81,44 @@ describe("home and services survive a failed department read", () => {
     loadHomeForViewer.mockResolvedValue({ kind: "forbidden" });
     loadServicesForViewer.mockResolvedValue({ kind: "error", error: new Error("services down") });
     await expect(HomePage()).rejects.toThrow("services down");
+  });
+
+  it("links to /departments when the index has departments", async () => {
+    loadHomeForViewer.mockResolvedValue({
+      kind: "ok",
+      data: { departments: [], services: [], rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] },
+    });
+    loadDepartmentsIndexForViewer.mockResolvedValue({
+      kind: "ok",
+      data: [{ slug: "media", name: "Media" }],
+    });
+    const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).toContain('href="/departments"');
+    expect(markup).toContain("All departments");
+  });
+
+  it("hides the departments link when the index is empty", async () => {
+    loadHomeForViewer.mockResolvedValue({
+      kind: "ok",
+      data: { departments: [], services: [], rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] },
+    });
+    loadDepartmentsIndexForViewer.mockResolvedValue({ kind: "ok", data: [] });
+    const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).not.toContain('href="/departments"');
+    expect(markup).not.toContain("All departments");
+  });
+
+  it("hides the departments link when the index is forbidden or errors", async () => {
+    loadHomeForViewer.mockResolvedValue({
+      kind: "ok",
+      data: { departments: [], services: [], rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] },
+    });
+    for (const index of [{ kind: "forbidden" }, { kind: "error", error: new Error("db down") }] as const) {
+      loadDepartmentsIndexForViewer.mockResolvedValueOnce(index);
+      const markup = renderToStaticMarkup(await HomePage());
+      expect(markup).not.toContain('href="/departments"');
+      expect(markup).not.toContain("All departments");
+    }
   });
 
   it("throws on /services when the services result errors", async () => {
