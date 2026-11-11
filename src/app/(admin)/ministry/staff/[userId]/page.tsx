@@ -36,7 +36,7 @@ export default async function StaffCvPage({
   // edit form lives — redirect rather than duplicate that UI here.
   if (userId === user.id) redirect("/profile");
 
-  if (!(await canViewStaffCard(supabase, user.id, userId))) redirect("/dashboard");
+  if (!(await canViewStaffCard(supabase, user.id, userId))) redirect("/home");
 
   const admin = createAdminClient();
   const [{ data: owner }, { data: entries }, isAdmin, isLeadership, canEditJobDesc, leadsMinistry] =

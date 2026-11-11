@@ -4,7 +4,7 @@ import { isHiddenFromNav } from "@/config/modules";
 
 export default function MyMissionPage() {
   // Unbuilt placeholder — out of the menu, so send direct visits home.
-  if (isHiddenFromNav("my-mission")) redirect("/dashboard");
+  if (isHiddenFromNav("my-mission")) redirect("/home");
   return (
     <div className="ffsa-screen">
       <Masthead context="Outreach &amp; impact" title="My mission" />

@@ -16,7 +16,7 @@ export default async function SlackLinksPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  if (!(await callerIsAdmin(supabase, user.id))) redirect("/dashboard");
+  if (!(await callerIsAdmin(supabase, user.id))) redirect("/home");
 
   const admin = createAdminClient();
   // slack_linked_at / slack_link_source are new in migration 187 and

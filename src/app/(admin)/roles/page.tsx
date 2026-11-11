@@ -20,7 +20,7 @@ export default async function RolesPage() {
 
   // super_admin, admin or holders of administration.manage_roles may manage roles.
   if (!(await callerCanManageRoles(supabase, user.id))) {
-    redirect("/dashboard");
+    redirect("/home");
   }
 
   const isSuperAdmin = await callerIsSuperAdmin(supabase, user.id);

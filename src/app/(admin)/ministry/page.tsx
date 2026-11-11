@@ -28,7 +28,7 @@ export default async function MinistryPage() {
   const isLeadership = !isAdmin && (await isLeadershipTeam(supabase, user.id));
   const seesEverything = isAdmin || isLeadership;
   const ledIds = seesEverything ? [] : await getLedMinistryIds(supabase, user.id);
-  if (!seesEverything && ledIds.length === 0) redirect("/dashboard");
+  if (!seesEverything && ledIds.length === 0) redirect("/home");
 
   const admin = createAdminClient();
   const { data: ministries } = await listMinistries(admin);

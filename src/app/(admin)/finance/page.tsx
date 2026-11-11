@@ -6,6 +6,7 @@ import { getFinanceHubAccess } from "@/lib/finance-access";
 import { Globe, Wallet, CreditCard, Home, HeartHandshake, FolderKanban, BookOpen } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
+import { StatementsAccessNotice } from "@/components/finance/statements-access-notice";
 import { XeroConnection } from "./xero-connection";
 import { XeroSyncStatus } from "./xero-sync-status";
 import {
@@ -98,6 +99,7 @@ export default async function FinancePage() {
       <Masthead context="Financial management" title="Finance" />
 
       <div className="space-y-7 px-5 py-6 md:px-8 md:py-7">
+        <StatementsAccessNotice />
         <div className="border border-ink">
           <SectionBar title="Modules" meta={`${liveCount} of ${modules.length} live`} />
           <div className="md:hidden">

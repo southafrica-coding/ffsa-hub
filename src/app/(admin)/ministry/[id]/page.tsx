@@ -30,7 +30,7 @@ export default async function MinistryDetailPage({
   // they get elsewhere (OKRs, the Ministry list page) — but management stays
   // limited to admins and that specific ministry's own leaders.
   const canView = isAdmin || leadsThisMinistry || (await isLeadershipTeam(supabase, user.id));
-  if (!canView) redirect("/dashboard");
+  if (!canView) redirect("/home");
   const canManage = isAdmin || leadsThisMinistry;
 
   const admin = createAdminClient();
