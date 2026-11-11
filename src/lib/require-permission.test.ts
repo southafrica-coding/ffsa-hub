@@ -87,16 +87,16 @@ describe("requireModuleAccess", () => {
     await expect(requireModuleAccess(client(DIRECT).client, "u1", "finance")).resolves.toBeUndefined();
   });
 
-  it("redirects to the dashboard when not allowed", async () => {
+  it("redirects home when not allowed", async () => {
     await expect(requireModuleAccess(client(NOBODY).client, "u1", "finance")).rejects.toThrow(
-      "REDIRECT:/dashboard"
+      "REDIRECT:/home"
     );
   });
 
   it("keeps the records-library carve-out for admins", async () => {
     await expect(
       requireModuleAccess(client(ADMIN).client, "u1", "records-library")
-    ).rejects.toThrow("REDIRECT:/dashboard");
+    ).rejects.toThrow("REDIRECT:/home");
   });
 });
 
@@ -127,7 +127,7 @@ describe("finance module access", () => {
 
   it("still redirects a plain member", async () => {
     await expect(requireModuleAccess(client(MEMBER).client, "u1", "finance")).rejects.toThrow(
-      "REDIRECT:/dashboard"
+      "REDIRECT:/home"
     );
   });
 
@@ -143,18 +143,18 @@ describe("finance module access", () => {
       "brand-kit",
     ]) {
       expect(await hasModuleAccess(db, "u1", moduleId)).toBe(false);
-      await expect(requireModuleAccess(db, "u1", moduleId)).rejects.toThrow("REDIRECT:/dashboard");
+      await expect(requireModuleAccess(db, "u1", moduleId)).rejects.toThrow("REDIRECT:/home");
     }
     await expect(
       requireAnyModuleAccess(db, "u1", ["bookings", "vehicles"])
-    ).rejects.toThrow("REDIRECT:/dashboard");
+    ).rejects.toThrow("REDIRECT:/home");
   });
 
   it("denies an inactive finance_admin and treats null is_active as active", async () => {
     const inactive: PermissionWorld = { ...FINANCE_ADMIN, active: false };
     expect(await hasModuleAccess(client(inactive).client, "u1", "finance")).toBe(false);
     await expect(requireModuleAccess(client(inactive).client, "u1", "finance")).rejects.toThrow(
-      "REDIRECT:/dashboard"
+      "REDIRECT:/home"
     );
 
     const nullActive: PermissionWorld = { ...FINANCE_ADMIN, active: null };
@@ -177,7 +177,7 @@ describe("finance module access", () => {
     });
     expect(await hasModuleAccess(permsDown.client, "u1", "finance")).toBe(false);
     await expect(requireModuleAccess(permsDown.client, "u1", "finance")).rejects.toThrow(
-      "REDIRECT:/dashboard"
+      "REDIRECT:/home"
     );
 
     const bundleDown = createFakeSupabase({
@@ -206,6 +206,41 @@ describe("finance module access", () => {
     expect(await hasModuleAccess(db, "u1", "finance", { programId: PROGRAM })).toBe(false);
   });
 
+  it("lets a finance_admin through an any-of list that includes finance", async () => {
+    const db = client(FINANCE_ADMIN).client;
+    await expect(requireAnyModuleAccess(db, "u1", ["finance", "users"])).resolves.toBeUndefined();
+    expect(await hasModuleAccess(db, "u1", "users")).toBe(false);
+  });
+
+  it("fails closed when the users read fails", async () => {
+    // The first users read errors. A later read would show an active
+    // finance_admin. That must stay an "error", not a deny that falls
+    // through to canManageFinance.
+    let usersReads = 0;
+    const usersDown = createFakeSupabase({
+      resolve: (q) => {
+        if (q.table === "users") {
+          usersReads += 1;
+          if (usersReads === 1) return { data: null, error: { message: "users down" } };
+          return { data: { is_active: true } };
+        }
+        return permissionWorldResolver(FINANCE_ADMIN)(q) ?? { data: [] };
+      },
+    });
+    expect(await hasModuleAccess(usersDown.client, "u1", "finance")).toBe(false);
+    expect(usersReads).toBe(1);
+
+    const stillDown = createFakeSupabase({
+      resolve: (q) =>
+        q.table === "users"
+          ? { data: null, error: { message: "users down" } }
+          : permissionWorldResolver(FINANCE_ADMIN)(q) ?? { data: [] },
+    });
+    await expect(requireModuleAccess(stillDown.client, "u1", "finance")).rejects.toThrow(
+      "REDIRECT:/home"
+    );
+  });
+
   it("still admits the permission keys canManageFinance already accepts", async () => {
     for (const key of ["finance.manage", "finance.write"] as const) {
       const world: PermissionWorld = { roles: [], direct: [{ module: "finance", key }] };
@@ -229,6 +264,6 @@ describe("requireAnyModuleAccess", () => {
   it("redirects when none are", async () => {
     await expect(
       requireAnyModuleAccess(client(DIRECT).client, "u1", ["bookings", "vehicles"])
-    ).rejects.toThrow("REDIRECT:/dashboard");
+    ).rejects.toThrow("REDIRECT:/home");
   });
 });

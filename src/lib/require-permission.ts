@@ -41,6 +41,9 @@ type GrantRow = {
 
 type ModuleDecision = "allow" | "deny" | "error";
 
+/** One front door. Module denials land on Home, not the dashboard board. */
+const MODULE_DENIAL = "/home";
+
 /**
  * Permission and bypass-role half of canAccessAnyModule.
  *
@@ -174,6 +177,10 @@ async function canAccessAnyModule(
 ): Promise<boolean> {
   const decision = await moduleGrantDecision(supabase, userId, modules, scope);
   if (decision === "allow") return true;
+  // Any-of stays any-of. A finance_admin asked for ["finance", "users"] is
+  // allowed, because finance access is enough for this call. "users" on its
+  // own is still denied. A failed read ("error"), including the users row,
+  // is not a clean deny and is not retried here.
   if (decision !== "deny" || !modules.includes("finance")) return false;
   return canManageFinance(supabase, userId);
 }
@@ -189,7 +196,7 @@ async function canAccessAnyModule(
  * Pass `{ programId }` on a program page so a grant scoped to that program
  * counts.
  * Callers that omit it only see unscoped grants. A deactivated account
- * (is_active = false) never passes.
+ * (is_active = false) never passes. A denial redirects to /home.
  *
  * Usage:
  *   await requireModuleAccess(supabase, userId, "finance");
@@ -202,7 +209,7 @@ export async function requireModuleAccess(
   scope?: GrantScope
 ) {
   if (await canAccessAnyModule(supabase, userId, [module], scope)) return;
-  redirect("/dashboard");
+  redirect(MODULE_DENIAL);
 }
 
 /**
@@ -233,5 +240,5 @@ export async function requireAnyModuleAccess(
   scope?: GrantScope
 ) {
   if (await canAccessAnyModule(supabase, userId, modules, scope)) return;
-  redirect("/dashboard");
+  redirect(MODULE_DENIAL);
 }
