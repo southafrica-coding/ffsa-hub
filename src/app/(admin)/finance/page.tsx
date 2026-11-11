@@ -3,7 +3,16 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getFinanceHubAccess } from "@/lib/finance-access";
-import { Globe, Wallet, CreditCard, Home, HeartHandshake, FolderKanban, BookOpen } from "lucide-react";
+import {
+  Globe,
+  Wallet,
+  CreditCard,
+  Home,
+  HeartHandshake,
+  FolderKanban,
+  BookOpen,
+  type LucideIcon,
+} from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
 import { XeroConnection } from "./xero-connection";
@@ -16,7 +25,16 @@ import {
 } from "@/lib/finance/orgs";
 import { getXeroMirrorFreshness } from "@/lib/finance/xero-mirror-sync";
 
-const FINANCE_MODULES = [
+type FinanceModule = {
+  title: string;
+  description: string;
+  /** Omitted until the page exists. A missing href is never rendered as a link. */
+  href?: string;
+  icon: LucideIcon;
+  ready: boolean;
+};
+
+const FINANCE_MODULES: FinanceModule[] = [
   {
     title: "Outreach Finance",
     description: "Track budgets, expenses, receipts, cash batches, and closeouts for international outreach teams.",
@@ -27,14 +45,12 @@ const FINANCE_MODULES = [
   {
     title: "Staff Fees",
     description: "Monthly staff fees (R100/month), payment tracking, and status.",
-    href: "/finance/staff-fees",
     icon: CreditCard,
     ready: false,
   },
   {
     title: "Rent & Housing",
     description: "Rent payments, housing allocations, and payment history.",
-    href: "/finance/rent",
     icon: Home,
     ready: false,
   },
@@ -110,18 +126,22 @@ export default async function FinancePage() {
                       <Icon className="h-4 w-4 shrink-0 text-[color:var(--text-tertiary)]" />
                       <span className="font-display text-[20px] font-black uppercase leading-none">{mod.title}</span>
                     </span>
-                    <StatusPill tone={mod.ready ? "good" : "quiet"}>{mod.ready ? "Live" : "Soon"}</StatusPill>
+                    <StatusPill tone={mod.ready ? "good" : "quiet"}>
+                      {mod.ready ? "Live" : "Coming soon"}
+                    </StatusPill>
                   </div>
                   <p className="mt-2 text-[13px] leading-snug text-[color:var(--text-secondary)]">{mod.description}</p>
                 </>
               );
-              return mod.ready ? (
+              return mod.ready && mod.href ? (
                 <Link key={mod.title} href={mod.href} className="block border-b border-rule px-4 py-4 last:border-b-0">
                   {body}
                 </Link>
               ) : (
                 <div key={mod.title} className="border-b border-rule px-4 py-4 opacity-55 last:border-b-0">
-                  {body}
+                  <span aria-disabled="true" className="block">
+                    {body}
+                  </span>
                 </div>
               );
             })}
@@ -144,12 +164,12 @@ export default async function FinancePage() {
                     <TableCell className="align-top">
                       <div className="flex items-center gap-2.5">
                         <Icon className="h-4 w-4 shrink-0 text-[color:var(--text-tertiary)]" />
-                        {mod.ready ? (
+                        {mod.ready && mod.href ? (
                           <Link href={mod.href} className="font-display text-[19px] font-black uppercase leading-none hover:text-electric">
                             {mod.title}
                           </Link>
                         ) : (
-                          <span className="font-display text-[19px] font-black uppercase leading-none">
+                          <span aria-disabled="true" className="font-display text-[19px] font-black uppercase leading-none">
                             {mod.title}
                           </span>
                         )}
@@ -160,11 +180,11 @@ export default async function FinancePage() {
                     </TableCell>
                     <TableCell className="align-top">
                       <StatusPill tone={mod.ready ? "good" : "quiet"}>
-                        {mod.ready ? "Live" : "Soon"}
+                        {mod.ready ? "Live" : "Coming soon"}
                       </StatusPill>
                     </TableCell>
                     <TableCell className="align-top text-right">
-                      {mod.ready ? (
+                      {mod.ready && mod.href ? (
                         <Link
                           href={mod.href}
                           className="inline-block border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white"
@@ -172,7 +192,9 @@ export default async function FinancePage() {
                           Open
                         </Link>
                       ) : (
-                        <span className="mono-label">—</span>
+                        <span aria-disabled="true" className="mono-label">
+                          —
+                        </span>
                       )}
                     </TableCell>
                   </TableRow>
