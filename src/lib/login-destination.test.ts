@@ -38,6 +38,10 @@ describe("login destination", () => {
     expect(loginDestination("/\\evil")).toBe("/home");
     expect(loginDestination("https://evil.com")).toBe("/home");
     expect(loginDestination("https://evil")).toBe("/home");
+    expect(loginDestination("@evil.com")).toBe("/home");
+    expect(loginDestination("javascript:alert(1)")).toBe("/home");
+    expect(loginDestination("http://evil.com")).toBe("/home");
+    expect(loginDestination("https:")).toBe("/home");
   });
 
   it("treats /login, including a nested redirect, as no return path", () => {

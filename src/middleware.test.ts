@@ -208,6 +208,20 @@ describe("middleware", () => {
     expect(loc.searchParams.get("redirect")).toBeNull();
   });
 
+  it("a signed-in GET / redirects once to /home, and /home is not redirected again", async () => {
+    current = makeClient({ token: jwtFor("u1"), validUserId: "u1" });
+    const first = await middleware(req("/"));
+    const loc = location(first)!;
+    expect(first.status).toBe(307);
+    expect(loc.origin).toBe("https://hub.test");
+    expect(loc.pathname).toBe("/home");
+    expect(loc.search).toBe("");
+
+    const second = await middleware(req(`${loc.pathname}${loc.search}`));
+    expect(second.status).toBe(200);
+    expect(location(second)).toBeNull();
+  });
+
   it("an anonymous visit to / reaches login with no redirect param", async () => {
     const loc = location(await middleware(req("/")))!;
     expect(loc.pathname).toBe("/login");
