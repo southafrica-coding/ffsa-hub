@@ -28,6 +28,8 @@ vi.mock("@/lib/departments/session", () => ({
 vi.mock("@/lib/departments/load", () => ({
   sessionClient: async () => ({ kind: "session" }),
   loadCachedDepartmentsIndex: async () => ({ kind: "ok", data: [] }),
+  myDepartments: (rows: { viewerMembership: string }[]) =>
+    rows.filter((row) => row.viewerMembership === "member" || row.viewerMembership === "leader"),
   settleViewerResult: (result: { kind: string; data?: unknown }) => {
     if (result.kind !== "ok") throw new Error(result.kind);
     return result.data;
@@ -144,7 +146,7 @@ describe("/home follows the viewer, not the route", () => {
     expect(html).toContain(STAFF_LANGUAGE);
     expect(tabs).toContain('href="/home"');
     expect(tabs).toContain(">Home<");
-    expect(html).toContain("My departments");
+    expect(html).toContain("Rocks due");
   });
 
   it("gives a student with a scoped role the staff shell", async () => {

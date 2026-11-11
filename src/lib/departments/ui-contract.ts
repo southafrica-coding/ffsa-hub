@@ -17,6 +17,10 @@
  * view (budget without detail). Those sections are null, and memberCount
  * is null because the roster is not read.
  *
+ * viewerMembership is the viewer's own active membership in that
+ * department: leader, member, or none. It is not visibility.
+ * canSeeDepartmentDetail can be true while viewerMembership is none.
+ *
  * Viewer memberships include isPointLeader. People include email, null
  * unless canSeePeopleEmails. purpose, cluster, dueOn and parentName are nullable.
  *
@@ -27,6 +31,9 @@
 export type DepartmentCluster = "leadership" | "inward" | "outward" | "backbone" | "alongside";
 
 export type PersonCapacity = "leader" | "member";
+
+/** Active staff_ministry_members row for the viewer in one department. */
+export type ViewerDepartmentMembership = "member" | "leader" | "none";
 
 export interface DepartmentPerson {
   name: string;
@@ -56,6 +63,13 @@ export interface DepartmentSummary {
   active: boolean;
   /** True when the viewer gets the header and budget only. */
   budgetOnly: boolean;
+  /**
+   * Viewer's own active membership in this department.
+   * leader is member_role leader. member is any other active membership.
+   * none means no active membership. Admin and Leadership Team visibility
+   * do not count.
+   */
+  viewerMembership: ViewerDepartmentMembership;
   access: DepartmentAccess;
 }
 

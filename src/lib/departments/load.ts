@@ -5,6 +5,7 @@ import {
   loadDepartmentsIndexForViewer,
   type DepartmentHome,
   type DepartmentHomeResult,
+  type ViewerDepartmentMembership,
   type ViewerResult,
 } from "@/lib/departments";
 import { loginPath } from "@/lib/departments/login-path";
@@ -15,9 +16,26 @@ export const loadCachedDepartmentsIndex = cache(loadDepartmentsIndexForViewer);
 
 export type ShellDepartment = { id: string; label: string; href: string };
 
-/** HubShell's prop. An empty list hides the department group and the phone tab. */
-export function toShellDepartments(rows: readonly { slug: string; name: string }[]): ShellDepartment[] {
-  return rows.map((row) => ({
+const SHELL_MEMBERSHIPS = new Set<ViewerDepartmentMembership>(["member", "leader"]);
+
+/** Member or leader. Admin and Leadership Team visibility is none. */
+export function isMyDepartment(viewerMembership: ViewerDepartmentMembership): boolean {
+  return SHELL_MEMBERSHIPS.has(viewerMembership);
+}
+
+export function myDepartments<T extends { viewerMembership: ViewerDepartmentMembership }>(rows: readonly T[]): T[] {
+  return rows.filter((row) => isMyDepartment(row.viewerMembership));
+}
+
+/**
+ * HubShell's prop. Only a member or a leader appears. Admin and Leadership
+ * Team visibility stay on the index, not in this group. An empty list hides
+ * the group and the phone tab.
+ */
+export function toShellDepartments(
+  rows: readonly { slug: string; name: string; viewerMembership: ViewerDepartmentMembership }[]
+): ShellDepartment[] {
+  return myDepartments(rows).map((row) => ({
     id: row.slug,
     label: row.name,
     href: `/departments/${row.slug}`,

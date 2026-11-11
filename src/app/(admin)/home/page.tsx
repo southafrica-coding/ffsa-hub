@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { shellVariantForRoles, type StaffSignals } from "@/components/shell-nav";
 import { loadHomeForViewer, loadServicesForViewer } from "@/lib/departments";
 import { clusterLabel, departmentNames, managingLabel } from "@/lib/departments/data";
-import { loadCachedDepartmentsIndex, settleViewerResult } from "@/lib/departments/load";
+import { loadCachedDepartmentsIndex, myDepartments, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { getSidebarAccess } from "@/lib/sidebar-access";
 import { getRequestViewer } from "@/lib/viewer-cache";
@@ -78,38 +78,34 @@ function HomeBody({
   staffSignals?: StaffSignals;
 }) {
   const names = departmentNames(home.departments);
+  const mine = myDepartments(home.departments);
   const roles = roleNames ?? userRoles;
   const variantOptions = { departments, staffSignals };
   const portal = !menuLoadFailed && shellVariantForRoles(roles, variantOptions) === "portal";
+  const showDepartmentBlock = mine.length > 0 || showAllDepartments || departmentsNote;
 
   return (
     <div>
       <PageHeading context={homeContext(roles, menuLoadFailed, variantOptions)} title="Home" />
 
-      {portal ? null : (
+      {portal || !showDepartmentBlock ? null : (
         <>
-          <SectionHeading title="My departments" />
+          {mine.length > 0 ? <SectionHeading title="My departments" /> : null}
           {departmentsNote ? (
             <p className="px-5 py-4 text-sm text-muted-foreground md:px-8">Couldn&apos;t load departments.</p>
-          ) : home.departments.length === 0 ? (
-            <EmptyNote title="No department home yet">
-              A home appears when you lead or serve on a staff ministry. Part-time ministries, Rooted
-              Christian Academy and No Ministry do not get one.
-            </EmptyNote>
-          ) : (
-            home.departments.map((department) => (
-              <StackLink
-                key={department.slug}
-                href={`/departments/${department.slug}`}
-                title={department.name}
-                meta={
-                  department.budgetOnly
-                    ? `${clusterLabel(department.cluster)} · Budget only`
-                    : clusterLabel(department.cluster)
-                }
-              />
-            ))
-          )}
+          ) : null}
+          {mine.map((department) => (
+            <StackLink
+              key={department.slug}
+              href={`/departments/${department.slug}`}
+              title={department.name}
+              meta={
+                department.budgetOnly
+                  ? `${clusterLabel(department.cluster)} · Budget only`
+                  : clusterLabel(department.cluster)
+              }
+            />
+          ))}
           {showAllDepartments ? (
             <p className="px-5 py-3 text-sm md:px-8">
               <Link href="/departments">All departments</Link>
