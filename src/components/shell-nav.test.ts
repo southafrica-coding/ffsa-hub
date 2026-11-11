@@ -11,6 +11,24 @@ describe("shellVariantForRoles", () => {
     expect(shellVariantForRoles(["student", "staff"])).toBe("staff");
     expect(shellVariantForRoles(["ministry_leader"])).toBe("staff");
   });
+
+  it("gives a student with a direct module grant the staff shell", () => {
+    expect(shellVariantForRoles(["student"], { permittedModules: new Set(["schools"]) })).toBe("staff");
+    expect(shellVariantForRoles(["self_service"], { permittedModules: ["bookings"] })).toBe("staff");
+  });
+
+  it("gives a student with a scoped role the staff shell", () => {
+    expect(shellVariantForRoles(["student", "program_leader"])).toBe("staff");
+  });
+
+  it("gives a student with a department the staff shell", () => {
+    expect(shellVariantForRoles(["student"], { departments: [{ slug: "media" }] })).toBe("staff");
+  });
+
+  it("keeps a student, and a person with no roles, on the portal", () => {
+    expect(shellVariantForRoles(["student"], { permittedModules: new Set(), departments: [] })).toBe("portal");
+    expect(shellVariantForRoles([], { permittedModules: new Set(), departments: [] })).toBe("portal");
+  });
 });
 
 describe("buildShellNav", () => {
@@ -42,14 +60,15 @@ describe("buildShellNav", () => {
     expect(flattenShellNav(nav).filter((item) => item.label === "Home").map((item) => item.href)).toEqual(["/home"]);
   });
 
-  it("uses Finance for the staff office when the finance module is open, and nowhere else", () => {
+  it("uses Finance for the staff office and keeps My finance in the avatar menu", () => {
     const nav = buildShellNav(["staff"], new Set(["prayer-room"]));
-    const finance = flattenShellNav(nav).filter((item) => item.label === "Finance");
-    expect(finance.length).toBeGreaterThan(0);
-    expect(finance.every((item) => item.href === "/finance")).toBe(true);
     expect(nav.work.some((item) => item.label === "Finance" && item.href === "/finance")).toBe(true);
-    expect(nav.me.some((item) => item.label === "Finance" && item.href === "/finance")).toBe(true);
-    expect(flattenShellNav(nav).some((item) => item.href === "/my-finance")).toBe(false);
+    expect(nav.me).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "My finance", href: "/my-finance" }),
+        expect.objectContaining({ label: "Finance", href: "/finance" }),
+      ])
+    );
   });
 
   it("gives the portal shell the phone tabs and keeps staff Finance off it", () => {

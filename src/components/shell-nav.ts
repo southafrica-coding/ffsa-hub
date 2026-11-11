@@ -30,13 +30,27 @@ export type ShellLink = {
 export type ShellVariant = "staff" | "portal";
 
 /**
- * Membership roles. Anyone holding a role outside this set is staff and gets
- * the staff shell, whichever route they are on. An empty list is portal-only.
+ * Membership roles. A viewer is staff when they hold any other role (scoped
+ * or not), a module grant, or a department. Everyone else gets the portal.
  */
 const MEMBERSHIP_ONLY_ROLES = new Set(["student", "community_member", "self_service"]);
 
-export function shellVariantForRoles(userRoles: string[]): ShellVariant {
-  const staff = userRoles.some((role) => !MEMBERSHIP_ONLY_ROLES.has(role));
+function hasEntries(value: ReadonlySet<string> | readonly string[] | null | undefined): boolean {
+  if (value == null) return false;
+  if ("size" in value) return value.size > 0;
+  return value.length > 0;
+}
+
+export function shellVariantForRoles(
+  userRoles: readonly string[],
+  options?: {
+    permittedModules?: ReadonlySet<string> | readonly string[] | null;
+    departments?: readonly unknown[] | null;
+  }
+): ShellVariant {
+  const staffRole = userRoles.some((role) => !MEMBERSHIP_ONLY_ROLES.has(role));
+  const staff =
+    staffRole || hasEntries(options?.permittedModules) || (options?.departments?.length ?? 0) > 0;
   return staff ? "staff" : "portal";
 }
 
@@ -140,18 +154,14 @@ export function buildShellNav(
     icon: byId.get("dashboard")?.icon ?? LayoutDashboard,
   };
 
-  const me = getVisiblePortalTabs()
-    .filter((tab) => tab.href !== "/my-finance")
-    .map((tab) => ({
-      id: tab.id,
-      label: tab.label,
-      href: tab.href,
-      icon: tab.icon,
-    }));
-  // Staff Finance is the office. It is included only when the finance module
-  // is open to this viewer. That module is currently open to every signed-in
-  // person, because anyone can run an outreach budget. Personal fees are not
-  // listed here; the portal shell owns /my-finance under the same label.
+  const me = getVisiblePortalTabs().map((tab) => ({
+    id: tab.id,
+    label: tab.href === "/my-finance" ? "My finance" : tab.label,
+    href: tab.href,
+    icon: tab.icon,
+  }));
+  // Staff Finance is the office at /finance, only when that module is open.
+  // Personal fees stay in the avatar as My finance.
   const finance = byId.get("finance");
   if (finance) me.push(fromModule(finance, "Finance"));
   me.push({

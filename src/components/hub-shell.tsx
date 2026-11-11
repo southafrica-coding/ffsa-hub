@@ -15,6 +15,7 @@ export async function HubShell({
   menuLoadFailed,
   initials,
   departments = [],
+  roleNames,
   equipmentStaff = false,
   variant = "staff",
 }: {
@@ -25,6 +26,8 @@ export async function HubShell({
   initials?: string;
   /** Empty until the department API is wired. A non-empty list shows the tab and group. */
   departments?: { id: string; label: string; href: string }[];
+  /** Every role name, including scoped ones. Falls back to the unscoped list. */
+  roleNames?: string[];
   /** True when has_equipment_access() is true. Hire gear then opens the staff register. */
   equipmentStaff?: boolean;
   /**
@@ -34,7 +37,9 @@ export async function HubShell({
   variant?: "staff" | "portal";
 }) {
   const collapsed = (await cookies()).get("ffsa-sidebar")?.value === "1";
-  const resolvedVariant = menuLoadFailed ? variant : shellVariantForRoles(userRoles);
+  const resolvedVariant = menuLoadFailed
+    ? variant
+    : shellVariantForRoles(roleNames ?? userRoles, { permittedModules, departments });
   return (
     <div className="flex h-screen overflow-hidden bg-bg text-ink">
       <AdminSidebar

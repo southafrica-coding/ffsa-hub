@@ -3,8 +3,10 @@ import { getAccessibleSchoolsProgramIds } from "@/lib/auth/schools-program-acces
 import { getPermissionRowsForRoles } from "@/services/permissions";
 
 export interface SidebarAccess {
-  /** Role names assigned to the user (e.g. "super_admin", "events_admin"). */
+  /** Unscoped role names. Module visibility still uses this list. */
   userRoles: string[];
+  /** Every role name, including program-scoped ones. The shell uses this. */
+  roleNames: string[];
   /** Module ids the user can reach, derived from direct + role-bundle permissions. */
   permittedModules: Set<string>;
   /**
@@ -47,10 +49,12 @@ async function readOrThrow<T>(
  */
 export async function getSidebarAccess(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any
+  supabase: any,
+  known?: { userId: string; active: boolean }
 ): Promise<SidebarAccess> {
   const result: SidebarAccess = {
     userRoles: [],
+    roleNames: [],
     permittedModules: new Set<string>(),
     menuLoadFailed: false,
   };
@@ -58,25 +62,27 @@ export async function getSidebarAccess(
   // 1) Who is this? Prefer getUser() (revalidated); fall back to the cookie
   //    session only if getUser errors, so an auth-server blip doesn't read as
   //    logged out. A clean null user means genuinely signed out → empty menu.
-  let userId: string | null = null;
-  try {
-    const { data, error } = await supabase.auth.getUser();
-    if (data?.user) {
-      userId = data.user.id;
-    } else if (error) {
-      const { data: sessionData } = await supabase.auth.getSession();
-      userId = sessionData?.session?.user?.id ?? null;
-    }
-  } catch {
+  let userId: string | null = known?.userId ?? null;
+  if (!known) {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      userId = sessionData?.session?.user?.id ?? null;
+      const { data, error } = await supabase.auth.getUser();
+      if (data?.user) {
+        userId = data.user.id;
+      } else if (error) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        userId = sessionData?.session?.user?.id ?? null;
+      }
     } catch {
-      userId = null;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        userId = sessionData?.session?.user?.id ?? null;
+      } catch {
+        userId = null;
+      }
     }
   }
 
-  if (!userId) return result; // signed out — a minimal menu is correct
+  if (!userId || known?.active === false) return result; // signed out — a minimal menu is correct
 
   // 2) Load roles + permitted modules. If this fails for an authenticated user,
   //    flag it so the sidebar shows a refresh prompt, not a phantom empty menu.
@@ -86,9 +92,11 @@ export async function getSidebarAccess(
     // Global nav keeps unscoped assignments. A program-scoped schools grant
     // still lights Training; other modules stay unscoped.
     const [userRow, roleRows] = await Promise.all([
-      readOrThrow<{ is_active: boolean | null } | null>(() =>
-        supabase.from("users").select("is_active").eq("id", userId).maybeSingle()
-      ),
+      known?.active === true
+        ? Promise.resolve({ is_active: true })
+        : readOrThrow<{ is_active: boolean | null } | null>(() =>
+            supabase.from("users").select("is_active").eq("id", userId).maybeSingle()
+          ),
       readOrThrow<
         Array<{
           role_id?: string;
@@ -110,12 +118,12 @@ export async function getSidebarAccess(
       grantCounts(row.scope_type, row.scope_id, undefined)
     );
 
-    result.userRoles = unscopedRoles
-      .map((r) => {
-        const role = Array.isArray(r.roles) ? r.roles[0] : r.roles;
-        return role?.name ?? null;
-      })
-      .filter(Boolean) as string[];
+    const nameOf = (row: { roles: { name: string } | { name: string }[] | null }) => {
+      const role = Array.isArray(row.roles) ? row.roles[0] : row.roles;
+      return role?.name ?? null;
+    };
+    result.roleNames = (roleRows ?? []).map(nameOf).filter((name): name is string => !!name);
+    result.userRoles = unscopedRoles.map(nameOf).filter((name): name is string => !!name);
 
     // Only super_admin can skip the per-permission lookup. A plain `admin`
     // sees every module except the SUPER_ADMIN_ONLY_MODULES carve-outs
@@ -160,7 +168,7 @@ export async function getSidebarAccess(
           )
           .catch(() => [] as { id: string }[]),
         // Program-scoped schools grants light Training without opening every module.
-        getAccessibleSchoolsProgramIds(supabase, userId),
+        getAccessibleSchoolsProgramIds(supabase, userId, known?.active === true ? { active: true } : undefined),
       ]);
 
       for (const row of permRows ?? []) {

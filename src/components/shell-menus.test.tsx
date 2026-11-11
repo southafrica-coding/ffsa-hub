@@ -83,7 +83,7 @@ describe("removed portal nav", () => {
           walk(full);
           continue;
         }
-        if (!/\.(ts|tsx)$/.test(name) || name.endsWith(".test.ts") || name.endsWith(".test.tsx")) continue;
+        if (!/\.(ts|tsx)$/.test(name) || name === "shell-menus.test.tsx") continue;
         const text = readFileSync(full, "utf8");
         if (text.includes("portal-nav") || text.includes("PortalNav")) offenders.push(path.relative(root, full));
       }

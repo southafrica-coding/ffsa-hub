@@ -1,22 +1,12 @@
-import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
-import { accountIsActive } from "@/lib/auth/grant-scope";
 import { loginPath } from "@/lib/departments/login-path";
-import { createClient } from "@/lib/supabase/server";
+import { getRequestViewer } from "@/lib/viewer-cache";
 
 /**
- * One session read per request. The department wrappers check the same
- * user again; this keeps our own active check from running twice.
+ * One session read per request, shared with the admin and portal layouts.
+ * The department wrappers still check the same user on their own client.
  */
-export const getViewer = cache(async () => {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, active: false };
-  const active = await accountIsActive(supabase, user.id);
-  return { supabase, user, active };
-});
+export const getViewer = getRequestViewer;
 
 /** Signed-in and active. A missing session goes to login. An inactive account is a 404. */
 export async function requireSignedIn(currentPath = "") {

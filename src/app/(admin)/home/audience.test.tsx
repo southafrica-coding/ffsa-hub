@@ -27,6 +27,7 @@ vi.mock("@/lib/departments/session", () => ({
 }));
 vi.mock("@/lib/departments/load", () => ({
   sessionClient: async () => ({ kind: "session" }),
+  loadCachedDepartmentsIndex: async () => ({ kind: "ok", data: [] }),
   settleViewerResult: (result: { kind: string; data?: unknown }) => {
     if (result.kind !== "ok") throw new Error(result.kind);
     return result.data;
@@ -41,6 +42,13 @@ vi.mock("@/lib/departments", () => ({
 }));
 vi.mock("@/lib/sidebar-access", () => ({
   getSidebarAccess: () => getSidebarAccess(),
+}));
+vi.mock("@/lib/viewer-cache", () => ({
+  getRequestViewer: async () => ({
+    supabase: { kind: "session" },
+    user: { id: "user" },
+    active: true,
+  }),
 }));
 
 import { HubShell } from "@/components/hub-shell";
@@ -61,15 +69,33 @@ function tabBar(html: string): string {
   return html.slice(start, end);
 }
 
-async function renderHome(roles: string[], routeVariant: "staff" | "portal") {
+async function renderHome(
+  roles: string[],
+  routeVariant: "staff" | "portal",
+  extras?: {
+    permittedModules?: string[];
+    roleNames?: string[];
+    departments?: { id: string; label: string; href: string }[];
+    menuLoadFailed?: boolean;
+  }
+) {
+  const permittedModules = new Set(extras?.permittedModules ?? []);
+  const roleNames = extras?.roleNames ?? roles;
+  const departments = extras?.departments ?? [];
+  const menuLoadFailed = extras?.menuLoadFailed ?? false;
   getSidebarAccess.mockResolvedValue({
     userRoles: roles,
-    permittedModules: new Set<string>(),
-    menuLoadFailed: false,
+    roleNames,
+    permittedModules,
+    menuLoadFailed,
   });
   return renderToStaticMarkup(
     await HubShell({
       userRoles: roles,
+      roleNames,
+      permittedModules,
+      departments,
+      menuLoadFailed,
       variant: routeVariant,
       children: await HomePage(),
     })
@@ -98,6 +124,33 @@ describe("/home follows the viewer, not the route", () => {
     expect(tabs).toContain(">Me<");
     expect(tabs).not.toContain('href="/services"');
     expect(tabs).not.toContain(">Home<");
+    expect(html).not.toContain("My departments");
+    expect(html).not.toContain("Rocks due");
+    expect(html).not.toContain("OKR check-ins due");
+    expect(html).toContain("Services you use");
+  });
+
+  it("gives a student with a module grant the staff shell", async () => {
+    const html = await renderHome(["student"], "portal", { permittedModules: ["schools"] });
+    const tabs = tabBar(html);
+    expect(html).toContain(STAFF_LANGUAGE);
+    expect(tabs).toContain('href="/home"');
+    expect(tabs).toContain(">Home<");
+    expect(html).toContain("My departments");
+  });
+
+  it("gives a student with a scoped role the staff shell", async () => {
+    const html = await renderHome(["student"], "portal", { roleNames: ["student", "program_leader"] });
+    expect(tabBar(html)).toContain(">Home<");
+    expect(html).toContain(STAFF_LANGUAGE);
+  });
+
+  it("keeps the staff shell when the menu failed to load", async () => {
+    const html = await renderHome([], "staff", { menuLoadFailed: true });
+    expect(html).toContain(STAFF_LANGUAGE);
+    expect(html).not.toContain(PORTAL_HOME_CONTEXT);
+    expect(tabBar(html)).toContain(">Home<");
+    expect(html).toContain("Rocks due");
   });
 
   it("gives a staff viewer staff tabs and the staff heading", async () => {

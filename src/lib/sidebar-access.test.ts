@@ -25,7 +25,7 @@ describe("getSidebarAccess", () => {
   it("returns an empty menu for a signed-out visitor", async () => {
     const f = createFakeSupabase({ user: null });
     const access = await getSidebarAccess(f.client);
-    expect(access).toEqual({ userRoles: [], permittedModules: new Set(), menuLoadFailed: false });
+    expect(access).toEqual({ userRoles: [], roleNames: [], permittedModules: new Set(), menuLoadFailed: false });
     expect(f.queries).toHaveLength(0);
   });
 
@@ -113,6 +113,7 @@ describe("getSidebarAccess", () => {
       }).client
     );
     expect(scoped.userRoles).toEqual([]);
+    expect(scoped.roleNames).toEqual(["program_leader"]);
     expect(sorted(scoped.permittedModules)).toEqual(["schools"]);
 
     const contactOnly = await getSidebarAccess(
@@ -132,7 +133,7 @@ describe("getSidebarAccess", () => {
         direct: [{ module: "events", key: "events.view" }],
       }).client
     );
-    expect(access).toEqual({ userRoles: [], permittedModules: new Set(), menuLoadFailed: false });
+    expect(access).toEqual({ userRoles: [], roleNames: [], permittedModules: new Set(), menuLoadFailed: false });
   });
 
   it("a program staff seat lights up Training without a schools permission", async () => {
