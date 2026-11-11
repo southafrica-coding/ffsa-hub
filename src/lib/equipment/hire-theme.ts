@@ -13,8 +13,9 @@ const P = {
   lineStrong: "#3A3328", // input and button outlines
   ink: "#F6F0E2", // primary text
   body: "#CFC6B4",
-  muted: "#8C8273",
-  dim: "#5E564A",
+  muted: "#998F82", // a step lighter than dim text
+  dim: "#928472", // readable text: 4.5:1 on bg, surface, surface2 and hover
+  dimEdge: "#70695C", // borders and disabled text: 3:1 on those surfaces
   accent: "#FFB801",
   onAccent: "#100E0B", // text on the yellow — always dark
   ok: "#9CC48A",

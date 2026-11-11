@@ -245,7 +245,7 @@ export function ListingEditor({
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={busy !== null}
-                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-[6px] border border-dashed border-[color:var(--hire-dim)] text-[12px] text-[color:var(--hire-muted)]"
+                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-[6px] border border-dashed border-[color:var(--hire-dim-edge)] text-[12px] text-[color:var(--hire-muted)]"
                 >
                   {busy === "photo" ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
                   Add
@@ -384,7 +384,7 @@ export function ListingEditor({
                 className={cn(
                   "flex h-[52px] flex-[2] items-center justify-center rounded-[8px] px-5 text-[15px] font-bold md:h-11 md:flex-none",
                   blockers.length > 0
-                    ? "bg-[color:var(--hire-surface2)] text-[color:var(--hire-dim)]"
+                    ? "bg-[color:var(--hire-surface2)] text-[color:var(--hire-dim-edge)]"
                     : "bg-[color:var(--hire-accent)] text-[color:var(--hire-on-accent)]"
                 )}
               >

@@ -2,8 +2,8 @@
 
 // Storefront chrome (frames 44b, 46a, 47a): the header on desktop, the slim
 // header + bottom tab bar on a phone (Home · Browse · Cart · Rentals). Every
-// link keeps the visitor's chosen dates. Cart and Rentals arrive with
-// checkout, so until then they show but can't be opened.
+// link keeps the visitor's chosen dates. Cart and Rentals have no page yet,
+// so they stay on the bar as a label and are not links.
 
 import Image from "next/image";
 import Link from "next/link";
@@ -101,11 +101,11 @@ export function StoreTabBar() {
   const dated = useDated();
   const pathname = usePathname() ?? "";
   const cell = "flex min-h-[48px] items-center justify-center text-[12px]";
-  const tabs = [
-    { label: "Home", href: "/hire", active: pathname === "/hire", ready: true },
-    { label: "Browse", href: "/hire/c/all", active: pathname.startsWith("/hire/c/"), ready: true },
-    { label: "Cart", href: "/hire/cart", active: false, ready: false },
-    { label: "Rentals", href: "/hire/account", active: false, ready: false },
+  const tabs: Array<{ label: string; href: string; active: boolean } | { label: string }> = [
+    { label: "Home", href: "/hire", active: pathname === "/hire" },
+    { label: "Browse", href: "/hire/c/all", active: pathname.startsWith("/hire/c/") },
+    { label: "Cart" },
+    { label: "Rentals" },
   ];
   return (
     <nav
@@ -114,7 +114,7 @@ export function StoreTabBar() {
       style={{ paddingBottom: "max(10px, env(safe-area-inset-bottom, 0px))" }}
     >
       {tabs.map((t) =>
-        t.ready ? (
+        "href" in t ? (
           <Link
             key={t.label}
             href={dated(t.href)}
@@ -124,8 +124,9 @@ export function StoreTabBar() {
             {t.label}
           </Link>
         ) : (
-          <span key={t.label} aria-disabled="true" title="Coming with checkout" className={cn(cell, "text-[color:var(--hire-dim)]")}>
-            {t.label}
+          <span key={t.label} className={cn(cell, "flex-col text-[color:var(--hire-dim)]")}>
+            <span>{t.label}</span>
+            <span className="text-[10px] uppercase tracking-[0.12em]">Coming soon</span>
           </span>
         )
       )}

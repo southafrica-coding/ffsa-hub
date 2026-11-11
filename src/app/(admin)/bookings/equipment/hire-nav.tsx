@@ -51,7 +51,6 @@ export function HirePanel() {
             return (
               <span
                 key={item.label}
-                aria-disabled="true"
                 title="Not built yet"
                 className="flex items-center justify-between px-5 py-[9px] text-[14px] text-[color:var(--hire-dim)]"
               >
@@ -126,7 +125,7 @@ export function HireTabBar() {
                 {circle}
               </Link>
             ) : (
-              <span key={tab.label} aria-disabled="true" title="Not built yet" className={cell}>
+              <span key={tab.label} title="Not built yet" className={cell}>
                 {circle}
               </span>
             );
@@ -146,7 +145,6 @@ export function HireTabBar() {
           ) : (
             <span
               key={tab.label}
-              aria-disabled="true"
               title="Not built yet"
               className={cn(cell, "text-[color:var(--hire-dim)]")}
             >
@@ -192,7 +190,6 @@ export function HireTabBar() {
               ) : (
                 <span
                   key={item.label}
-                  aria-disabled="true"
                   className="flex min-h-[52px] items-center justify-between border-t border-[color:var(--hire-line)] px-[18px] text-[15px] text-[color:var(--hire-dim)]"
                 >
                   {item.label}
