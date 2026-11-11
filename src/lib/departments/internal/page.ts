@@ -19,13 +19,13 @@ import {
   listRocks,
   listRocksForQuarter,
   loadPeopleById,
+  type ActiveMembership,
   type DepartmentRecord,
   type MembershipRecord,
   type PersonRecord,
 } from "./repository";
 import { budgetLinks } from "../shape";
 import type {
-  DepartmentAccess,
   DepartmentHome,
   DepartmentOkrs,
   DepartmentPerson,
@@ -33,6 +33,7 @@ import type {
   OkrStatus,
   Rock,
   SubMinistry,
+  ViewerDepartmentMembership,
   ViewerMembership,
 } from "../ui-contract";
 import { okrStatus } from "../ui-contract";
@@ -65,6 +66,27 @@ function personOf(member: MembershipRecord, people: Map<string, PersonRecord>, e
   };
 }
 
+/**
+ * member_role is only 'member' | 'leader' (migration 126).
+ * dept_is_ministry_leader and dept_can_write_rock treat leader as
+ * member_role = 'leader'. is_point_leader is not a role. Any other
+ * active row is a member. listActiveMemberships already drops inactive
+ * rows and unknown roles, and the viewer is active (is_active IS NOT FALSE;
+ * NULL counts as active) before this runs.
+ */
+export function viewerDepartmentMembership(
+  memberships: readonly { staff_ministry_id: string; member_role: string | null }[],
+  ministryId: string
+): ViewerDepartmentMembership {
+  let member = false;
+  for (const membership of memberships) {
+    if (membership.staff_ministry_id !== ministryId) continue;
+    if (membership.member_role === "leader") return "leader";
+    if (membership.member_role === "member") member = true;
+  }
+  return member ? "member" : "none";
+}
+
 export function viewerMemberships(
   memberships: readonly { staff_ministry_id: string; member_role: string | null; is_point_leader: boolean }[],
   ministries: readonly { id: string; slug: string }[]
@@ -95,7 +117,8 @@ async function summaryFor(
   row: DepartmentRecord,
   access: DepartmentAccessFlags,
   counts: Map<string, number>,
-  parents: Map<string, { slug: string; name: string }>
+  parents: Map<string, { slug: string; name: string }>,
+  memberships: readonly ActiveMembership[]
 ): Promise<DepartmentSummary> {
   return {
     slug: row.slug,
@@ -106,6 +129,7 @@ async function summaryFor(
     memberCount: access.canSeeDepartmentDetail ? (counts.get(row.id) ?? 0) : null,
     active: row.is_active,
     budgetOnly: access.canSeeBudget && !access.canSeeDepartmentDetail,
+    viewerMembership: viewerDepartmentMembership(memberships, row.id),
     access,
   };
 }
@@ -118,11 +142,24 @@ function isListedHome(row: DepartmentRecord, foldedSources: Set<string>): boolea
 }
 
 export async function listVisibleDepartments(
-  reader: Client
-): Promise<{ data: DepartmentSummary[] | null; error: { message: string } | null; accessError?: boolean }> {
-  const [rows, aliases] = await Promise.all([listDepartmentRows(reader), listAliases(reader)]);
+  reader: Client,
+  userId: string
+): Promise<{
+  data: DepartmentSummary[] | null;
+  memberships: ActiveMembership[] | null;
+  error: { message: string } | null;
+  accessError?: boolean;
+}> {
+  const [rows, aliases, memberships] = await Promise.all([
+    listDepartmentRows(reader),
+    listAliases(reader),
+    listActiveMemberships(reader, userId),
+  ]);
+  if (memberships.error) {
+    return { data: null, memberships: null, error: memberships.error, accessError: true };
+  }
   if (rows.error || aliases.error) {
-    return { data: null, error: rows.error ?? aliases.error, accessError: true };
+    return { data: null, memberships: null, error: rows.error ?? aliases.error, accessError: true };
   }
   const foldedSources = new Set(aliases.data.map((alias) => alias.staff_ministry_id));
   const parents = new Map(rows.data.map((row) => [row.id, { slug: row.slug, name: row.name }]));
@@ -134,7 +171,7 @@ export async function listVisibleDepartments(
     foldedDetailIds(reader, rows.data),
   ]);
   if (!fold.ok || decisions.some((decision) => !decision.ok)) {
-    return { data: null, error: { message: "access lookup failed" }, accessError: true };
+    return { data: null, memberships: null, error: { message: "access lookup failed" }, accessError: true };
   }
   const visible = homes.flatMap((home, index) => {
     const decision = decisions[index];
@@ -150,12 +187,12 @@ export async function listVisibleDepartments(
   const counts = detailIds.length === 0
     ? { data: new Map<string, number>(), error: null }
     : await countActiveMembers(createAdminClient(), detailIds);
-  if (counts.error) return { data: null, error: counts.error };
+  if (counts.error) return { data: null, memberships: null, error: counts.error };
   const summaries: DepartmentSummary[] = [];
   for (const row of visible) {
-    summaries.push(await summaryFor(row.home, row.access, counts.data, parents));
+    summaries.push(await summaryFor(row.home, row.access, counts.data, parents, memberships.data));
   }
-  return { data: summaries, error: null };
+  return { data: summaries, memberships: memberships.data, error: null };
 }
 
 async function loadBudget(admin: Client, department: DepartmentRecord) {
@@ -338,16 +375,18 @@ export async function buildDepartmentHome(
   const detail = access.canSeeDepartmentDetail;
   const seeBudget = access.canSeeBudget;
   if (!detail && !seeBudget) return { data: null, error: null };
-  const counts = detail ? await countActiveMembers(admin) : { data: new Map<string, number>(), error: null };
+  const [counts, all, mine] = await Promise.all([
+    detail ? countActiveMembers(admin) : Promise.resolve({ data: new Map<string, number>(), error: null }),
+    listDepartmentRows(admin),
+    listActiveMemberships(userClient, userId),
+  ]);
   if (counts.error) return { data: null, error: counts.error };
-  const all = await listDepartmentRows(admin);
   if (all.error) return { data: null, error: all.error };
+  if (mine.error) return { data: null, error: mine.error };
   const parentMap = new Map(all.data.map((row) => [row.id, { slug: row.slug, name: row.name }]));
-  const summary = await summaryFor(department, access, counts.data, parentMap);
+  const summary = await summaryFor(department, access, counts.data, parentMap, mine.data);
   const budget = seeBudget ? await loadBudget(admin, department) : { data: null, error: null };
   if (budget.error) return { data: null, error: budget.error };
-  const mine = detail ? await listActiveMemberships(userClient, userId) : { data: [], error: null };
-  if (mine.error) return { data: null, error: mine.error };
   const viewer = viewerMemberships(mine.data, all.data);
 
   if (!detail) {

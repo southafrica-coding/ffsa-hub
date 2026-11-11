@@ -3,17 +3,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FakeQuery } from "@/lib/testing/fake-supabase";
 import { createFakeSupabase } from "@/lib/testing/fake-supabase";
 import {
+  ADMIN,
+  FINANCE_USER,
   INACTIVE_ADMIN,
   LEADER,
   LEADERSHIP,
+  LEADERSHIP_MEMBER,
   MEDIA,
   MEMBER,
   OUTSIDER,
+  WORSHIP,
   WORSHIP_LEADER,
   makeDepartmentWorld,
   resolveDepartmentWorld,
   type DepartmentWorld,
 } from "@/lib/testing/department-world";
+import type { DepartmentSummary } from "./ui-contract";
 import {
   loadDepartmentHomeForViewer,
   loadDepartmentsIndexForViewer,
@@ -199,5 +204,233 @@ describe("viewer wrappers", () => {
       expect(home.data.okrCheckInsDue).toEqual([]);
       expect(home.data.departments.some((row) => row.slug === "media")).toBe(true);
     }
+  });
+});
+
+function summaryOf(rows: DepartmentSummary[], slug: string): DepartmentSummary {
+  const row = rows.find((item) => item.slug === slug);
+  if (!row) throw new Error(`missing ${slug}`);
+  return row;
+}
+
+describe("viewerMembership", () => {
+  it("reports member for an active membership", async () => {
+    const listed = await loadDepartmentsIndexForViewer(client(MEMBER));
+    expect(listed.kind).toBe("ok");
+    if (listed.kind === "ok") expect(summaryOf(listed.data, "media").viewerMembership).toBe("member");
+
+    const dashboard = await loadHomeForViewer(client(MEMBER));
+    expect(dashboard.kind).toBe("ok");
+    if (dashboard.kind === "ok") expect(summaryOf(dashboard.data.departments, "media").viewerMembership).toBe("member");
+
+    const home = await loadDepartmentHomeForViewer(client(MEMBER), "media");
+    expect(home.kind).toBe("ok");
+    if (home.kind === "ok") expect(home.data.department.viewerMembership).toBe("member");
+
+    const point = h.world!.memberships.find((row) => row.user_id === MEMBER && row.staff_ministry_id === MEDIA);
+    expect(point).toBeTruthy();
+    if (point) point.is_point_leader = true;
+    const pointed = await loadDepartmentsIndexForViewer(client(MEMBER));
+    expect(pointed.kind).toBe("ok");
+    if (pointed.kind === "ok") expect(summaryOf(pointed.data, "media").viewerMembership).toBe("member");
+
+    const person = h.world!.people.find((row) => row.id === MEMBER);
+    expect(person).toBeTruthy();
+    if (person) person.is_active = null;
+    const nullable = await loadDepartmentsIndexForViewer(client(MEMBER));
+    expect(nullable.kind).toBe("ok");
+    if (nullable.kind === "ok") expect(summaryOf(nullable.data, "media").viewerMembership).toBe("member");
+
+    const financeHome = await loadDepartmentHomeForViewer(client(FINANCE_USER), "finances_legal");
+    expect(financeHome.kind).toBe("ok");
+    if (financeHome.kind === "ok") expect(financeHome.data.department.viewerMembership).toBe("member");
+    const financeMedia = await loadDepartmentHomeForViewer(client(FINANCE_USER), "media");
+    expect(financeMedia.kind).toBe("ok");
+    if (financeMedia.kind === "ok") {
+      expect(financeMedia.data.department.viewerMembership).toBe("none");
+      expect(financeMedia.data.department.budgetOnly).toBe(true);
+      expect(financeMedia.data.department.access.canSeeDepartmentDetail).toBe(false);
+    }
+  });
+
+  it("reports leader for an active leader role", async () => {
+    const listed = await loadDepartmentsIndexForViewer(client(LEADER));
+    expect(listed.kind).toBe("ok");
+    if (listed.kind === "ok") expect(summaryOf(listed.data, "media").viewerMembership).toBe("leader");
+
+    const dashboard = await loadHomeForViewer(client(LEADER));
+    expect(dashboard.kind).toBe("ok");
+    if (dashboard.kind === "ok") expect(summaryOf(dashboard.data.departments, "media").viewerMembership).toBe("leader");
+
+    const home = await loadDepartmentHomeForViewer(client(LEADER), "media");
+    expect(home.kind).toBe("ok");
+    if (home.kind === "ok") expect(home.data.department.viewerMembership).toBe("leader");
+  });
+
+  it("reports none for an admin who is not a member", async () => {
+    const listed = await loadDepartmentsIndexForViewer(client(ADMIN));
+    expect(listed.kind).toBe("ok");
+    if (listed.kind === "ok") {
+      const media = summaryOf(listed.data, "media");
+      expect(media.viewerMembership).toBe("none");
+      expect(media.access.canSeeDepartmentDetail).toBe(true);
+    }
+
+    const dashboard = await loadHomeForViewer(client(ADMIN));
+    expect(dashboard.kind).toBe("ok");
+    if (dashboard.kind === "ok") {
+      expect(summaryOf(dashboard.data.departments, "media").viewerMembership).toBe("none");
+    }
+
+    const home = await loadDepartmentHomeForViewer(client(ADMIN), "media");
+    expect(home.kind).toBe("ok");
+    if (home.kind === "ok") {
+      expect(home.data.department.viewerMembership).toBe("none");
+      expect(home.data.access.canSeeDepartmentDetail).toBe(true);
+    }
+  });
+
+  it("reports none for a Leadership Team member who is not in that department", async () => {
+    const listed = await loadDepartmentsIndexForViewer(client(LEADERSHIP_MEMBER));
+    expect(listed.kind).toBe("ok");
+    if (listed.kind === "ok") {
+      const media = summaryOf(listed.data, "media");
+      expect(media.viewerMembership).toBe("none");
+      expect(media.access.canSeeDepartmentDetail).toBe(true);
+      expect(summaryOf(listed.data, "leadership_team").viewerMembership).toBe("member");
+    }
+
+    const home = await loadDepartmentHomeForViewer(client(LEADERSHIP_MEMBER), "media");
+    expect(home.kind).toBe("ok");
+    if (home.kind === "ok") {
+      expect(home.data.department.viewerMembership).toBe("none");
+      expect(home.data.access.canSeeDepartmentDetail).toBe(true);
+    }
+
+    const donors = "d0d0d0d0-d0d0-4d0d-8d0d-d0d0d0d0d0d0";
+    const donor = "d1d1d1d1-d1d1-4d1d-8d1d-d1d1d1d1d1d1";
+    h.world!.ministries.push({
+      id: donors,
+      slug: "donors_dev",
+      name: "Donors & Development",
+      description: null,
+      is_active: true,
+      ministry_type: "main",
+      sort_order: 61,
+      parent_id: null,
+    });
+    h.world!.people.push({
+      id: donor,
+      first_name: "Dee",
+      last_name: "Dev",
+      preferred_name: null,
+      display_name: null,
+      email: "dee@example.com",
+      job_title: null,
+      is_active: true,
+    });
+    h.world!.memberships.push({
+      id: "m-donor",
+      user_id: donor,
+      staff_ministry_id: donors,
+      member_role: "member",
+      is_point_leader: false,
+      status: "active",
+    });
+    const folded = await loadDepartmentHomeForViewer(client(donor), "finances_legal");
+    expect(folded.kind).toBe("ok");
+    if (folded.kind === "ok") {
+      expect(folded.data.department.viewerMembership).toBe("none");
+      expect(folded.data.access.canSeeDepartmentDetail).toBe(true);
+    }
+  });
+
+  it("reports a mixed list of leader, member, and none", async () => {
+    h.world!.memberships.push(
+      {
+        id: "m-admin-media",
+        user_id: ADMIN,
+        staff_ministry_id: MEDIA,
+        member_role: "leader",
+        is_point_leader: false,
+        status: "active",
+      },
+      {
+        id: "m-admin-worship",
+        user_id: ADMIN,
+        staff_ministry_id: WORSHIP,
+        member_role: "member",
+        is_point_leader: true,
+        status: "active",
+      }
+    );
+    const expected = {
+      leadership_team: "none",
+      prayer_and_worship: "member",
+      media: "leader",
+      hulk: "none",
+      operations: "none",
+      finances_legal: "none",
+    };
+
+    const listed = await loadDepartmentsIndexForViewer(client(ADMIN));
+    expect(listed.kind).toBe("ok");
+    if (listed.kind === "ok") {
+      expect(Object.fromEntries(listed.data.map((row) => [row.slug, row.viewerMembership]))).toEqual(expected);
+      expect(summaryOf(listed.data, "operations").access.canSeeDepartmentDetail).toBe(true);
+    }
+
+    const dashboard = await loadHomeForViewer(client(ADMIN));
+    expect(dashboard.kind).toBe("ok");
+    if (dashboard.kind === "ok") {
+      expect(Object.fromEntries(dashboard.data.departments.map((row) => [row.slug, row.viewerMembership]))).toEqual(
+        expected
+      );
+    }
+  });
+
+  it("reports none for an inactive membership", async () => {
+    h.world!.memberships.push({
+      id: "m-admin-inactive",
+      user_id: ADMIN,
+      staff_ministry_id: MEDIA,
+      member_role: "leader",
+      is_point_leader: true,
+      status: "inactive",
+    });
+    const inactive = await loadDepartmentsIndexForViewer(client(ADMIN));
+    expect(inactive.kind).toBe("ok");
+    if (inactive.kind === "ok") {
+      const media = summaryOf(inactive.data, "media");
+      expect(media.viewerMembership).toBe("none");
+      expect(media.access.canSeeDepartmentDetail).toBe(true);
+    }
+
+    const row = h.world!.memberships.find((membership) => membership.id === "m-admin-inactive");
+    expect(row).toBeTruthy();
+    if (row) row.status = "pending";
+    const pending = await loadDepartmentHomeForViewer(client(ADMIN), "media");
+    expect(pending.kind).toBe("ok");
+    if (pending.kind === "ok") expect(pending.data.department.viewerMembership).toBe("none");
+
+    h.world = makeDepartmentWorld();
+    h.world.memberships.push({
+      id: "m-ian-media",
+      user_id: INACTIVE_ADMIN,
+      staff_ministry_id: MEDIA,
+      member_role: "leader",
+      is_point_leader: false,
+      status: "active",
+    });
+    expect((await loadDepartmentsIndexForViewer(client(INACTIVE_ADMIN))).kind).toBe("forbidden");
+    expect((await loadHomeForViewer(client(INACTIVE_ADMIN))).kind).toBe("forbidden");
+    expect((await loadDepartmentHomeForViewer(client(INACTIVE_ADMIN), "media")).kind).toBe("forbidden");
+  });
+
+  it("fails closed when the membership lookup fails", async () => {
+    h.world!.errors = { staff_ministry_members: true };
+    expect((await loadDepartmentsIndexForViewer(client(ADMIN))).kind).toBe("forbidden");
+    expect((await loadHomeForViewer(client(ADMIN))).kind).toBe("forbidden");
+    expect((await loadDepartmentHomeForViewer(client(ADMIN), "media")).kind).toBe("error");
   });
 });
