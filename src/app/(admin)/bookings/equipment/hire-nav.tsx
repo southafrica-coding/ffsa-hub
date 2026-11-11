@@ -52,7 +52,7 @@ export function HirePanel() {
               <span
                 key={item.label}
                 title="Not built yet"
-                className="flex items-center justify-between px-5 py-[9px] text-[14px] text-[color:var(--hire-dim-edge)]"
+                className="flex items-center justify-between px-5 py-[9px] text-[14px] text-[color:var(--hire-dim)]"
               >
                 {item.label}
                 <span className="text-[10px] uppercase tracking-[0.14em]">Soon</span>
@@ -125,7 +125,7 @@ export function HireTabBar() {
                 {circle}
               </Link>
             ) : (
-              <span key={tab.label} aria-disabled="true" title="Not built yet" className={cell}>
+              <span key={tab.label} title="Not built yet" className={cell}>
                 {circle}
               </span>
             );
@@ -146,7 +146,7 @@ export function HireTabBar() {
             <span
               key={tab.label}
               title="Not built yet"
-              className={cn(cell, "text-[color:var(--hire-dim-edge)]")}
+              className={cn(cell, "text-[color:var(--hire-dim)]")}
             >
               {tab.label}
             </span>
@@ -190,7 +190,7 @@ export function HireTabBar() {
               ) : (
                 <span
                   key={item.label}
-                  className="flex min-h-[52px] items-center justify-between border-t border-[color:var(--hire-line)] px-[18px] text-[15px] text-[color:var(--hire-dim-edge)]"
+                  className="flex min-h-[52px] items-center justify-between border-t border-[color:var(--hire-line)] px-[18px] text-[15px] text-[color:var(--hire-dim)]"
                 >
                   {item.label}
                   <span className="text-[11px] uppercase tracking-[0.14em]">Soon</span>

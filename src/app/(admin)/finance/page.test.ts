@@ -37,6 +37,7 @@ const APP = path.join(ROOT, "src/app");
 const SOURCES = [
   "src/app/(admin)/finance/page.tsx",
   "src/app/(public)/hire/_components/store-chrome.tsx",
+  "src/app/(admin)/bookings/equipment/hire-nav.tsx",
 ];
 
 type Segment = string | { dynamic: true; catchAll: boolean };
@@ -127,10 +128,14 @@ describe("finance and hire internal hrefs", () => {
   it("keeps Coming soon as plain text with AA contrast", () => {
     const finance = readFileSync(path.join(ROOT, SOURCES[0]), "utf8");
     const hire = readFileSync(path.join(ROOT, SOURCES[1]), "utf8");
+    const nav = readFileSync(path.join(ROOT, SOURCES[2]), "utf8");
     expect(finance).not.toContain("opacity-55");
     expect(finance).not.toContain("aria-disabled");
     expect(finance).toContain('aria-hidden="true"');
     expect(hire).not.toContain("aria-disabled");
+    expect(nav).not.toContain("aria-disabled");
+    expect(nav).not.toContain("hire-dim-edge");
+    expect(nav).toContain("hire-dim");
     expect(HIRE_CSS).toContain(`--hire-dim: ${HIRE.dim}`);
     expect(HIRE_CSS).toContain(`--hire-dim-edge: ${HIRE.dimEdge}`);
     expect(contrastRatio(toneHex(TONE.quiet), "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
