@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEnrollmentsByUser, getResponsesByUser } from "@/services/schools";
+import { getCurrentUser } from "@/services/users";
 import Link from "next/link";
 import {
   Masthead,
+  MastheadAction,
   NeedsYou,
   NeedsYouAction,
   SectionBar,
@@ -105,15 +107,22 @@ export default async function MySchoolsPage() {
   }
 
   const userId = user.id;
-  const { data: enrollments } = await getEnrollmentsByUser(supabase, userId);
-  const { data: myResponses } = await getResponsesByUser(supabase, userId);
-
-  const { data: openPrograms } = await supabase
-    .from("programs")
-    .select("id, name, code, credit_hours")
-    .eq("application_open", true)
-    .eq("status", "active")
-    .order("name", { ascending: true });
+  // Same gate as /my-attendance: a signed-in profile may open it. A session
+  // with no profile row is sent to login, so the link stays off for them.
+  // That page does not check a role.
+  const [{ data: profile }, { data: enrollments }, { data: myResponses }, { data: openPrograms }] =
+    await Promise.all([
+      getCurrentUser(supabase),
+      getEnrollmentsByUser(supabase, userId),
+      getResponsesByUser(supabase, userId),
+      supabase
+        .from("programs")
+        .select("id, name, code, credit_hours")
+        .eq("application_open", true)
+        .eq("status", "active")
+        .order("name", { ascending: true }),
+    ]);
+  const canViewAttendance = Boolean(profile);
 
   const responses = (myResponses ?? []) as ResponseRow[];
   const enrolled = (enrollments ?? []) as EnrollmentRow[];
@@ -132,6 +141,11 @@ export default async function MySchoolsPage() {
       <Masthead
         context={`Training & education · ${enrolled.length} ${enrolled.length === 1 ? "enrolment" : "enrolments"}`}
         title="My training"
+        actions={
+          canViewAttendance ? (
+            <MastheadAction href="/my-attendance">View my attendance</MastheadAction>
+          ) : undefined
+        }
       />
 
       {/* The page's ONE yellow band: something is open that you have not
