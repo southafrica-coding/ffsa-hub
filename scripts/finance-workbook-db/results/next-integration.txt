@@ -1,0 +1,20 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /workspace
+
+ ✓ src/services/budget-workbook.integration.test.ts > workbook routes on local PostgREST > refuses preview create and save before any write 17ms
+ ✓ src/services/budget-workbook.integration.test.ts > workbook routes on local PostgREST > returns schema_not_applied when the budgets table is absent 3ms
+ ✓ src/services/budget-workbook.integration.test.ts > workbook routes on local PostgREST > returns schema_not_applied when migration 303's function is absent 20ms
+ ✓ src/services/budget-workbook.integration.test.ts > workbook routes on local PostgREST > lets a ministry leader create, load, and save without reading finance_orgs 172ms
+ ✓ src/services/budget-workbook.integration.test.ts > workbook routes on local PostgREST > maps a stale revision to 409 and leaves the sheet unchanged, then a reload save works 154ms
+ ✓ src/services/budget-workbook.integration.test.ts > workbook routes on local PostgREST > does not add an audit row when the saved sheet matches what is stored 103ms
+ ✓ src/services/budget-workbook.integration.test.ts > workbook routes on local PostgREST > saves tracker rows on submitted and approved budgets and rolls a forbidden line edit back 336ms
+ ✓ src/services/budget-workbook.integration.test.ts > workbook routes on local PostgREST > lets an owning leader discover NPC periods and create the first budget, and hides every other period 148ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  11:28:26
+   Duration  1.37s (transform 148ms, setup 0ms, import 224ms, tests 979ms, environment 0ms)
+
