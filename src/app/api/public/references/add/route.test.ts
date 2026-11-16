@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeSupabase, type FakeQuery } from "@/lib/testing/fake-supabase";
-import { SELF_REFEREE_MESSAGE } from "@/lib/references/self-referee";
+import { REFEREE_CHECK_FAILED, SELF_REFEREE_MESSAGE } from "@/lib/references/self-referee";
 
 const h = vi.hoisted(() => ({
   createReferenceRequest: vi.fn(),
   sendReferenceInvite: vi.fn(),
   authEmail: "auth@example.com",
+  lookupError: null as string | null,
 }));
 
 const state = vi.hoisted(() => ({
@@ -16,6 +17,9 @@ function admin() {
   const fake = createFakeSupabase({
     resolve: (q: FakeQuery) => {
       if (q.table === "application_responses") {
+        if (h.lookupError && (q.columns ?? "").includes("users!")) {
+          return { data: null, error: { message: h.lookupError } };
+        }
         return {
           data: {
             id: "app-1",
@@ -79,6 +83,7 @@ function add(email: string) {
 describe("POST /api/public/references/add self-referee", () => {
   beforeEach(() => {
     h.authEmail = "auth@example.com";
+    h.lookupError = null;
     admin();
     h.createReferenceRequest.mockReset();
     h.createReferenceRequest.mockResolvedValue({
@@ -109,5 +114,22 @@ describe("POST /api/public/references/add self-referee", () => {
     expect(h.sendReferenceInvite).toHaveBeenCalledWith(
       expect.objectContaining({ toEmail: "ada+ref@example.com" })
     );
+  });
+
+  it("hides a database error from the applicant email lookup", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    h.lookupError = "permission denied for table application_responses";
+    const res = await add("pastor@example.com");
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe(REFEREE_CHECK_FAILED);
+    expect(JSON.stringify(body)).not.toContain("permission denied");
+    expect(h.createReferenceRequest).not.toHaveBeenCalled();
+    expect(h.sendReferenceInvite).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[references/add] applicant email lookup failed",
+      "permission denied for table application_responses"
+    );
+    errorSpy.mockRestore();
   });
 });

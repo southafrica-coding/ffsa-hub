@@ -5,6 +5,18 @@
 export const SELF_REFEREE_MESSAGE =
   "A referee can't use your own email address. Please enter your referee's email.";
 
+export const STAFF_SELF_REFEREE_MESSAGE =
+  "A referee can't use the applicant's own email address.";
+
+export const REFEREE_CHECK_FAILED =
+  "Couldn't check the referee email. Please try again.";
+
+export type SelfRefereeAudience = "applicant" | "staff";
+
+export function selfRefereeMessage(audience: SelfRefereeAudience = "applicant"): string {
+  return audience === "staff" ? STAFF_SELF_REFEREE_MESSAGE : SELF_REFEREE_MESSAGE;
+}
+
 export const REFEREE_OTHER_PERSON_HINT =
   "The referee must be someone else, with their own email.";
 
@@ -38,21 +50,23 @@ type RefereeEntry = {
 export function selfRefereeError(
   references: RefereeEntry[],
   applicantEmails: Array<string | null | undefined>,
-  slots?: Array<{ id: string; label?: string | null }>
+  slots?: Array<{ id: string; label?: string | null }>,
+  audience: SelfRefereeAudience = "applicant"
 ): string | null {
   const labels = new Map(
     (slots ?? []).map((slot) => [slot.id, (slot.label ?? "").trim()])
   );
   const named = references.length > 1;
+  const sentence = selfRefereeMessage(audience);
   const failures: string[] = [];
   for (let i = 0; i < references.length; i++) {
     const ref = references[i];
     if (!isSelfReferee(ref?.referee_email, applicantEmails)) continue;
-    if (!named) return SELF_REFEREE_MESSAGE;
+    if (!named) return sentence;
     const slotLabel = ref?.slot_id ? labels.get(ref.slot_id) : "";
     const name = typeof ref?.referee_name === "string" ? ref.referee_name.trim() : "";
     const entry = slotLabel || name || `Referee ${i + 1}`;
-    failures.push(`${entry}: ${SELF_REFEREE_MESSAGE}`);
+    failures.push(`${entry}: ${sentence}`);
   }
   if (failures.length === 0) return null;
   return failures.join(" ");
@@ -96,18 +110,26 @@ async function linkedUserAuthEmail(supabase: Client, userId: unknown): Promise<s
   if (typeof getUserById !== "function") return null;
   try {
     const { data, error } = await getUserById.call(supabase.auth.admin, userId);
-    if (error) return null;
+    if (error) {
+      // Missing the auth address does not refuse the write. The application
+      // and profile addresses are still compared.
+      console.error("[self-referee] auth email lookup failed", error);
+      return null;
+    }
     const email = data?.user?.email;
     return typeof email === "string" ? email : null;
-  } catch {
+  } catch (err) {
+    console.error("[self-referee] auth email lookup failed", err);
     return null;
   }
 }
 
 /**
  * Every email the applicant is known by for one application.
- * A read error fails closed: callers must not write a referee address
- * they could not compare.
+ * A failed read of the application row fails closed: callers must not
+ * write a referee address they could not compare.
+ * A failed auth-admin lookup is logged and ignored. The other addresses
+ * are still compared.
  */
 export async function loadApplicantEmails(
   supabase: Client,

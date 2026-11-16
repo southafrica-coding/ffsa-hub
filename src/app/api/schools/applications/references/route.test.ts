@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeSupabase, filterValue, type FakeQuery } from "@/lib/testing/fake-supabase";
+import { REFERENCE_REQUEST_WITH_SLOT } from "@/lib/references/reference-request-columns";
 
 const editReferenceContact = vi.hoisted(() =>
   vi.fn(async () => ({ ok: true, data: { id: "ref" }, emailed: false, emailChanged: false }))
@@ -299,7 +300,9 @@ describe("GET /api/schools/applications/references", () => {
 
     const userRead = referenceQueries(user);
     expect(userRead).toHaveLength(1);
-    expect(userRead[0].columns).toBe("*, reference_slots(label, description)");
+    expect(userRead[0].columns).toBe(REFERENCE_REQUEST_WITH_SLOT);
+    expect(userRead[0].columns).not.toContain("token");
+    expect(userRead[0].columns).not.toContain("*");
     expect(referenceQueries(admin)).toHaveLength(0);
     expect(user.queries.some((q) => q.rpc?.name === "can_access_assigned_school_record")).toBe(false);
   });

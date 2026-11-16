@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { createFakeSupabase } from "@/lib/testing/fake-supabase";
+import { describe, expect, it, vi } from "vitest";
 import {
   SELF_REFEREE_MESSAGE,
   isSelfReferee,
+  loadApplicantEmails,
   selfRefereeError,
 } from "./self-referee";
 
@@ -75,5 +77,41 @@ describe("selfRefereeError", () => {
         slots
       )
     ).toBeNull();
+  });
+});
+
+describe("loadApplicantEmails auth lookup", () => {
+  it("logs a failed auth lookup and still returns the other applicant emails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fake = createFakeSupabase({
+      resolve: (q) => {
+        if (q.table === "application_responses") {
+          return {
+            data: {
+              applicant_email: "ada@example.com",
+              applicant_info: { email: "info@example.com" },
+              user_id: "user-1",
+              users: { email: "user@example.com" },
+            },
+          };
+        }
+        return { data: null };
+      },
+    });
+    fake.client.auth.admin = {
+      getUserById: async () => ({ data: { user: null }, error: { message: "auth down" } }),
+    };
+
+    const result = await loadApplicantEmails(fake.client, "app-1");
+
+    expect(result.error).toBeNull();
+    expect(result.emails).toEqual(["ada@example.com", "info@example.com", "user@example.com"]);
+    expect(isSelfReferee("ada@example.com", result.emails)).toBe(true);
+    expect(isSelfReferee("pastor@example.com", result.emails)).toBe(false);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[self-referee] auth email lookup failed",
+      expect.objectContaining({ message: "auth down" })
+    );
+    errorSpy.mockRestore();
   });
 });

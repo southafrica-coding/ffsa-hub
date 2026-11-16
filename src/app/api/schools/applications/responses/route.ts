@@ -842,7 +842,10 @@ async function sendStatusEmail(
 
 // ── PATCH: Reference reminder ──
 const REFERENCE_REMINDER_SELECT =
-  "id, status, reminder_sent_at, referee_email, referee_name, token, application_id, reference_slots(label), application_responses(id, program_id, applicant_info, applicant_email, user_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name))";
+  "id, status, reminder_sent_at, referee_email, referee_name, application_id, reference_slots(label), application_responses(id, program_id, applicant_info, applicant_email, user_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name))";
+
+// Loaded only after the caller is allowed to remind this reference.
+const REFERENCE_REMINDER_SEND_SELECT = `${REFERENCE_REMINDER_SELECT}, token`;
 
 type ReminderApplication = {
   id?: string;
@@ -1036,7 +1039,19 @@ export async function PATCH(request: Request) {
     const preview = previewRefusalResponse();
     if (preview) return preview;
 
-    const result = await deliverReferenceReminder(adminSupabase, refReq as ReminderRequestRow);
+    const { data: secret } = await (adminSupabase as any)
+      .from("reference_requests")
+      .select("token")
+      .eq("id", reference_request_id)
+      .single();
+    if (!secret?.token) {
+      return NextResponse.json({ error: "Reference request not found" }, { status: 404 });
+    }
+
+    const result = await deliverReferenceReminder(adminSupabase, {
+      ...(refReq as ReminderRequestRow),
+      token: secret.token as string,
+    });
     return reminderAttemptResponse(result);
   }
 
@@ -1068,7 +1083,7 @@ export async function PATCH(request: Request) {
 
     const { data: refs, error: refsError } = await (adminSupabase as any)
       .from("reference_requests")
-      .select(REFERENCE_REMINDER_SELECT)
+      .select(REFERENCE_REMINDER_SEND_SELECT)
       .eq("application_id", application_id);
 
     if (refsError) {

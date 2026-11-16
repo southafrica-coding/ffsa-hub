@@ -189,6 +189,7 @@ export async function PATCH(request: Request) {
   const result = await editReferenceContact(adminSupabase, ref, {
     referee_name: body?.referee_name,
     referee_email: body?.referee_email,
+    audience: "staff",
   });
 
   if (!result.ok) {

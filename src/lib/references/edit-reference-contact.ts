@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { updateReferenceRequest } from "@/services/schools";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { referenceSendConfirmed } from "@/lib/email/reference-email";
-import { isSelfReferee, loadApplicantEmails, SELF_REFEREE_MESSAGE } from "@/lib/references/self-referee";
+import { isSelfReferee, loadApplicantEmails, REFEREE_CHECK_FAILED, SELF_REFEREE_MESSAGE, selfRefereeMessage } from "@/lib/references/self-referee";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -12,8 +12,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // The reference row shape this helper needs. Both callers load it with the same
 // joined select (see REFERENCE_EDIT_SELECT) so applicant/program/slot names are
 // available for the re-invite email.
+// A string literal, not a template: the typed client parses the select and
+// a widened string comes back as GenericStringError. Same columns as
+// REFERENCE_REQUEST_COLUMN_LIST, then the joins this editor needs.
+// status_token belongs to the application, not this table.
 export const REFERENCE_EDIT_SELECT =
-  "*, reference_slots(label), application_responses(status_token, program_id, applicant_info, programs(name), users!application_responses_user_id_fkey(first_name, last_name))";
+  "id, application_id, slot_id, referee_name, referee_email, status, relationship, known_duration, reference_text, form_data, submitted_at, email_sent_at, reminder_sent_at, created_at, updated_at, reference_slots(label), application_responses(status_token, program_id, applicant_info, programs(name), users!application_responses_user_id_fkey(first_name, last_name))" as const;
 
 type EditResult =
   | { ok: true; data: unknown; emailed: boolean; emailChanged: boolean }
@@ -47,7 +51,7 @@ export async function editReferenceContact(
   adminSupabase: Client,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ref: any,
-  input: { referee_name?: unknown; referee_email?: unknown }
+  input: { referee_name?: unknown; referee_email?: unknown; audience?: "applicant" | "staff" }
 ): Promise<EditResult> {
   if (!ref) return { ok: false, status: 404, error: "Reference request not found" };
   if (ref.status === "submitted") {
@@ -74,9 +78,12 @@ export async function editReferenceContact(
     return { ok: false, status: 500, error: "Application not found." };
   }
   const loaded = await loadApplicantEmails(adminSupabase, ref.application_id);
-  if (loaded.error) return { ok: false, status: 500, error: loaded.error };
+  if (loaded.error) {
+    console.error("[editReferenceContact] applicant email lookup failed", loaded.error);
+    return { ok: false, status: 500, error: REFEREE_CHECK_FAILED };
+  }
   if (isSelfReferee(email, loaded.emails)) {
-    return { ok: false, status: 400, error: SELF_REFEREE_MESSAGE };
+    return { ok: false, status: 400, error: selfRefereeMessage(input.audience) };
   }
 
   const emailChanged =

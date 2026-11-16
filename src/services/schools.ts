@@ -1,5 +1,9 @@
 import { applicantEmailIlikePattern } from "@/lib/applications/applicant-identity";
 import {
+  REFERENCE_REQUEST_COLUMN_LIST,
+  REFERENCE_REQUEST_WITH_SLOT,
+} from "@/lib/references/reference-request-columns";
+import {
   isSelfReferee,
   loadApplicantEmails,
   SELF_REFEREE_MESSAGE,
@@ -998,7 +1002,14 @@ export async function createReferenceRequest(supabase: Client, data: {
   if (isSelfReferee(data.referee_email, loaded.emails)) {
     return referenceWriteRefusal(SELF_REFEREE_MESSAGE);
   }
-  return supabase.from("reference_requests").insert(data).select().single();
+  // The column default generates token. RETURNING it requires SELECT on token,
+  // which only service_role still has. A user client fails closed here.
+  // Callers are the admin invite paths and they email this token.
+  return supabase
+    .from("reference_requests")
+    .insert(data)
+    .select("id, application_id, slot_id, referee_name, referee_email, status, token")
+    .single();
 }
 
 // Update a reference request's contact details (and, when the email is being
@@ -1037,7 +1048,7 @@ export async function updateReferenceRequest(
     .update(data)
     .eq("id", id)
     .eq("status", "pending")
-    .select()
+    .select(REFERENCE_REQUEST_COLUMN_LIST)
     .single();
 }
 
@@ -1081,15 +1092,19 @@ export async function getInterviewReviewSummaries(
 export async function getReferenceRequestsByApplication(supabase: Client, applicationId: string) {
   return supabase
     .from("reference_requests")
-    .select("*, reference_slots(label, description)")
+    .select(REFERENCE_REQUEST_WITH_SLOT)
     .eq("application_id", applicationId)
     .order("created_at", { ascending: true });
 }
 
 export async function getReferenceRequestByToken(supabase: Client, token: string) {
+  // Filter is the invite secret. Authenticated cannot use that column;
+  // callers pass the service-role client.
   return supabase
     .from("reference_requests")
-    .select("*, reference_slots(label, description), application_responses(id, program_id, user_id, applicant_email, applicant_info, programs(name, code))")
+    .select(
+      `${REFERENCE_REQUEST_COLUMN_LIST}, reference_slots(label, description), application_responses(id, program_id, user_id, applicant_email, applicant_info, programs(name, code))`
+    )
     .eq("token", token)
     .single();
 }
@@ -1108,7 +1123,7 @@ export async function submitReference(
     })
     .eq("token", token)
     .eq("status", "pending")
-    .select()
+    .select(REFERENCE_REQUEST_COLUMN_LIST)
     .single();
 }
 

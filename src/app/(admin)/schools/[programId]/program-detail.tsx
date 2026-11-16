@@ -30,7 +30,7 @@ import {
 import { Chip, Masthead, StatusPill } from "@/components/ffsa";
 import {
   REFEREE_OTHER_PERSON_HINT,
-  SELF_REFEREE_MESSAGE,
+  STAFF_SELF_REFEREE_MESSAGE,
   isSelfReferee,
 } from "@/lib/references/self-referee";
 import { TrackTab } from "./track-tab";
@@ -1866,7 +1866,7 @@ function ApplicantsTab({
         reviewingResponse?.users?.email,
       ])
     ) {
-      alert(SELF_REFEREE_MESSAGE);
+      alert(STAFF_SELF_REFEREE_MESSAGE);
       return;
     }
     setSavingRef(true);

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { editReferenceContact } from "./edit-reference-contact";
-import { SELF_REFEREE_MESSAGE } from "./self-referee";
+import { REFEREE_CHECK_FAILED, SELF_REFEREE_MESSAGE } from "./self-referee";
 
 const sendReferenceInvite = vi.hoisted(() => vi.fn());
 
@@ -27,9 +27,14 @@ function ref() {
   };
 }
 
-function admin(opts?: { applicantEmail?: string | null; authEmail?: string | null }) {
+function admin(opts?: {
+  applicantEmail?: string | null;
+  authEmail?: string | null;
+  lookupError?: string | null;
+}) {
   const applicantEmail = opts?.applicantEmail ?? null;
   const authEmail = opts?.authEmail ?? null;
+  const lookupError = opts?.lookupError ?? null;
   const updates: Array<Record<string, unknown>> = [];
   return {
     updates,
@@ -60,6 +65,7 @@ function admin(opts?: { applicantEmail?: string | null; authEmail?: string | nul
               return { data: { application_id: "app-1" }, error: null };
             }
             if (table === "application_responses") {
+              if (lookupError) return { data: null, error: { message: lookupError } };
               return {
                 data: {
                   applicant_email: applicantEmail,
@@ -191,5 +197,26 @@ describe("editReferenceContact", () => {
       expect.objectContaining({ toEmail: "pastor@example.com" })
     );
     expect(db.updates.some((u) => u.referee_email === "pastor@example.com")).toBe(true);
+  });
+
+  it("returns a generic message when the applicant email lookup fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const db = admin({ lookupError: "duplicate key value violates unique constraint" });
+    const result = await editReferenceContact(db.client, ref(), {
+      referee_email: "pastor@example.com",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(500);
+      expect(result.error).toBe(REFEREE_CHECK_FAILED);
+      expect(result.error).not.toContain("duplicate key");
+    }
+    expect(db.updates).toEqual([]);
+    expect(sendReferenceInvite).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[editReferenceContact] applicant email lookup failed",
+      "duplicate key value violates unique constraint"
+    );
+    errorSpy.mockRestore();
   });
 });

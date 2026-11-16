@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createReferenceRequest } from "@/services/schools";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { referenceSendConfirmed } from "@/lib/email/reference-email";
-import { isSelfReferee, loadApplicantEmails, SELF_REFEREE_MESSAGE } from "@/lib/references/self-referee";
+import { isSelfReferee, loadApplicantEmails, REFEREE_CHECK_FAILED, SELF_REFEREE_MESSAGE } from "@/lib/references/self-referee";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -91,7 +91,8 @@ export async function POST(request: Request) {
 
   const loaded = await loadApplicantEmails(supabase, application.id);
   if (loaded.error) {
-    return NextResponse.json({ error: loaded.error }, { status: 500 });
+    console.error("[references/add] applicant email lookup failed", loaded.error);
+    return NextResponse.json({ error: REFEREE_CHECK_FAILED }, { status: 500 });
   }
   if (isSelfReferee(refereeEmail, loaded.emails)) {
     return NextResponse.json({ error: SELF_REFEREE_MESSAGE }, { status: 400 });

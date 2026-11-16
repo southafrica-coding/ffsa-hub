@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createFakeSupabase } from "@/lib/testing/fake-supabase";
+import { REFERENCE_REQUEST_COLUMN_LIST } from "@/lib/references/reference-request-columns";
 import { SELF_REFEREE_MESSAGE } from "@/lib/references/self-referee";
 import { createReferenceRequest, updateReferenceRequest } from "./schools";
 
@@ -88,6 +89,9 @@ describe("createReferenceRequest self-referee guard", () => {
     });
     expect(result.error).toBeNull();
     expect(writes(fake).map((q) => q.action)).toEqual(["insert"]);
+    expect(writes(fake)[0].columns).toBe(
+      "id, application_id, slot_id, referee_name, referee_email, status, token"
+    );
   });
 });
 
@@ -109,5 +113,6 @@ describe("updateReferenceRequest self-referee guard", () => {
     });
     expect(result.error).toBeNull();
     expect(writes(fake).map((q) => q.action)).toEqual(["update"]);
+    expect(writes(fake)[0].columns).toBe(REFERENCE_REQUEST_COLUMN_LIST);
   });
 });
