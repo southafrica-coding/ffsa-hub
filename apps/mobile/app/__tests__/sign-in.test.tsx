@@ -13,7 +13,7 @@ jest.mock("@/lib/supabase", () => ({
 
 const signIn = supabase.auth.signInWithPassword as jest.Mock;
 
-async function fillAndSubmit(email = "jo@example.org", password = "wrong") {
+async function fillAndSubmit(email = "sample@example.org", password = "wrong") {
   await fireEvent.changeText(screen.getByLabelText("Email"), email);
   await fireEvent.changeText(screen.getByLabelText("Password"), password);
   await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
@@ -36,8 +36,8 @@ describe("Sign-in screen", () => {
   it("signs in with the trimmed email", async () => {
     signIn.mockResolvedValue({ data: {}, error: null });
     await render(<SignInScreen />);
-    await fillAndSubmit("  jo@example.org ", "correct horse");
-    expect(signIn).toHaveBeenCalledWith({ email: "jo@example.org", password: "correct horse" });
+    await fillAndSubmit("  sample@example.org ", "correct horse");
+    expect(signIn).toHaveBeenCalledWith({ email: "sample@example.org", password: "correct horse" });
     expect(screen.queryByTestId("sign-in-error")).toBeNull();
   });
 

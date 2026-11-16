@@ -8,7 +8,7 @@ export const NOW = new Date(2026, 10, 3, 9, 0, 0); // Tue 3 Nov 2026, 09:00 loca
 
 export function makeMe(over: { roles?: string[]; direct?: string[]; viaRole?: string[] } = {}): Me {
   return meSchema.parse({
-    user: { id: "u1", email: "jo@example.org" },
+    user: { id: "u1", email: "sample@example.org" },
     profile: { firstName: "Sample", lastName: "Person", preferredName: null, avatarUrl: null, isActive: true },
     roles: (over.roles ?? []).map((name) => ({ name, scopeType: null, scopeId: null })),
     permissions: [

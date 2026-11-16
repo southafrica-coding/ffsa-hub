@@ -292,7 +292,7 @@ describe("Volunteer door: scanning", () => {
       json({ guests: [{ ticketId: "t9", code: "QwErTyUiOpA", name: "Sample Person 922", ticketTypeName: "General", status: "valid", checkedInAt: null }] });
     await render(screenFor());
     await screen.findByLabelText("12 of 40 checked in");
-    await fireEvent.changeText(screen.getByLabelText("Guest name"), "sarah");
+    await fireEvent.changeText(screen.getByLabelText("Guest name"), "sample");
     await fireEvent.press(await screen.findByRole("button", { name: "Check in Sample Person 922" }));
     expect(await screen.findByTestId("verdict-title")).toHaveTextContent("Checked in");
     expect(checkIns()[0].body).toEqual({ code: "QwErTyUiOpA", scannerName: "Sample Person 199" });

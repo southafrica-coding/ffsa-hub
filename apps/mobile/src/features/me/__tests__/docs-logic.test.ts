@@ -235,7 +235,7 @@ describe("household", () => {
     const e = meStrings.docs.member.errors;
     expect(validateMember(child, e)).toEqual({});
     expect(validateMember({ ...child, fullName: "" }, e)).toEqual({ fullName: e.fullName });
-    const spouse = { ...child, relationship: "spouse", firstName: "Sample", lastName: "Person", email: "jo@example.org" };
+    const spouse = { ...child, relationship: "spouse", firstName: "Sample", lastName: "Person", email: "sample@example.org" };
     expect(validateMember(spouse, e)).toEqual({});
     expect(validateMember({ ...spouse, email: "not-an-email" }, e)).toEqual({ email: e.emailInvalid });
     expect(validateMember({ ...spouse, firstName: "", lastName: "", email: "" }, e)).toEqual({
@@ -246,12 +246,12 @@ describe("household", () => {
   });
 
   it("a spouse sends name + email only, with visa cleared", () => {
-    const body = memberBody({ ...child, relationship: "spouse", firstName: " Sample ", lastName: "Person", email: "jo@example.org" }, opts);
+    const body = memberBody({ ...child, relationship: "spouse", firstName: " Sample ", lastName: "Person", email: "sample@example.org" }, opts);
     expect(body).toEqual({
       relationship: "spouse",
       first_name: "Sample",
       last_name: "Person",
-      email: "jo@example.org",
+      email: "sample@example.org",
       full_name: "Sample Person",
       is_international: false,
       visa_category: "",

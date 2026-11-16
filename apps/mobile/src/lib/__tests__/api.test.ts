@@ -25,7 +25,7 @@ function setup(overrides: Partial<ApiDeps> = {}) {
 }
 
 const ME = {
-  user: { id: "u1", email: "jo@example.org" },
+  user: { id: "u1", email: "sample@example.org" },
   profile: { firstName: "Sample", lastName: "Person", preferredName: "Sample", avatarUrl: null, isActive: true },
   roles: [
     { name: "staff", scopeType: null, scopeId: null },
@@ -185,7 +185,7 @@ describe("GET /api/me", () => {
     fetchImpl.mockResolvedValue(jsonResponse(200, ME));
     const me = await getMe(apiFetch);
     expect(fetchImpl.mock.calls[0][0]).toBe(`${BASE}/api/me`);
-    expect(me.user.email).toBe("jo@example.org");
+    expect(me.user.email).toBe("sample@example.org");
     expect(me.roles).toHaveLength(2);
     expect(me.permissions).toHaveLength(2);
     expect(me.serverTime).toBe(ME.serverTime);
@@ -229,6 +229,6 @@ describe("GET /api/me", () => {
   it("falls back through preferred name, first name, then email", () => {
     const base = meSchema.parse(ME);
     expect(displayName({ ...base, profile: { ...base.profile!, preferredName: null } })).toBe("Sample");
-    expect(displayName({ ...base, profile: null })).toBe("jo@example.org");
+    expect(displayName({ ...base, profile: null })).toBe("sample@example.org");
   });
 });

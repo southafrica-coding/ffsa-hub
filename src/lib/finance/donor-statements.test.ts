@@ -173,7 +173,7 @@ describe("buildStatements", () => {
       taxYear: 2026,
       lines: [
         line({ invoiceNumber: "INV-1", contactName: "Sample Foundation 918", unitPriceUsd: 500 }),
-        line({ invoiceNumber: "INV-2", contactName: "Sample School 919", unitPriceUsd: 624.68 }),
+        line({ invoiceNumber: "INV-2", contactName: "Sample - Partner 919", unitPriceUsd: 624.68 }),
         line({ invoiceNumber: "INV-3", contactName: "Sample Person 900", unitPriceUsd: 40, description: "Wild Ones Fundraiser" }),
         line({ invoiceNumber: "INV-4", contactName: "SamplÃ© Person 902", unitPriceUsd: 6.06 }),
         line({ invoiceNumber: "INV-5", contactName: "Sam", unitPriceUsd: 10 }),
@@ -183,7 +183,11 @@ describe("buildStatements", () => {
     });
     const codes = (name: string) => r.donors.find((d) => d.name === name)!.flags.map((f) => f.code);
     expect(codes("Sample Foundation 918")).toContain("organisation");
-    expect(codes("Sample School 919")).toContain("organisation");
+    // "Partner" is not an organisation phrase, so this flag comes from the " - " branch.
+    const hyphenated = r.donors.find((d) => d.name === "Sample - Partner 919")!;
+    expect(hyphenated.flags.find((f) => f.code === "organisation")?.detail).toBe(
+      "Looks like an organisation — confirm they get a statement",
+    );
     expect(codes("Sample Person 900")).toContain("review_line");
     expect(codes("Samplé Person 902")).toContain("encoding_fixed");
     expect(codes("Sam")).toContain("incomplete_name");

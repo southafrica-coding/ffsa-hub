@@ -73,7 +73,7 @@ describe("Sign-in", () => {
   it("announces a failed sign-in", async () => {
     signIn.mockResolvedValue({ data: {}, error: { status: 400, message: "Invalid login credentials" } });
     await render(<SignInScreen />);
-    await fireEvent.changeText(screen.getByLabelText("Email"), "jo@example.org");
+    await fireEvent.changeText(screen.getByLabelText("Email"), "sample@example.org");
     await fireEvent.changeText(screen.getByLabelText("Password"), "nope");
     await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
     expect(screen.getByRole("alert")).toBeTruthy();
@@ -85,7 +85,7 @@ describe("Me", () => {
   it("success: email and roles read as label + value; every row named", async () => {
     mockFetch.mockImplementation(apiRoutes({ "/api/me": makeMe() }));
     await render(wrap(<MeScreen />));
-    expect(await screen.findByLabelText("Email: jo@example.org")).toBeTruthy();
+    expect(await screen.findByLabelText("Email: sample@example.org")).toBeTruthy();
     expect(screen.getByLabelText(/^Roles: /)).toBeTruthy();
     for (const name of ["Profile", "Settings", "About"]) expect(screen.getByRole("header", { name })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit name and phone" })).toBeTruthy();

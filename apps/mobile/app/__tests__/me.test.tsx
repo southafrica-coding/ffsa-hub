@@ -62,7 +62,7 @@ describe("Me", () => {
     mockFetch.mockImplementation(apiRoutes({ "/api/me": ME }));
     await render(wrap(<MeScreen />));
     expect(await screen.findByRole("header", { name: "Sample Person" })).toBeTruthy();
-    expect(screen.getByText("jo@example.org")).toBeTruthy();
+    expect(screen.getByText("sample@example.org")).toBeTruthy();
     expect(screen.getByText("Staff · Team leader")).toBeTruthy();
     expect(screen.getByLabelText("App version: 1.2.3")).toBeTruthy();
     expect(screen.getByText("Match phone (now light)")).toBeTruthy();

@@ -10,12 +10,14 @@
 --     unpaid upcoming pickups and requests waiting on a decision.
 --
 --   • vehicle_alert_settings.slack_alert_user_ids — who gets them. Seeded
---     with Gideon Botha (vehicle coordinator).
+--     with the vehicle coordinator.
 --   • vehicle_booking_slack_alerts — every DM posted that may need rewriting
 --     later (the request once it's decided, a sign-in once it's completed).
 --     Server-only: RLS on, no policies.
 --
--- Idempotent so it can be re-run from the SQL editor.
+-- Already applied in production, including the original coordinator row.
+-- The name and id in the seed below are placeholders. This edit is a
+-- text-only scrub: do not re-apply this file from the SQL editor.
 -- ----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS public.vehicle_alert_settings (
@@ -25,7 +27,7 @@ CREATE TABLE IF NOT EXISTS public.vehicle_alert_settings (
 );
 
 INSERT INTO public.vehicle_alert_settings (id, slack_alert_user_ids)
-VALUES (true, ARRAY['5fdf31ec-4183-4dec-8ef1-09a3230b44da'::uuid]) -- Gideon Botha
+VALUES (true, ARRAY['00000000-0000-4000-8000-000000000924'::uuid]) -- vehicle coordinator (placeholder)
 ON CONFLICT (id) DO NOTHING;
 
 ALTER TABLE public.vehicle_alert_settings ENABLE ROW LEVEL SECURITY;

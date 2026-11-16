@@ -63,6 +63,6 @@ describe("validateSignInForm", () => {
   it("requires an email-shaped address and a password", () => {
     expect(validateSignInForm("", "")).toEqual({ email: "Enter your email address.", password: "Enter your password." });
     expect(validateSignInForm("nope", "pw").email).toBe("That doesn't look like an email address.");
-    expect(validateSignInForm("  jo@example.org ", "pw")).toEqual({});
+    expect(validateSignInForm("  sample@example.org ", "pw")).toEqual({});
   });
 });

@@ -64,7 +64,7 @@ describe("announce", () => {
   });
 
   it("joins the parts that exist into sentences", () => {
-    expect(announcement("Checked in.", undefined, "Sample Personh", false, "")).toBe("Checked in. Sample Personh");
+    expect(announcement("Checked in.", undefined, "Sample Person", false, "")).toBe("Checked in. Sample Person");
   });
 });
 

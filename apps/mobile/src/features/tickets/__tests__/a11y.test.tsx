@@ -209,7 +209,7 @@ describe("Door", () => {
       { ticketId: "g1", code: "C1", name: "Sample Person 923", ticketTypeName: "General", status: "valid", checkedInAt: null },
     ]);
     await render(<DoorScreen eventId="e1" door={makeDoor({ search })} />);
-    await fireEvent.changeText(screen.getByLabelText("Guest name"), "sarah");
+    await fireEvent.changeText(screen.getByLabelText("Guest name"), "sample");
     expect(await screen.findByRole("button", { name: "Check in Sample Person 923" })).toBeTruthy();
     expect(spy).toHaveBeenCalledWith("1 guest found", { queue: true });
     expect(audit()).toEqual([]);

@@ -225,7 +225,7 @@ describe("Door", () => {
       ]),
     });
     await render(<DoorScreen eventId="e1" door={door} />);
-    await fireEvent.changeText(screen.getByLabelText("Guest name"), "sarah");
+    await fireEvent.changeText(screen.getByLabelText("Guest name"), "sample");
     await fireEvent.press(await screen.findByRole("button", { name: "Check in Sample Person 922" }, { timeout: 2000 }));
     expect(door.checkIn).toHaveBeenCalledWith("GuestCode9");
     expect(screen.getByLabelText(/^Sample Person 923\. General\. In at \d\d:\d\d$/)).toBeTruthy();

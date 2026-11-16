@@ -85,11 +85,11 @@ describe("staffDoorClient → /api/events/[id]/check-in", () => {
 
   it("GET ?q= returns guests", async () => {
     const { apiFetch, calls } = server(() => ({
-      body: { guests: [{ ticketId: "t1", code: "AAAA", name: "Sarah M", ticketTypeName: "G", status: "valid", checkedInAt: null }] },
+      body: { guests: [{ ticketId: "t1", code: "AAAA", name: "Sample P", ticketTypeName: "G", status: "valid", checkedInAt: null }] },
     }));
-    const guests = await staffDoorClient(apiFetch, "e1").search("sarah m");
-    expect(guests[0].name).toBe("Sarah M");
-    expect(calls[0].url).toBe("https://hub.test/api/events/e1/check-in?q=sarah%20m");
+    const guests = await staffDoorClient(apiFetch, "e1").search("sample p");
+    expect(guests[0].name).toBe("Sample P");
+    expect(calls[0].url).toBe("https://hub.test/api/events/e1/check-in?q=sample%20p");
   });
 
   it("POST {code} parses every server outcome", async () => {

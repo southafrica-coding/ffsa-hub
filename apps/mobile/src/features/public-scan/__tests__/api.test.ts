@@ -122,7 +122,7 @@ describe("volunteerDoorClient", () => {
       if (url.includes("?q=")) return json({ guests: [{ ticketId: "t1", code: "C1", name: "Sample Person 922", ticketTypeName: null, status: "valid", checkedInAt: null }] });
       const body = JSON.parse(String(init.body));
       if (body.undo) return json({ result: "undone" });
-      return json({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "Sarah" });
+      return json({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "Sample" });
     });
     return { f, client: volunteerDoorClient(createPublicFetch({ baseUrl: BASE, fetchImpl: f.impl }), TOKEN, { scannerName: name }) };
   }
@@ -130,7 +130,7 @@ describe("volunteerDoorClient", () => {
   it("speaks the four verbs of /api/scan/[token]", async () => {
     const { f, client } = door("Sample Person 199");
     expect(await client.stats()).toEqual({ checkedIn: 3, total: 9 });
-    expect(await client.search("sarah mok")).toEqual([
+    expect(await client.search("sample per")).toEqual([
       { ticketId: "t1", code: "C1", name: "Sample Person 922", ticketTypeName: "Ticket", status: "valid", checkedInAt: null },
     ]);
     expect(await client.checkIn("AbCdEfGhIjK")).toMatchObject({ result: "ok", ticketId: "t1" });
@@ -138,7 +138,7 @@ describe("volunteerDoorClient", () => {
 
     expect(f.calls.map((c) => [c.init.method ?? "GET", c.url.replace(BASE, "")])).toEqual([
       ["GET", `/api/scan/${TOKEN}?stats=1`],
-      ["GET", `/api/scan/${TOKEN}?q=sarah%20mok`],
+      ["GET", `/api/scan/${TOKEN}?q=sample%20per`],
       ["POST", `/api/scan/${TOKEN}`],
       ["POST", `/api/scan/${TOKEN}`],
     ]);

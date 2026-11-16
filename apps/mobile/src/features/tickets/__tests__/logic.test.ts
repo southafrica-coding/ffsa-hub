@@ -63,11 +63,11 @@ describe("createScanGate (debounce)", () => {
 
 describe("verdicts", () => {
   it("ok: ink, admit, undoable, names the guest", () => {
-    const v = verdictFromOutcome({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "Sarah M" });
+    const v = verdictFromOutcome({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "Sample P" });
     expect(v).toMatchObject({
       kind: "checked_in",
       title: "Checked in",
-      detail: "Sarah M · General",
+      detail: "Sample P · General",
       style: "ink",
       icon: "check",
       haptic: "success",

@@ -50,7 +50,7 @@ export async function findContactsByIdentifier(
       .order("created_at", { ascending: true })
       .limit(IDENTIFIER_MATCH_CAP + 1),
     // Phones are matched on both the raw and the normalised column: someone
-    // types "082 445 1120" but E.164 stores "+27824451120", and vice versa.
+    // types "082 000 0000" but E.164 stores "+27820000000", and vice versa.
     supabase
       .from("contact_phones")
       .select("contact_id, phone, phone_normalized, is_primary, created_at")

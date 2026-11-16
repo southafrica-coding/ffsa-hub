@@ -28,7 +28,7 @@ describe("useMe / useCan", () => {
       { wrapper },
     );
     expect(result.current.me.status).toBe("ready");
-    expect(result.current.me.me?.user.email).toBe("jo@example.org");
+    expect(result.current.me.me?.user.email).toBe("sample@example.org");
     expect(result.current.canView).toBe(true);
     expect(result.current.canDoor).toBe(false);
     expect(result.current.staff).toBe(true);

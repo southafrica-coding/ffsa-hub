@@ -488,10 +488,10 @@ describe("Household member", () => {
     expect(screen.queryByLabelText("Passport number")).toBeNull();
     await fireEvent.changeText(screen.getByLabelText("First name"), "Sample");
     await fireEvent.changeText(screen.getByLabelText("Last name"), "Person");
-    await fireEvent.changeText(screen.getByLabelText("Email"), "jo@example.org");
+    await fireEvent.changeText(screen.getByLabelText("Email"), "sample@example.org");
     await fireEvent.press(screen.getByRole("button", { name: "Add member" }));
     await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
-    expect(posts[0]).toMatchObject({ relationship: "spouse", full_name: "Sample Person", email: "jo@example.org" });
+    expect(posts[0]).toMatchObject({ relationship: "spouse", full_name: "Sample Person", email: "sample@example.org" });
     expect(mockNav.setOptions).toHaveBeenCalledWith({ title: "Add spouse" });
   });
 
@@ -548,7 +548,7 @@ describe("Household member", () => {
     await render(wrap(<HouseholdMemberScreen />));
     await fireEvent.changeText(await screen.findByLabelText("First name"), "Sample");
     await fireEvent.changeText(screen.getByLabelText("Last name"), "Person");
-    await fireEvent.changeText(screen.getByLabelText("Email"), "jo@example.org");
+    await fireEvent.changeText(screen.getByLabelText("Email"), "sample@example.org");
     await fireEvent.press(screen.getByRole("button", { name: "Add member" }));
     expect(await screen.findByText(refusal)).toBeTruthy();
     expect(mockRouter.back).not.toHaveBeenCalled();
