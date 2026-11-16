@@ -77,6 +77,34 @@ export function DateBar({
   );
 }
 
+/**
+ * Two ways to ask for gear: pick it yourself (the pick list), or answer a
+ * few questions and let the team work it out (the event helper). Picking
+ * comes first; the questions are there for people who aren't sure.
+ */
+export function HelperBanner({ range, className }: { range: Range & { chosen?: boolean }; className?: string }) {
+  const href = (path: string) => (range.chosen === false ? path : withDates(path, range));
+  const card =
+    "flex flex-col gap-1 rounded-[8px] border border-[color:var(--hire-line2)] bg-[color:var(--hire-surface)] px-4 py-3.5 text-[14px] hover:border-[color:var(--hire-line-strong)] md:px-5";
+  return (
+    <div className={cn("grid grid-cols-1 gap-2.5 md:grid-cols-2", className)}>
+      <Link href={href("/hire/request")} className={card}>
+        <span>
+          <b className="text-[color:var(--hire-ink)]">Know what you need?</b> Pick it from one list and send it to us.
+        </span>
+        <span className="font-bold text-[color:var(--hire-accent)]">Pick your gear →</span>
+      </Link>
+      <Link href={href("/hire/helper")} className={card}>
+        <span>
+          <b className="text-[color:var(--hire-ink)]">Not sure what you need?</b> Answer a few questions and our team
+          will tell you what to hire.
+        </span>
+        <span className="font-bold text-[color:var(--hire-accent)]">Tell us about your event →</span>
+      </Link>
+    </div>
+  );
+}
+
 /** "2 free" / "2 of 4 free" / "Booked" — and its colour. */
 export function freeText(i: Pick<StoreItem, "free" | "stock">): { text: string; tone: "ok" | "some" | "none" } {
   if (i.free <= 0) return { text: "Booked", tone: "none" };

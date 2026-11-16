@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils/cn";
 import { dayCount, rangeLabel, readRange, sastToday } from "@/lib/equipment/dates";
 import { periodForDates, periodLabel } from "@/lib/equipment/pricing";
 import { categoryIds, loadStore, withDates, type StoreCategory } from "@/lib/equipment/storefront";
-import { DateBar, ItemCard } from "../../_components/store-ui";
+import { DateBar, HelperBanner, ItemCard } from "../../_components/store-ui";
 
 type Params = { from?: string; to?: string; only?: string; type?: string; q?: string };
 
@@ -134,6 +134,8 @@ export default async function CategoryPage({
             ))}
         </div>
       </header>
+
+      <HelperBanner range={range} className="mx-[18px] mt-4 md:mx-10" />
 
       <div className="md:grid md:grid-cols-[260px_minmax(0,1fr)]">
         {/* Desktop filters (46a). */}

@@ -1,16 +1,19 @@
 "use client";
 
 // The booking box on the item page (46b, and 47a-3's bottom bar on a phone):
-// how many, what it comes to, the deposit. The cart itself arrives with
-// checkout, so "Add to cart" is shown but can't be pressed yet.
+// how many, what it comes to, the deposit. Until the cart arrives with
+// checkout, "Request" carries the pick to the pick list (/hire/request),
+// which sends it to the team.
 
 import { useState } from "react";
+import Link from "next/link";
 import { Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { rands } from "@/lib/equipment/money";
 import { quote, type QuoteProduct, type QuoteSettings } from "@/lib/equipment/pricing";
 
 export function ItemBooking({
+  slug,
   product,
   settings,
   from,
@@ -21,6 +24,7 @@ export function ItemBooking({
   allFreeFrom,
   variant,
 }: {
+  slug: string;
   product: QuoteProduct;
   settings: QuoteSettings;
   from: string;
@@ -62,21 +66,19 @@ export function ItemBooking({
     </div>
   );
 
-  const add = (
-    <button
-      type="button"
-      disabled
-      title="Booking online opens soon"
-      className={cn(
-        "flex h-[46px] flex-1 items-center justify-center rounded-[6px] px-4 text-[15px] font-bold md:h-[46px]",
-        free > 0
-          ? "bg-[color:var(--hire-accent)] text-[color:var(--hire-on-accent)] opacity-60"
-          : "bg-[color:var(--hire-surface2)] text-[color:var(--hire-dim)]"
-      )}
-    >
-      {free > 0 ? `${variant === "bar" ? "Add" : "Add to cart"} · ${rands(total)}` : "Booked on these dates"}
-    </button>
-  );
+  const button = "flex h-[46px] flex-1 items-center justify-center rounded-[6px] px-4 text-[15px] font-bold md:h-[46px]";
+  const add =
+    free > 0 ? (
+      <Link
+        href={`/hire/request?from=${from}&to=${to}&pick=${encodeURIComponent(`${slug}:${qty}`)}`}
+        className={cn(button, "bg-[color:var(--hire-accent)] !text-[color:var(--hire-on-accent)]")}
+      >
+        {variant === "bar" ? "Request" : "Request this"} · {rands(total)}
+      </Link>
+    ) : (
+      <span className={cn(button, "bg-[color:var(--hire-surface2)] text-[color:var(--hire-dim)]")}>Booked on these dates</span>
+    );
+  const note = "You can add more on the next page, then send the list to our team.";
 
   const limitNote =
     free > 0 && qty >= free && free < stock
@@ -91,7 +93,7 @@ export function ItemBooking({
           {add}
         </div>
         <div className="text-[12px] text-[color:var(--hire-muted)]">
-          {limitNote ?? "Booking online opens soon."}
+          {limitNote ?? "Add more on the next page."}
           {product.deposit_cents > 0 && ` · deposit ${rands(product.deposit_cents)} each`}
         </div>
       </div>
@@ -118,7 +120,7 @@ export function ItemBooking({
         {free > 0 && stepper}
         {add}
       </div>
-      <div className="text-[13px] text-[color:var(--hire-muted)]">{limitNote ?? "Booking online opens soon."}</div>
+      <div className="text-[13px] text-[color:var(--hire-muted)]">{limitNote ?? note}</div>
       {product.deposit_cents > 0 && (
         <div className="flex justify-between border-t border-[color:var(--hire-line2)] pt-3 text-[13px]">
           <span>Refundable deposit</span>
