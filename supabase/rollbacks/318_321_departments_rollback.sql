@@ -8,8 +8,8 @@
 -- Deleting a be_free membership that 318 inserted fires
 -- archive_staff_ministry_membership (250) and sync_no_ministry_membership
 -- (266). be_free is part_time, so it does not count as a main ministry.
--- On prod Philip van Staden stays in Prayer & Worship, which is main, so
--- his main-ministry count stays above zero and the No Ministry add side
+-- On prod the seeded department lead stays in Prayer & Worship, which is main, so
+-- that user's main-ministry count stays above zero and the No Ministry add side
 -- does not run.
 --
 -- Export before this runs. From psql, against the database you are
@@ -181,7 +181,7 @@ COMMENT ON FUNCTION public.can_moderate_evangelism() IS NULL;
 REVOKE ALL ON FUNCTION public.can_moderate_evangelism() FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.can_moderate_evangelism() TO authenticated, service_role;
 
--- undo 318 data. Updates first, then inserts. A be_free row or a Philip
+-- undo 318 data. Updates first, then inserts. A be_free row or a seeded-lead
 -- membership that already existed is not in migration_318_changes, so it
 -- is not deleted. The palette timestamp is the value recorded before 318
 -- changed the row. The link is cleared only while it still points at the

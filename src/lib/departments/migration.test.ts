@@ -27,8 +27,10 @@ const doorsRollback = readFileSync(
 const all = [homes, services, rocks, budgets].join("\n");
 
 describe("departments migrations 318–321", () => {
-  it("does not mention the live Supabase project", () => {
-    expect(all).not.toContain("thodakhvkcodfystnkxa");
+  it("does not mention a live Supabase project", () => {
+    expect(all).not.toMatch(/\.supabase\.co/);
+    // Project refs are 20 lowercase letters. No host, and no ref-shaped token.
+    expect(all).not.toMatch(/\b[a-z]{20}\b/);
   });
 
   it("does not delete ministry memberships", () => {
@@ -53,7 +55,7 @@ describe("departments migrations 318–321", () => {
     expect(homes).toMatch(/d\.parent_id IS NULL/);
   });
 
-  it("records Philip only when that user id exists", () => {
+  it("records the seeded user only when that user id exists", () => {
     expect(homes).toContain("ac7d1c5e-4300-422f-9fad-d50c29a15ca6");
     expect(homes).toMatch(/EXISTS \(\s*SELECT 1 FROM public\.users u\s*WHERE u\.id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6'/);
     expect(homes).toMatch(/'be_free', 'part_time'/);

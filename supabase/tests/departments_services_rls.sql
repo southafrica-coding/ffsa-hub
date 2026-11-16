@@ -360,7 +360,7 @@ CREATE POLICY "Staff ministries are readable"
 GRANT SELECT ON public.staff_ministries TO authenticated;
 GRANT SELECT ON public.staff_ministry_members TO authenticated;
 
--- ── People and homes (Philip is deliberately absent) ────────
+-- ── People and homes (the seeded department lead is deliberately absent) ────────
 INSERT INTO public.roles (name) VALUES
   ('admin'), ('ministry_leader'), ('leadership_team'), ('finance_admin'), ('staff');
 INSERT INTO public.permissions (key) VALUES
@@ -507,7 +507,7 @@ SELECT
   (SELECT updated_at FROM public.ministries WHERE slug = 'be-free') AS be_free_updated,
   (SELECT color FROM public.ministries WHERE slug = 'be-free') AS be_free_color;
 
--- ── Apply, then again, before Philip exists ────────────────
+-- ── Apply, then again, before the seeded department lead exists ────────────────
 \ir ../migrations/318_department_homes.sql
 \ir ../migrations/319_department_services.sql
 \ir ../migrations/320_ministry_rocks.sql
@@ -618,7 +618,7 @@ BEGIN
   PERFORM public._t('one palette row', n = 1, 'n=' || n);
   SELECT count(*) INTO n FROM public.staff_ministry_members
    WHERE user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
-  PERFORM public._t('philip skipped when user is absent', n = 0, 'n=' || n);
+  PERFORM public._t('seeded department lead skipped when user is absent', n = 0, 'n=' || n);
 
   SELECT count(*) INTO n FROM public.services;
   PERFORM public._t('eight services', n = 8, 'n=' || n);
@@ -738,7 +738,7 @@ BEGIN
 END
 $do$;
 
--- Philip arrives. A third apply records him and does not duplicate.
+-- The seeded department lead arrives. A third apply records that user and does not duplicate.
 INSERT INTO public.users (id, is_active) VALUES
   ('ac7d1c5e-4300-422f-9fad-d50c29a15ca6', true);
 \ir ../migrations/318_department_homes.sql
@@ -757,24 +757,24 @@ BEGIN
      AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6'
      AND mm.member_role = 'leader'
      AND mm.status = 'active';
-  PERFORM public._t('philip is the be free leader', n = 1, 'n=' || n);
-  PERFORM public._t('philip is point leader', point, coalesce(point::text, 'null'));
+  PERFORM public._t('seeded department lead is the be free leader', n = 1, 'n=' || n);
+  PERFORM public._t('seeded department lead is point leader', point, coalesce(point::text, 'null'));
   SELECT r.name INTO role
     FROM public.user_roles ur
     JOIN public.roles r ON r.id = ur.role_id
    WHERE ur.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6'
      AND ur.scope_type IS NULL;
-  PERFORM public._t('philip holds ministry_leader', role = 'ministry_leader', coalesce(role, 'null'));
+  PERFORM public._t('seeded department lead holds ministry_leader', role = 'ministry_leader', coalesce(role, 'null'));
   SELECT count(*) INTO n
     FROM public.staff_ministry_members mm
     JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id
    WHERE sm.slug = 'no_ministry'
      AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
-  PERFORM public._t('part-time be free did not put philip on no ministry', n = 0, 'n=' || n);
+  PERFORM public._t('part-time be free did not put the seeded department lead on no ministry', n = 0, 'n=' || n);
   SELECT count(*) INTO n FROM public.org_edit_log
    WHERE table_name = 'staff_ministry_members' AND action = 'created'
      AND after ->> 'user_id' = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
-  PERFORM public._t('org edit log recorded philip', n >= 1, 'n=' || n);
+  PERFORM public._t('org edit log recorded the seeded department lead', n >= 1, 'n=' || n);
 END
 $do$;
 
@@ -785,14 +785,14 @@ DECLARE n int;
 BEGIN
   SELECT count(*) INTO n FROM public.staff_ministry_members
    WHERE user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
-  PERFORM public._t('re-apply does not duplicate philip', n = 1, 'n=' || n);
+  PERFORM public._t('re-apply does not duplicate the seeded department lead', n = 1, 'n=' || n);
   SELECT count(*) INTO n FROM public.user_roles
    WHERE user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
-  PERFORM public._t('re-apply does not duplicate philip role', n = 1, 'n=' || n);
+  PERFORM public._t('re-apply does not duplicate the seeded department lead role', n = 1, 'n=' || n);
   SELECT count(*) INTO n FROM public.staff_ministry_members mm
     JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id
    WHERE sm.slug = 'hulk' AND mm.member_role = 'leader';
-  PERFORM public._t('hulk leaders still 4 after philip', n = 4, 'n=' || n);
+  PERFORM public._t('hulk leaders still 4 after the seeded department lead', n = 4, 'n=' || n);
 END
 $do$;
 
@@ -1215,7 +1215,7 @@ BEGIN
 END
 $do$;
 
--- Demote Philip, then re-run homes. The membership must stay demoted.
+-- Demote the seeded department lead, then re-run homes. The membership must stay demoted.
 UPDATE public.staff_ministry_members mm
    SET member_role = 'member', is_point_leader = false
   FROM public.staff_ministries sm
@@ -1233,11 +1233,11 @@ BEGIN
     JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id
    WHERE sm.slug = 'be_free'
      AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
-  PERFORM public._t('re-run does not re-promote Philip', role = 'member' AND point IS FALSE, coalesce(role, 'null'));
+  PERFORM public._t('re-run does not re-promote the seeded department lead', role = 'member' AND point IS FALSE, coalesce(role, 'null'));
 END
 $do$;
 
--- Philip stays in Prayer & Worship, a main ministry, so deleting the
+-- The seeded department lead stays in Prayer & Worship, a main ministry, so deleting the
 -- part-time be_free membership does not put him on No Ministry.
 INSERT INTO public.staff_ministry_members (staff_ministry_id, user_id, member_role, status)
 SELECT id, 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6', 'member', 'active'
@@ -1272,7 +1272,7 @@ $do$;
 DELETE FROM public.okr_objectives WHERE title = 'do not cascade be_free';
 
 -- The subcategory lives on Prayer & Worship, so it is not a dependent of
--- the be_free ministry. The join row hangs off Philip's tracked be_free
+-- the be_free ministry. The join row hangs off the seeded lead's tracked be_free
 -- membership, which the rollback would delete.
 INSERT INTO public.staff_ministry_subcategories (staff_ministry_id, name)
 SELECT id, 'Be Free seat'
@@ -1424,13 +1424,13 @@ BEGIN
     FROM public.staff_ministry_members
    WHERE user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6'
      AND staff_ministry_id = (SELECT id FROM public.staff_ministries WHERE slug = 'prayer_and_worship');
-  PERFORM public._t('Philip stays in Prayer and Worship', n = 1, 'n=' || n);
+  PERFORM public._t('the seeded department lead stays in Prayer and Worship', n = 1, 'n=' || n);
   SELECT count(*) INTO n
     FROM public.staff_ministry_members mm
     JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id
    WHERE sm.slug = 'no_ministry'
      AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
-  PERFORM public._t('No Ministry sync does not add Philip', n = 0, 'n=' || n);
+  PERFORM public._t('No Ministry sync does not add the seeded department lead', n = 0, 'n=' || n);
   SELECT pg_get_functiondef('public.can_moderate_evangelism()'::regprocedure) INTO body;
   PERFORM public._t(
     'rollback restores can_moderate_evangelism from 311',

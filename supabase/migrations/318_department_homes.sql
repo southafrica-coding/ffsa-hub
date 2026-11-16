@@ -29,10 +29,10 @@
 -- Be Free is a booking-palette ministry (public.ministries, slug
 -- be-free), not a staff ministry. This adds a part_time staff ministry
 -- be_free and links the palette row when that link is still empty.
--- Philip van Staden (users.id ac7d1c5e-4300-422f-9fad-d50c29a15ca6) is
--- recorded as its leader only when he has no be_free membership yet
+-- The seeded department lead (users.id ac7d1c5e-4300-422f-9fad-d50c29a15ca6) is
+-- recorded as its leader only when that user has no be_free membership yet
 -- (member_role = leader, and is_point_leader when that seat is empty).
--- A later change to his role or point-leader flag is left alone. The
+-- A later change to that role or point-leader flag is left alone. The
 -- insert is a no-op when that user id is absent. The existing membership
 -- triggers (leadership role, no-ministry sync, org edit log) fire as
 -- they do for any roster write. be_free is part_time, so the no-ministry
@@ -489,7 +489,7 @@ SELECT 'update', 'ministries', t.id,
  WHERE t.id IN (SELECT id FROM upd)
 ON CONFLICT (table_name, row_id, kind) DO NOTHING;
 
--- Philip van Staden. No-op when the user id is absent, and no-op when
+-- The seeded department lead. No-op when the user id is absent, and no-op when
 -- a be_free membership already exists — a later edit of member_role or
 -- is_point_leader is not overwritten. The ministry_leader role is
 -- granted only in the same run that inserts the membership. The
