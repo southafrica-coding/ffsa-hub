@@ -29,20 +29,20 @@ function input(over: Partial<OrgInput> = {}): OrgInput {
       { id: "none", name: "No Ministry", slug: "no_ministry", cluster: null, parent_id: null, purpose: null, description: null, ministry_type: "main", sort_order: 7 },
     ],
     members: [
-      { id: "m1", staff_ministry_id: "lt", user_id: "caleb", member_role: "member", is_point_leader: false, role_title: "Integrator", responsibilities: [], share_pct: null, staff_kind: null, subcategories: [] },
-      { id: "m2", staff_ministry_id: "media", user_id: "tosca", member_role: "leader", is_point_leader: true, role_title: null, responsibilities: ["Runs the team"], share_pct: null, staff_kind: null, subcategories: [] },
-      { id: "m3", staff_ministry_id: "events", user_id: "tosca", member_role: "member", is_point_leader: false, role_title: "Events media", responsibilities: [], share_pct: null, staff_kind: null, subcategories: [] },
-      { id: "m4", staff_ministry_id: "events", user_id: "mache", member_role: "member", is_point_leader: false, role_title: null, responsibilities: [], share_pct: null, staff_kind: null, subcategories: ["Hosting"] },
+      { id: "m1", staff_ministry_id: "lt", user_id: "sample24", member_role: "member", is_point_leader: false, role_title: "Integrator", responsibilities: [], share_pct: null, staff_kind: null, subcategories: [] },
+      { id: "m2", staff_ministry_id: "media", user_id: "sample279", member_role: "leader", is_point_leader: true, role_title: null, responsibilities: ["Runs the team"], share_pct: null, staff_kind: null, subcategories: [] },
+      { id: "m3", staff_ministry_id: "events", user_id: "sample279", member_role: "member", is_point_leader: false, role_title: "Events media", responsibilities: [], share_pct: null, staff_kind: null, subcategories: [] },
+      { id: "m4", staff_ministry_id: "events", user_id: "sample286", member_role: "member", is_point_leader: false, role_title: null, responsibilities: [], share_pct: null, staff_kind: null, subcategories: ["Hosting"] },
       { id: "m5", staff_ministry_id: "none", user_id: "x", member_role: "member", is_point_leader: false, role_title: null, responsibilities: [], share_pct: null, staff_kind: null, subcategories: [] },
     ],
     people: [
-      { id: "caleb", name: "Caleb", job_title: null },
-      { id: "tosca", name: "Tosca Ferndale", job_title: "Media lead" },
-      { id: "mache", name: "Maché van Zyl", job_title: "Hosting" },
+      { id: "sample24", name: "Sample Person 24", job_title: null },
+      { id: "sample279", name: "Sample Person 279", job_title: "Media lead" },
+      { id: "sample286", name: "Sample Person 286", job_title: "Hosting" },
     ],
     lines: [
-      { staff_ministry_id: "media", leader_user_id: "caleb", kind: "oversees", label: null },
-      { staff_ministry_id: "lt", leader_user_id: "caleb", kind: "integrates", label: "Integrator" },
+      { staff_ministry_id: "media", leader_user_id: "sample24", kind: "oversees", label: null },
+      { staff_ministry_id: "lt", leader_user_id: "sample24", kind: "integrates", label: "Integrator" },
     ],
     objectives: [
       {
@@ -54,11 +54,11 @@ function input(over: Partial<OrgInput> = {}): OrgInput {
         position: 1,
         krs: [
           kr({ current_status: "moving_forward", metric_start: 0, metric_target: 10, current_value: 5, last_checkin_at: "2026-09-29T10:00:00Z" }),
-          kr({ current_status: "stuck", owner_user_id: "tosca" }),
+          kr({ current_status: "stuck", owner_user_id: "sample279" }),
         ],
       },
     ],
-    shepherds: [{ staff_ministry_id: "media", user_id: "tosca" }],
+    shepherds: [{ staff_ministry_id: "media", user_id: "sample279" }],
     schools: [{ id: "ffx", name: "FFX", students: 38 }],
     cycleName: "2026",
     updateMonthStart: "2026-09-01",
@@ -129,14 +129,14 @@ describe("buildOrgModel", () => {
   });
 
   it("names leads, shepherd, and KR owners from the people they point at", () => {
-    expect(media.leads).toEqual(["Tosca Ferndale"]);
-    expect(media.shepherd).toBe("Tosca Ferndale");
-    expect(media.objectives[0].krs[1].ownerName).toBe("Tosca Ferndale");
-    expect(media.lines).toEqual([{ userId: "caleb", name: "Caleb", kind: "oversees", label: null }]);
+    expect(media.leads).toEqual(["Sample Person 279"]);
+    expect(media.shepherd).toBe("Sample Person 279");
+    expect(media.objectives[0].krs[1].ownerName).toBe("Sample Person 279");
+    expect(media.lines).toEqual([{ userId: "sample24", name: "Sample Person 24", kind: "oversees", label: null }]);
   });
 
   it("works out shared people from two memberships, never from a stored line", () => {
-    expect(m.shared).toEqual([{ a: "events", b: "media", people: ["Tosca Ferndale"] }]);
+    expect(m.shared).toEqual([{ a: "events", b: "media", people: ["Sample Person 279"] }]);
     expect(media.members[0].alsoOn).toEqual(["events"]);
   });
 
@@ -147,7 +147,7 @@ describe("buildOrgModel", () => {
   });
 
   it("tags the Integrator on the Leadership team", () => {
-    expect(m.leaders).toEqual([{ userId: "caleb", name: "Caleb", tag: "INTEGRATOR", title: "Integrator" }]);
+    expect(m.leaders).toEqual([{ userId: "sample24", name: "Sample Person 24", tag: "INTEGRATOR", title: "Integrator" }]);
   });
 
   it("rolls objectives up to their direction", () => {
@@ -187,7 +187,7 @@ describe("computeLayout", () => {
 
   it("sizes a team's table by its people, not its objectives", () => {
     const media = m.teams.find((t) => t.id === "media")!;
-    // 1 lead row (Tosca) + 0 others + the "+N more · OPEN" row
+    // 1 lead row (Sample Person 279) + 0 others + the "+N more · OPEN" row
     expect(teamTableRows(media)).toMatchObject({ more: 0 });
     expect(teamRows(media)).toBe(2);
     const events = m.teams.find((t) => t.id === "events")!;
@@ -229,7 +229,7 @@ describe("computeLayout", () => {
   });
 
   it("draws a reporting line from a Leadership-team row, and a dotted line for a shared person", () => {
-    expect(l.edges.some((e) => e.kind === "report" && e.a === "lead:caleb" && e.b === "team:media")).toBe(true);
+    expect(l.edges.some((e) => e.kind === "report" && e.a === "lead:sample24" && e.b === "team:media")).toBe(true);
     expect(l.edges.some((e) => e.kind === "works" && e.a === "team:events" && e.b === "team:media")).toBe(true);
   });
 
@@ -240,7 +240,7 @@ describe("computeLayout", () => {
 
   it("lights what is connected to the selection", () => {
     const lit = litSet("team:media", l.edges);
-    expect(lit.has("lead:caleb")).toBe(true);
+    expect(lit.has("lead:sample24")).toBe(true);
     expect(lit.has("team:events")).toBe(true);
     expect(lit.has("team:tr")).toBe(false);
   });

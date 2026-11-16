@@ -36,8 +36,8 @@ const PLACEHOLDERS = Object.keys(
 );
 
 const SAMPLE = {
-  contactFirstName: "Thandi",
-  contactName: "Thandi Nkosi",
+  contactFirstName: "Sample",
+  contactName: "Sample Person 202",
   tradingName: "Fire & Fragrance SA NPC",
   invoiceNumber: "INV-12345",
   currencyCode: "ZAR",

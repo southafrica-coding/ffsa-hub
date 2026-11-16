@@ -37,15 +37,15 @@ describe("small rules", () => {
   });
 
   it("repairs mojibake names and leaves good ones alone", () => {
-    expect(fixEncoding("HÃ©drik Agenbag")).toBe("Hédrik Agenbag");
-    expect(fixEncoding("JunÃ© Joubert")).toBe("Juné Joubert");
-    expect(fixEncoding("Abigail Kolbé")).toBe("Abigail Kolbé");
+    expect(fixEncoding("SamplÃ© Person 902")).toBe("Samplé Person 902");
+    expect(fixEncoding("PersonÃ© Sample 903")).toBe("Personé Sample 903");
+    expect(fixEncoding("Samplé Person 904")).toBe("Samplé Person 904");
     expect(fixEncoding("Plain Name")).toBe("Plain Name");
   });
 
   it("groups names regardless of case, accents and spacing", () => {
-    expect(donorKey("  Hédrik  Agenbag ")).toBe(donorKey("HÃ©drik Agenbag"));
-    expect(donorKey("PETER C GILL")).toBe("peter c gill");
+    expect(donorKey("  Samplé  Person 902 ")).toBe(donorKey("SamplÃ© Person 902"));
+    expect(donorKey("SAMPLE Q PERSON 913")).toBe("sample q person 913");
   });
 
   it("assigns ministry from the description", () => {
@@ -70,9 +70,9 @@ describe("buildStatements", () => {
     const r = buildStatements({
       taxYear: 2026,
       lines: [
-        line({ invoiceNumber: "INV-2223", contactName: "Briana Boll", unitPriceUsd: 1000, description: "HULC Donation", invoiceTotalUsd: 1406.7 }),
-        line({ invoiceNumber: "INV-2223", contactName: "Briana Boll", unitPriceUsd: 500, description: "Donation", invoiceTotalUsd: 1406.7 }),
-        line({ invoiceNumber: "INV-2223", contactName: "Briana Boll", unitPriceUsd: -93.3, itemCode: "STRIPE", description: "Stripe Card Processing Fee", invoiceTotalUsd: 1406.7 }),
+        line({ invoiceNumber: "INV-2223", contactName: "Sample Person 910", unitPriceUsd: 1000, description: "HULC Donation", invoiceTotalUsd: 1406.7 }),
+        line({ invoiceNumber: "INV-2223", contactName: "Sample Person 910", unitPriceUsd: 500, description: "Donation", invoiceTotalUsd: 1406.7 }),
+        line({ invoiceNumber: "INV-2223", contactName: "Sample Person 910", unitPriceUsd: -93.3, itemCode: "STRIPE", description: "Stripe Card Processing Fee", invoiceTotalUsd: 1406.7 }),
       ],
     });
     expect(r.donors).toHaveLength(1);
@@ -87,7 +87,7 @@ describe("buildStatements", () => {
     const r = buildStatements({
       taxYear: 2026,
       options: { amountBasis: "net" },
-      lines: [line({ invoiceNumber: "INV-1", contactName: "Briana Boll", unitPriceUsd: 1500, invoiceTotalUsd: 1406.7 })],
+      lines: [line({ invoiceNumber: "INV-1", contactName: "Sample Person 910", unitPriceUsd: 1500, invoiceTotalUsd: 1406.7 })],
     });
     expect(r.totals.grandTotalCents).toBe(140670);
   });
@@ -96,13 +96,13 @@ describe("buildStatements", () => {
     const r = buildStatements({
       taxYear: 2026,
       lines: [
-        line({ invoiceNumber: "INV-1", contactName: "Kassandra Aleck", unitPriceUsd: 50, invoiceDate: "2026-01-04" }),
-        line({ invoiceNumber: "INV-2", contactName: "Kassandra Aleck", unitPriceUsd: 50, invoiceDate: "2026-01-18" }),
-        line({ invoiceNumber: "INV-3", contactName: "Owen Veer", unitPriceUsd: 250 }),
+        line({ invoiceNumber: "INV-1", contactName: "Sample Person 901", unitPriceUsd: 50, invoiceDate: "2026-01-04" }),
+        line({ invoiceNumber: "INV-2", contactName: "Sample Person 901", unitPriceUsd: 50, invoiceDate: "2026-01-18" }),
+        line({ invoiceNumber: "INV-3", contactName: "Sample Person 911", unitPriceUsd: 250 }),
       ],
     });
     expect(r.totals).toMatchObject({ grandTotalCents: 35000, giftCount: 3, donorCount: 2 });
-    expect(r.donors.find((d) => d.name === "Owen Veer")!.gifts).toHaveLength(1);
+    expect(r.donors.find((d) => d.name === "Sample Person 911")!.gifts).toHaveLength(1);
   });
 
   it("leaves out unpaid invoices, other years and non-USD gifts", () => {
@@ -132,10 +132,10 @@ describe("buildStatements", () => {
     expect(r.totals.grandTotalCents).toBe(3000);
   });
 
-  it("drops pass-through lines like Distrokid's 10% to FFSA", () => {
+  it("drops pass-through lines like Sample Foundation 921's 10% to FFSA", () => {
     const r = buildStatements({
       taxYear: 2026,
-      lines: [line({ invoiceNumber: "INV-9", contactName: "Distrokid", unitPriceUsd: 12, description: "10% to FFSA" })],
+      lines: [line({ invoiceNumber: "INV-9", contactName: "Sample Foundation 921", unitPriceUsd: 12, description: "10% to FFSA" })],
     });
     expect(r.donors).toHaveLength(0);
     expect(r.excludedLines).toHaveLength(1);
@@ -143,16 +143,16 @@ describe("buildStatements", () => {
 
   it("never sends a credit-note contact a statement, and matches the donor it names", () => {
     const lines = [
-      line({ invoiceNumber: "INV-2213", contactName: "Peter C Gill", unitPriceUsd: 75, description: "DTS Donation" }),
-      line({ invoiceNumber: "CN-0001", contactName: "Parker Pollard", unitPriceUsd: 75, quantity: -1, description: "DTS Donation - Peter Gill" }),
+      line({ invoiceNumber: "INV-2213", contactName: "Sample Q Person 913", unitPriceUsd: 75, description: "DTS Donation" }),
+      line({ invoiceNumber: "CN-0001", contactName: "Sample Person 912", unitPriceUsd: 75, quantity: -1, description: "DTS Donation - Sample Person 913" }),
     ];
     const r = buildStatements({ taxYear: 2026, lines });
-    expect(r.donors.map((d) => d.name)).toEqual(["Peter C Gill"]);
+    expect(r.donors.map((d) => d.name)).toEqual(["Sample Q Person 913"]);
     expect(r.creditNotes).toHaveLength(1);
-    expect(r.creditNotes[0]).toMatchObject({ amountCents: -7500, matchedDonorName: "Peter C Gill" });
-    const peter = r.donors[0];
-    expect(peter.totalCents).toBe(7500);
-    expect(peter.flags.map((f) => f.code)).toEqual(expect.arrayContaining(["credit_note", "dts"]));
+    expect(r.creditNotes[0]).toMatchObject({ amountCents: -7500, matchedDonorName: "Sample Q Person 913" });
+    const donor = r.donors[0];
+    expect(donor.totalCents).toBe(7500);
+    expect(donor.flags.map((f) => f.code)).toEqual(expect.arrayContaining(["credit_note", "dts"]));
     expect(r.totals.creditNoteCents).toBe(-7500);
 
     // Credit notes on a non-donation account (2850) are still listed.
@@ -172,24 +172,24 @@ describe("buildStatements", () => {
     const r = buildStatements({
       taxYear: 2026,
       lines: [
-        line({ invoiceNumber: "INV-1", contactName: "Fidelity Charitable", unitPriceUsd: 500 }),
-        line({ invoiceNumber: "INV-2", contactName: "Austin - Stratum Tech", unitPriceUsd: 624.68 }),
-        line({ invoiceNumber: "INV-3", contactName: "Jo Smith", unitPriceUsd: 40, description: "Wild Ones Fundraiser" }),
-        line({ invoiceNumber: "INV-4", contactName: "HÃ©drik Agenbag", unitPriceUsd: 6.06 }),
-        line({ invoiceNumber: "INV-5", contactName: "Anna", unitPriceUsd: 10 }),
-        line({ invoiceNumber: "INV-6", contactName: "Kassandra Aleck", unitPriceUsd: 50 }),
-        line({ invoiceNumber: "INV-7", contactName: "Kassandra Desiree Aleck", unitPriceUsd: 50 }),
+        line({ invoiceNumber: "INV-1", contactName: "Sample Foundation 918", unitPriceUsd: 500 }),
+        line({ invoiceNumber: "INV-2", contactName: "Sample School 919", unitPriceUsd: 624.68 }),
+        line({ invoiceNumber: "INV-3", contactName: "Sample Person 900", unitPriceUsd: 40, description: "Wild Ones Fundraiser" }),
+        line({ invoiceNumber: "INV-4", contactName: "SamplÃ© Person 902", unitPriceUsd: 6.06 }),
+        line({ invoiceNumber: "INV-5", contactName: "Sam", unitPriceUsd: 10 }),
+        line({ invoiceNumber: "INV-6", contactName: "Sample Person 901", unitPriceUsd: 50 }),
+        line({ invoiceNumber: "INV-7", contactName: "Sample (Nick) Person 901", unitPriceUsd: 50 }),
       ],
     });
     const codes = (name: string) => r.donors.find((d) => d.name === name)!.flags.map((f) => f.code);
-    expect(codes("Fidelity Charitable")).toContain("organisation");
-    expect(codes("Austin - Stratum Tech")).toContain("organisation");
-    expect(codes("Jo Smith")).toContain("review_line");
-    expect(codes("Hédrik Agenbag")).toContain("encoding_fixed");
-    expect(codes("Anna")).toContain("incomplete_name");
-    expect(codes("Kassandra Aleck")).toContain("possible_duplicate");
-    expect(codes("Kassandra Desiree Aleck")).toContain("possible_duplicate");
-    expect(codes("Jo Smith")).not.toContain("organisation");
+    expect(codes("Sample Foundation 918")).toContain("organisation");
+    expect(codes("Sample School 919")).toContain("organisation");
+    expect(codes("Sample Person 900")).toContain("review_line");
+    expect(codes("Samplé Person 902")).toContain("encoding_fixed");
+    expect(codes("Sam")).toContain("incomplete_name");
+    expect(codes("Sample Person 901")).toContain("possible_duplicate");
+    expect(codes("Sample (Nick) Person 901")).toContain("possible_duplicate");
+    expect(codes("Sample Person 900")).not.toContain("organisation");
   });
 
   it("finds emails in order: edit, source row, Xero contacts, Hub", () => {
@@ -219,56 +219,56 @@ describe("buildStatements", () => {
     const r = buildStatements({
       taxYear: 2026,
       lines: [
-        line({ invoiceNumber: "INV-1", contactName: "Kassandra Aleck", unitPriceUsd: 50 }),
-        line({ invoiceNumber: "INV-2", contactName: "Kassandra Desiree Aleck", unitPriceUsd: 50 }),
-        line({ invoiceNumber: "INV-3", contactName: "Keswick Christian School", unitPriceUsd: 840 }),
+        line({ invoiceNumber: "INV-1", contactName: "Sample Person 901", unitPriceUsd: 50 }),
+        line({ invoiceNumber: "INV-2", contactName: "Sample (Nick) Person 901", unitPriceUsd: 50 }),
+        line({ invoiceNumber: "INV-3", contactName: "Sample School 920", unitPriceUsd: 840 }),
       ],
       edits: [
-        { donorKey: "kassandra desiree aleck", mergeIntoKey: "kassandra aleck" },
-        { donorKey: "kassandra aleck", displayName: "Kassandra D. Aleck", email: "k@x.com" },
-        { donorKey: "keswick christian school", excluded: true },
+        { donorKey: "sample nick person 901", mergeIntoKey: "sample person 901" },
+        { donorKey: "sample person 901", displayName: "Sample (N.) Person 901", email: "k@x.com" },
+        { donorKey: "sample school 920", excluded: true },
       ],
     });
-    const k = r.donors.find((d) => d.key === "kassandra aleck")!;
-    expect(k).toMatchObject({ name: "Kassandra D. Aleck", email: "k@x.com", emailSource: "edit", totalCents: 10000 });
-    expect(k.mergedFrom).toEqual(["Kassandra Desiree Aleck"]);
+    const k = r.donors.find((d) => d.key === "sample person 901")!;
+    expect(k).toMatchObject({ name: "Sample (N.) Person 901", email: "k@x.com", emailSource: "edit", totalCents: 10000 });
+    expect(k.mergedFrom).toEqual(["Sample (Nick) Person 901"]);
     expect(r.totals).toMatchObject({ donorCount: 1, grandTotalCents: 10000, excludedDonorCount: 1, excludedDonorCents: 84000 });
   });
 });
 
 describe("matchCreditNoteDonor", () => {
   const donors = [
-    { key: "peter c gill", name: "Peter C Gill" },
-    { key: "peter gillespie", name: "Peter Gillespie" },
+    { key: "sample q person 913", name: "Sample Q Person 913" },
+    { key: "sample person 913x", name: "Sample Person 913x" },
   ];
   it("finds the person in any segment, preferring an exact name", () => {
-    const more = [...donors, { key: "kassandra aleck", name: "Kassandra Aleck" }, { key: "kassandra desiree aleck", name: "Kassandra Desiree Aleck" }, { key: "larry jones", name: "Larry Jones" }];
-    expect(matchCreditNoteDonor("Donation - DTS - Larry Jones", more)?.name).toBe("Larry Jones");
-    expect(matchCreditNoteDonor("Donation - DTS Donation  - Peter Gill", more)?.name).toBe("Peter C Gill");
-    expect(matchCreditNoteDonor("Donation - Kassandra Aleck", more)?.name).toBe("Kassandra Aleck");
-    expect(matchCreditNoteDonor("Donation - Kassandra Desiree Aleck", more)?.name).toBe("Kassandra Desiree Aleck");
+    const more = [...donors, { key: "sample person 901", name: "Sample Person 901" }, { key: "sample nick person 901", name: "Sample (Nick) Person 901" }, { key: "sample person 914", name: "Sample Person 914" }];
+    expect(matchCreditNoteDonor("Donation - DTS - Sample Person 914", more)?.name).toBe("Sample Person 914");
+    expect(matchCreditNoteDonor("Donation - DTS Donation  - Sample Person 913", more)?.name).toBe("Sample Q Person 913");
+    expect(matchCreditNoteDonor("Donation - Sample Person 901", more)?.name).toBe("Sample Person 901");
+    expect(matchCreditNoteDonor("Donation - Sample (Nick) Person 901", more)?.name).toBe("Sample (Nick) Person 901");
     expect(matchCreditNoteDonor("Donation - DTS", more)).toBeNull();
-    const onlyShort = [{ key: "kassandra aleck", name: "Kassandra Aleck" }];
-    expect(matchCreditNoteDonor("Donation - Kassandra Desiree Aleck", onlyShort)?.name).toBe("Kassandra Aleck");
+    const onlyShort = [{ key: "sample person 901", name: "Sample Person 901" }];
+    expect(matchCreditNoteDonor("Donation - Sample (Nick) Person 901", onlyShort)?.name).toBe("Sample Person 901");
   });
 
   it("lists donation credit notes on other accounts, but not tuition or refunds", () => {
     const r = buildStatements({
       taxYear: 2026,
       lines: [
-        line({ invoiceNumber: "INV-1", contactName: "Owen Veer", unitPriceUsd: 250, accountCode: "1010" }),
-        line({ invoiceNumber: "CN-2096", contactName: "Parker Pollard", unitPriceUsd: 242.45, quantity: -1, accountCode: "2850", description: "Donation - DTS Donation  - Owen Veer" }),
-        line({ invoiceNumber: "CN-2101", contactName: "Kiana Redding", unitPriceUsd: 1000, quantity: -1, accountCode: "4105", description: "Discipleship Training School" }),
-        line({ invoiceNumber: "CN-3070", contactName: "Dwayne Roberts", unitPriceUsd: 750, quantity: -1, accountCode: "1050", description: "Overpayment Refund" }),
+        line({ invoiceNumber: "INV-1", contactName: "Sample Person 911", unitPriceUsd: 250, accountCode: "1010" }),
+        line({ invoiceNumber: "CN-2096", contactName: "Sample Person 912", unitPriceUsd: 242.45, quantity: -1, accountCode: "2850", description: "Donation - DTS Donation  - Sample Person 911" }),
+        line({ invoiceNumber: "CN-2101", contactName: "Sample Person 917", unitPriceUsd: 1000, quantity: -1, accountCode: "4105", description: "Discipleship Training School" }),
+        line({ invoiceNumber: "CN-3070", contactName: "Sample Person 915", unitPriceUsd: 750, quantity: -1, accountCode: "1050", description: "Overpayment Refund" }),
       ],
     });
     expect(r.creditNotes.map((c) => c.invoiceNumber)).toEqual(["CN-2096"]);
-    expect(r.creditNotes[0].matchedDonorName).toBe("Owen Veer");
+    expect(r.creditNotes[0].matchedDonorName).toBe("Sample Person 911");
     expect(r.excludedLines.map((e) => e.reason)).toEqual(["Credit note not for a donation", "Credit note not for a donation"]);
   });
 
   it("needs every named word in the donor's name", () => {
-    expect(matchCreditNoteDonor("DTS Donation - Peter Gill", donors)?.name).toBe("Peter C Gill");
+    expect(matchCreditNoteDonor("DTS Donation - Sample Person 913", donors)?.name).toBe("Sample Q Person 913");
     expect(matchCreditNoteDonor("DTS Donation", donors)).toBeNull();
     expect(matchCreditNoteDonor("Refund - Someone Else", donors)).toBeNull();
   });
@@ -285,10 +285,10 @@ describe("spreadsheet parsing", () => {
     [],
     ["Invoice Number", "Invoice Date", "Due Date", "Item Code", "Description", "Quantity", "Original Currency",
       "Invoice Total (Source)", "Balance (Source)", "Unit Price (ex) (USD)", "Invoice Total (USD)", "Balance (USD)", "Contact", "Status"],
-    ["INV-2223", 46055, 46055, "", "HULC Donation", 1, "USD", 1406.7, 0, 1000, 1406.7, 0, "Briana Boll", "Paid"],
-    ["INV-2223", 46055, 46055, "", "Donation", 1, "USD", 1406.7, 0, "$500.00", 1406.7, 0, "Briana Boll", "Paid"],
+    ["INV-2223", 46055, 46055, "", "HULC Donation", 1, "USD", 1406.7, 0, 1000, 1406.7, 0, "Sample Person 910", "Paid"],
+    ["INV-2223", 46055, 46055, "", "Donation", 1, "USD", 1406.7, 0, "$500.00", 1406.7, 0, "Sample Person 910", "Paid"],
     ["INV-2300", 46100, 46100, "", "Donation", 1, "USD", 25, 25, 25, 25, 25, "Late Payer", "Approved"],
-    ["CN-0001", 46100, 46100, "", "DTS Donation - Peter Gill", -1, "USD", -75, 0, 75, -75, 0, "Parker Pollard", "Paid"],
+    ["CN-0001", 46100, 46100, "", "DTS Donation - Sample Person 913", -1, "USD", -75, 0, 75, -75, 0, "Sample Person 912", "Paid"],
     ["Total", "", "", "", "", "", "", "", "", "", 1356.7, 25, "", ""],
   ];
 
@@ -310,19 +310,19 @@ describe("spreadsheet parsing", () => {
     const parsed = parseWorkbook({
       Donations: [
         ["Donor Name", "Email Address", "Donation Amount", "Donation Date"],
-        ["Juan Kidd", "juan@example.com", "$13.47", "1/2/2026"],
-        ["Briana Boll", "", "$1,500.00", "2/2/2026"],
+        ["Sample Person 916", "sample916@example.com", "$13.47", "1/2/2026"],
+        ["Sample Person 910", "", "$1,500.00", "2/2/2026"],
       ],
       "Email Lookup": [
         ["*ContactName", "AccountNumber", "EmailAddress"],
-        ["Briana Boll", "", "briana@example.com"],
+        ["Sample Person 910", "", "sample910@example.com"],
       ],
       Notes: [["nothing here"]],
     });
     expect(parsed.used.map((u) => u.kind)).toEqual(["donations_list", "contacts"]);
     const r = buildStatements({ taxYear: 2026, lines: parsed.lines, contactEmails: parsed.contactEmails });
     expect(r.totals.grandTotalCents).toBe(151347);
-    expect(r.donors.find((d) => d.name === "Briana Boll")).toMatchObject({ email: "briana@example.com", emailSource: "xero" });
+    expect(r.donors.find((d) => d.name === "Sample Person 910")).toMatchObject({ email: "sample910@example.com", emailSource: "xero" });
   });
 
   it("prefers a real Xero report over a derived list in the same workbook", () => {

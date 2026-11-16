@@ -3,7 +3,7 @@ import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from "@
 import { fmtUsd, formatUsDate, type Donor } from "./donor-statements";
 import { wordingOf, type WordingSettings } from "./donor-statement-wording";
 
-// The year-end statement, in the order finance specified (Ellen, Oct 2026):
+// The year-end statement, in the order finance specified (Sample Person 50, Oct 2026):
 // logo, organisation, Tax ID, address, "[Year] Donation Summary for …",
 // greeting, total, one line per gift, mission paragraph, IRS paragraph
 // (word for word — the written acknowledgment for gifts of $250+),

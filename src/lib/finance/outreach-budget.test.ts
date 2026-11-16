@@ -14,7 +14,7 @@ const CATS: BudgetCategory[] = names.map((name, i) => ({
 }));
 const cat = (description: string) => guessCategory(description, CATS)?.name ?? null;
 
-// Ellen's Botswana sheet as a CSV export reads it: spacer column A,
+// Sample Person 50's Botswana sheet as a CSV export reads it: spacer column A,
 // currency strings, blank placeholder rows, a spacer row, a total row.
 const BOTSWANA: unknown[][] = [
   ["", "", "Amount", "Frequency", "People", "Total"],

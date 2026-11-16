@@ -38,8 +38,10 @@
 -- return exactly what they did before. user_roles and user_permissions
 -- are not touched.
 --
--- Seeds the flag ON for the person whose sign-in email is
--- stephankuhn05@gmail.com (a no-op if there is no such user).
+-- Seeds the flag ON for user@example.com.
+-- The original one-off data fix was already applied in production and the
+-- personal address was scrubbed before this repo went public. On a fresh
+-- install the placeholder matches no row.
 -- ============================================================
 
 
@@ -130,7 +132,7 @@ CREATE POLICY "Remove outreach restrictions" ON public.outreach_user_restriction
 
 
 -- ────────────────────────────────────────────────────────────
--- 4. Seed: Stefan Keen
+-- 4. Seed: placeholder user
 -- ────────────────────────────────────────────────────────────
 -- Looked up by sign-in email. No such user → no row. Already has a row →
 -- left alone, so re-running never overrides an admin's later choice.
@@ -138,7 +140,7 @@ INSERT INTO public.outreach_user_restrictions (user_id, limited_to_own_teams)
 SELECT u.id, true
 FROM auth.users au
 JOIN public.users u ON u.id = au.id
-WHERE lower(au.email) = lower('stephankuhn05@gmail.com')
+WHERE lower(au.email) = lower('user@example.com')
 ON CONFLICT (user_id) DO NOTHING;
 
 

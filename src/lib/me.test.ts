@@ -109,8 +109,8 @@ describe("buildMePayload", () => {
     const body = buildMePayload({
       user: { id: "u1", email: "a@b.test" },
       profile: {
-        first_name: "Thandi",
-        last_name: "Mokoena",
+        first_name: "Sample",
+        last_name: "Person 199",
         preferred_name: null,
         avatar_url: null,
         is_active: true,
@@ -123,8 +123,8 @@ describe("buildMePayload", () => {
     expect(body).toEqual({
       user: { id: "u1", email: "a@b.test" },
       profile: {
-        firstName: "Thandi",
-        lastName: "Mokoena",
+        firstName: "Sample",
+        lastName: "Person 199",
         preferredName: null,
         avatarUrl: null,
         isActive: true,

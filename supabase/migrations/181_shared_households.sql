@@ -134,8 +134,8 @@ CREATE INDEX IF NOT EXISTS household_members_household_idx
 -- 5. Email normalisation + matching indexes
 -- ────────────────────────────────────────────────────────────
 -- The raw `email` keeps its original casing for display; matching goes
--- through this generated column so " Nathaly@Example.COM " and
--- "nathaly@example.com" are the same person.
+-- through this generated column so " Sample@Example.COM " and
+-- "sample@example.com" are the same person.
 ALTER TABLE public.household_members
   ADD COLUMN IF NOT EXISTS email_normalized text
   GENERATED ALWAYS AS (NULLIF(lower(btrim(email)), '')) STORED;

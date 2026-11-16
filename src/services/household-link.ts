@@ -23,7 +23,7 @@ type Client = any;
 
 export type HouseholdLinkState = {
   pendingHouseholdId: string;
-  // e.g. "Nathaly Seidel" — the name of whoever created that household.
+  // e.g. "Sample Person" — the name of whoever created that household.
   displayName: string;
 };
 

@@ -110,8 +110,8 @@ describe("validateExpense: required fields (as on the website)", () => {
   });
 
   it("trims text and keeps optional fields", () => {
-    const v = validateExpense({ ...base, vendor: "  Shoprite ", notes: "Team lunch", receipt_code: "R001", purchaser: "Thandi" }, ctx());
-    expect(v.ok && v.payload).toMatchObject({ vendor: "Shoprite", notes: "Team lunch", receipt_code: "R001", purchaser: "Thandi" });
+    const v = validateExpense({ ...base, vendor: "  Shoprite ", notes: "Team lunch", receipt_code: "R001", purchaser: "Sample Person 199" }, ctx());
+    expect(v.ok && v.payload).toMatchObject({ vendor: "Shoprite", notes: "Team lunch", receipt_code: "R001", purchaser: "Sample Person 199" });
   });
 });
 

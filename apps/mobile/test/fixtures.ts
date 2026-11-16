@@ -7,7 +7,7 @@ import { ApiError, meSchema, type Me } from "@/lib/api";
 export function makeMe(overrides: Partial<z.input<typeof meSchema>> = {}): Me {
   return meSchema.parse({
     user: { id: "u1", email: "jo@example.org" },
-    profile: { firstName: "Johanna", lastName: "Smit", preferredName: "Jo", avatarUrl: null, isActive: true },
+    profile: { firstName: "Sample", lastName: "Person", preferredName: "Sample", avatarUrl: null, isActive: true },
     roles: [{ name: "staff", scopeType: null, scopeId: null }],
     permissions: [{ key: "events.view", scopeType: null, scopeId: null, source: "role" }],
     serverTime: "2026-11-03T08:00:00.000Z",

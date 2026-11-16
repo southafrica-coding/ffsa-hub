@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════
 -- 248 — Finance Office role
 -- ════════════════════════════════════════════════════════════
--- A ready-made role for the finance office (Ellen and team) to run year-end
+-- A ready-made role for the finance office (Sample Person 50 and team) to run year-end
 -- donor statements: Finance → Donor Statements — settings, import, review,
 -- preview, test send, send, resend, paper statements, send log.
 --

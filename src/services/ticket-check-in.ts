@@ -192,8 +192,8 @@ export type GuestMatch = {
  * Find a guest by name when their QR won't scan or was never opened.
  *
  * Deliberately name-only on the way in AND on the way out: no email, no
- * phone, no order total. A door needs to know that "Sarah Mokoena" holds a
- * General ticket — it does not need her contact details, and this list is
+ * phone, no order total. A door needs to know that "Sample Person 922" holds a
+ * General ticket — it does not need their contact details, and this list is
  * reachable by anyone holding the shared link.
  */
 export async function searchGuests(
@@ -204,7 +204,7 @@ export async function searchGuests(
 ): Promise<GuestMatch[]> {
   const q = query.trim();
   if (q.length < 2) return [];
-  // Tokenised: "sarah mok" should match first_name=Sarah last_name=Mokoena,
+  // Tokenised: "sample per" should match first_name=Sample last_name=Person,
   // which a single ilike over either column alone never does.
   const terms = q.split(/\s+/).slice(0, 3);
 

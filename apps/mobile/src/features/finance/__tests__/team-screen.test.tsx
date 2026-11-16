@@ -92,14 +92,14 @@ describe("Team screen", () => {
         program_name: "DTS",
         my_role: "team_member",
         roster: [
-          { id: "p1", role: "owner", name: "Thandi" },
-          { id: "p2", role: "team_member", name: "Sipho" },
+          { id: "p1", role: "owner", name: "Sample Person 199" },
+          { id: "p2", role: "team_member", name: "Sample Person 190" },
         ],
       },
     });
     const { wrap } = makeOutbox();
     await render(wrap(<TeamScreen teamId={TEAM} />));
-    expect(await screen.findByText("Thandi")).toBeTruthy();
+    expect(await screen.findByText("Sample Person 199")).toBeTruthy();
     expect(screen.getByText(strings.team.memberNote)).toBeTruthy();
     expect(screen.queryByText(/rand/)).toBeNull();
     expect(screen.queryByRole("button", { name: strings.team.addExpense })).toBeNull();

@@ -96,7 +96,7 @@ export async function getPracticeBookings(
     start_time: String(r.start_time).slice(0, 5),
     end_time: String(r.end_time).slice(0, 5),
     // The booker first, then in the order they were added — so a vocal group
-    // reads "Naledi +2" from the person who made it.
+    // reads "Sample +2" from the person who made it.
     people: [...r.people]
       .sort((a, b) =>
         a.user_id === r.booked_by ? -1 : b.user_id === r.booked_by ? 1 : a.created_at.localeCompare(b.created_at)

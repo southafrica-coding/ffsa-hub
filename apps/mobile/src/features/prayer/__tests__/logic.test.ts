@@ -125,7 +125,7 @@ describe("the wall's rules", () => {
   });
 
   it("names who leads, by first name", () => {
-    expect(leadNames(live, seatTypes)).toBe("Thabo");
+    expect(leadNames(live, seatTypes)).toBe("Sample Person 199");
     expect(leadNames(unled, seatTypes)).toBeNull();
   });
 

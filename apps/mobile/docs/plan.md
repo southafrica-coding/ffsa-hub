@@ -47,7 +47,7 @@ Time figures are **my rough guesses for a build driven by headless Claude Code w
 ### Phase 2 — Daily-driver (≈4–6 weeks)
 *Jack gets:* push notifications and the approvals people were waiting for; public store release.
 - **Push notifications** (Expo push → APNs/FCM): booking decisions, approvals waiting, expense/receipt flags, event reminders. Needs one new table + sender (hand-applied migration). (E)
-- **Approvals for Coreen** (scope to confirm — see Question G): approve/flag expenses, fund releases, closeouts, booking/vehicle requests.
+- **Approvals for Sample Person 2** (scope to confirm — see Question G): approve/flag expenses, fund releases, closeouts, booking/vehicle requests.
 - Prayer Room (mobile layout already designed), bookings/vehicles requests + vehicle collect/return photos.
 - Account security (2FA, once PR #293 lands on web).
 - Offline outbox hardened; dark mode; accessibility audit.
@@ -116,7 +116,7 @@ Each: options → tradeoff → my recommendation. "Evidence" cites what I read.
 
 ### G. MVP modules/screens first
 Recommended first cut (maps to Phase 1): **Sign-in → Home ("needs you") → My Finance (teams, budget lines, expenses) → Receipt capture (camera, tied to a budget line) → My Events/tickets QR → Staff door check-in → Profile/notification prefs.**
-"Approvals for Coreen" is **in Phase 2, not Phase 1**, because I could not find a single "finance approvals" screen on the web (the permission `finance.approve` exists; approvals appear spread across fund releases, closeouts, expenses and booking/vehicle requests). **Question for Jack/Coreen:** what exactly does she approve today and where? Her answer decides whether approvals can move into Phase 1. (Also: earlier meeting notes show names/roles around "sole approver" were uncertain — please confirm.)
+"Approvals for Sample Person 2" is **in Phase 2, not Phase 1**, because I could not find a single "finance approvals" screen on the web (the permission `finance.approve` exists; approvals appear spread across fund releases, closeouts, expenses and booking/vehicle requests). **Question for Jack/Sample Person 2:** what exactly does she approve today and where? Her answer decides whether approvals can move into Phase 1. (Also: earlier meeting notes show names/roles around "sole approver" were uncertain — please confirm.)
 
 ### H. Design approach
 Three honest options:
@@ -174,7 +174,7 @@ Three honest options:
 1. What is FFSA's exact **registered legal name/type** (and does it already have a D-U-N-S)?
 2. Who will be the **Account Holder** for Apple and Google, and what email?
 3. Which people are in the **pilot** (names/roles) for TestFlight/internal testing — (Apple internal testers must be App Store Connect users; external testers up to 10,000).
-4. Does Coreen's "approval" mean expense approvals, fund releases, closeouts, or all three?
+4. Does Sample Person 2's "approval" mean expense approvals, fund releases, closeouts, or all three?
 5. Is a designer available for the app icon, splash and store screenshots?
 
 ## 6. Unverified items (so nobody relies on them)

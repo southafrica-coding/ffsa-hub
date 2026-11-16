@@ -214,7 +214,7 @@ describe("household", () => {
     firstName: "",
     lastName: "",
     email: "",
-    fullName: " Sam Smit ",
+    fullName: " Sample Person ",
     dateOfBirth: "2018-04-01",
     gender: "male",
     passportCountry: "South Africa",
@@ -235,7 +235,7 @@ describe("household", () => {
     const e = meStrings.docs.member.errors;
     expect(validateMember(child, e)).toEqual({});
     expect(validateMember({ ...child, fullName: "" }, e)).toEqual({ fullName: e.fullName });
-    const spouse = { ...child, relationship: "spouse", firstName: "Jo", lastName: "Smit", email: "jo@example.org" };
+    const spouse = { ...child, relationship: "spouse", firstName: "Sample", lastName: "Person", email: "jo@example.org" };
     expect(validateMember(spouse, e)).toEqual({});
     expect(validateMember({ ...spouse, email: "not-an-email" }, e)).toEqual({ email: e.emailInvalid });
     expect(validateMember({ ...spouse, firstName: "", lastName: "", email: "" }, e)).toEqual({
@@ -246,13 +246,13 @@ describe("household", () => {
   });
 
   it("a spouse sends name + email only, with visa cleared", () => {
-    const body = memberBody({ ...child, relationship: "spouse", firstName: " Jo ", lastName: "Smit", email: "jo@example.org" }, opts);
+    const body = memberBody({ ...child, relationship: "spouse", firstName: " Sample ", lastName: "Person", email: "jo@example.org" }, opts);
     expect(body).toEqual({
       relationship: "spouse",
-      first_name: "Jo",
-      last_name: "Smit",
+      first_name: "Sample",
+      last_name: "Person",
       email: "jo@example.org",
-      full_name: "Jo Smit",
+      full_name: "Sample Person",
       is_international: false,
       visa_category: "",
       visa_type: "",
@@ -263,7 +263,7 @@ describe("household", () => {
 
   it("a child's visa is cleared unless international, and the specifics unless long-term", () => {
     const local = memberBody(child, opts);
-    expect(local).toMatchObject({ full_name: "Sam Smit", passport_number: "A123", visa_category: "", visa_type: "", visa_expiry_date: "" });
+    expect(local).toMatchObject({ full_name: "Sample Person", passport_number: "A123", visa_category: "", visa_type: "", visa_expiry_date: "" });
     const intl = memberBody({ ...child, isInternational: true }, opts);
     expect(intl).toMatchObject({ is_international: true, visa_category: "long_term", visa_type: "Study", visa_expiry_date: "2027-01-01" });
     const shortStay = memberBody({ ...child, isInternational: true, visaCategory: "90_day" }, opts);

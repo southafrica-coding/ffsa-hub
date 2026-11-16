@@ -113,13 +113,13 @@ describe("loadTeam", () => {
       { outreach_teams: { data: null, error: null } },
       {
         outreach_team_overview: {
-          data: { id: TEAM, team_name: "Burundi", status: "active", my_role: "team_member", roster: [{ id: "p1", role: "owner", name: "Thandi" }] },
+          data: { id: TEAM, team_name: "Burundi", status: "active", my_role: "team_member", roster: [{ id: "p1", role: "owner", name: "Sample Person 199" }] },
           error: null,
         },
       },
     );
     const t = await loadTeam(db, TEAM);
-    expect(t).toMatchObject({ kind: "member", overview: { my_role: "team_member", roster: [{ name: "Thandi" }] } });
+    expect(t).toMatchObject({ kind: "member", overview: { my_role: "team_member", roster: [{ name: "Sample Person 199" }] } });
   });
 
   it("is 'none' when you can't see the team at all", async () => {

@@ -58,7 +58,7 @@
 --      finance_admin / finance.edit) may update and add projects. Only
 --      is_admin() writes finance_orgs. No DELETE policy, no anon access.
 --
--- ACCOUNT CODES: the chart of accounts is on hold (Coreen has not sent it),
+-- ACCOUNT CODES: the chart of accounts is on hold (Sample Person 2 has not sent it),
 -- so this migration adds NO account-code column anywhere. Any account / code
 -- column on a future finance record (transactions, budget lines) must be
 -- NULLABLE until the chart of accounts arrives. PR #475's

@@ -120,7 +120,7 @@ const MINE = {
       role: "keys",
       status: "invited",
       required_label: null,
-      set: { id: "s2", set_date: "2026-11-02", start_time: "08:00:00", end_time: "09:30:00", title: "Morning devo", theme: null, owner: person("u9", "Grace", "Dlamini") },
+      set: { id: "s2", set_date: "2026-11-02", start_time: "08:00:00", end_time: "09:30:00", title: "Morning devo", theme: null, owner: person("u9", "Sample", "Person 905") },
     },
   ],
   "/api/prayer-room/sets?scope=owned": [],
@@ -146,7 +146,7 @@ describe("Prayer a11y: week", () => {
     expect(screen.getByRole("header", { name: strings.title })).toBeTruthy();
     expect(screen.getByRole("header", { name: "Tuesday 3 November" })).toBeTruthy();
     const row = screen.getByRole("button", { name: /^Tuesday 7 to 9 pm, Night watch/ });
-    expect(row.props.accessibilityLabel).toMatch(/2 hours\. Led by Thabo$/);
+    expect(row.props.accessibilityLabel).toMatch(/2 hours\. Led by Sample Person 199$/);
     expect(row.props.accessibilityHint).toBe(strings.set.openHint);
     // The unled set says so in words, not only with a dashed border.
     expect(screen.getByRole("button", { name: /needs a lead/ })).toBeTruthy();
@@ -193,7 +193,7 @@ describe("Prayer a11y: set sheet", () => {
     await within(sheet).findByText("Night watch");
     expect(within(sheet).getByRole("header", { name: "Night watch" })).toBeTruthy();
     expect(within(sheet).getByRole("button", { name: strings.set.close })).toBeTruthy();
-    expect(within(sheet).getByLabelText("Prayer Lead, Thabo")).toBeTruthy();
+    expect(within(sheet).getByLabelText("Prayer Lead, Sample Person 199")).toBeTruthy();
     expect(within(sheet).getByRole("button", { name: "Ask to join: Worship Lead" }).props.accessibilityHint).toBeTruthy();
     // The scrim is hidden: Close and the back gesture do its job.
     expect(screen.getAllByRole("button", { name: strings.set.close })).toHaveLength(1);

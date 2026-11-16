@@ -45,7 +45,7 @@ function makeDoor(over: Partial<Record<keyof DoorClient, jest.Mock>> = {}) {
   return {
     stats: over.stats ?? jest.fn(async () => ({ checkedIn: 12, total: 40 })),
     search: over.search ?? jest.fn(async () => []),
-    checkIn: over.checkIn ?? jest.fn(async () => ({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "Sarah Mokoena" })),
+    checkIn: over.checkIn ?? jest.fn(async () => ({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "Sample Person 922" })),
     undo: over.undo ?? jest.fn(async () => undefined),
   } as unknown as DoorClient & Record<keyof DoorClient, jest.Mock>;
 }
@@ -77,7 +77,7 @@ describe("Door", () => {
     await render(<DoorScreen eventId="e1" door={door} />);
     await typeCode("AbCdEfGhIjK");
     expect(await screen.findByTestId("verdict-title")).toHaveTextContent("Checked in");
-    expect(screen.getByText("Sarah Mokoena · General")).toBeTruthy();
+    expect(screen.getByText("Sample Person 922 · General")).toBeTruthy();
     expect(door.checkIn).toHaveBeenCalledWith("AbCdEfGhIjK");
     expect(Haptics.notificationAsync).toHaveBeenCalledWith("success");
 
@@ -220,15 +220,15 @@ describe("Door", () => {
   it("name search: one tap checks the guest in", async () => {
     const door = makeDoor({
       search: jest.fn(async () => [
-        { ticketId: "t9", code: "GuestCode9", name: "Sarah Mokoena", ticketTypeName: "General", status: "valid", checkedInAt: null },
-        { ticketId: "t8", code: "GuestCode8", name: "Sarah Botha", ticketTypeName: "General", status: "checked_in", checkedInAt: "2026-11-03T16:00:00Z" },
+        { ticketId: "t9", code: "GuestCode9", name: "Sample Person 922", ticketTypeName: "General", status: "valid", checkedInAt: null },
+        { ticketId: "t8", code: "GuestCode8", name: "Sample Person 923", ticketTypeName: "General", status: "checked_in", checkedInAt: "2026-11-03T16:00:00Z" },
       ]),
     });
     await render(<DoorScreen eventId="e1" door={door} />);
     await fireEvent.changeText(screen.getByLabelText("Guest name"), "sarah");
-    await fireEvent.press(await screen.findByRole("button", { name: "Check in Sarah Mokoena" }, { timeout: 2000 }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Check in Sample Person 922" }, { timeout: 2000 }));
     expect(door.checkIn).toHaveBeenCalledWith("GuestCode9");
-    expect(screen.getByLabelText(/^Sarah Botha\. General\. In at \d\d:\d\d$/)).toBeTruthy();
+    expect(screen.getByLabelText(/^Sample Person 923\. General\. In at \d\d:\d\d$/)).toBeTruthy();
   });
 
   it("name search: empty result", async () => {

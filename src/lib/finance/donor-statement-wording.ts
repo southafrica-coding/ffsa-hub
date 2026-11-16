@@ -99,7 +99,7 @@ export function unknownPlaceholders(template: string): string[] {
   return [...new Set((template.match(/\[[^\]\n]{1,40}\]/g) ?? []).filter((m) => !known.has(m.toLowerCase())))];
 }
 
-/** "FF SA USA - 2026 Donation Statement - Peter C Gill.pdf" */
+/** "FF SA USA - 2026 Donation Statement - Sample Q Person 913.pdf" */
 export function statementFileName(year: number, donorName: string): string {
   const safe = donorName.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
   return `FF SA USA - ${year} Donation Statement - ${safe}.pdf`;

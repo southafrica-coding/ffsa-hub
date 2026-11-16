@@ -22,7 +22,7 @@ jest.mock("expo-router", () => ({ useRouter: () => mockRouter }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: "dismiss" }) }));
 jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { version: "1.2.3" } } }));
 
-const mockProfileRow = { current: { data: { first_name: "Johanna", last_name: "Smit", phone: "+27 82 000 0000" }, error: null as unknown } };
+const mockProfileRow = { current: { data: { first_name: "Sample", last_name: "Person", phone: "+27 82 000 0000" }, error: null as unknown } };
 jest.mock("@/lib/supabase", () => ({
   supabase: {
     auth: { signOut: jest.fn().mockResolvedValue({ error: null }) },
@@ -41,7 +41,7 @@ beforeEach(() => {
   openBrowser.mockClear();
   Object.values(mockRouter).forEach((f) => f.mockClear());
   (supabase.auth.signOut as jest.Mock).mockClear();
-  mockProfileRow.current = { data: { first_name: "Johanna", last_name: "Smit", phone: "+27 82 000 0000" }, error: null };
+  mockProfileRow.current = { data: { first_name: "Sample", last_name: "Person", phone: "+27 82 000 0000" }, error: null };
 });
 
 describe("Me", () => {
@@ -61,7 +61,7 @@ describe("Me", () => {
   it("success: name, email, readable roles, version", async () => {
     mockFetch.mockImplementation(apiRoutes({ "/api/me": ME }));
     await render(wrap(<MeScreen />));
-    expect(await screen.findByRole("header", { name: "Johanna Smit" })).toBeTruthy();
+    expect(await screen.findByRole("header", { name: "Sample Person" })).toBeTruthy();
     expect(screen.getByText("jo@example.org")).toBeTruthy();
     expect(screen.getByText("Staff · Team leader")).toBeTruthy();
     expect(screen.getByLabelText("App version: 1.2.3")).toBeTruthy();
@@ -80,7 +80,7 @@ describe("Me", () => {
     await render(wrap(<MeScreen />));
     expect(await screen.findByText("Couldn't load your profile")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByRole("header", { name: "Johanna Smit" })).toBeTruthy();
+    expect(await screen.findByRole("header", { name: "Sample Person" })).toBeTruthy();
   });
 
   it("permission denied on /api/me: says so, with retry", async () => {
@@ -169,17 +169,17 @@ describe("Edit profile", () => {
     );
     await render(wrap(<EditProfileScreen />));
     const first = await screen.findByLabelText("First name");
-    expect(first.props.value).toBe("Johanna");
+    expect(first.props.value).toBe("Sample");
 
     await fireEvent.changeText(first, "  ");
     await fireEvent.press(screen.getByRole("button", { name: "Save" }));
     expect(screen.getByText("Enter your first name.")).toBeTruthy();
     expect(saved).toHaveLength(0);
 
-    await fireEvent.changeText(screen.getByLabelText("First name"), "Jo ");
+    await fireEvent.changeText(screen.getByLabelText("First name"), "Sam ");
     await fireEvent.changeText(screen.getByLabelText("Phone"), "");
     await fireEvent.press(screen.getByRole("button", { name: "Save" }));
-    expect(saved).toEqual([{ method: "PUT", body: { first_name: "Jo", last_name: "Smit", phone: null } }]);
+    expect(saved).toEqual([{ method: "PUT", body: { first_name: "Sam", last_name: "Person", phone: null } }]);
     expect(mockRouter.back).toHaveBeenCalled();
   });
 

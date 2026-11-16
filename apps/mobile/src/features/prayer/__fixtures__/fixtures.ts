@@ -9,7 +9,7 @@ export const ME_ID = "u1";
 /** Tuesday 3 Nov 2026, 08:00 SAST (06:00 UTC). The week is Sun 1 – Sat 7 Nov. */
 export const NOW = new Date("2026-11-03T06:00:00.000Z");
 
-export const person = (id: string, first: string, last = "Mokoena") => ({
+export const person = (id: string, first: string, last = "Person") => ({
   id,
   first_name: first,
   last_name: last,
@@ -69,12 +69,12 @@ export function prayerSet(over: Record<string, unknown> = {}) {
     alt_venue_id: null,
     series_id: null,
     owner_id: "u9",
-    owner: person("u9", "Grace", "Dlamini"),
+    owner: person("u9", "Sample Person 59", ""),
     week_start: "2026-11-01",
     slots: [
-      slot({ id: "sl1", seat: "prayer_lead", status: "filled", user: person("u2", "Thabo") }),
+      slot({ id: "sl1", seat: "prayer_lead", status: "filled", user: person("u2", "Sample Person 199") }),
       slot({ id: "sl2", seat: "worship_lead", status: "open" }),
-      slot({ id: "sl3", seat: "keys", status: "filled", user: person(ME_ID, "Jo", "Smit") }),
+      slot({ id: "sl3", seat: "keys", status: "filled", user: person(ME_ID, "Sample", "Person") }),
       slot({ id: "sl4", seat: "vocals", status: "open" }),
     ],
     ...over,
@@ -89,7 +89,7 @@ export const UNLED = prayerSet({
   end_time: "09:30:00",
   title: "Morning devo",
   owner_id: "u9",
-  slots: [slot({ id: "sl5", seat: "prayer_lead", status: "open" }), slot({ id: "sl6", seat: "keys", status: "invited", user: person(ME_ID, "Jo", "Smit") })],
+  slots: [slot({ id: "sl5", seat: "prayer_lead", status: "open" }), slot({ id: "sl6", seat: "keys", status: "invited", user: person(ME_ID, "Sample", "Person") })],
 });
 
 export const WALL_META = { seatTypes: SEAT_TYPES, bands: BANDS };
@@ -138,7 +138,7 @@ export function practiceWeek(over: Partial<Record<keyof PracticeWeek, unknown>> 
         station_id: "st-drums",
         booked_by: "u2",
         band_name: null,
-        people: [{ user_id: "u2", station_id: "st-drums", first_name: "Thabo", full_name: "Thabo Mokoena" }],
+        people: [{ user_id: "u2", station_id: "st-drums", first_name: "Sample Person 199", full_name: "Sample Person 199" }],
       },
       {
         id: "pb2",
@@ -149,7 +149,7 @@ export function practiceWeek(over: Partial<Record<keyof PracticeWeek, unknown>> 
         station_id: "st-keys",
         booked_by: ME_ID,
         band_name: null,
-        people: [{ user_id: ME_ID, station_id: "st-keys", first_name: "Jo", full_name: "Jo Smit" }],
+        people: [{ user_id: ME_ID, station_id: "st-keys", first_name: "Sample", full_name: "Sample Person" }],
       },
     ],
     days: ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"],
@@ -170,5 +170,5 @@ export const BAND_BOOKING = {
   station_id: null,
   booked_by: "u2",
   band_name: "The Sends",
-  people: [{ user_id: "u2", station_id: "st-drums", first_name: "Thabo", full_name: "Thabo Mokoena" }],
+  people: [{ user_id: "u2", station_id: "st-drums", first_name: "Sample Person 199", full_name: "Sample Person 199" }],
 };

@@ -119,7 +119,7 @@ describe("My tickets", () => {
       status: "valid",
       checkedInAt: null,
       ticketTypeName: "Youth",
-      holderName: "Thandi",
+      holderName: "Sample Person 199",
       waiver: { required: true, signed: false, signedAt: null, title: "Consent", hasDocument: false },
       event: ticketEvent("e7", "Youth Camp", "2026-12-10"),
     };

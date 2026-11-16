@@ -44,11 +44,11 @@ function world(opts: {
     resolve: (q: FakeQuery) => {
       if (opts.adminError && q.table === "tickets") return { error: { message: opts.adminError } };
       if (q.table === "orders" && filterValue(q, "eq", "buyer_contact_id") === "c1") {
-        return { data: [{ id: "o1", buyer_first_name: "Thandi", buyer_last_name: "Mokoena" }] };
+        return { data: [{ id: "o1", buyer_first_name: "Sample", buyer_last_name: "Person 199" }] };
       }
       if (q.table === "orders") {
         const ids = (filterValue(q, "in", "id") as string[]) ?? [];
-        return { data: ids.map((id) => ({ id, buyer_first_name: "Thandi", buyer_last_name: "M" })) };
+        return { data: ids.map((id) => ({ id, buyer_first_name: "Sample", buyer_last_name: "Person 199" })) };
       }
       if (q.table === "tickets") {
         const ids = (filterValue(q, "in", "order_id") as string[]) ?? [];
@@ -109,7 +109,7 @@ describe("GET /api/mobile/my-tickets", () => {
         id: "t0",
         code: "CODE0xyz",
         status: "valid",
-        holderName: "Thandi Mokoena",
+        holderName: "Sample Person 199",
         ticketTypeName: "General",
         waiver: { required: true, signed: true, signedAt: "2026-10-01T00:00:00Z", title: null, hasDocument: false },
       }),

@@ -208,7 +208,7 @@ export function practisingPhrase(n: number): string {
   return `${n} ${n === 1 ? "person" : "people"} already practising`;
 }
 
-/** First names on a station booking: "Thabo", or "Grace +2" for a group. */
+/** First names on a station booking: "Sample", or "Person +2" for a group. */
 export function bookingNames(b: PracticeBooking): string {
   if (b.people.length === 0) return "Someone";
   const first = b.people[0].first_name;

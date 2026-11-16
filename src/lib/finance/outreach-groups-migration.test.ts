@@ -293,14 +293,14 @@ describe("migration 274 — data", () => {
     expect(code274).not.toMatch(/\b(INSERT INTO|UPDATE|DELETE FROM)\s+public\.(user_roles|user_permissions|role_permissions|permissions|roles)\b/i);
   });
 
-  it("writes only one row, for stephankuhn05@gmail.com looked up by email", () => {
+  it("writes only one row, for user@example.com looked up by email", () => {
     const inserts = [...code274.matchAll(/INSERT INTO\s+([\w.]+)/g)].map((m) => m[1]);
     expect(inserts).toEqual(["public.outreach_user_restrictions"]);
     expect(code274).not.toMatch(/\bUPDATE\s+public\./);
     expect(code274).not.toMatch(/\bDELETE\s+FROM/i);
     const seed = code274.slice(code274.indexOf("INSERT INTO public.outreach_user_restrictions"));
     expect(seed).toMatch(/FROM auth\.users au\s+JOIN public\.users u ON u\.id = au\.id/);
-    expect(seed).toMatch(/WHERE lower\(au\.email\) = lower\('stephankuhn05@gmail\.com'\)/);
+    expect(seed).toMatch(/WHERE lower\(au\.email\) = lower\('user@example\.com'\)/);
     expect(seed).toMatch(/SELECT u\.id, true/);
     expect(seed).toMatch(/ON CONFLICT \(user_id\) DO NOTHING;/);
   });

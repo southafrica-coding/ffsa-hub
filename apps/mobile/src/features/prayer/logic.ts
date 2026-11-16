@@ -192,7 +192,7 @@ export function needsALead(set: PrayerSet, seatTypes: SeatType[]): boolean {
   return !set.slots.some((s) => s.status === "filled" && isLeadSlot(s, leads));
 }
 
-/** First names in the filled lead seats: "Thabo & Grace". */
+/** First names in the filled lead seats: "Sample & Person". */
 export function leadNames(set: PrayerSet, seatTypes: SeatType[]): string | null {
   const leads = leadSeatIds(seatTypes);
   const names = set.slots.filter((s) => s.status === "filled" && isLeadSlot(s, leads)).map((s) => displayName(s.filled));

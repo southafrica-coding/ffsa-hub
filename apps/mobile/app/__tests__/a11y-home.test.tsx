@@ -55,7 +55,7 @@ describe("Home accessibility", () => {
   it("success: headings, the band's Open names its item, rows say read state and browser cue in words", async () => {
     mockFetch.mockImplementation(apiRoutes({ "/api/me": makeMe(), "/api/notifications": FEED }));
     await renderHome();
-    expect(await screen.findByRole("header", { name: "Hello, Jo" })).toBeTruthy();
+    expect(await screen.findByRole("header", { name: "Hello, Sample" })).toBeTruthy();
     expect(screen.getByRole("header", { name: "Needs you (1)" })).toBeTruthy();
     expect(screen.getByRole("header", { name: "Earlier" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open: New booking request" })).toBeTruthy();

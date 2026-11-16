@@ -64,12 +64,12 @@ function isOpenYet(week: PracticeWeek) {
   return week.now >= week.opensAt;
 }
 
-/** "Thabo Nkosi", "Grace Adeyemi, Lerato Dube". */
+/** "Sample Person 202", "Sample Person 59, Sample Person 258". */
 function namesOf(b: PracticeBooking) {
   return b.people.map((p) => p.full_name).join(", ") || "Someone";
 }
 
-/** 36c's sentence for a row someone already has: "Thabo is on drums and Sipho on bass." */
+/** 36c's sentence for a row someone already has: "Sample Person 199 is on drums and Sample Person 190 on bass." */
 function whoIsOn(row: RowState, stations: PracticeStation[]): string {
   const parts = stations
     .filter((s) => row.byStation.has(s.id))

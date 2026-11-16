@@ -67,7 +67,7 @@ describe("emails", () => {
 
   it("confirmation names the date, the 30 days, the kept records and the contact", () => {
     const { subject, html } = deletionRequestConfirmationEmail({
-      name: "Thandi",
+      name: "Sample Person 199",
       requestedAt: "2026-11-03T10:00:00Z",
       contactEmail: "office@ffsa.test",
       siteUrl: "https://hub.test",

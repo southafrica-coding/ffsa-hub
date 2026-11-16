@@ -31,8 +31,8 @@ Progress states are the document's five: complete · moving · in_progress · st
 
 1. **Nothing is deleted.** Everything structural carries start/end dates; the chart can be
    rendered "as of" any date. Ending a team sets `ends_on`; its objectives become `ended`, not failed.
-2. **Structure changes are change sets** (`org_changes`): proposed by a lead or Ally, approved by
-   the Integrator (Caleb), applied on `effective_on` by a nightly job. A set can't be approved while
+2. **Structure changes are change sets** (`org_changes`): proposed by a lead or Sample Person 3, approved by
+   the Integrator (Sample Person 24), applied on `effective_on` by a nightly job. A set can't be approved while
    anyone it moves has no destination (42b). Nobody approves their own.
 3. **Before approval a set lists its downstream effects**, computed, not typed: communications
    audiences that retire, recurring space bookings that end, outreach budgets needing a new owner,
@@ -66,14 +66,14 @@ Progress states are the document's five: complete · moving · in_progress · st
 
 ## Admin editing (43a/43b)
 
-Permission `org.admin`, held by **Ally and Caleb** (granted through Users & Roles like any other permission; neither approves a change set they proposed themselves). Everyone signed in can view the chart, zoom into any team and read every role description. Edit mode on the chart: click a table, every fact opens in one
+Permission `org.admin`, held by **Sample Person 3 and Sample Person 24** (granted through Users & Roles like any other permission; neither approves a change set they proposed themselves). Everyone signed in can view the chart, zoom into any team and read every role description. Edit mode on the chart: click a table, every fact opens in one
 inspector, each tagged with where it lives:
 
 - **Typed here, saves now** — team name, cluster, purpose, sub-groups, role titles,
   responsibilities, share %, staff/volunteer, objective and KR wording, KR owner, shepherd,
   direction definitions, Missio structure, canvas layout. Written to the org tables; every edit
   goes to `org_edit_log` (who, when, field, before, after) and can be undone from History.
-- **Change set, Caleb approves** — lead, reporting lines, creating/ending a team, adding or
+- **Change set, Sample Person 24 approves** — lead, reporting lines, creating/ending a team, adding or
   moving a person between teams (42b).
 - **From another module ↗** — Training school staff and schools in session, Prayer Room
   seats/evaluators/coverage, Events teams, Vehicles fleet manager. The module wins; the chart
@@ -98,7 +98,7 @@ Then retire 099's tables.
 1. Schema + import (no UI change): org tables, OKR tables, import from 099, ministries view.
 2. Chart reads the new tables: 40a light canvas, layers, highlight, drawer. Retire React Flow tree.
 3. Zoom into a team (41a).
-4. Edit mode + edit log (43b), `org.admin` for Ally and Caleb.
+4. Edit mode + edit log (43b), `org.admin` for Sample Person 3 and Sample Person 24.
 5. Change sets (42b) with the nightly apply job and downstream-effects query.
 6. Monthly updates (42c), then linked KRs one module at a time (Prayer Room first).
 

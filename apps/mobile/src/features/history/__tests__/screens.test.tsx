@@ -109,7 +109,7 @@ describe("My History", () => {
     await fireEvent.press(await screen.findByTestId("record-applications-a1"));
     const sheet = screen.getByTestId("record-sheet");
     expect(within(sheet).getByText(strings.detail.more)).toBeTruthy();
-    expect(within(sheet).getByLabelText("Home church: Grace")).toBeTruthy();
+    expect(within(sheet).getByLabelText("Home church: Sample Church")).toBeTruthy();
     expect(within(sheet).getByLabelText("Phone: blank")).toBeTruthy();
     expect(within(sheet).getByText("Submitted 12 Mar 2019")).toBeTruthy();
     expect(within(sheet).queryByTestId("open-file")).toBeNull();

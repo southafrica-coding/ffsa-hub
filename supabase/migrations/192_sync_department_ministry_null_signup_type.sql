@@ -5,7 +5,7 @@
 -- Migration 156 added a trigger that auto-joins a user to the ministry whose
 -- slug equals their department, but gated it on signup_type = 'staff'. Older
 -- and admin-created accounts have signup_type NULL, so 23 real staff members
--- (Nathaly Seidel, Kristine Kilman, Gideon Botha, the Project 54 team, …) were
+-- (sample staff accounts and the Project 54 team) were
 -- silently skipped and never appeared on their ministry roster.
 --
 -- signup_type is a poor staff test: of 212 users, 141 are NULL, 68 'staff' and

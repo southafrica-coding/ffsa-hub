@@ -190,14 +190,14 @@ describe("POST /api/public/applications identity", () => {
     ];
     const res = await submit({
       answers: [
-        { question_id: "q1", question_label: "First Name", answer: "Grace" },
+        { question_id: "q1", question_label: "First Name", answer: "Sample" },
         { question_id: "q2", question_label: "Surname", answer: "Hopper" },
-        { question_id: "q3", question_label: "Email address", answer: "grace@example.com" },
+        { question_id: "q3", question_label: "Email address", answer: "sample906@example.com" },
       ],
     });
     expect(res.status).toBe(200);
     const payload = h.createPublicResponse.mock.calls[0][1] as { applicant_email: string; applicant_info: { first_name: string } };
-    expect(payload.applicant_email).toBe("grace@example.com");
-    expect(payload.applicant_info.first_name).toBe("Grace");
+    expect(payload.applicant_email).toBe("sample906@example.com");
+    expect(payload.applicant_info.first_name).toBe("Sample");
   });
 });

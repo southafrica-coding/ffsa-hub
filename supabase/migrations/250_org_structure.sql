@@ -40,7 +40,7 @@
 -- decided.
 --
 -- PERMISSION. 099's org.manage is reused rather than adding org.admin (two
--- keys for one act). Its display name changes; grant it to Ally and Caleb in
+-- keys for one act). Its display name changes; grant it to Sample Person 3 and Sample Person 24 in
 -- Users & Roles once their chart entries are resolved — neither name matches
 -- a Hub user automatically.
 --
@@ -556,7 +556,7 @@ BEGIN
      AND v_first IN (public.org_norm_name(u.first_name), public.org_norm_name(u.preferred_name));
 
   IF position(' ' IN v_l) = 0 THEN
-    -- A bare first name ("Ally", "Shania").
+    -- A bare first name ("Sample", "Person").
     IF array_length(first_ids, 1) = 1 THEN
       RETURN QUERY SELECT 'first_name'::text, first_ids;
     ELSIF array_length(first_ids, 1) > 1 THEN
@@ -567,7 +567,7 @@ BEGIN
     RETURN;
   END IF;
 
-  -- A full name with no full match ("Jack Killman"): offer anyone sharing the
+  -- A full name with no full match ("Sample Person"): offer anyone sharing the
   -- first name or the surname, so a misspelling still surfaces the person.
   SELECT COALESCE(array_agg(DISTINCT u.id), '{}') INTO near_ids
     FROM public.users u
@@ -711,15 +711,15 @@ BEGIN
    WHERE e.chart_id = v_chart
   ON CONFLICT (source_key) DO NOTHING;
 
-  -- The Integrator seat — held by Caleb.
+  -- The Integrator seat — held by Sample Person 24.
   INSERT INTO public.org_import_queue (
     source_kind, source_key, chart_label, role_title,
     staff_ministry_id, proposal, match_kind, suggested_user_ids, sort_order
   )
-  SELECT 'role', h.key, 'Caleb', 'Integrator',
+  SELECT 'role', h.key, 'Sample Person 24', 'Integrator',
          h.staff_ministry_id, 'integrates', mu.match_kind, mu.user_ids, 2000
     FROM _node_home h
-    CROSS JOIN LATERAL public.org_match_user('Caleb') mu
+    CROSS JOIN LATERAL public.org_match_user('Sample Person 24') mu
    WHERE h.key = 'integrator'
   ON CONFLICT (source_key) DO NOTHING;
 END $$;
@@ -918,6 +918,6 @@ GRANT EXECUTE ON FUNCTION public.has_org_chart_manage()                    TO au
 --   -- Nothing has been applied yet — the queue waits for a person:
 --   SELECT count(*) FROM public.staff_ministry_members WHERE source = 'chart_import';  -- 0
 --
---   -- org.manage renamed; grant it to Ally and Caleb in Users & Roles:
+--   -- org.manage renamed; grant it to Sample Person 3 and Sample Person 24 in Users & Roles:
 --   SELECT key, display_name FROM public.permissions WHERE key = 'org.manage';
 -- ============================================================

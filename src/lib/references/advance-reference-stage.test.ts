@@ -87,11 +87,11 @@ describe("advanceApplicationWhenReferencesComplete", () => {
 
   it("moves a stored submitted application the same way", async () => {
     const db = clientFor({
-      app: { id: "hedrik", program_id: "sbi", status: "submitted" },
+      app: { id: "sample902", program_id: "sbi", status: "submitted" },
       slots,
       refs: bothIn,
     });
-    expect(await advanceApplicationWhenReferencesComplete(db.client, "hedrik")).toEqual({
+    expect(await advanceApplicationWhenReferencesComplete(db.client, "sample902")).toEqual({
       advanced: true,
     });
   });

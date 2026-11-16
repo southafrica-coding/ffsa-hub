@@ -745,7 +745,7 @@ function SetAside({ build }: { build: StatementBuild }) {
             <>
               <p className="mb-3 text-[color:var(--text-tertiary)]">
                 Never sent a statement. Whether the original gift should come off the named donor&rsquo;s statement is still
-                Allyson&rsquo;s / the bookkeeper&rsquo;s call.
+                Sample Person 3&rsquo;s / the bookkeeper&rsquo;s call.
               </p>
               <ul className="space-y-1.5">
                 {build.creditNotes.map((c) => (

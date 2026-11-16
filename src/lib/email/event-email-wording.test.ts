@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { cleanWording, eventMessageHtml, fillTags, unknownTags, wordingFor } from "./event-email-wording";
 
-const vars = { firstName: "Thandi", eventTitle: "FF Global", defaultSubject: "Your tickets for FF Global" };
+const vars = { firstName: "Sample Person 199", eventTitle: "FF Global", defaultSubject: "Your tickets for FF Global" };
 
 describe("wordingFor", () => {
   it("sends the standard subject and no message when nothing is set", () => {
@@ -12,8 +12,8 @@ describe("wordingFor", () => {
   it("uses the event's subject and message with merge tags filled", () => {
     const stored = { ticket_confirmation: { subject: "[First Name], you're in for [Event]!", message: "See you there, [first name]." } };
     expect(wordingFor(stored, "ticket_confirmation", vars)).toEqual({
-      subject: "Thandi, you're in for FF Global!",
-      message: "See you there, Thandi.",
+      subject: "Sample Person 199, you're in for FF Global!",
+      message: "See you there, Sample Person 199.",
     });
   });
 

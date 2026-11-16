@@ -8,7 +8,7 @@ export const application = (o: Partial<ApplicationRecord> = {}): ApplicationReco
   cohort: "2019 Winter",
   status: "accepted",
   submitted_at: "2019-03-12T08:00:00+00:00",
-  raw_data: { "Home church": "Grace", Phone: null },
+  raw_data: { "Home church": "Sample Church", Phone: null },
   ...o,
 });
 

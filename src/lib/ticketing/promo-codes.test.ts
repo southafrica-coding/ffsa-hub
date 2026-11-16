@@ -234,7 +234,7 @@ describe("waived per-ticket questions", () => {
         [{ ticketTypeId: GENERAL, qty: 1, questions: questionsAfterPromo(questions, t, GENERAL) }],
         [{ ticket_type_id: GENERAL, answers }]
       );
-    const ok = lines({ name: "Thandi", age: "should be dropped" });
+    const ok = lines({ name: "Sample Person 199", age: "should be dropped" });
     expect(ok.valid).toBe(true);
     expect(ok.groups[0].answers.map((a) => a.id)).toEqual(["name"]);
     expect(lines({}).valid).toBe(false);

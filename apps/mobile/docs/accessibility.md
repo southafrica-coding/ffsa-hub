@@ -337,7 +337,7 @@ Tests: `src/features/prayer/__tests__/a11y.test.tsx` (10 tests: roles/names/stat
 ### Week (`components/WeekView.tsx`, `SetRow.tsx`)
 | Check | Status | Notes |
 |---|---|---|
-| Labels, roles, state | Fixed | Set rows were one sentence without length or lead; now "…, you are on this set. 2 hours. Led by Thabo". |
+| Labels, roles, state | Fixed | Set rows were one sentence without length or lead; now "…, you are on this set. 2 hours. Led by Sample Person 199". |
 | Headers | Pass | Each day is a header read as the full date ("Tuesday 3 November"). |
 | Touch targets | Pass | Rows 56dp min. |
 | Dynamic Type (2.0) | Pass | Title clamps to 2 lines, rest wraps. |
@@ -353,7 +353,7 @@ Tests: `src/features/prayer/__tests__/a11y.test.tsx` (10 tests: roles/names/stat
 ### Set sheet (`components/SetSheet.tsx`, `ui.tsx` Sheet)
 | Check | Status | Notes |
 |---|---|---|
-| Labels, roles, state | Pass | Seats read "Prayer Lead, Thabo"; Accept/Decline/Ask name the seat; Ask has a hint; Accept shows `busy`. |
+| Labels, roles, state | Pass | Seats read "Prayer Lead, Sample Person 199"; Accept/Decline/Ask name the seat; Ask has a hint; Accept shows `busy`. |
 | Headers | Pass | Sheet title (date) and set title are headers; Lineup / Praying are headers. |
 | Touch targets | Pass | Kit buttons. |
 | Dynamic Type (2.0) | Fixed | Seat-name column was a fixed 104dp; now `minWidth` 104 / `maxWidth` 45%. |

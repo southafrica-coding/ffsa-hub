@@ -104,7 +104,7 @@ describe("Home", () => {
   it("success: greets by name, one yellow band, grouped list, unread badge", async () => {
     mockFetch.mockImplementation(routes(FEED));
     await renderHome();
-    expect(await screen.findByRole("header", { name: "Hello, Jo" })).toBeTruthy();
+    expect(await screen.findByRole("header", { name: "Hello, Sample" })).toBeTruthy();
     expect(await screen.findByText("2 things need you")).toBeTruthy();
     expect(screen.getAllByTestId("needs-you")).toHaveLength(1);
     expect(screen.getByText("Needs you (2)")).toBeTruthy();

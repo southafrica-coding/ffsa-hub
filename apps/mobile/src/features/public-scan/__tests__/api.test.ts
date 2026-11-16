@@ -119,7 +119,7 @@ describe("volunteerDoorClient", () => {
   function door(name?: string | null) {
     const f = fakeFetch((url, init) => {
       if (url.includes("?stats=1")) return json({ checkedIn: 3, total: 9 });
-      if (url.includes("?q=")) return json({ guests: [{ ticketId: "t1", code: "C1", name: "Sarah Mokoena", ticketTypeName: null, status: "valid", checkedInAt: null }] });
+      if (url.includes("?q=")) return json({ guests: [{ ticketId: "t1", code: "C1", name: "Sample Person 922", ticketTypeName: null, status: "valid", checkedInAt: null }] });
       const body = JSON.parse(String(init.body));
       if (body.undo) return json({ result: "undone" });
       return json({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "Sarah" });
@@ -128,10 +128,10 @@ describe("volunteerDoorClient", () => {
   }
 
   it("speaks the four verbs of /api/scan/[token]", async () => {
-    const { f, client } = door("Thandi");
+    const { f, client } = door("Sample Person 199");
     expect(await client.stats()).toEqual({ checkedIn: 3, total: 9 });
     expect(await client.search("sarah mok")).toEqual([
-      { ticketId: "t1", code: "C1", name: "Sarah Mokoena", ticketTypeName: "Ticket", status: "valid", checkedInAt: null },
+      { ticketId: "t1", code: "C1", name: "Sample Person 922", ticketTypeName: "Ticket", status: "valid", checkedInAt: null },
     ]);
     expect(await client.checkIn("AbCdEfGhIjK")).toMatchObject({ result: "ok", ticketId: "t1" });
     await client.undo("t1");
@@ -142,7 +142,7 @@ describe("volunteerDoorClient", () => {
       ["POST", `/api/scan/${TOKEN}`],
       ["POST", `/api/scan/${TOKEN}`],
     ]);
-    expect(JSON.parse(String(f.calls[2].init.body))).toEqual({ code: "AbCdEfGhIjK", scannerName: "Thandi" });
+    expect(JSON.parse(String(f.calls[2].init.body))).toEqual({ code: "AbCdEfGhIjK", scannerName: "Sample Person 199" });
     expect(JSON.parse(String(f.calls[3].init.body))).toEqual({ undo: "t1" });
   });
 
@@ -184,7 +184,7 @@ describe("plain-English first-load errors", () => {
   });
 
   it("names are trimmed and capped at 60", () => {
-    expect(cleanScannerName("  Thandi  ")).toBe("Thandi");
+    expect(cleanScannerName("  Sample Person 199  ")).toBe("Sample Person 199");
     expect(cleanScannerName("x".repeat(70))).toHaveLength(60);
   });
 });

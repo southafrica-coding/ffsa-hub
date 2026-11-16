@@ -405,7 +405,7 @@ export function OrgCanvas({
             right: t.objectives.some((o) => o.krs.some((k) => !k.measured)) ? "~ = FROM STATUS" : "OKRS",
             rows: t.objectives.length
               ? t.objectives.flatMap((o) => objectiveRows(o))
-              : [{ title: "No objective this cycle yet", meta: "Draft one at the next all-team review, or ask Ally." }],
+              : [{ title: "No objective this cycle yet", meta: "Draft one at the next all-team review, or ask Sample Person 3." }],
           },
           {
             title: "OKR RHYTHM",

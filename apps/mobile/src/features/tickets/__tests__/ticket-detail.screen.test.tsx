@@ -39,7 +39,7 @@ const signedTicket = {
   status: "valid",
   checkedInAt: null,
   ticketTypeName: "Youth",
-  holderName: "Thandi Mokoena",
+  holderName: "Sample Person 199",
   waiver: { required: true, signed: true, signedAt: "2026-10-01T10:00:00Z", title: "Consent", hasDocument: true },
   event: ticketEvent("e7", "Youth Camp", "2026-12-10"),
 };
@@ -66,7 +66,7 @@ describe("Ticket detail", () => {
     expect(screen.getByTestId("ticket-code", { includeHiddenElements: true })).toHaveTextContent("AbCdEfGhIjK");
     expect(screen.getByLabelText(/^Ticket QR code\. Code A b C d/)).toBeTruthy();
     expect(screen.getByText("Saved on this phone")).toBeTruthy();
-    expect(screen.getByLabelText("Ticket holder: Thandi Mokoena")).toBeTruthy();
+    expect(screen.getByLabelText("Ticket holder: Sample Person 199")).toBeTruthy();
     await waitFor(() => expect(Brightness.setBrightnessAsync).toHaveBeenCalledWith(1));
 
     await view.unmount();

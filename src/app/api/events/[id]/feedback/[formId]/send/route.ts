@@ -121,7 +121,7 @@ export async function POST(
 
   for (const r of recipients) {
     // The greeting uses the first word of whatever name we were given —
-    // "Hi Thandi," reads better than "Hi Thandi Mokoena,".
+    // "Hi Sample," reads better than "Hi Sample Person 199,".
     const firstName = r.name ? r.name.split(/\s+/)[0] : null;
     // The event's own subject / message for this email (migration 242).
     const wording = wordingFor(eventRow?.email_wording, kind === "reminder" ? "feedback_reminder" : "feedback_invite", {

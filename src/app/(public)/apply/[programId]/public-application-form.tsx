@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,13 @@ import {
   confirmationSentence,
   type ConfirmationStatus,
 } from "@/lib/applications/confirmation-notice";
+import {
+  applicationDraftKey,
+  clearApplicationDraft,
+  draftHasContent,
+  readApplicationDraft,
+  writeApplicationDraft,
+} from "@/lib/applications/application-draft";
 
 type DbQuestion = {
   id: string;
@@ -285,12 +292,138 @@ export function PublicApplicationForm({
   const {
     control,
     handleSubmit,
+    reset,
+    watch,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(schema),
     defaultValues,
     mode: "onBlur",
   });
+
+  // ── Draft on this device ────────────────────────────────────────────────
+  // Phones reload this page on pull-to-refresh and when the browser drops a
+  // background tab, which used to wipe every answer. Keep a draft in
+  // localStorage, put it back on load, and remove it once submitted.
+  const draftKey = applicationDraftKey(programId);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const draftReadyRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localStateRef = useRef({
+    refNames,
+    refEmails,
+    firstName,
+    lastName,
+    email,
+    nationality,
+    homeCountry,
+    trackMode,
+    selectedSegmentIds,
+  });
+  localStateRef.current = {
+    refNames,
+    refEmails,
+    firstName,
+    lastName,
+    email,
+    nationality,
+    homeCountry,
+    trackMode,
+    selectedSegmentIds,
+  };
+
+  const scheduleDraftSave = useCallback(() => {
+    if (!draftReadyRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      writeApplicationDraft(draftKey, {
+        v: 1,
+        savedAt: Date.now(),
+        answers: getValues() as Record<string, unknown>,
+        ...localStateRef.current,
+      });
+    }, 400);
+  }, [draftKey, getValues]);
+
+  // Restore once, after mount (localStorage isn't there during SSR).
+  useEffect(() => {
+    const draft = readApplicationDraft(draftKey);
+    if (draft && draftHasContent(draft)) {
+      // Only answers to questions that still exist on the form.
+      const answers: Record<string, unknown> = { ...defaultValues };
+      for (const id of Object.keys(defaultValues)) {
+        if (id in draft.answers) answers[id] = draft.answers[id];
+      }
+      reset(answers);
+      const slotIds = new Set(referenceSlots.map((s) => s.id));
+      const keep = (r: Record<string, string>) =>
+        Object.fromEntries(Object.entries(r ?? {}).filter(([k]) => slotIds.has(k)));
+      setRefNames(keep(draft.refNames));
+      setRefEmails(keep(draft.refEmails));
+      setFirstName(draft.firstName ?? "");
+      setLastName(draft.lastName ?? "");
+      setEmail(draft.email ?? "");
+      if (countries.includes(draft.nationality)) setNationality(draft.nationality);
+      if (countries.includes(draft.homeCountry)) setHomeCountry(draft.homeCountry);
+      if (draft.trackMode === "segments" || hasWholeProgramOption) {
+        setTrackMode(draft.trackMode);
+      }
+      const segIds = new Set(segments.map((s) => s.id));
+      setSelectedSegmentIds((draft.selectedSegmentIds ?? []).filter((id) => segIds.has(id)));
+      setDraftRestored(true);
+    }
+    draftReadyRef.current = true;
+    // Run once on mount — later prop changes must not overwrite typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Save on every answer change (RHF fields) …
+  useEffect(() => {
+    const sub = watch(() => scheduleDraftSave());
+    return () => sub.unsubscribe();
+  }, [watch, scheduleDraftSave]);
+
+  // … and on the fields kept in local state.
+  useEffect(() => {
+    scheduleDraftSave();
+  }, [
+    scheduleDraftSave,
+    refNames,
+    refEmails,
+    firstName,
+    lastName,
+    email,
+    nationality,
+    homeCountry,
+    trackMode,
+    selectedSegmentIds,
+  ]);
+
+  useEffect(
+    () => () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    },
+    []
+  );
+
+  function startOver() {
+    if (!window.confirm("Clear all your answers and start again?")) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    clearApplicationDraft(draftKey);
+    reset(defaultValues);
+    setRefNames({});
+    setRefEmails({});
+    setFirstName("");
+    setLastName("");
+    setEmail("");
+    setNationality("");
+    setHomeCountry("");
+    setTrackMode(hasWholeProgramOption ? "whole_program" : "segments");
+    setSelectedSegmentIds([]);
+    setDraftRestored(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   // Watch parent answers so follow-up visibility updates live.
   const watchedParentValues = useWatch({
@@ -502,6 +635,9 @@ export function PublicApplicationForm({
           ? result.confirmationStatus
           : "failed"
       );
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      draftReadyRef.current = false;
+      clearApplicationDraft(draftKey);
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
@@ -532,6 +668,21 @@ export function PublicApplicationForm({
       className="space-y-8"
       noValidate
     >
+      {draftRestored && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card p-4">
+          <p className="text-sm text-foreground">
+            We kept the answers you started on this device.
+          </p>
+          <button
+            type="button"
+            onClick={startOver}
+            className="ffsa-public-btn-ghost text-sm text-muted-foreground underline underline-offset-2"
+          >
+            Start over
+          </button>
+        </div>
+      )}
+
       {serverError && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4">
           <p className="text-sm text-destructive">{serverError}</p>

@@ -71,7 +71,7 @@ function serve(over: Partial<Record<string, Handler>> = {}) {
     [`GET ${DOOR}?stats=1`]: () => json({ checkedIn: 12, total: 40 }),
     [`GET ${DOOR}/event`]: () => json({ event: { title: "Send Night", startDate: "2026-11-07" } }),
     [`POST ${DOOR}`]: (body) =>
-      body?.undo ? json({ result: "undone" }) : json({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "Sarah Mokoena" }),
+      body?.undo ? json({ result: "undone" }) : json({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "Sample Person 922" }),
     ...over,
   } as Record<string, Handler>;
 }
@@ -107,7 +107,7 @@ beforeEach(async () => {
   mockRouter.canGoBack.mockReturnValue(false);
   serve();
   await AsyncStorage.clear();
-  await AsyncStorage.setItem(SCANNER_NAME_KEY, "Thandi");
+  await AsyncStorage.setItem(SCANNER_NAME_KEY, "Sample Person 199");
 });
 
 describe("Volunteer door: opening the link", () => {
@@ -180,10 +180,10 @@ describe("Volunteer door: who is scanning", () => {
     await render(screenFor());
     expect(await screen.findByRole("header", { name: "Who's on the door?" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Start scanning" })).toBeDisabled();
-    await fireEvent.changeText(screen.getByLabelText("First name"), "  Lerato ");
+    await fireEvent.changeText(screen.getByLabelText("First name"), "  Sample Person 258 ");
     await fireEvent.press(screen.getByRole("button", { name: "Start scanning" }));
-    expect(await screen.findByText("Scanning as Lerato")).toBeTruthy();
-    await waitFor(async () => expect(await AsyncStorage.getItem(SCANNER_NAME_KEY)).toBe("Lerato"));
+    expect(await screen.findByText("Scanning as Sample Person 258")).toBeTruthy();
+    await waitFor(async () => expect(await AsyncStorage.getItem(SCANNER_NAME_KEY)).toBe("Sample Person 258"));
     expect(auditTappables(screen.container as never)).toEqual([]);
   });
 
@@ -204,9 +204,9 @@ describe("Volunteer door: scanning", () => {
 
     await typeCode("AbCdEfGhIjK");
     expect(await screen.findByTestId("verdict-title")).toHaveTextContent("Checked in");
-    expect(screen.getByText("Sarah Mokoena · General")).toBeTruthy();
+    expect(screen.getByText("Sample Person 922 · General")).toBeTruthy();
     expect(Haptics.notificationAsync).toHaveBeenCalledWith("success");
-    expect(checkIns()[0].body).toEqual({ code: "AbCdEfGhIjK", scannerName: "Thandi" });
+    expect(checkIns()[0].body).toEqual({ code: "AbCdEfGhIjK", scannerName: "Sample Person 199" });
 
     await fireEvent.press(screen.getByRole("button", { name: "Undo" }));
     expect(await screen.findByText("Check-in undone")).toBeTruthy();
@@ -255,7 +255,7 @@ describe("Volunteer door: scanning", () => {
     serve();
     await fireEvent.press(screen.getByRole("button", { name: "Send now" }));
     await waitFor(() => expect(screen.queryByTestId("queue-banner")).toBeNull());
-    expect(checkIns().at(-1)?.body).toEqual({ code: "AbCdEfGhIjK", scannerName: "Thandi" });
+    expect(checkIns().at(-1)?.body).toEqual({ code: "AbCdEfGhIjK", scannerName: "Sample Person 199" });
   });
 
   it("camera: one ticket in front of the lens is sent once (the Tickets scan gate)", async () => {
@@ -289,12 +289,12 @@ describe("Volunteer door: scanning", () => {
 
   it("name search works on the public link", async () => {
     routes[`GET ${DOOR}?q`] = () =>
-      json({ guests: [{ ticketId: "t9", code: "QwErTyUiOpA", name: "Sarah Mokoena", ticketTypeName: "General", status: "valid", checkedInAt: null }] });
+      json({ guests: [{ ticketId: "t9", code: "QwErTyUiOpA", name: "Sample Person 922", ticketTypeName: "General", status: "valid", checkedInAt: null }] });
     await render(screenFor());
     await screen.findByLabelText("12 of 40 checked in");
     await fireEvent.changeText(screen.getByLabelText("Guest name"), "sarah");
-    await fireEvent.press(await screen.findByRole("button", { name: "Check in Sarah Mokoena" }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Check in Sample Person 922" }));
     expect(await screen.findByTestId("verdict-title")).toHaveTextContent("Checked in");
-    expect(checkIns()[0].body).toEqual({ code: "QwErTyUiOpA", scannerName: "Thandi" });
+    expect(checkIns()[0].body).toEqual({ code: "QwErTyUiOpA", scannerName: "Sample Person 199" });
   });
 });

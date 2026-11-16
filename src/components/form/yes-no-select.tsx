@@ -36,6 +36,8 @@ export function YesNoSelect({
           return (
             <label
               key={opt.value}
+              data-slot="yes-no-option"
+              data-state={selected ? "checked" : "unchecked"}
               className={cn(
                 "flex-1 cursor-pointer rounded-md border px-4 py-2.5 text-center text-sm font-medium transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
                 selected

@@ -129,8 +129,8 @@ only if bookings ever needs ministries it cannot link.
 099 already seeds `org.manage` ("author / edit the chart"), held by nobody,
 and `has_org_chart_manage()` already gates writes on it. A second key would
 mean two permissions for the same act. Proposal: reuse `org.manage`, rename
-its display to "Administer org & OKR structure", and grant it to Ally and
-Caleb. (Neither can be granted automatically — see the import numbers.)
+its display to "Administer org & OKR structure", and grant it to Sample Person 3 and
+Sample Person 24. (Neither can be granted automatically — see the import numbers.)
 
 ### Team-scoped roles
 
@@ -160,14 +160,14 @@ A dry-run name match of the 171 person nodes against `users`:
 |---|---|
 | exact full name, one user | 48 |
 | first name only, unique among users | 67 |
-| first name only, more than one user (Gabriel, Caleb ×2, Sarah, Jordan, David, Bianca, Dylan) | 8 |
-| no match (Ally ×3, Shania, Jack Killman, Steph Mensah, Josiah Bell, …) | 48 |
+| first name only, more than one user (Sample Person 244, Sample Person 24 ×2, Sample Person 226, Sample Person 252, Sample Person 907, Sample Person 19, Sample Person 45) | 8 |
+| no match (Sample Person 3 ×3, and other unmatched sample names) | 48 |
 
 Only the **48 exact matches** should auto-link. A unique first name is not an
-identity — "Ruben" being the only Ruben with an account today does not make
-him the Ruben on the chart. The other 123 go to the unmatched queue, with the
+identity — "Sample" being the only Sample with an account today does not make
+them the Sample on the chart. The other 123 go to the unmatched queue, with the
 first-name and near-spelling candidates shown as suggestions for a person to
-confirm. Both people meant to hold `org.manage` (Ally, Caleb) are in that
+confirm. Both people meant to hold `org.manage` (Sample Person 3, Sample Person 24) are in that
 queue, so resolving them is the first thing anyone does with it.
 
 **Chart teams vs staff ministries:**
@@ -177,17 +177,17 @@ queue, so resolving them is the first thing anyone does with it.
 | Leadership Team, Prayer & Worship, Media, HULC, Operations, Training, Project 54, Woven | ✓ match (HULC = slug `hulk`) |
 | 10/40 CrossFit | `1040` — match by hand |
 | Finances & Legal, Donors & Dev, Events | **none** — create as ministries |
-| Inside Ministry, Outside Ministry | **none** — these are Ally's and Caleb's portfolios; reporting lines, not rosters? |
+| Inside Ministry, Outside Ministry | **none** — these are Sample Person 3's and Sample Person 24's portfolios; reporting lines, not rosters? |
 | — | Missio Ministry (chart has it as a stream), RCA, Ed for Life (chart sub-teams), 4 part-time, No Ministry |
 
 **`cross_team` edges are not throwaway.** Doc 18 discards them because shared
 service is derived from people holding two memberships. But on `main` those
 second memberships do not exist yet — the edges are the only record that
-Brendon serves Finances & Legal and Donors & Dev, or that Tosca does Events
+Sample Person 21 serves Finances & Legal and Donors & Dev, or that Sample Person 279 does Events
 media. Proposal: import each edge whose source matches a user and whose
 target is a team as a **second membership** (`role_title` = the edge label,
 `source = 'chart_import'`), and only then discard it. The 2 `parallel` edges
-(Gabriel and Eduard alongside Missio) become `reporting_lines` rows of kind
+(Sample Person 244 and Sample Person 240 alongside Missio) become `reporting_lines` rows of kind
 `alongside`.
 
 **Existing memberships win.** 151 roster rows are live and maintained by
@@ -275,7 +275,7 @@ Run once, in the migration, idempotently:
 3. `cross_team` edges → second memberships, same rules. `parallel` edges →
    `reporting_lines`.
 4. Leadership Team members' portfolios → `reporting_lines` of kind `oversees`.
-   The Integrator seat → `integrates`, holder from the queue once Caleb is
+   The Integrator seat → `integrates`, holder from the queue once Sample Person 24 is
    resolved.
 5. `org_layout` stays empty; the new canvas (step I) writes it.
 
@@ -298,8 +298,8 @@ team-scoped roles, the `ministries` view.
 ## Answers so far (Jack, 2026-10-18)
 
 1. **Inside Ministry / Outside Ministry are real ministries with their own
-   rosters.** Create both as staff ministries. Ally and Caleb can also assign
-   people into them. So: Ally is a leader of Inside Ministry and Caleb of
+   rosters.** Create both as staff ministries. Sample Person 3 and Sample Person 24 can also assign
+   people into them. So: Sample Person 3 is a leader of Inside Ministry and Sample Person 24 of
    Outside Ministry (which already lets each manage that roster through
    `leads_staff_ministry`), and each also gets an `oversees` reporting line
    from the Leadership Team.
@@ -347,9 +347,9 @@ new memberships and 3 reporting lines; a non-manager is refused; deleting a
 membership — directly or by deleting the user — leaves a history row.
 
 **After applying 250, by hand:**
-- Resolve Ally and Caleb in the queue (neither matches automatically).
+- Resolve Sample Person 3 and Sample Person 24 in the queue (neither matches automatically).
 - Grant them `org.manage` ("Administer org & OKR structure") in Users & Roles.
-- Appoint Ally leader of Inside Ministry and Caleb of Outside Ministry on the
+- Appoint Sample Person 3 leader of Inside Ministry and Sample Person 24 of Outside Ministry on the
   Ministry tab — that route also keeps the `ministry_leader` role in sync,
   which the import deliberately does not touch.
 

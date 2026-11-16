@@ -49,7 +49,7 @@ export function rowState(
   return { start, end, band, byStation, people, open: band ? 0 : stations.length - byStation.size };
 }
 
-/** "Thabo", or "Grace +2" for a group. */
+/** "Sample", or "Person +2" for a group. */
 export function bookingNames(b: PracticeBooking): string {
   if (b.people.length === 0) return "Someone";
   const first = b.people[0].first_name;

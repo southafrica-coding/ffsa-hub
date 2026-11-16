@@ -417,7 +417,7 @@ describe("Health insurance", () => {
 
 // ── Household ──────────────────────────────────────────────────────────────
 
-const SAM = { id: "m1", relationship: "child", full_name: "Sam Smit", passport_number: "A1" };
+const SAM = { id: "m1", relationship: "child", full_name: "Sample Person", passport_number: "A1" };
 
 describe("Household", () => {
   it("loading", async () => {
@@ -443,7 +443,7 @@ describe("Household", () => {
     );
     mockTables.current = { users: { data: { marital_status: "married", household_linked_at: "2026-01-01T00:00:00Z" }, error: null } };
     await render(wrap(<HouseholdScreen />));
-    await fireEvent.press(await screen.findByRole("button", { name: "Sam Smit" }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Sample Person" }));
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: "/me/household-member", params: { id: "m1" } });
     expect(screen.getByRole("button", { name: "Add spouse" })).toBeTruthy();
     expect(screen.getByText("Shared with your spouse's account")).toBeTruthy();
@@ -457,7 +457,7 @@ describe("Household", () => {
     pf.mockImplementation(apiRoutes({ "/api/profile/household": { members: [SAM] } }));
     await render(wrap(<HouseholdScreen />));
     await fireEvent.press(await screen.findByRole("button", { name: "Try again" }));
-    expect(await screen.findByRole("button", { name: "Sam Smit" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Sample Person" })).toBeTruthy();
   });
 
   it("forbidden", async () => {
@@ -476,7 +476,7 @@ describe("Household member", () => {
         "/api/profile/household": (init?: { method?: string; body?: unknown }) => {
           if (init?.method === "POST") {
             posts.push(init.body);
-            return { member: { id: "m2", relationship: "spouse", full_name: "Jo Smit" } };
+            return { member: { id: "m2", relationship: "spouse", full_name: "Sample Person" } };
           }
           return { members: [] };
         },
@@ -486,12 +486,12 @@ describe("Household member", () => {
     await fireEvent.press(await screen.findByRole("button", { name: "Add member" }));
     expect(screen.getByText("Enter your spouse's first name.")).toBeTruthy();
     expect(screen.queryByLabelText("Passport number")).toBeNull();
-    await fireEvent.changeText(screen.getByLabelText("First name"), "Jo");
-    await fireEvent.changeText(screen.getByLabelText("Last name"), "Smit");
+    await fireEvent.changeText(screen.getByLabelText("First name"), "Sample");
+    await fireEvent.changeText(screen.getByLabelText("Last name"), "Person");
     await fireEvent.changeText(screen.getByLabelText("Email"), "jo@example.org");
     await fireEvent.press(screen.getByRole("button", { name: "Add member" }));
     await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
-    expect(posts[0]).toMatchObject({ relationship: "spouse", full_name: "Jo Smit", email: "jo@example.org" });
+    expect(posts[0]).toMatchObject({ relationship: "spouse", full_name: "Sample Person", email: "jo@example.org" });
     expect(mockNav.setOptions).toHaveBeenCalledWith({ title: "Add spouse" });
   });
 
@@ -520,7 +520,7 @@ describe("Household member", () => {
       }),
     );
     await render(wrap(<HouseholdMemberScreen />));
-    expect(await screen.findByDisplayValue("Sam Smit")).toBeTruthy();
+    expect(await screen.findByDisplayValue("Sample Person")).toBeTruthy();
     expect(mockNav.setOptions).toHaveBeenCalledWith({ title: "Edit child" });
     await fireEvent.press(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(pf.mock.calls.some((c) => c[0] === "/api/profile/household/m1" && c[1]?.method === "PUT")).toBe(true));
@@ -546,8 +546,8 @@ describe("Household member", () => {
       }),
     );
     await render(wrap(<HouseholdMemberScreen />));
-    await fireEvent.changeText(await screen.findByLabelText("First name"), "Jo");
-    await fireEvent.changeText(screen.getByLabelText("Last name"), "Smit");
+    await fireEvent.changeText(await screen.findByLabelText("First name"), "Sample");
+    await fireEvent.changeText(screen.getByLabelText("Last name"), "Person");
     await fireEvent.changeText(screen.getByLabelText("Email"), "jo@example.org");
     await fireEvent.press(screen.getByRole("button", { name: "Add member" }));
     expect(await screen.findByText(refusal)).toBeTruthy();

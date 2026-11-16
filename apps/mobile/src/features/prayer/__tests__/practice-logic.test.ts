@@ -49,8 +49,8 @@ describe("practice rows and days", () => {
   });
 
   it("names a group by its first singer", () => {
-    const b = { ...week().bookings[0], people: [...week().bookings[0].people, { user_id: "u5", station_id: "st-vocals", first_name: "Lerato", full_name: "Lerato M" }] };
-    expect(bookingNames(b)).toBe("Thabo +1");
+    const b = { ...week().bookings[0], people: [...week().bookings[0].people, { user_id: "u5", station_id: "st-vocals", first_name: "Sample Person 258", full_name: "Sample Person 258 M" }] };
+    expect(bookingNames(b)).toBe("Sample Person 199 +1");
   });
 });
 

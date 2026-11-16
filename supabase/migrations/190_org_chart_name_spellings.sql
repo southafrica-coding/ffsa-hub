@@ -2,8 +2,8 @@
 -- FFSA Hub — Migration 190: Org chart — correct two name spellings
 -- ============================================================
 -- The 099 seed misspelled both Finance team members:
---   fin-coreen  "Coreen Styn"  →  "Coreen Steyn"
---   fin-ellen   "Ellen Styn"   →  "Ellen Stines"
+--   fin-sample2  "Sample Person 2"  →  "Sample Person 2"
+--   fin-sample50   "Sample Person 50"   →  "Sample Person 50"
 -- (They are not related — the shared "Styn" in the seed was the error.)
 --
 -- Idempotent: each update is keyed on the stable node key and the
@@ -11,13 +11,13 @@
 -- ============================================================
 
 UPDATE public.org_nodes
-   SET label      = 'Coreen Steyn',
+   SET label      = 'Sample Person 2',
        updated_at = now()
- WHERE key = 'fin-coreen'
-   AND label = 'Coreen Styn';
+ WHERE key = 'fin-sample2'
+   AND label = 'Sample Person 2';
 
 UPDATE public.org_nodes
-   SET label      = 'Ellen Stines',
+   SET label      = 'Sample Person 50',
        updated_at = now()
- WHERE key = 'fin-ellen'
-   AND label = 'Ellen Styn';
+ WHERE key = 'fin-sample50'
+   AND label = 'Sample Person 50';

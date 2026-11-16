@@ -3,7 +3,7 @@
 Branch `feat/schools-lms-assignments-slice-2`. Migration **310**
 (`supabase/migrations/310_schools_lms_assignments.sql`). **DO NOT APPLY** until
 Jack says so. Previews share the prod database, so nothing here has been run
-against `thodakhvkcodfystnkxa` or any shared project. Apply by hand in the
+against `<project-ref>` or any shared project. Apply by hand in the
 dashboard SQL editor (after 305 and 308), per the usual process.
 
 Goal: replace Google Classroom around live lectures. Staff set assignments,

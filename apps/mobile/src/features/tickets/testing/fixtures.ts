@@ -9,7 +9,7 @@ export const NOW = new Date(2026, 10, 3, 9, 0, 0); // Tue 3 Nov 2026, 09:00 loca
 export function makeMe(over: { roles?: string[]; direct?: string[]; viaRole?: string[] } = {}): Me {
   return meSchema.parse({
     user: { id: "u1", email: "jo@example.org" },
-    profile: { firstName: "Jo", lastName: "Smit", preferredName: null, avatarUrl: null, isActive: true },
+    profile: { firstName: "Sample", lastName: "Person", preferredName: null, avatarUrl: null, isActive: true },
     roles: (over.roles ?? []).map((name) => ({ name, scopeType: null, scopeId: null })),
     permissions: [
       ...(over.direct ?? []).map((key) => ({ key, scopeType: null, scopeId: null, source: "direct" })),
@@ -40,7 +40,7 @@ export function makeTickets(over: Partial<{ tickets: unknown[]; registrations: u
         status: "valid",
         checkedInAt: null,
         ticketTypeName: "General",
-        holderName: "Thandi Mokoena",
+        holderName: "Sample Person 199",
         waiver: { required: false, signed: false, signedAt: null, title: null, hasDocument: false },
         event: event("e1", "Send Night", "2026-11-20"),
       },
@@ -50,7 +50,7 @@ export function makeTickets(over: Partial<{ tickets: unknown[]; registrations: u
         status: "checked_in",
         checkedInAt: "2026-10-01T16:05:00.000Z",
         ticketTypeName: "General",
-        holderName: "Thandi Mokoena",
+        holderName: "Sample Person 199",
         waiver: { required: false, signed: false, signedAt: null, title: null, hasDocument: false },
         event: event("e0", "Ministry Night", "2026-10-01"),
       },

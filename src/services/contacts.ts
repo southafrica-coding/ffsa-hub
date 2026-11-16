@@ -181,7 +181,7 @@ export async function getContacts(
     // Ids that matched on an identifier are OR-ed in alongside the column
     // filters. They are added to EVERY token's clause because the identifier
     // lookup was run against the whole search string — a two-token search like
-    // "naledi 082" should still surface her if the phone alone identified her.
+    // "sample 082" should still surface her if the phone alone identified her.
     const idClause =
       options.identifierMatchIds && options.identifierMatchIds.length > 0
         ? `,id.in.(${options.identifierMatchIds.join(",")})`
@@ -296,7 +296,7 @@ export async function findDedupMatches(
 
   // Look across the contact_emails / contact_phones join tables (any
   // email or phone the contact holds — not just the primary cache on
-  // contacts.email / contacts.phone). This is what enables Jaco-style
+  // contacts.email / contacts.phone). This is what enables Sample Person 248-style
   // "same person, different identifier" deduplication.
   const emailMatchIds = new Set<string>();
   const phoneMatchIds = new Set<string>();

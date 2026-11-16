@@ -121,7 +121,7 @@ describe("the gate", () => {
   // Every required field except the insurance expiry date.
   const complete: Record<string, unknown> = {
     first_name: "Sam",
-    last_name: "Nkosi",
+    last_name: "Person 202",
     gender: "male",
     marital_status: "single",
     date_of_birth: "1995-01-01",

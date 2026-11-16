@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS public.okr_objectives (
   position          integer NOT NULL DEFAULT 0,
   title             text NOT NULL,
   description       text,
-  -- Free text on purpose: the sheet's values are prose ("Q2", "Hanno is our
+  -- Free text on purpose: the sheet's values are prose ("Q2", "Sample Person 246 is our
   -- man."). Structure them later if the team asks for it.
   owner_note        text,
   timeline          text,

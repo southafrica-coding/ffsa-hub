@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS public.donor_statement_settings (
   address_line1      text NOT NULL DEFAULT 'C/O FF CHARLOTTE',
   address_line2      text NOT NULL DEFAULT '1324 THE PLAZA',
   address_city_line  text NOT NULL DEFAULT 'CHARLOTTE, NC 28205-3428',
-  signer_name        text NOT NULL DEFAULT 'Allyson Tiglao',
+  signer_name        text NOT NULL DEFAULT 'Sample Person 3',
   signer_title       text NOT NULL DEFAULT 'President',
   logo_path          text,
   signature_path     text,

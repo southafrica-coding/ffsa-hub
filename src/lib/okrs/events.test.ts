@@ -85,11 +85,11 @@ describe("lastNotesEdit", () => {
         id: "e2",
         field: "notes",
         created_at: "2026-08-02T00:00:00Z",
-        actor_name: "Ally",
+        actor_name: "Sample Person 3",
       }),
       event({ id: "e1", field: "notes", created_at: "2026-08-01T00:00:00Z" }),
     ];
-    expect(lastNotesEdit(events)).toEqual({ at: "2026-08-02T00:00:00Z", actor: "Ally" });
+    expect(lastNotesEdit(events)).toEqual({ at: "2026-08-02T00:00:00Z", actor: "Sample Person 3" });
   });
 
   it("returns null when the notes have never been edited", () => {

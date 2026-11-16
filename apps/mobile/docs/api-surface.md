@@ -37,7 +37,7 @@ Everything else below goes through the Next.js API.
 | Notification prefs | `/api/profile/notification-preferences` | cookie | — | bearer client |
 | Push | **none exists** | — | — | New: `device_push_tokens` table, register endpoint, a sender (see plan E). Needs a migration (hand-applied by Jack) |
 | Profile | `/api/profile/*` (cv, household, insurance, licence, notification-preferences, passport-photo, slack), `/api/account/*` | cookie | passport photos + sensitive docs | bearer client; sensitive-data screens are phase 3+ |
-| Approvals (Coreen) | outreach `fund-releases`, `closeouts`, expenses status; staff approvals; booking decisions (`/api/bookings/*`) | cookie + role checks | Slack, email | **Scope first:** I did not find a single "approvals inbox" page for finance. `finance.approve` exists as a permission. Confirm with Jack/Coreen what she approves today. (unverified) |
+| Approvals (Sample Person 2) | outreach `fund-releases`, `closeouts`, expenses status; staff approvals; booking decisions (`/api/bookings/*`) | cookie + role checks | Slack, email | **Scope first:** I did not find a single "approvals inbox" page for finance. `finance.approve` exists as a permission. Confirm with Jack/Sample Person 2 what she approves today. (unverified) |
 | Bookings, vehicles, equipment | `/api/bookings/*`, `/api/vehicles/*`, `/api/equipment/*` | cookie | email/Slack | later phase |
 | Dashboard layout | `/api/dashboard/layout`, `/staff-insurance`, `/vehicles` | cookie | — | later |
 | Calendar | `/api/calendar/upcoming` | cookie | Google Calendar API key/OAuth (server) | later |

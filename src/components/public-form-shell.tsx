@@ -887,6 +887,28 @@ function adminChromeReclaim(
   .ffsa-public [data-slot="button"][data-variant="ghost"]:hover {
     background: ${tk.cardElev} !important;
   }
+  /* Yes/No answers. Their selected look is bg-primary, and --primary is
+     near-black in the light theme — on a dark card a chosen "Yes" was
+     rgb(10,10,10) against an unchosen rgb(0,0,0). The answer was recorded but
+     looked untouched, so applicants on phones (no focus ring after a tap)
+     reported the Yes/No questions "won't choose". Paint the chosen one in
+     the brand accent. The attribute selector out-ranks the label rule above. */
+  .ffsa-public label[data-slot="yes-no-option"] {
+    border: 1px solid ${tk.borderSoft} !important;
+    background: ${tk.cardElev} !important;
+    color: ${tk.text} !important;
+  }
+  .ffsa-public label[data-slot="yes-no-option"][data-state="checked"] {
+    border-color: ${tk.yellow} !important;
+    background: ${tk.yellow} !important;
+    color: ${tk.bg} !important;
+  }
+  /* Pull-to-refresh reloads the page and used to wipe a half-filled form.
+     The draft survives it now, but don't trigger it by accident either. */
+  html:has(.ffsa-public form),
+  body:has(.ffsa-public form) {
+    overscroll-behavior-y: none;
+  }
   .ffsa-public .border,
   .ffsa-public .border-t,
   .ffsa-public .border-b {

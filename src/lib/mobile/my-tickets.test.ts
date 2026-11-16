@@ -32,7 +32,7 @@ const ticket = (over: Partial<TicketRow> = {}): TicketRow => ({
   ...over,
 });
 
-const ORDERS = [{ id: "o1", buyer_first_name: "Thandi", buyer_last_name: "Mokoena" }];
+const ORDERS = [{ id: "o1", buyer_first_name: "Sample", buyer_last_name: "Person 199" }];
 
 describe("buildMyTicketsPayload", () => {
   it("shapes tickets with holder, tier and event, and no buyer contact details", () => {
@@ -45,7 +45,7 @@ describe("buildMyTicketsPayload", () => {
         status: "valid",
         checkedInAt: null,
         ticketTypeName: "General",
-        holderName: "Thandi Mokoena",
+        holderName: "Sample Person 199",
         waiver: { required: false, signed: false, signedAt: null, title: null, hasDocument: false },
         event: {
           id: "e1",

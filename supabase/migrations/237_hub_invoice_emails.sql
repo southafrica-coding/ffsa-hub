@@ -81,13 +81,13 @@ View your bill online: [Online Invoice Link]
 Please EFT payment into the following account:
 Account Holder: FF SA YWAM NPC
 Bank name: First National Bank Limited
-Account Number: 62848325834
-Branch Code: 250655 
+Account Number: 00000000000
+Branch Code: 000000 
 Reference: Initial & surname + Reason for payment (ex. A. Smith EFL) or Invoice Number
 
 If you are outside of South Africa, you may wire transfer using the above payment details or use the following link to pay. If using this form of payment, we ask that you add 2.95% to the amount due.   
 
-https://pos.snapscan.io/qr/OH05AvHH
+https://pos.snapscan.io/qr/SNAPSCAN_CODE
 
 If you have any questions, please let us know.
 
@@ -105,14 +105,14 @@ View your bill online: [Online Invoice Link]
 If you are able, please EFT or wire transfer into the following account:
 Account Holder: FF SA YWAM NPC
 Bank name: First National Bank Limited
-Account Number: 62882155362
-Branch Code: 250655 (Universal Branch code)
-Swift Address: FIRNZAJJXXX
+Account Number: 00000000000
+Branch Code: 000000 (Universal Branch code)
+Swift Address: SWIFT_CODE
 Reference: Initial & last name - FFBX
 
 If you are outside South Africa, you may wire transfer using the above payment details or the following link to pay. We ask that you add 3% to the amount due if using this form of payment.   
 
-https://pos.snapscan.io/qr/uos8papk 
+https://pos.snapscan.io/qr/SNAPSCAN_CODE 
 
 If you have any questions, please let us know.
 
@@ -130,15 +130,15 @@ View your bill online: [Online Invoice Link]
 If you are able, please EFT into the following account:
 Account Holder: FF SA NPC
 Bank name: First National Bank Limited
-Account Number: 63114056450
-Address: FNB Forex, 30 Diagonal Street, FNB Place, 9th Floor, Johannesburg, 2001
-Branch Code: 250655 (Universal Branch code)
-Swift Address: FIRNZAJJXXX
+Account Number: 00000000000
+Address: BRANCH_ADDRESS
+Branch Code: 000000 (Universal Branch code)
+Swift Address: SWIFT_CODE
 Reference: Initial & surname or Invoice Number
 
 If you are outside of South Africa, you may wire transfer using the above payment details or use the following link to pay. If using this form of payment we ask that you add 3% to the amount due.   
 
-https://pos.snapscan.io/qr/kEJeE7Ci
+https://pos.snapscan.io/qr/SNAPSCAN_CODE
 
 From your online bill you can print a PDF, export a CSV, or create a free login and view your outstanding bills.
 
@@ -159,13 +159,13 @@ If you are able, please EFT or wire transfer into the following account:
 
 Account Holder: FF SA YWAM NPC
 Bank name: First National Bank Limited
-Account Number: 62872315439
-Branch Code: 250655 (Universal Branch code)
+Account Number: 00000000000
+Branch Code: 000000 (Universal Branch code)
 Reference: Initial & last name - Leadership 
 
 If you are outside of South Africa, you may wire transfer using the above payment details or use the following link to pay. We ask that you add 3% to the amount due if using this form of payment.   
 
-https://pos.snapscan.io/qr/xqvRZLaJ
+https://pos.snapscan.io/qr/SNAPSCAN_CODE
 
 If you have any questions, please let us know.
 
@@ -182,8 +182,8 @@ View your bill online: [Online Invoice Link]
 
 Name on Account: FF SA NPC
 Bank: First National Bank 
-Limited Account Number: 63114056468
-Branch Code: 250655
+Limited Account Number: 00000000000
+Branch Code: 000000
 Reference: Name + Retreat or Invoice Number
 
 Please let us know if you have any questions
@@ -200,8 +200,8 @@ The amount outstanding of [Currency Code] [Amount Due Without Currency] is due o
 View your bill online: [Online Invoice Link]
 
 FF SA YWAM NPCBank: First National Bank 
-Limited Account Number: 62848326527
-Branch Code: 250655
+Limited Account Number: 00000000000
+Branch Code: 000000
 Reference: Name + RR or Invoice # 
 
 Please let us know if you have any questions
@@ -220,14 +220,14 @@ View your bill online: [Online Invoice Link]
 If you are able, please EFT or wire transfer into the following account:
 Account Holder: FF SA YWAM NPC
 Bank name: First National Bank Limited
-Account Number: 63114056434
-Branch Code: 250655 (Universal Branch code)
-Swift Address: FIRNZAJJXXX
+Account Number: 00000000000
+Branch Code: 000000 (Universal Branch code)
+Swift Address: SWIFT_CODE
 Reference: Initial & last name - SBS
 
 If you are outside of South Africa, you may wire transfer using the above payment details or use the following link to pay. If using this form of payment we ask that you add 2.95% to the amount due.   
 
-https://pos.snapscan.io/qr/i0OKjfwU 
+https://pos.snapscan.io/qr/SNAPSCAN_CODE 
 
 From your online bill you can print a PDF, export a CSV, or create a free login and view your outstanding bills.
 
@@ -246,12 +246,12 @@ If you have a South African Bank account, please EFT into the following account:
 
 FF SA YWAM NPC
 Bank: First National Bank 
-Limited Account Number: 62848031118 
+Limited Account Number: 00000000000 
 Reference: Name + What you’re paying for     
 or invoice number 
 
 If you do not have a South African Bank account please use the snapscan link to pay. If paying via SnapScan please add 2.95% of your invoice amount before paying. 
-https://pos.snapscan.io/qr/OH05AvHH
+https://pos.snapscan.io/qr/SNAPSCAN_CODE
 
 If you have any questions, please let us know.
 
@@ -269,13 +269,13 @@ View your bill online: [Online Invoice Link]
 Please EFT payment into the following account:
 Account Holder: FF SA YWAM NPC
 Bank name: First National Bank Limited
-Account Number: 628 483 265 27 
-Branch Code: 250655 
+Account Number: 000 000 000 00 
+Branch Code: 000000 
 Reference: Initial & surname + Reason for payment (ex. A. Smith Camp) or Invoice Number
 
 If you are outside of South Africa, you may wire transfer using the above payment details or use the following link to pay. If using this form of payment, we ask that you add 2.95% to the amount due.   
 
-https://pos.snapscan.io/qr/OH05AvHH
+https://pos.snapscan.io/qr/SNAPSCAN_CODE
 
 If you have any questions, please let us know.
 
@@ -306,7 +306,7 @@ View and pay your bill online: [Online Invoice Link]
 From your online bill you can print a PDF, export a CSV, or create a free login and view your outstanding bills.
 
 If you would like to make a partial payment you may use this link to do so - 
-https://buy.stripe.com/4gw5ksdmScIw70k7sx 
+https://buy.stripe.com/PAYMENT_LINK 
 Please note that there is a processing fee and the total attributed to your invoice will be the amount you pay less processing fees. 
 
 If you have any questions, please let us know.
@@ -322,7 +322,7 @@ The amount outstanding of [Currency Code] [Amount Due Without Currency] is due o
 
 View and pay your bill online: [Online Invoice Link]
 
-If you would like to make a partial payment you may use this link to do so. Please note that there is a 3% transaction fee that will be taken from the amount paid. You are responsible for paying your school fees in full, including the 3% transaction fee - https://buy.stripe.com/cN25ksaaG9wkacw289
+If you would like to make a partial payment you may use this link to do so. Please note that there is a 3% transaction fee that will be taken from the amount paid. You are responsible for paying your school fees in full, including the 3% transaction fee - https://buy.stripe.com/PAYMENT_LINK
 
 If you would prefer to send funds via wire transfer and reduce fees please respond to this email requesting wire transfer information. 
 
@@ -341,7 +341,7 @@ View and pay your bill online: [Online Invoice Link]
 From your online bill you can print a PDF, export a CSV, or create a free login and view your outstanding bills.
 
 If you would like to make a partial payment you may use this link to do so - 
-https://buy.stripe.com/3csbIQgz4cIw84o5kw
+https://buy.stripe.com/PAYMENT_LINK
 
 Please note that there is a processing fee and the total attributed to your invoice will be the amount you pay less processing fees. 
 
@@ -375,7 +375,7 @@ View and pay your bill online: [Online Invoice Link]
 From your online bill you can print a PDF, export a CSV, or create a free login and view your outstanding bills.
 
 If you would like to make a partial payment you may use this link to do so - 
-https://buy.stripe.com/dR6bIQciObEsesM5kq
+https://buy.stripe.com/PAYMENT_LINK
 Please note that there is a 3% processing fee and the total attributed to your invoice will be the amount you pay less processing fees. 
 
 If you have any questions, please let us know.
@@ -391,7 +391,7 @@ The amount outstanding of [Currency Code] [Amount Due Without Currency] is due o
 
 View and pay your bill online: [Online Invoice Link]
 
-If you would like to make a partial payment you may use this link to do so - https://buy.stripe.com/cN25ksaaG9wkacw289
+If you would like to make a partial payment you may use this link to do so - https://buy.stripe.com/PAYMENT_LINK
 
 If you have any questions, please let us know.
 
@@ -408,7 +408,7 @@ View and pay your bill online: [Online Invoice Link]
 From your online bill you can print a PDF, export a CSV, or create a free login and view your outstanding bills.
 
 If you would like to make a partial payment you may use this link to do so - 
-https://buy.stripe.com/bIYaEMeqW5g4doI14b
+https://buy.stripe.com/PAYMENT_LINK
 Please note that there is a 2.9% processing fee and the total attributed to your invoice will be the amount you pay less processing fees. 
 
 If you have any questions, please let us know.
@@ -432,7 +432,7 @@ Thanks,
 ON CONFLICT (xero_region, name) DO NOTHING;
 
 -- ------------------------------------------------------------
--- Pre-fill the schools finance named (Ellen, 2026-10-15). Matched on the
+-- Pre-fill the schools finance named (Sample Person 50, 2026-10-15). Matched on the
 -- school code so a rename can't break it; anything unmatched stays empty and
 -- falls back to Xero's defaults until someone picks in the Billing panel.
 -- ------------------------------------------------------------

@@ -102,7 +102,7 @@ function makeClient(asAdmin: boolean) {
   function run(op: Op, single: boolean) {
     state.ops.push({ ...op, table: asAdmin ? `admin:${op.table}` : op.table });
     if (op.table === "users" && !asAdmin) {
-      return { data: { email: "me@example.com", first_name: "Thandi", last_name: "Mokoena", display_name: null }, error: null };
+      return { data: { email: "me@example.com", first_name: "Sample", last_name: "Person 199", display_name: null }, error: null };
     }
     if (op.table === "user_roles") {
       return { data: state.admins.map((a) => ({ user_id: a.user_id, roles: { name: "admin" } })), error: null };
@@ -256,10 +256,10 @@ describe("table present (migration 289 applied)", () => {
       request: { id: "r1", status: "open", reason: "Leaving the base", requestedAt: "2026-11-03T10:00:00.000Z" },
       contactEmail: "info@fireandfragrance.com",
     });
-    expect(state.rows[0]).toMatchObject({ user_id: "me", source: "app", email: "me@example.com", full_name: "Thandi Mokoena" });
+    expect(state.rows[0]).toMatchObject({ user_id: "me", source: "app", email: "me@example.com", full_name: "Sample Person 199" });
     // Only the ACTIVE admin, lower-cased.
     expect(adminSends().map((s) => s.to)).toEqual(["admin1@ffsa.test"]);
-    expect(adminSends()[0].html).toContain("Thandi Mokoena");
+    expect(adminSends()[0].html).toContain("Sample Person 199");
     expect(adminSends()[0].html).toContain("Leaving the base");
     expect(confirmations().map((s) => s.to)).toEqual(["me@example.com"]);
     expect(confirmations()[0].html).toMatch(/within 30 days/);

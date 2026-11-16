@@ -48,7 +48,7 @@ Two names to know:
 | `leadership_team` | Leadership Team | 131 | no | `bookings.request` (131); `okrs.view`, `okrs.manage_cycles`, `okrs.manage_all` (183) | Auto-assigned by trigger from "Leadership Team" ministry membership. Sole role for the **Staff decisions** module (role-only, admin does not get it) |
 | `legal_admin` | Legal / Compliance | 157 | no | `legal.access` | Read-only consents console |
 | `finance_office` | Finance Office | 248 | no | `finance.donor_statements` only | Opens Finance menu but NOT outreach/school fees/Xero connection |
-| `finance_admin` | (Finance Admin) | **not read** (unverified origin) | ? | ? | Referenced by RLS (`has_role('finance_admin')`) and `FINANCE_MANAGE_ROLES`. Per finance-meeting notes: Coreen's team |
+| `finance_admin` | (Finance Admin) | **not read** (unverified origin) | ? | ? | Referenced by RLS (`has_role('finance_admin')`) and `FINANCE_MANAGE_ROLES`. Per finance-meeting notes: Sample Person 2's team |
 | `comms_admin` | (Comms Admin) | **not read** | ? | ? | In `COMMS_MANAGE_ROLES`, nav gating |
 | `mission_leader` | (Mission Leader) | **not read** | ? | ? | Nav gating (mission module hidden) |
 | `schools_admin` | (Schools admin) | **not read** | ? | ? | In `SCHOOLS_MANAGE_ROLES` |

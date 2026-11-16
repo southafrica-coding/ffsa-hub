@@ -96,13 +96,13 @@ describe("resolveApplicantIdentity", () => {
         { id: "q-email", label: "Email", type: "email" },
       ],
       answers: [
-        { question_label: "Full name", answer: "Grace Hopper" },
-        { question_id: "q-email", question_label: "Email", answer: " Grace@Example.com " },
+        { question_label: "Full name", answer: "Sample Person 906" },
+        { question_id: "q-email", question_label: "Email", answer: " Sample906@Example.com " },
       ],
     });
     expect(result).toEqual({
       ok: true,
-      identity: { firstName: "Grace Hopper", lastName: "", email: "grace@example.com" },
+      identity: { firstName: "Sample Person 906", lastName: "", email: "sample906@example.com" },
     });
   });
 

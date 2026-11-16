@@ -45,8 +45,8 @@ const checkedInTicket = {
   ticket_types: { name: "General" },
   orders: {
     id: "order-1",
-    buyer_first_name: "Ama",
-    buyer_last_name: "Nkosi",
+    buyer_first_name: "Sample",
+    buyer_last_name: "Person 202",
     buyer_email: "ama@example.com",
   },
   users: null,
@@ -116,8 +116,8 @@ describe("event page times on first paint", () => {
           {
             id: "order-1234abcd",
             status: "paid",
-            buyer_first_name: "Ama",
-            buyer_last_name: "Nkosi",
+            buyer_first_name: "Sample",
+            buyer_last_name: "Person 202",
             buyer_email: "ama@example.com",
             total_cents: 15000,
             refund_cents: 0,

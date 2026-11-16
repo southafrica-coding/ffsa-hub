@@ -60,7 +60,7 @@ export function usePracticeWeek(anchor: string) {
   return { week, reload: load };
 }
 
-/** The names a row shows, in station order: "Thabo · Sipho · Grace +2", you as "You". */
+/** The names a row shows, in station order: "Sample · Person · Sample +2", you as "You". */
 export function rowNames(row: RowState, week: PracticeWeek, userId: string): { text: string; mine: boolean } {
   let mine = false;
   const names = week.stations

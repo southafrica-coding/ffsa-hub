@@ -77,7 +77,7 @@ function makeDoor(over: Partial<Record<keyof DoorClient, jest.Mock>> = {}) {
   return {
     stats: over.stats ?? jest.fn(async () => ({ checkedIn: 12, total: 40 })),
     search: over.search ?? jest.fn(async () => []),
-    checkIn: over.checkIn ?? jest.fn(async () => ({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "Sarah Mokoena" })),
+    checkIn: over.checkIn ?? jest.fn(async () => ({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "Sample Person 922" })),
     undo: over.undo ?? jest.fn(async () => undefined),
   } as unknown as DoorClient;
 }
@@ -206,11 +206,11 @@ describe("Door", () => {
   it("name search announces how many guests it found", async () => {
     const spy = jest.spyOn(AccessibilityInfo, "announceForAccessibilityWithOptions").mockImplementation(() => {});
     const search = jest.fn(async () => [
-      { ticketId: "g1", code: "C1", name: "Sarah Botha", ticketTypeName: "General", status: "valid", checkedInAt: null },
+      { ticketId: "g1", code: "C1", name: "Sample Person 923", ticketTypeName: "General", status: "valid", checkedInAt: null },
     ]);
     await render(<DoorScreen eventId="e1" door={makeDoor({ search })} />);
     await fireEvent.changeText(screen.getByLabelText("Guest name"), "sarah");
-    expect(await screen.findByRole("button", { name: "Check in Sarah Botha" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Check in Sample Person 923" })).toBeTruthy();
     expect(spy).toHaveBeenCalledWith("1 guest found", { queue: true });
     expect(audit()).toEqual([]);
     spy.mockRestore();

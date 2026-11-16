@@ -3,7 +3,7 @@
 -- ════════════════════════════════════════════════════════════
 -- Who the statement email comes from, where replies go, and the words on
 -- the PDF and in the email — all editable in Finance → Donor Statements →
--- Settings, defaulting to the wording finance signed off (Ellen, Oct 2026).
+-- Settings, defaulting to the wording finance signed off (Sample Person 50, Oct 2026).
 --
 -- The email body is a template. Placeholders are filled per donor:
 --   [Donor Name] [Year] [total]             — this donor's statement

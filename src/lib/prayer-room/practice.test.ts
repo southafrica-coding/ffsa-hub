@@ -35,9 +35,9 @@ function booking(over: Partial<PracticeBooking>): PracticeBooking {
     start_time: "16:30",
     end_time: "17:00",
     station_id: "drums",
-    booked_by: "thabo",
+    booked_by: "sample199",
     band_name: null,
-    people: [person("thabo")],
+    people: [person("sample199")],
     ...over,
   };
 }
@@ -92,7 +92,7 @@ describe("rowState", () => {
   it("counts each singer in a vocal group", () => {
     const b = [
       booking({}),
-      booking({ station_id: "vocals", booked_by: "naledi", people: ["naledi", "grace", "lerato"].map(person) }),
+      booking({ station_id: "vocals", booked_by: "sample145", people: ["sample145", "sample59", "sample258"].map(person) }),
     ];
     const r = rowState(b, stations, "2026-10-09", 990, 1020);
     expect(r.people).toBe(4);

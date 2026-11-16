@@ -27,7 +27,7 @@ const schema: FeedbackSchema = {
 const rows: ResponseRow[] = [
   {
     id: "r1",
-    respondent_name: "Thandi",
+    respondent_name: "Sample Person 199",
     respondent_email: "t@example.com",
     answers: { q_rating: 5, q_nps: 10, q_choice: "Setup", q_text: "Start on time" },
     submitted_at: "2026-08-18T10:00:00Z",
@@ -83,7 +83,7 @@ describe("summariseFeedback", () => {
     const s = byId("q_text");
     if (s.kind !== "text") throw new Error("expected text");
     expect(s.count).toBe(2);
-    expect(s.answers.map((a) => a.name)).toEqual(["Thandi", "Lee"]);
+    expect(s.answers.map((a) => a.name)).toEqual(["Sample Person 199", "Lee"]);
   });
 
   it("normalises every scored question to one headline percentage", () => {
@@ -112,13 +112,13 @@ describe("responsesToCsv", () => {
     const [header] = csv.split("\n");
     expect(header).toContain('"Name"');
     expect(header).toContain('"Overall?"');
-    expect(csv).toContain('"Thandi"');
+    expect(csv).toContain('"Sample Person 199"');
   });
 
   it("drops identity columns entirely on an anonymous form", () => {
     const csv = responsesToCsv(schema, rows, true);
     expect(csv).not.toContain('"Name"');
-    expect(csv).not.toContain('"Thandi"');
+    expect(csv).not.toContain('"Sample Person 199"');
   });
 });
 

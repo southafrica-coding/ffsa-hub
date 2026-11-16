@@ -37,7 +37,7 @@ const BANDS: Band[] = [
   ...band("NIGHT", "17:30", "20:00", "Prophetic worship"),
 ];
 
-const owner = { id: "u1", first_name: "Tshepo", last_name: "Molefe", preferred_name: null };
+const owner = { id: "u1", first_name: "Sample", last_name: "Person 213", preferred_name: null };
 
 const set = (
   id: string,

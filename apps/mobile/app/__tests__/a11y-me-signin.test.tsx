@@ -30,7 +30,7 @@ jest.mock("@/lib/supabase", () => ({
     auth: { signOut: jest.fn().mockResolvedValue({ error: null }), signInWithPassword: jest.fn() },
     from: () => ({
       select: () => ({
-        eq: () => ({ maybeSingle: async () => ({ data: { first_name: "Johanna", last_name: "Smit", phone: "" }, error: null }) }),
+        eq: () => ({ maybeSingle: async () => ({ data: { first_name: "Sample", last_name: "Person", phone: "" }, error: null }) }),
       }),
     }),
   },

@@ -26,7 +26,7 @@ function setup(overrides: Partial<ApiDeps> = {}) {
 
 const ME = {
   user: { id: "u1", email: "jo@example.org" },
-  profile: { firstName: "Johanna", lastName: "Smit", preferredName: "Jo", avatarUrl: null, isActive: true },
+  profile: { firstName: "Sample", lastName: "Person", preferredName: "Sample", avatarUrl: null, isActive: true },
   roles: [
     { name: "staff", scopeType: null, scopeId: null },
     { name: "team_leader", scopeType: "outreach_team", scopeId: "t1" },
@@ -189,7 +189,7 @@ describe("GET /api/me", () => {
     expect(me.roles).toHaveLength(2);
     expect(me.permissions).toHaveLength(2);
     expect(me.serverTime).toBe(ME.serverTime);
-    expect(displayName(me)).toBe("Jo");
+    expect(displayName(me)).toBe("Sample");
   });
 
   it("is tolerant: extra fields ignored, nullable/missing optional fields accepted", () => {
@@ -228,7 +228,7 @@ describe("GET /api/me", () => {
 
   it("falls back through preferred name, first name, then email", () => {
     const base = meSchema.parse(ME);
-    expect(displayName({ ...base, profile: { ...base.profile!, preferredName: null } })).toBe("Johanna");
+    expect(displayName({ ...base, profile: { ...base.profile!, preferredName: null } })).toBe("Sample");
     expect(displayName({ ...base, profile: null })).toBe("jo@example.org");
   });
 });

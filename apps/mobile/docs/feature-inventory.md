@@ -40,7 +40,7 @@ Prepared 1 Nov 2026 from the repo tree (≈137 `page.tsx` screens, ≈369 API ro
 | Org chart `/org-chart` | people tree | admin / `org.view` | DB | S | P3 | Later |
 | Contacts `/contacts/**` | CRM, duplicates, import, lists, follow-up | staff/admin/contacts perms | API, SRV | L | W (maybe quick-lookup P3 via `/api/people/quick-view`) | Later |
 
-## C. Finance office (Coreen's world)
+## C. Finance office (Sample Person 2's world)
 | Module | What | Gating | Data | Size | Priority | Status |
 |---|---|---|---|---|---|---|
 | Outreach finance `/finance/outreach`, `/[teamId]`, `/groups` | teams, budget, cash batches, fund releases, closeouts, reports | `finance.view/edit`, `finance_admin`, per-team access | DB+API, SRV (Slack, maybe Xero) | L | P1 for **receipt-matching + approvals** (scope to confirm), rest W | Planned |
@@ -63,4 +63,4 @@ Public event pages `/e/[slug]` (ticket storefront), apply `/apply/[programId]`, 
 ## G. Things I did not verify
 - Whether realtime subscriptions (Supabase Realtime) are used anywhere — no evidence found in tree paths; code-search was unavailable (GitHub `search_code` returned incomplete results). 
 - Exact contents of every portal page (My Attendance/History/Schools).
-- Whether an "approvals" inbox for Coreen exists on web (see api-surface.md).
+- Whether an "approvals" inbox for Sample Person 2 exists on web (see api-surface.md).

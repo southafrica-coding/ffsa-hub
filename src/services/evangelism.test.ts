@@ -25,7 +25,7 @@ const forViewer: Attribution = { id: "t1", is_mine: false, author_name: null, pu
 const forPublisher: Attribution = {
   id: "t1",
   is_mine: false,
-  author_name: "Thabo N",
+  author_name: "Sample N",
   published_by: "publisher",
   withheld_reason: null,
 };
@@ -44,9 +44,9 @@ describe("presentTestimony", () => {
   });
 
   it("shows attribution the database released to a publisher or the author", () => {
-    expect(presentTestimony(row, forPublisher).author_name).toBe("Thabo N");
+    expect(presentTestimony(row, forPublisher).author_name).toBe("Sample N");
     const own = presentTestimony(row, forAuthor);
-    expect(own.author_name).toBe("Thabo N");
+    expect(own.author_name).toBe("Sample N");
     expect(own.is_mine).toBe(true);
   });
 
