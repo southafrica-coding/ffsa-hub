@@ -21,10 +21,13 @@ vi.mock("@/lib/references/edit-reference-contact", () => ({
   REFERENCE_EDIT_SELECT: "*",
 }));
 vi.mock("@/lib/references/reference-delivery", () => ({
-  annotateReferenceDelivery: vi.fn(async () => []),
+  annotateReferenceDelivery: vi.fn(
+    async (_admin: unknown, _applicationId: string, refs: unknown[]) =>
+      (refs ?? []).map((ref) => ({ ...(ref as object), email_problem: null }))
+  ),
 }));
 
-import { PATCH } from "./route";
+import { GET, PATCH } from "./route";
 
 const A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -135,5 +138,195 @@ describe("PATCH /api/schools/applications/references", () => {
     const res = await PATCH(patch("ref-a"));
     expect(res.status).toBe(403);
     expect(editReferenceContact).not.toHaveBeenCalled();
+  });
+});
+
+const APP = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+const PROGRAM = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const REVIEWER = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1";
+const SOMEONE_ELSE = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2";
+
+function referenceRow() {
+  return {
+    id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    application_id: APP,
+    slot_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+    referee_name: "Referee",
+    referee_email: "referee@example.test",
+    token: "invite-token-must-not-leak",
+    status: "pending",
+    relationship: "pastor",
+    known_duration: "3 years",
+    reference_text: "A written reference",
+    form_data: { answers: [] },
+    submitted_at: null,
+    email_sent_at: "2026-01-02T00:00:00Z",
+    reminder_sent_at: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    reference_slots: { label: "Pastor", description: "A pastor who knows them" },
+  };
+}
+
+function useGet(opts: {
+  userId: string;
+  assignedStaffId: string | null;
+  canRead?: boolean;
+  manager?: boolean;
+  canAccess?: boolean;
+}) {
+  const user = createFakeSupabase({
+    user: { id: opts.userId },
+    resolve: (q: FakeQuery) => {
+      if (q.rpc?.name === "can_access_assigned_school_record") {
+        return { data: opts.canAccess === true };
+      }
+      if (q.table === "application_responses") {
+        if (opts.canRead === false) return { data: null };
+        return {
+          data: {
+            id: APP,
+            program_id: PROGRAM,
+            assigned_staff_id: opts.assignedStaffId,
+          },
+        };
+      }
+      if (q.table === "users") return { data: { is_active: true } };
+      if (q.table === "user_roles") {
+        if (!opts.manager) return { data: [] };
+        return { data: [{ scope_type: null, scope_id: null, roles: { name: "admin" } }] };
+      }
+      if (q.table === "user_permissions" || q.table === "program_leaders" || q.table === "role_permissions") {
+        return { data: [] };
+      }
+      if (q.table === "reference_requests") return { data: [referenceRow()] };
+      return { data: [] };
+    },
+  });
+  const admin = createFakeSupabase({
+    resolve: (q: FakeQuery) => {
+      if (q.table === "reference_requests") return { data: [referenceRow()] };
+      return { data: [] };
+    },
+  });
+  state.user = user.client;
+  state.admin = admin.client;
+  return { user, admin };
+}
+
+function getReferences() {
+  return GET(new Request(`http://localhost/api/schools/applications/references?application_id=${APP}`));
+}
+
+function referenceQueries(fake: ReturnType<typeof createFakeSupabase>) {
+  return fake.queries.filter((q) => q.table === "reference_requests" && q.action === "select");
+}
+
+describe("GET /api/schools/applications/references", () => {
+  it("returns an assigned reviewer's references with no token", async () => {
+    const { user, admin } = useGet({
+      userId: REVIEWER,
+      assignedStaffId: REVIEWER,
+      canAccess: true,
+    });
+
+    const res = await getReferences();
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.references).toHaveLength(1);
+    expect(body.references[0].referee_name).toBe("Referee");
+    expect(body.references[0].reference_slots).toEqual({
+      label: "Pastor",
+      description: "A pastor who knows them",
+    });
+    expect(body.references[0]).not.toHaveProperty("token");
+    expect(JSON.stringify(body)).not.toContain("invite-token-must-not-leak");
+
+    expect(referenceQueries(user)).toHaveLength(0);
+    const adminRead = referenceQueries(admin);
+    expect(adminRead).toHaveLength(1);
+    expect(adminRead[0].columns).not.toContain("token");
+    expect(adminRead[0].columns).toContain("referee_email");
+    expect(adminRead[0].columns).toContain("reference_slots(label, description)");
+    expect(filterValue(adminRead[0], "eq", "application_id")).toBe(APP);
+    const rpc = user.queries.find((q) => q.rpc?.name === "can_access_assigned_school_record");
+    expect(rpc?.rpc?.args).toEqual({ target_program_id: PROGRAM });
+  });
+
+  it("refuses program staff who are not the assigned reviewer", async () => {
+    const { admin } = useGet({
+      userId: REVIEWER,
+      assignedStaffId: SOMEONE_ELSE,
+      canAccess: true,
+    });
+
+    const res = await getReferences();
+    expect(res.status).toBe(403);
+    expect(referenceQueries(admin)).toHaveLength(0);
+  });
+
+  it("does not treat a null assignee as the caller", async () => {
+    const { user, admin } = useGet({
+      userId: REVIEWER,
+      assignedStaffId: null,
+      canAccess: true,
+    });
+
+    const res = await getReferences();
+    expect(res.status).toBe(403);
+    expect(referenceQueries(admin)).toHaveLength(0);
+    expect(user.queries.some((q) => q.rpc?.name === "can_access_assigned_school_record")).toBe(false);
+  });
+
+  it("keeps the manager read on the user client and still omits token", async () => {
+    const { user, admin } = useGet({
+      userId: REVIEWER,
+      assignedStaffId: REVIEWER,
+      manager: true,
+      canAccess: false,
+    });
+
+    const res = await getReferences();
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.references).toHaveLength(1);
+    expect(body.references[0].referee_name).toBe("Referee");
+    expect(body.references[0].status).toBe("pending");
+    expect(body.references[0]).not.toHaveProperty("token");
+    expect(JSON.stringify(body)).not.toContain("invite-token-must-not-leak");
+
+    const userRead = referenceQueries(user);
+    expect(userRead).toHaveLength(1);
+    expect(userRead[0].columns).toBe("*, reference_slots(label, description)");
+    expect(referenceQueries(admin)).toHaveLength(0);
+    expect(user.queries.some((q) => q.rpc?.name === "can_access_assigned_school_record")).toBe(false);
+  });
+
+  it("refuses an assigned reviewer the school-record check does not allow", async () => {
+    const { admin } = useGet({
+      userId: REVIEWER,
+      assignedStaffId: REVIEWER,
+      canAccess: false,
+    });
+
+    const res = await getReferences();
+    expect(res.status).toBe(403);
+    expect(referenceQueries(admin)).toHaveLength(0);
+  });
+
+  it("refuses when the caller cannot read the application", async () => {
+    const { user, admin } = useGet({
+      userId: REVIEWER,
+      assignedStaffId: REVIEWER,
+      canRead: false,
+      canAccess: true,
+    });
+
+    const res = await getReferences();
+    expect(res.status).toBe(403);
+    expect(referenceQueries(admin)).toHaveLength(0);
+    expect(referenceQueries(user)).toHaveLength(0);
   });
 });
