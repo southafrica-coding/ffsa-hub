@@ -27,8 +27,10 @@ const doorsRollback = readFileSync(
 const all = [homes, services, rocks, budgets].join("\n");
 
 describe("departments migrations 318–321", () => {
-  it("does not mention the live Supabase project", () => {
-    expect(all).not.toContain("thodakhvkcodfystnkxa");
+  it("does not mention a live Supabase project", () => {
+    expect(all).not.toMatch(/\.supabase\.co/);
+    // Project refs are 20 lowercase letters. No host, and no ref-shaped token.
+    expect(all).not.toMatch(/\b[a-z]{20}\b/);
   });
 
   it("does not delete ministry memberships", () => {
