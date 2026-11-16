@@ -30,6 +30,7 @@ import {
   resolveApplicantIdentity,
   withIdentityAnswers,
 } from "@/lib/applications/applicant-identity";
+import { selfRefereeError } from "@/lib/references/self-referee";
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -202,6 +203,11 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+  }
+
+  const selfReferee = selfRefereeError(submittedReferences, [email], referenceSlots ?? []);
+  if (selfReferee) {
+    return NextResponse.json({ error: selfReferee }, { status: 400 });
   }
 
   // Email was already checked. Refuse a second application for this school.

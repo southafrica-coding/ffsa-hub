@@ -1,4 +1,9 @@
 import { applicantEmailIlikePattern } from "@/lib/applications/applicant-identity";
+import {
+  isSelfReferee,
+  loadApplicantEmails,
+  SELF_REFEREE_MESSAGE,
+} from "@/lib/references/self-referee";
 import { redactInterviewNotesForViewer } from "@/lib/schools/interview-review-form";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -975,12 +980,24 @@ export async function deleteReferenceSlot(supabase: Client, id: string) {
 // REFERENCE REQUESTS
 // ────────────────────────────────────────────────────────────
 
+function referenceWriteRefusal(message: string) {
+  return {
+    data: null,
+    error: { message, details: "", hint: "", code: "self_referee" },
+  };
+}
+
 export async function createReferenceRequest(supabase: Client, data: {
   application_id: string;
   slot_id: string;
   referee_name: string;
   referee_email: string;
 }) {
+  const loaded = await loadApplicantEmails(supabase, data.application_id);
+  if (loaded.error) return referenceWriteRefusal(loaded.error);
+  if (isSelfReferee(data.referee_email, loaded.emails)) {
+    return referenceWriteRefusal(SELF_REFEREE_MESSAGE);
+  }
   return supabase.from("reference_requests").insert(data).select().single();
 }
 
@@ -1001,6 +1018,20 @@ export async function updateReferenceRequest(
     reminder_sent_at?: string | null;
   }
 ) {
+  if (typeof data.referee_email === "string") {
+    const { data: row, error: rowError } = await supabase
+      .from("reference_requests")
+      .select("application_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (rowError) return { data: null, error: rowError };
+    if (!row?.application_id) return referenceWriteRefusal("Application not found.");
+    const loaded = await loadApplicantEmails(supabase, row.application_id);
+    if (loaded.error) return referenceWriteRefusal(loaded.error);
+    if (isSelfReferee(data.referee_email, loaded.emails)) {
+      return referenceWriteRefusal(SELF_REFEREE_MESSAGE);
+    }
+  }
   return supabase
     .from("reference_requests")
     .update(data)

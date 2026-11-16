@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createReferenceRequest } from "@/services/schools";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { referenceSendConfirmed } from "@/lib/email/reference-email";
+import { isSelfReferee, loadApplicantEmails, SELF_REFEREE_MESSAGE } from "@/lib/references/self-referee";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -88,6 +89,14 @@ export async function POST(request: Request) {
     );
   }
 
+  const loaded = await loadApplicantEmails(supabase, application.id);
+  if (loaded.error) {
+    return NextResponse.json({ error: loaded.error }, { status: 500 });
+  }
+  if (isSelfReferee(refereeEmail, loaded.emails)) {
+    return NextResponse.json({ error: SELF_REFEREE_MESSAGE }, { status: 400 });
+  }
+
   const { data: refRequest, error } = await createReferenceRequest(supabase, {
     application_id: application.id,
     slot_id,
@@ -96,6 +105,9 @@ export async function POST(request: Request) {
   });
 
   if (error || !refRequest) {
+    if (error?.message === SELF_REFEREE_MESSAGE) {
+      return NextResponse.json({ error: SELF_REFEREE_MESSAGE }, { status: 400 });
+    }
     return NextResponse.json(
       { error: "Couldn't save your reference. Please try again." },
       { status: 500 }

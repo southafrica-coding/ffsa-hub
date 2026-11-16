@@ -28,6 +28,11 @@ import {
   REFERENCE_NOT_SENT_MESSAGE,
 } from "@/lib/references/reference-delivery";
 import { Chip, Masthead, StatusPill } from "@/components/ffsa";
+import {
+  REFEREE_OTHER_PERSON_HINT,
+  SELF_REFEREE_MESSAGE,
+  isSelfReferee,
+} from "@/lib/references/self-referee";
 import { TrackTab } from "./track-tab";
 import type { PipelinePerson, TrackSummary } from "@/lib/schools/track-pipeline";
 import { RosterTab, AddStudentButton, type RosterFee, type RosterFilter, type RosterTrack } from "./roster-tab";
@@ -1854,6 +1859,16 @@ function ApplicantsTab({
       alert("Reference name and email are both required.");
       return;
     }
+    if (
+      isSelfReferee(editRefEmail, [
+        reviewingResponse?.applicant_email,
+        reviewingResponse?.applicant_info?.email,
+        reviewingResponse?.users?.email,
+      ])
+    ) {
+      alert(SELF_REFEREE_MESSAGE);
+      return;
+    }
     setSavingRef(true);
     try {
       const res = await fetch("/api/schools/applications/references", {
@@ -3537,6 +3552,7 @@ function ApplicantsTab({
                               placeholder="name@example.com"
                               className="h-8 text-sm"
                             />
+                            <p className="text-xs text-muted-foreground">{REFEREE_OTHER_PERSON_HINT}</p>
                           </div>
                           <p className="text-xs text-muted-foreground">
                             Changing the email sends a fresh invite to the new

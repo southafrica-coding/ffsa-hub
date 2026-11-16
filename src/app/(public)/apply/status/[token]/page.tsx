@@ -25,6 +25,7 @@ import {
 import { ReferenceEditor, type EditableReference } from "./reference-editor";
 import { ReferenceStatusBanner } from "./reference-status-banner";
 import { annotateReferenceDelivery } from "@/lib/references/reference-delivery";
+import { loadApplicantEmails } from "@/lib/references/self-referee";
 import { requiredReferenceProgress } from "@/lib/schools/applicant-pipeline-stage";
 
 const T = PUBLIC_SHELL_TOKENS;
@@ -119,6 +120,8 @@ export default async function ApplicationStatusPage({
   if (!response) {
     notFound();
   }
+
+  const applicantEmails = (await loadApplicantEmails(supabase, response.id)).emails;
 
   type RawRef = {
     id: string;
@@ -358,6 +361,7 @@ export default async function ApplicationStatusPage({
           statusToken={token}
           references={editableRefs}
           missingSlots={missingRequiredSlots}
+          applicantEmails={applicantEmails}
         />
       )}
 

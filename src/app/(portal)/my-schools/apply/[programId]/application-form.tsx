@@ -13,6 +13,10 @@ import {
   referenceHeadsUpNote,
   referenceSubmittedNote,
 } from "@/lib/references/reference-status-copy";
+import {
+  REFEREE_OTHER_PERSON_HINT,
+  selfRefereeError,
+} from "@/lib/references/self-referee";
 
 type Question = {
   id: string;
@@ -59,6 +63,7 @@ export function ApplicationForm({
   referenceSlots = [],
   countries = [],
   initialNationality = "",
+  applicantEmails = [],
   segments = [],
   hasWholeProgramOption = false,
 }: {
@@ -67,6 +72,8 @@ export function ApplicationForm({
   referenceSlots?: ReferenceSlot[];
   countries?: string[];
   initialNationality?: string;
+  /** Auth email and profile email, so a referee field can be checked before submit. */
+  applicantEmails?: Array<string | null | undefined>;
   /** Standalone segments (e.g. FFX's Q1/Q2/Q3) this program is split into. Empty for every ordinary program — the picker below then doesn't render. */
   segments?: Segment[];
   /** Whether whole-program pricing is configured, i.e. "the whole thing" is a real option alongside the segments. */
@@ -179,8 +186,6 @@ export function ApplicationForm({
     }
     setTrackError(null);
 
-    setLoading(true);
-
     const formattedAnswers = questions
       .filter((q) => visibleIds.has(q.id) && !isSystemCountry(q))
       .map((q) => ({
@@ -196,6 +201,14 @@ export function ApplicationForm({
         referee_name: refNames[slot.id].trim(),
         referee_email: refEmails[slot.id].trim(),
       }));
+
+    const selfReferee = selfRefereeError(references, applicantEmails, referenceSlots);
+    if (selfReferee) {
+      setError(selfReferee);
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const res = await fetch("/api/schools/applications/responses", {
@@ -475,6 +488,7 @@ export function ApplicationForm({
                     onChange={(e) => setRefEmails((prev) => ({ ...prev, [slot.id]: e.target.value }))}
                     required={slot.is_required}
                   />
+                  <p className="text-xs text-muted-foreground mt-1">{REFEREE_OTHER_PERSON_HINT}</p>
                 </div>
               </div>
             </div>

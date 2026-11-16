@@ -43,6 +43,7 @@ import { sendAcceptanceToLinkedAccount } from "@/lib/schools/acceptance-email";
 import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-rejected";
 import { applicationWaitlistedEmailHtml } from "@/lib/email/templates/application-waitlisted";
 import { interviewScheduledEmailHtml } from "@/lib/email/templates/interview-scheduled";
+import { selfRefereeError } from "@/lib/references/self-referee";
 
 
 export async function POST(request: Request) {
@@ -177,6 +178,26 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+  }
+
+  const { data: account, error: accountError } = await supabase
+    .from("users")
+    .select("email")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (accountError) {
+    return NextResponse.json(
+      { error: "Could not check the referee email." },
+      { status: 500 }
+    );
+  }
+  const selfReferee = selfRefereeError(
+    submittedRefs,
+    [user.email, account?.email],
+    requiredSlotsCheck ?? []
+  );
+  if (selfReferee) {
+    return NextResponse.json({ error: selfReferee }, { status: 400 });
   }
 
   // Persist nationality / home country the same way the public flow does, so

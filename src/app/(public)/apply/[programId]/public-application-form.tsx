@@ -24,8 +24,13 @@ import {
 import {
   identityGaps,
   isValidApplicantEmail,
+  resolveApplicantIdentity,
   type IdentityQuestion,
 } from "@/lib/applications/applicant-identity";
+import {
+  REFEREE_OTHER_PERSON_HINT,
+  selfRefereeError,
+} from "@/lib/references/self-referee";
 import {
   confirmationSentence,
   type ConfirmationStatus,
@@ -589,6 +594,26 @@ export function PublicApplicationForm({
         referee_email: refEmails[slot.id].trim(),
       }));
 
+    const identity = resolveApplicantIdentity({
+      questions,
+      answers,
+      firstName: gaps.firstName ? firstName : undefined,
+      lastName: gaps.lastName ? lastName : undefined,
+      email: gaps.email ? email : undefined,
+    });
+    if (identity.ok) {
+      const selfReferee = selfRefereeError(
+        references,
+        [identity.identity.email],
+        referenceSlots
+      );
+      if (selfReferee) {
+        setServerError(selfReferee);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+    }
+
     if (!consentAccepted) {
       setConsentError("Please accept the Privacy & Data Processing Agreement to submit your application.");
       window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
@@ -951,6 +976,7 @@ export function PublicApplicationForm({
                     }
                     required={slot.is_required}
                   />
+                  <p className="text-xs text-muted-foreground">{REFEREE_OTHER_PERSON_HINT}</p>
                 </div>
               </div>
             </div>

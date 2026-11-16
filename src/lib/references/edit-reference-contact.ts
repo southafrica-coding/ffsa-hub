@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { updateReferenceRequest } from "@/services/schools";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { referenceSendConfirmed } from "@/lib/email/reference-email";
+import { isSelfReferee, loadApplicantEmails, SELF_REFEREE_MESSAGE } from "@/lib/references/self-referee";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -69,6 +70,15 @@ export async function editReferenceContact(
     return { ok: false, status: 400, error: "A valid reference email is required." };
   }
 
+  if (!ref.application_id) {
+    return { ok: false, status: 500, error: "Application not found." };
+  }
+  const loaded = await loadApplicantEmails(adminSupabase, ref.application_id);
+  if (loaded.error) return { ok: false, status: 500, error: loaded.error };
+  if (isSelfReferee(email, loaded.emails)) {
+    return { ok: false, status: 400, error: SELF_REFEREE_MESSAGE };
+  }
+
   const emailChanged =
     email.toLowerCase() !== String(ref.referee_email ?? "").toLowerCase();
 
@@ -91,7 +101,13 @@ export async function editReferenceContact(
   }
 
   const { data, error } = await updateReferenceRequest(adminSupabase, ref.id, payload);
-  if (error) return { ok: false, status: 500, error: error.message };
+  if (error) {
+    return {
+      ok: false,
+      status: error.message === SELF_REFEREE_MESSAGE ? 400 : 500,
+      error: error.message,
+    };
+  }
   if (!data) {
     // The status guard in updateReferenceRequest rejected it (raced to submitted).
     return {
