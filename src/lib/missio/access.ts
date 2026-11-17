@@ -3,13 +3,12 @@ import { getAuthedUser } from "@/lib/api-auth";
 import { createClient } from "@/lib/supabase/server";
 import type { MissioOrgRole } from "@/lib/missio/types";
 
-// Hard wall: Missio membership (org_people, org_staff_roles) is readable and
-// writable only by someone who holds a Missio org role, or by the service
-// role used by server jobs. An FFSA admin or super_admin is not a pass.
-// These routes never treat one as a member. has_org_role runs first. The
-// service role in this module is only for matching or creating an FFSA
-// contact, and only after that check. Every org_people read and write uses
-// the signed-in user's client.
+// Hard wall: an FFSA admin or super_admin is not a pass. has_org_role runs
+// first and counts only org_staff_roles. Migration 329 (draft #599, 36285f3e)
+// revokes INSERT on org_people from authenticated, so a new row is
+// service-role only, and only after that check plus a verified email or
+// phone. Reads and PATCH use the signed-in user's client. PATCH may change
+// only campus, status, joined_at, and current_stage.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;

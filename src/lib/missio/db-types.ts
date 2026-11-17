@@ -3,7 +3,8 @@
  *
  * TODO: switch to generated types once draft PR 599 merges
  * (branch cursor/missio-org-phase0-data, migration 329_missio_org_phase0.sql,
- * head 418301c1). Names below were checked against that file.
+ * head 36285f3e). Names below were checked against that file. INSERT on
+ * org_people is revoked from authenticated; the service role inserts.
  *
  *   has_org_role(p_org_slug text, p_roles text[] default null) → boolean
  *   has_org_role_id(p_org_id uuid, p_roles text[] default null) → boolean

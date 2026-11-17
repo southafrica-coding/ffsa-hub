@@ -803,7 +803,7 @@ describe("POST /api/missio/people", () => {
     });
     expect(state.tables.contacts).toHaveLength(1);
     expect(state.writes.filter((write) => write.table === "contacts")).toEqual([]);
-    expect(state.writes.find((write) => write.table === "org_people")?.client).toBe("user");
+    expect(state.writes.find((write) => write.table === "org_people")?.client).toBe("admin");
     expect(state.tables.org_people[0]).toMatchObject({
       contact_id: contactId,
       org_id: MISSIO,
@@ -838,7 +838,7 @@ describe("POST /api/missio/people", () => {
       is_primary: true,
     });
     expect(state.tables.contact_phones[0]).toMatchObject({ phone_normalized: "+27821234567" });
-    expect(state.writes.find((write) => write.table === "org_people" && write.op === "insert")?.client).toBe("user");
+    expect(state.writes.find((write) => write.table === "org_people" && write.op === "insert")?.client).toBe("admin");
     const contactInsert = state.writes.find((write) => write.table === "contacts" && write.op === "insert");
     const contactPayload = Array.isArray(contactInsert?.payload) ? contactInsert?.payload[0] : contactInsert?.payload;
     expect(contactPayload).not.toHaveProperty("campus");

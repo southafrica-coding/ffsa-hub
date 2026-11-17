@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeEmail, normalizePhoneE164 } from "@/lib/phone";
 import { addContactEmail, addContactPhone } from "@/services/contact-identifiers";
-import type { OrgAccess } from "@/lib/missio/access";
+import { MISSIO_SLUG, type OrgAccess } from "@/lib/missio/access";
 import { maskEmail, maskPhone } from "@/lib/missio/mask";
 import type {
   ContactMatch,
@@ -360,15 +360,25 @@ async function loadPerson(
   return { person: toMissioPerson(data as PersonRow) };
 }
 
+async function missioOrgId(admin: Client): Promise<{ orgId: string } | { error: string }> {
+  const org = await admin.from("organisations").select("id").eq("slug", MISSIO_SLUG).maybeSingle();
+  if (org.error || !org.data?.id) {
+    console.error("[missio] organisation lookup failed", org.error?.message ?? MISSIO_SLUG);
+    return { error: "Something went wrong." };
+  }
+  return { orgId: org.data.id as string };
+}
+
 /**
- * Insert org_people on the signed-in user's client. contactId must already
- * be the verified match or the contact row just created — never the raw
- * request id on its own. org_id is the Missio organisation from the org
- * check. Campus, status, and stage are written only here, never onto contacts.
- * created_by is the signed-in pastor, not a field from the body.
+ * Insert org_people with the service role. Authenticated has no INSERT grant
+ * (migration 329). contactId must already be the verified match or the
+ * contact row just created. org_id is the organisations row for slug missio.
+ * The duplicate read and the row returned to the caller use the user client.
+ * Campus, status, and stage are written only on this row, never onto contacts.
  */
 async function linkPerson(
   auth: OrgAccess,
+  admin: Client,
   input: {
     contactId: string;
     campus?: MissioCampus;
@@ -376,10 +386,13 @@ async function linkPerson(
     joinedAt?: string | null;
   }
 ): Promise<{ ok: true; body: CreateMissioPersonResponse } | { ok: false; status: number; error: string }> {
+  const org = await missioOrgId(admin);
+  if ("error" in org) return { ok: false, status: 500, error: org.error };
+
   const existing = await auth.supabase
     .from("org_people")
     .select("id")
-    .eq("org_id", auth.orgId)
+    .eq("org_id", org.orgId)
     .eq("contact_id", input.contactId)
     .maybeSingle();
   if (existing.error) {
@@ -388,10 +401,10 @@ async function linkPerson(
   }
   if (existing.data) return { ok: false, status: 409, error: "This person is already in Missio." };
 
-  const inserted = await auth.supabase
+  const inserted = await admin
     .from("org_people")
     .insert({
-      org_id: auth.orgId,
+      org_id: org.orgId,
       contact_id: input.contactId,
       campus: input.campus ?? "potch",
       status: input.status ?? "active",
@@ -409,7 +422,7 @@ async function linkPerson(
     return { ok: false, status: 500, error: "Something went wrong." };
   }
 
-  const loaded = await loadPerson(auth.supabase, auth.orgId, inserted.data.id as string);
+  const loaded = await loadPerson(auth.supabase, org.orgId, inserted.data.id as string);
   if ("error" in loaded) return { ok: false, status: loaded.status, error: loaded.error };
   return { ok: true, body: { person: loaded.person, linkedExisting: true } };
 }
@@ -432,7 +445,7 @@ export async function createPerson(
     const verified = await identifierMatches(admin.client, parsed.data.contactId, parsed.data.matchedBy);
     // No org_people insert unless this contact really has that email or phone.
     if (!verified.ok) return verified;
-    const linked = await linkPerson(auth, {
+    const linked = await linkPerson(auth, admin.client, {
       contactId: parsed.data.contactId,
       campus: parsed.data.campus,
       status: parsed.data.status,
@@ -457,7 +470,7 @@ export async function createPerson(
   const found = await findExistingContact(admin.client, email, phone);
   if ("error" in found) return { ok: false, status: 500, error: found.error };
   if (found.contactId) {
-    return linkPerson(auth, {
+    return linkPerson(auth, admin.client, {
       contactId: found.contactId,
       campus: parsed.data.campus,
       status: parsed.data.status,
@@ -513,7 +526,7 @@ export async function createPerson(
     }
   }
 
-  const linked = await linkPerson(auth, {
+  const linked = await linkPerson(auth, admin.client, {
     contactId,
     campus: parsed.data.campus,
     status: parsed.data.status,

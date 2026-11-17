@@ -6,12 +6,11 @@ import { createPerson, listPeople, readPeopleQuery } from "@/lib/missio/people";
 // POST /api/missio/people
 //
 // Pastor or Missio org admin only. has_org_role runs before any read and
-// before the service-role client exists. org_people is read and written
-// with the user client. The service role is only for matching an existing
-// contact or creating a new one, and only for a contact id this handler
-// just verified. Campus, status, and stage are stored on org_people.
-// The route never writes contact_labels — the org_people trigger applies
-// the Missio label.
+// before the service-role client exists. org_people reads and PATCH use the
+// user client. INSERT is service-role only, and only for a contact id this
+// handler just verified or created. Campus, status, and stage are stored on
+// org_people. The route never writes contact_labels — the org_people trigger
+// applies the Missio label.
 
 export const dynamic = "force-dynamic";
 
