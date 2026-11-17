@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // In-memory stand-in for the two Supabase clients the Missio routes use.
-// The user client can see every org_people row on purpose. Migration 329 does
-// not let an FFSA admin through, but a route that skips has_org_role and then
-// opens the service role would still write. These tests fail that route.
-// contact_labels starts empty and must stay empty.
+// The user client can see every org_people row on purpose, so a route that
+// treats an FFSA admin as a pass fails these tests by returning that row.
+// The service role is only for contact matching and new contacts. org_people
+// writes are recorded on the user client. contact_labels starts empty.
 
 type Row = Record<string, unknown>;
 
@@ -803,7 +803,7 @@ describe("POST /api/missio/people", () => {
     });
     expect(state.tables.contacts).toHaveLength(1);
     expect(state.writes.filter((write) => write.table === "contacts")).toEqual([]);
-    expect(state.writes.find((write) => write.table === "org_people")?.client).toBe("admin");
+    expect(state.writes.find((write) => write.table === "org_people")?.client).toBe("user");
     expect(state.tables.org_people[0]).toMatchObject({
       contact_id: contactId,
       org_id: MISSIO,
@@ -838,7 +838,13 @@ describe("POST /api/missio/people", () => {
       is_primary: true,
     });
     expect(state.tables.contact_phones[0]).toMatchObject({ phone_normalized: "+27821234567" });
-    expect(state.writes.find((write) => write.table === "org_people" && write.op === "insert")?.client).toBe("admin");
+    expect(state.writes.find((write) => write.table === "org_people" && write.op === "insert")?.client).toBe("user");
+    const contactInsert = state.writes.find((write) => write.table === "contacts" && write.op === "insert");
+    const contactPayload = Array.isArray(contactInsert?.payload) ? contactInsert?.payload[0] : contactInsert?.payload;
+    expect(contactPayload).not.toHaveProperty("campus");
+    expect(contactPayload).not.toHaveProperty("status");
+    expect(contactPayload).not.toHaveProperty("current_stage");
+    expect(contactPayload).not.toHaveProperty("currentStage");
     expect(state.tables.org_people[0]).toMatchObject({
       org_id: MISSIO,
       created_by: PASTOR,

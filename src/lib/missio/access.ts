@@ -3,13 +3,13 @@ import { getAuthedUser } from "@/lib/api-auth";
 import { createClient } from "@/lib/supabase/server";
 import type { MissioOrgRole } from "@/lib/missio/types";
 
-// Org access is not an FFSA role. has_org_role / has_org_role_id (migration 329,
-// draft PR 599) are SECURITY DEFINER and count only org_staff_roles for
-// auth.uid(). An FFSA admin or super_admin does not pass, and no policy on
-// organisations, org_staff_roles, or org_people consults is_admin().
-// Every data route still calls requireOrgRole first and returns that 403
-// before it reads or writes anything — including before the service-role
-// client, which is the only client allowed to INSERT org_people.
+// Hard wall: Missio membership (org_people, org_staff_roles) is readable and
+// writable only by someone who holds a Missio org role, or by the service
+// role used by server jobs. An FFSA admin or super_admin is not a pass.
+// These routes never treat one as a member. has_org_role runs first. The
+// service role in this module is only for matching or creating an FFSA
+// contact, and only after that check. Every org_people read and write uses
+// the signed-in user's client.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -49,8 +49,8 @@ function notAuthorized() {
 
 /**
  * Signed-in caller who holds `roles` in `slug` (or any org role when `roles` is omitted).
- * The check is the has_org_role RPC on the user client. An RPC error is a refusal:
- * we do not fall through to a table read that FFSA admins could satisfy via is_admin().
+ * The check is the has_org_role RPC on the user client. FFSA admin and
+ * super_admin do not count. An RPC error is a refusal.
  */
 export async function requireOrgRole(
   slug: string,
