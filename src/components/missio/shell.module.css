@@ -408,14 +408,14 @@
   outline-offset: 2px;
 }
 
-/* The dialog is portaled outside the shell. A local class outranks the hub
-   button rule for the properties that rule does not mark important. */
+/* The dialog is portaled outside the shell. The hub button rule forces the
+   mono face and weight, so these two need the same flag to use the body face. */
 .dialog button,
 .dialog button:hover,
 .dialog button:focus,
 .dialog button:focus-visible {
-  font-family: var(--body), Archivo, system-ui, sans-serif;
-  font-weight: 600;
+  font-family: var(--body), Archivo, system-ui, sans-serif !important;
+  font-weight: 600 !important;
   font-size: 12.5px;
   letter-spacing: 0;
   text-transform: none;

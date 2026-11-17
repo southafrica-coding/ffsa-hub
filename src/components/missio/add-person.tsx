@@ -30,6 +30,10 @@ type Notice = { tone: "alert" | "success" | "info"; text: string };
 const EXISTS_NOTICE: Notice = { tone: "info", text: EXISTS_USE_SEARCH_MESSAGE };
 const NOT_FOUND_COPY = "We couldn't find the existing contact. Check the email and phone, or ask the FFSA office.";
 
+function tooManySearches(seconds: number): string {
+  return `Too many searches, try again in ${seconds} seconds`;
+}
+
 function hasOpenMatch(matches: ContactMatch[]): boolean {
   return matches.some((match) => !match.alreadyInOrg);
 }
@@ -57,7 +61,7 @@ export function AddPersonDialog({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [blockedQuery, setBlockedQuery] = useState<string | null>(null);
+  const [holdCreate, setHoldCreate] = useState(false);
   const [lockedUntil, setLockedUntil] = useState(0);
   const [submitLockedUntil, setSubmitLockedUntil] = useState(0);
   const [clock, setClock] = useState(() => Date.now());
@@ -92,7 +96,6 @@ export function AddPersonDialog({
       return;
     }
     setPending(true);
-    setBlockedQuery(null);
     setQuery(value);
     setStep("search");
     setNotice(keep ? { tone: "alert", text: keep } : null);
@@ -100,6 +103,7 @@ export function AddPersonDialog({
       const result = await client.searchContacts(value);
       setSearched({ kind, value });
       setMatches(result.matches);
+      if (result.matches.length === 0) setHoldCreate(false);
       if (keep) setNotice({ tone: "alert", text: keep });
       else if (result.matches.length === 0) setNotice({ tone: "alert", text: "No contact uses that email or phone." });
       else setNotice(null);
@@ -128,13 +132,8 @@ export function AddPersonDialog({
     setNotice(null);
     const kind = searched?.kind ?? classifyContactQuery(query);
     const value = (searched?.value ?? query).trim();
-    if (kind === "email") {
-      setEmail(value);
-      if (blockedQuery) setPhone("");
-    } else if (kind === "phone") {
-      setPhone(value);
-      if (blockedQuery) setEmail("");
-    }
+    if (kind === "email") setEmail(value);
+    else if (kind === "phone") setPhone(value);
   }
 
   function searchLockSeconds(): number | null {
@@ -149,7 +148,7 @@ export function AddPersonDialog({
     setQuery(value);
     setSearched(null);
     setMatches([]);
-    setBlockedQuery(value);
+    setHoldCreate(true);
     setNotice({ tone: "alert", text: NOT_FOUND_COPY });
   }
 
@@ -170,7 +169,7 @@ export function AddPersonDialog({
     const locked = searchLockSeconds();
     if (locked != null) {
       setQuery(candidates[0]?.value ?? (emailValue || phoneValue));
-      setNotice({ tone: "alert", text: `Too many searches, try again in ${locked} seconds` });
+      setNotice({ tone: "alert", text: tooManySearches(locked) });
       setPending(false);
       return;
     }
@@ -184,7 +183,7 @@ export function AddPersonDialog({
       for (const candidate of candidates) {
         const wait = searchLockSeconds();
         if (wait != null) {
-          setNotice({ tone: "alert", text: `Too many searches, try again in ${wait} seconds` });
+          setNotice({ tone: "alert", text: tooManySearches(wait) });
           return;
         }
         const result = await client.searchContacts(candidate.value);
@@ -192,7 +191,7 @@ export function AddPersonDialog({
         setQuery(candidate.value);
         setSearched(candidate);
         setMatches(result.matches);
-        setBlockedQuery(null);
+        setHoldCreate(false);
         setNotice(EXISTS_NOTICE);
         return;
       }
@@ -397,7 +396,7 @@ export function AddPersonDialog({
                 </ul>
               </div>
             ) : null}
-            {matches && matches.length === 0 && blockedQuery !== query.trim() ? (
+            {matches && matches.length === 0 && !holdCreate ? (
               <div className={styles.actions}>
                 <button type="button" className={styles.primary} onClick={startCreate}>
                   Create new person

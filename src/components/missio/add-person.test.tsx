@@ -561,6 +561,8 @@ describe("add person", () => {
     expect(host.querySelector("[data-testid=exists-use-search]")).toBeNull();
     expect(host.textContent).not.toContain("Create new person");
     setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "other.person@example.com");
+    expect(host.textContent).not.toContain("Create new person");
+    await click(host, "Find contact");
     expect([...host.querySelectorAll("button")].some((item) => item.textContent?.trim() === "Create new person")).toBe(true);
   });
 
@@ -599,7 +601,38 @@ describe("add person", () => {
     expect(host.textContent).not.toContain("pick Use this contact");
     expect(host.textContent).not.toContain("Create new person");
     setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "0825550199");
+    expect(host.textContent).not.toContain("Create new person");
+    await click(host, "Find contact");
     expect([...host.querySelectorAll("button")].some((item) => item.textContent?.trim() === "Create new person")).toBe(true);
+  });
+
+  it("keeps the other identifier when opening create from a search", async () => {
+    const { host, root } = render(
+      <AddPersonDialog
+        client={client({ searchContacts: async () => ({ matches: [] }) })}
+        onClose={() => {}}
+        onCreated={() => {}}
+      />
+    );
+    roots.push(root);
+    hosts.push(host);
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "mina.osei@example.com");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    setValue(host.querySelector("[aria-label=Phone]") as HTMLInputElement, "0825550199");
+    await click(host, "Back");
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "other.person@example.com");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    expect((host.querySelector("[aria-label=Email]") as HTMLInputElement).value).toBe("other.person@example.com");
+    expect((host.querySelector("[aria-label=Phone]") as HTMLInputElement).value).toBe("0825550199");
+
+    await click(host, "Back");
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "0835550100");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    expect((host.querySelector("[aria-label=Email]") as HTMLInputElement).value).toBe("other.person@example.com");
+    expect((host.querySelector("[aria-label=Phone]") as HTMLInputElement).value).toBe("0835550100");
   });
 
   it("does not search again when a follow-up search is rate limited", async () => {
