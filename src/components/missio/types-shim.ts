@@ -45,24 +45,33 @@ export interface MissioPerson {
   currentStage: string | null;
 }
 
-/** One exact contact hit. Email and phone are already masked by the route. */
+/**
+ * One exact contact hit from GET /api/missio/contacts/search.
+ * People who are not in Missio have no full name and no contact id — only
+ * `maskedName` and the opaque `matchToken` used to link them.
+ * `name` and `personId` are set only when `alreadyInOrg` is true.
+ */
 export interface ContactMatch {
-  contactId: string;
-  name: string;
+  matchToken: string;
+  maskedName: string;
   maskedEmail: string | null;
   maskedPhone: string | null;
   alreadyInOrg: boolean;
+  personId?: string;
+  name?: string;
 }
 
 /**
  * POST /api/missio/people.
- * Either link a contact the user just matched, or create a new contact.
+ * Either link the contact the pastor just matched, using the opaque
+ * matchToken, or create a new contact. contactId is not accepted.
+ * matchedBy is the email or phone they typed, unchanged.
  * The UI never sends a Missio label — a database trigger sets that.
  * A new contact needs a name and at least one of email or phone.
  */
 export type CreateMissioPersonInput =
   | {
-      contactId: string;
+      matchToken: string;
       matchedBy: { email: string } | { phone: string };
       campus?: MissioCampus;
       status?: MissioStatus;

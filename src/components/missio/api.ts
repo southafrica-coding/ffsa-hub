@@ -21,11 +21,13 @@ export const missioApi = {
 
 export class MissioApiError extends Error {
   readonly status: number;
+  readonly retryAfterSeconds: number | null;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, retryAfterSeconds: number | null = null) {
     super(message);
     this.name = "MissioApiError";
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -66,11 +68,28 @@ function errorMessage(body: Record<string, unknown>, fallback: string): string {
   return fallback;
 }
 
+const CONFLICT_FALLBACK =
+  "That couldn’t be saved. They may already be in Missio, or the email and phone belong to different people.";
+
+function retryAfterSeconds(header: string | null): number {
+  if (!header) return 60;
+  const asNumber = Number(header);
+  if (Number.isFinite(asNumber) && asNumber >= 0) return Math.ceil(asNumber);
+  const at = Date.parse(header);
+  if (!Number.isNaN(at)) return Math.max(0, Math.ceil((at - Date.now()) / 1000));
+  return 60;
+}
+
 async function parseResponse(res: Response): Promise<Record<string, unknown>> {
   const body = await readBody(res);
   if (res.status === 401) throw new MissioApiError(401, "Not signed in");
   if (res.status === 403) throw new MissioApiError(403, "No Missio pastor role");
-  if (res.status === 409) throw new MissioApiError(409, "Already in Missio");
+  if (res.status === 404) throw new MissioApiError(404, "This person couldn’t be found");
+  if (res.status === 409) throw new MissioApiError(409, errorMessage(body, CONFLICT_FALLBACK));
+  if (res.status === 429) {
+    const seconds = retryAfterSeconds(res.headers.get("retry-after"));
+    throw new MissioApiError(429, `Too many searches, try again in ${seconds} seconds`, seconds);
+  }
   if (!res.ok) throw new MissioApiError(res.status, errorMessage(body, "Missio didn’t respond."));
   return body;
 }
@@ -123,7 +142,7 @@ export function createMissioClient(fetchImpl: FetchLike = fetch): MissioClient {
       }
       const params = new URLSearchParams({ q: q.trim() });
       const body = await request(`${missioApi.contactSearch}?${params.toString()}`);
-      const matches = Array.isArray(body.matches) ? (body.matches as ContactMatch[]) : [];
+      const matches = Array.isArray(body.matches) ? (body.matches as ContactMatch[]).slice(0, 5) : [];
       return { matches };
     },
 

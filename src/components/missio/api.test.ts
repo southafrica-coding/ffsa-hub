@@ -12,10 +12,10 @@ function mockFetch(impl?: FetchMock) {
   return vi.fn<FetchMock>(impl ?? (async () => jsonResponse({})));
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
   });
 }
 
@@ -59,8 +59,8 @@ describe("missio client", () => {
       jsonResponse({
         matches: [
           {
-            contactId: "c1",
-            name: "Mina Osei",
+            matchToken: "tok-1",
+            maskedName: "M••• O•••",
             maskedEmail: "m•••@example.com",
             maskedPhone: "••• 4412",
             alreadyInOrg: false,
@@ -74,6 +74,8 @@ describe("missio client", () => {
       "/api/missio/contacts/search?q=mina.osei%40example.com"
     );
     expect(result.matches[0].alreadyInOrg).toBe(false);
+    expect(result.matches[0].matchToken).toBe("tok-1");
+    expect(result.matches[0]).not.toHaveProperty("contactId");
   });
 
   it("posts a matched contact without a label and surfaces 409 and linkedExisting", async () => {
@@ -82,7 +84,7 @@ describe("missio client", () => {
       .mockResolvedValueOnce(jsonResponse({ error: "conflict" }, 409));
     const client = createMissioClient(fetchMock as unknown as typeof fetch);
     const created = await client.createPerson({
-      contactId: "c1",
+      matchToken: "tok-1",
       matchedBy: { email: "mina.osei@example.com" },
       campus: "jhb",
     });
@@ -91,14 +93,56 @@ describe("missio client", () => {
     expect(init?.method).toBe("POST");
     const body = JSON.parse(String(init?.body));
     expect(body).toEqual({
-      contactId: "c1",
+      matchToken: "tok-1",
       matchedBy: { email: "mina.osei@example.com" },
       campus: "jhb",
     });
     expect(body).not.toHaveProperty("label");
+    expect(body).not.toHaveProperty("contactId");
     await expect(
       client.createPerson({ name: "Mina Osei", email: "mina.osei@example.com" })
-    ).rejects.toMatchObject({ status: 409, message: "Already in Missio" });
+    ).rejects.toMatchObject({ status: 409, message: "conflict" });
+  });
+
+  it("uses the 409 error text when email and phone belong to different people", async () => {
+    const fetchMock = mockFetch(async () =>
+      jsonResponse({ error: "Email and phone belong to different people" }, 409)
+    );
+    const client = createMissioClient(fetchMock as unknown as typeof fetch);
+    await expect(client.createPerson({ name: "Mina Osei", email: "mina.osei@example.com", phone: "0825550199" })).rejects.toMatchObject({
+      status: 409,
+      message: "Email and phone belong to different people",
+    });
+  });
+
+  it("reads Retry-After on a 429 and keeps at most five matches", async () => {
+    const matches = Array.from({ length: 6 }, (_, index) => ({
+      matchToken: `tok-${index}`,
+      maskedName: "A•••",
+      maskedEmail: null,
+      maskedPhone: null,
+      alreadyInOrg: false,
+    }));
+    const fetchMock = mockFetch()
+      .mockResolvedValueOnce(jsonResponse({ error: "slow down" }, 429, { "retry-after": "20" }))
+      .mockResolvedValueOnce(jsonResponse({ matches }));
+    const client = createMissioClient(fetchMock as unknown as typeof fetch);
+    await expect(client.searchContacts("mina.osei@example.com")).rejects.toMatchObject({
+      status: 429,
+      retryAfterSeconds: 20,
+      message: "Too many searches, try again in 20 seconds",
+    });
+    const result = await client.searchContacts("0825550199");
+    expect(result.matches).toHaveLength(5);
+  });
+
+  it("maps a missing person on PATCH to 404", async () => {
+    const fetchMock = mockFetch(async () => jsonResponse({ error: "missing" }, 404));
+    const client = createMissioClient(fetchMock as unknown as typeof fetch);
+    await expect(client.updatePerson("missing", { status: "inactive" })).rejects.toMatchObject({
+      status: 404,
+      message: "This person couldn’t be found",
+    });
   });
 
   it("patches campus and status and never sends a delete", async () => {

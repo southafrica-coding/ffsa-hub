@@ -30,6 +30,7 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
   const [list, setList] = useState<ListState>({ phase: "loading" });
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<MissioPerson | null>(null);
+  const [focusPersonId, setFocusPersonId] = useState<string | null>(null);
 
   const query = useMemo<PeopleQuery>(
     () => ({ campus, status, q, limit: DEFAULT_PEOPLE_LIMIT, offset }),
@@ -53,6 +54,14 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
       active = false;
     };
   }, [client, query, tick]);
+
+  useEffect(() => {
+    if (!focusPersonId || list.phase !== "ready") return;
+    const row = list.rows.find((person) => person.id === focusPersonId);
+    if (!row) return;
+    setEditing(row);
+    setFocusPersonId(null);
+  }, [focusPersonId, list]);
 
   const total = list.phase === "ready" ? list.total : 0;
   const from = total === 0 ? 0 : offset + 1;
@@ -216,6 +225,15 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
           client={client}
           onClose={() => setAdding(false)}
           onCreated={() => setTick((n) => n + 1)}
+          onViewPerson={(personId, name) => {
+            setAdding(false);
+            setCampus("");
+            setStatus("");
+            setDraft(name);
+            setQ(name);
+            setOffset(0);
+            setFocusPersonId(personId);
+          }}
         />
       ) : null}
       {editing ? (
@@ -227,6 +245,7 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
             setEditing(null);
             setTick((n) => n + 1);
           }}
+          onNotFound={() => setTick((n) => n + 1)}
         />
       ) : null}
     </div>
@@ -244,11 +263,13 @@ function EditPerson({
   client,
   onClose,
   onSaved,
+  onNotFound,
 }: {
   person: MissioPerson;
   client: MissioClient;
   onClose: () => void;
   onSaved: () => void;
+  onNotFound: () => void;
 }) {
   const [campus, setCampus] = useState<MissioCampus>(person.campus);
   const [status, setStatus] = useState<MissioStatus>(person.status);
@@ -262,7 +283,9 @@ function EditPerson({
       await client.updatePerson(person.id, patch);
       onSaved();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Couldn’t save.");
+      const missing = caught instanceof MissioApiError && caught.status === 404;
+      setError(missing ? "This person couldn’t be found" : caught instanceof Error ? caught.message : "Couldn’t save.");
+      if (missing) onNotFound();
       setPending(false);
     }
   }

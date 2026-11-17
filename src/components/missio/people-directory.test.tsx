@@ -3,7 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PeopleDirectory } from "./people-directory";
-import type { MissioClient } from "./api";
+import { MissioApiError, type MissioClient } from "./api";
 import type { MissioPerson, UpdateMissioPersonInput } from "./types-shim";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -160,6 +160,44 @@ describe("people directory", () => {
     });
     expect(patches).toEqual([{ status: "inactive" }]);
     expect(document.body.textContent).not.toMatch(/Delete/);
+  });
+
+  it("says when a PATCH id cannot be found and reloads the list", async () => {
+    let loads = 0;
+    const client: MissioClient = {
+      getMe: async () => {
+        throw new Error("unused");
+      },
+      async listPeople() {
+        loads += 1;
+        return { rows, total: rows.length };
+      },
+      searchContacts: async () => ({ matches: [] }),
+      createPerson: async () => {
+        throw new Error("unused");
+      },
+      updatePerson: async () => {
+        throw new MissioApiError(404, "missing");
+      },
+    };
+    const { host, root } = render(<PeopleDirectory client={client} />);
+    roots.push(root);
+    hosts.push(host);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const before = loads;
+    const edit = [...host.querySelectorAll("button")].find((button) => button.textContent === "Edit");
+    await act(async () => {
+      edit?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const mark = [...document.body.querySelectorAll("button")].find((button) => button.textContent === "Mark inactive");
+    await act(async () => {
+      mark?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(document.body.textContent).toContain("This person couldn’t be found");
+    expect(loads).toBeGreaterThan(before);
   });
 
   it("pages with the total from the route", async () => {
