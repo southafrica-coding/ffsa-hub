@@ -207,32 +207,3 @@
   color: #111;
   display: flex;
 }
-
-.kbd {
-  margin-left: auto;
-  font: 11px var(--font-roboto-mono), "Roboto Mono", ui-monospace, monospace;
-  color: #6b675d;
-  border: 1px solid #e7e4d9;
-  border-radius: 4px;
-  padding: 0 4px;
-}
-
-.sep {
-  border-top: 1px solid #e7e4d9;
-  margin: 6px 2px;
-}
-
-.foot {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  padding: 6px 8px;
-  font-size: 12px;
-  line-height: 16px;
-  color: #55524a;
-}
-
-.foot svg {
-  flex: none;
-  margin-top: 1px;
-}

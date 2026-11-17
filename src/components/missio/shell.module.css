@@ -65,22 +65,45 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 32px;
   margin-top: 6px;
   padding: 0 8px;
+  box-sizing: border-box;
   border-radius: 6px;
+  background: #28322c;
+  border: 1px solid #313b34;
   color: var(--side-sub);
 }
 
-.search input {
-  flex: 1;
+.search svg {
+  flex: none;
+}
+
+.shell .side .search input[name="q"] {
+  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
-  border: 0;
-  background: var(--side);
-  color: var(--side-ink);
-  font: inherit;
+  height: 24px;
+  margin: 0;
+  padding: 0 2px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #28322c !important;
+  background-color: #28322c !important;
+  box-shadow: none !important;
+  color: #f3efe4 !important;
+  -webkit-text-fill-color: #f3efe4;
+  caret-color: #f3efe4;
+  font-family: var(--body), Archivo, system-ui, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 20px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
   outline: none;
-  -webkit-text-fill-color: var(--side-ink);
 }
 
 .search input::placeholder {
@@ -291,19 +314,41 @@
   margin: 18px 0 12px;
 }
 
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 10.5rem;
+}
+
+.filterLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--quiet, #7a7466);
+}
+
 .select,
-.textInput {
-  height: 32px;
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  background: #fff;
-  color: #1c1b17;
-  font: inherit;
-  padding: 0 10px;
+.textInput,
+.field input,
+.field select {
+  box-sizing: border-box;
+  height: 36px;
+  border: 1px solid #ddd7c8 !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  color: #1c1b17 !important;
+  font-family: var(--body), Archivo, system-ui, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 20px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  padding: 0 10px !important;
 }
 
 .select {
   min-width: 10.5rem;
+  width: 100%;
 }
 
 .textInput {

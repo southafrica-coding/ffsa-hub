@@ -83,33 +83,43 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
           setQ(String(data.get("q") ?? "").trim());
         }}
       >
-        <select
-          aria-label="Campus"
-          className={styles.select}
-          value={campus}
-          onChange={(event) => {
-            setCampus(event.target.value as "" | MissioCampus);
-            setOffset(0);
-          }}
-        >
-          <option value="">All campuses</option>
-          <option value="potch">Missio Potch</option>
-          <option value="jhb">Missio JHB</option>
-        </select>
-        <select
-          aria-label="Status"
-          className={styles.select}
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value as "" | MissioStatus);
-            setOffset(0);
-          }}
-        >
-          <option value="">All statuses</option>
-          <option value="visitor">Visitor</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
+        <label className={styles.filter}>
+          <span className={styles.filterLabel} id="missio-campus-label">Campus</span>
+          <select
+            id="missio-campus"
+            aria-labelledby="missio-campus-label"
+            aria-label="Campus"
+            className={styles.select}
+            value={campus}
+            onChange={(event) => {
+              setCampus(event.target.value as "" | MissioCampus);
+              setOffset(0);
+            }}
+          >
+            <option value="">All campuses</option>
+            <option value="potch">Missio Potch</option>
+            <option value="jhb">Missio JHB</option>
+          </select>
+        </label>
+        <label className={styles.filter}>
+          <span className={styles.filterLabel} id="missio-status-label">Status</span>
+          <select
+            id="missio-status"
+            aria-labelledby="missio-status-label"
+            aria-label="Status"
+            className={styles.select}
+            value={status}
+            onChange={(event) => {
+              setStatus(event.target.value as "" | MissioStatus);
+              setOffset(0);
+            }}
+          >
+            <option value="">All statuses</option>
+            <option value="visitor">Visitor</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </label>
         <input
           className={styles.textInput}
           name="q"

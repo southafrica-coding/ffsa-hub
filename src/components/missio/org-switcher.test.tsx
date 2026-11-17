@@ -59,7 +59,11 @@ describe("OrgSwitcher", () => {
     });
     const menu = document.body.querySelector("[role=listbox]");
     expect(menu?.textContent).toContain("Fire & Fragrance SA");
+    expect(menu?.textContent).toContain("FFSA Hub");
     expect(menu?.textContent).toContain("Missio Church");
+    expect(menu?.textContent).toContain("Missio");
+    expect(menu?.textContent).not.toMatch(/shared|giving stay/i);
+    expect(menu?.querySelector("[class*=kbd]")).toBeNull();
     const missio = [...document.body.querySelectorAll("a")].find((link) => link.textContent?.includes("Missio Church"));
     expect(missio?.getAttribute("href")).toBe("/missio");
   });

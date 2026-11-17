@@ -7,8 +7,8 @@ import styles from "./org-switcher.module.css";
 import { useOrgSwitcher, type OrgSwitcherProps } from "./use-org-switcher";
 
 const BLURB: Record<string, string> = {
-  ffsa: "FFSA Hub · staff workspace",
-  missio: "Church plant · own people & books",
+  ffsa: "FFSA Hub",
+  missio: "Missio",
 };
 
 export function OrgTile({ slug, large = false }: { slug: string; large?: boolean }) {
@@ -30,20 +30,13 @@ export function OrgSwitcher({ orgs, currentOrg, onSwitch, compact = false }: Org
   const menuId = useId();
 
   useEffect(() => {
-    if (!visible) return;
+    if (!open) return;
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
-      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
-      const index = Number(event.key) - 1;
-      const org = ordered[index];
-      if (!org || org.slug === currentOrg) return;
-      event.preventDefault();
-      if (onSwitch) onSwitch(org.slug);
-      else window.location.assign(org.href);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [visible, ordered, currentOrg, onSwitch, setOpen]);
+  }, [open, setOpen]);
 
   if (!visible || !current) return null;
 
@@ -62,7 +55,7 @@ export function OrgSwitcher({ orgs, currentOrg, onSwitch, compact = false }: Org
         }}
       >
         <div className={styles.lbl}>Organisations</div>
-        {ordered.map((org, index) => {
+        {ordered.map((org) => {
           const selected = org.slug === currentOrg;
           return (
             <a
@@ -85,21 +78,10 @@ export function OrgSwitcher({ orgs, currentOrg, onSwitch, compact = false }: Org
                 <span className={styles.check} aria-hidden>
                   <CheckIcon />
                 </span>
-              ) : (
-                <span className={styles.kbd}>{index + 1}</span>
-              )}
+              ) : null}
             </a>
           );
         })}
-        <div className={styles.sep} />
-        <div className={styles.foot}>
-          <ShareIcon />
-          <span>Hire, Rooms and Calendar are shared</span>
-        </div>
-        <div className={styles.foot} style={{ paddingTop: 0 }}>
-          <LockIcon />
-          <span>People, kids and giving stay with each org</span>
-        </div>
       </div>
     </>
   ) : null;
@@ -149,22 +131,3 @@ function CheckIcon() {
   );
 }
 
-function ShareIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-      <circle cx="6" cy="12" r="2.5" />
-      <circle cx="18" cy="6" r="2.5" />
-      <circle cx="18" cy="18" r="2.5" />
-      <path d="m8.2 10.8 7.6-3.6M8.2 13.2l7.6 3.6" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-      <rect x="5" y="11" width="14" height="10" rx="2" />
-      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-    </svg>
-  );
-}

@@ -106,6 +106,14 @@ describe("people directory", () => {
     expect(host.textContent).toContain("Missio JHB");
     expect(host.textContent).toContain("—");
     expect(host.textContent).not.toMatch(/Delete/);
+    const campusSelect = host.querySelector("[aria-label=Campus]") as HTMLSelectElement;
+    const statusSelect = host.querySelector("[aria-label=Status]") as HTMLSelectElement;
+    expect(host.querySelector("#missio-campus-label")?.textContent).toBe("Campus");
+    expect(host.querySelector("#missio-status-label")?.textContent).toBe("Status");
+    expect(campusSelect.getAttribute("aria-labelledby")).toBe("missio-campus-label");
+    expect(statusSelect.getAttribute("aria-labelledby")).toBe("missio-status-label");
+    expect(campusSelect.selectedOptions[0]?.text).toBe("All campuses");
+    expect(statusSelect.selectedOptions[0]?.text).toBe("All statuses");
 
     await act(async () => {
       setControl(host, "Campus", "jhb");
