@@ -18,14 +18,28 @@
 -- Grants of org roles are service-role only (no INSERT/UPDATE/DELETE
 -- policy on org_staff_roles). Organisation rows are readable by any
 -- signed-in user and writable only by the service role.
+-- org_people inserts are service-role only. contact_labels is
+-- readable by any signed-in user (042), so a Missio pastor can see
+-- every contact_id. An INSERT or an update of contact_id / org_id
+-- would attach that FFSA contact, the contacts policy would return
+-- the full row, and the label mirror would tag it Missio.
 --
--- Operator rules, enforced by the absence of policies rather than by
--- the app:
+-- Authenticated may UPDATE only campus, status, joined_at and
+-- current_stage (column privileges, not just the RLS policy).
+-- org_id, contact_id, id and created_by are not grantable.
+-- updated_at is not grantable either; handle_updated_at() sets it
+-- inside the BEFORE UPDATE trigger, which does not need the caller
+-- to hold UPDATE on that column.
+--
+-- Operator rules, enforced by the absence of policies and grants
+-- rather than by the app:
 --   1. Do not give a Missio pastor (or any other Missio role) the
 --      FFSA 'staff' role or contacts.view / contacts.read. Those
 --      policies are table-wide and would show every contact.
 --   2. Insert org_staff_roles with the service role only.
---   3. Do not backfill org_people from the existing missio label
+--   3. org_people inserts are service-role only, after Hub Backend's
+--      own check and match. Do not grant authenticated INSERT.
+--   4. Do not backfill org_people from the existing missio label
 --      in this migration.
 --
 -- contacts keeps every existing policy. The one new SELECT policy
@@ -119,7 +133,7 @@ CREATE INDEX IF NOT EXISTS org_people_contact_id_idx
   ON public.org_people (contact_id);
 
 COMMENT ON TABLE public.org_people IS
-  'A contact inside one org. This is the only path an org role has to a contact. Not backfilled from existing labels.';
+  'A contact inside one org. Inserts are service-role only. Authenticated pastors and org admins may update campus, status, joined_at and current_stage. Not backfilled from existing labels.';
 
 DROP TRIGGER IF EXISTS set_updated_at ON public.org_people;
 CREATE TRIGGER set_updated_at
@@ -192,7 +206,13 @@ COMMENT ON FUNCTION public.has_org_role(text, text[]) IS
 --    anon and authenticated. Revoke anon (and PUBLIC), then
 --    grant authenticated only the commands a policy allows.
 --    service_role keeps ALL and bypasses RLS, which is how
---    org_staff_roles grants and organisation edits are made.
+--    org_staff_roles grants, organisation edits, and org_people
+--    inserts are made.
+--
+--    org_people has no INSERT grant for authenticated. UPDATE is
+--    column-level: campus, status, joined_at, current_stage.
+--    REVOKE ALL does not clear column grants, so the column list
+--    is revoked and re-granted on every run.
 -- ────────────────────────────────────────────────────────────
 
 ALTER TABLE public.organisations ENABLE ROW LEVEL SECURITY;
@@ -205,7 +225,13 @@ REVOKE ALL ON TABLE public.org_people FROM PUBLIC, anon, authenticated;
 
 GRANT SELECT ON TABLE public.organisations TO authenticated;
 GRANT SELECT ON TABLE public.org_staff_roles TO authenticated;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.org_people TO authenticated;
+GRANT SELECT ON TABLE public.org_people TO authenticated;
+REVOKE UPDATE (
+  id, org_id, contact_id, campus, status, joined_at, current_stage,
+  created_by, created_at, updated_at
+) ON TABLE public.org_people FROM authenticated;
+GRANT UPDATE (campus, status, joined_at, current_stage)
+  ON TABLE public.org_people TO authenticated;
 
 GRANT ALL ON TABLE public.organisations TO service_role;
 GRANT ALL ON TABLE public.org_staff_roles TO service_role;
@@ -235,8 +261,9 @@ CREATE POLICY "Org pastors and admins can read org staff roles"
   TO authenticated
   USING (public.has_org_role_id(org_id, ARRAY['pastor', 'admin']));
 
--- org_people: any org role can read. pastor and org admin can insert
--- and update. No DELETE policy for anyone, including FFSA admins.
+-- org_people: any org role can read. pastor and org admin can update
+-- the person fields the column grants allow. No INSERT policy and
+-- no DELETE policy. New rows are service-role only.
 DROP POLICY IF EXISTS "Org staff can read org people" ON public.org_people;
 CREATE POLICY "Org staff can read org people"
   ON public.org_people
@@ -245,11 +272,6 @@ CREATE POLICY "Org staff can read org people"
   USING (public.has_org_role_id(org_id));
 
 DROP POLICY IF EXISTS "Org pastors and admins can insert org people" ON public.org_people;
-CREATE POLICY "Org pastors and admins can insert org people"
-  ON public.org_people
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (public.has_org_role_id(org_id, ARRAY['pastor', 'admin']));
 
 DROP POLICY IF EXISTS "Org pastors and admins can update org people" ON public.org_people;
 CREATE POLICY "Org pastors and admins can update org people"

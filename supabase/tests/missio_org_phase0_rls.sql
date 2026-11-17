@@ -471,38 +471,75 @@ SELECT pg_temp.expect('pastor sees 0 non-Missio contacts',
     WHERE c.id <> 'c1111111-1111-1111-1111-111111111111'
   $$),
   '0');
-SELECT pg_temp.expect('pastor can insert a Missio org_people row',
+
+-- contact_labels is readable by any signed-in user. Put a non-Missio
+-- contact_id there so the pastor can copy it, which is the breach.
+INSERT INTO public.labels (slug, name) VALUES ('directory', 'Directory');
+INSERT INTO public.contact_labels (contact_id, label_id, added_via)
+SELECT 'c2222222-2222-2222-2222-222222222222', id, 'manual'
+FROM public.labels WHERE slug = 'directory';
+
+SELECT pg_temp.expect('pastor cannot insert a Missio contact taken from contact_labels',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.org_people (org_id, contact_id)
-    SELECT id, 'c5555555-5555-5555-5555-555555555555'
-    FROM public.organisations WHERE slug = 'missio'
-  $$),
-  'rows=1');
-SELECT pg_temp.expect('pastor insert stamped org_people_sync and their user id',
-  pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
-    SELECT added_via || '/' || coalesce(added_by::text, 'null')
+    SELECT o.id, cl.contact_id
     FROM public.contact_labels cl
     JOIN public.labels l ON l.id = cl.label_id
-    WHERE cl.contact_id = 'c5555555-5555-5555-5555-555555555555'
-      AND l.slug = 'missio'
+    JOIN public.organisations o ON o.slug = 'missio'
+    WHERE l.slug = 'missio'
+      AND cl.contact_id = 'c1111111-1111-1111-1111-111111111111'
   $$),
-  'org_people_sync/a1111111-1111-1111-1111-111111111111');
-SELECT pg_temp.expect('pastor can update that Missio row',
+  'err 42501');
+SELECT pg_temp.expect('pastor cannot insert a non-Missio contact taken from contact_labels',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
-    UPDATE public.org_people SET campus = 'jhb'
-    WHERE contact_id = 'c5555555-5555-5555-5555-555555555555'
+    INSERT INTO public.org_people (org_id, contact_id)
+    SELECT o.id, cl.contact_id
+    FROM public.contact_labels cl
+    JOIN public.labels l ON l.id = cl.label_id
+    JOIN public.organisations o ON o.slug = 'missio'
+    WHERE l.slug = 'directory'
   $$),
-  'rows=1');
-SELECT pg_temp.expect('pastor update kept the sync label (campus is not a move)',
+  'err 42501');
+SELECT pg_temp.expect('pastor cannot update contact_id',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.org_people
+       SET contact_id = 'c2222222-2222-2222-2222-222222222222'
+     WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+  $$),
+  'err 42501');
+SELECT pg_temp.expect('pastor cannot update org_id',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.org_people
+       SET org_id = (SELECT id FROM public.organisations WHERE slug = 'ffsa')
+     WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+  $$),
+  'err 42501');
+SELECT pg_temp.expect('pastor cannot update created_by',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.org_people
+       SET created_by = 'a1111111-1111-1111-1111-111111111111'
+     WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+  $$),
+  'err 42501');
+SELECT pg_temp.expect('pastor cannot update id',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.org_people
+       SET id = gen_random_uuid()
+     WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+  $$),
+  'err 42501');
+SELECT pg_temp.expect('failed attach left the Missio row on its own contact',
+  (SELECT o.slug || '/' || op.contact_id::text
+     FROM public.org_people op
+     JOIN public.organisations o ON o.id = op.org_id
+    WHERE op.contact_id = 'c1111111-1111-1111-1111-111111111111'),
+  'missio/c1111111-1111-1111-1111-111111111111');
+SELECT pg_temp.expect('after the failed attach the pastor still sees 0 non-Missio contacts',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
-    SELECT campus || '/' || (
-      SELECT count(*)::text FROM public.contact_labels
-      WHERE contact_id = 'c5555555-5555-5555-5555-555555555555'
-    )
-    FROM public.org_people
-    WHERE contact_id = 'c5555555-5555-5555-5555-555555555555'
+    SELECT count(*)::text FROM public.contacts c
+    WHERE c.id <> 'c1111111-1111-1111-1111-111111111111'
   $$),
-  'jhb/1');
+  '0');
 SELECT pg_temp.expect('pastor cannot delete org_people (no grant)',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     DELETE FROM public.org_people
@@ -522,13 +559,6 @@ SELECT pg_temp.expect('pastor delete left the Missio person in place',
   (SELECT count(*)::text FROM public.org_people
     WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'),
   '1');
-SELECT pg_temp.expect('pastor cannot insert into the other org',
-  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
-    INSERT INTO public.org_people (org_id, contact_id)
-    SELECT id, 'c3333333-3333-3333-3333-333333333333'
-    FROM public.organisations WHERE slug = 'ffsa'
-  $$),
-  'err 42501');
 SELECT pg_temp.expect('pastor cannot write org_staff_roles (no grant)',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.org_staff_roles (user_id, org_id, role)
@@ -590,7 +620,7 @@ SELECT pg_temp.expect('house church leader can read Missio org_people',
     JOIN public.organisations o ON o.id = op.org_id
     WHERE o.slug = 'missio'
   $$),
-  '2');
+  '1');
 SELECT pg_temp.expect('house church leader sees 0 ffsa org_people',
   pg_temp.scalar('a2222222-2222-2222-2222-222222222222', $$
     SELECT count(*)::text FROM public.org_people op
@@ -615,6 +645,40 @@ SELECT pg_temp.expect('house church leader update did not stick',
   (SELECT status FROM public.org_people
     WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'),
   'active');
+SELECT pg_temp.expect('pastor can update campus, status, joined_at and current_stage',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.org_people
+       SET campus = 'jhb',
+           status = 'inactive',
+           joined_at = DATE '2026-01-15',
+           current_stage = 'member'
+     WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('pastor field update stuck and kept the sync label',
+  pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
+    SELECT campus || '/' || status || '/' || joined_at::text || '/' || current_stage
+           || '/' || (
+             SELECT count(*)::text FROM public.contact_labels
+             WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+           )
+    FROM public.org_people
+    WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+  $$),
+  'jhb/inactive/2026-01-15/member/1');
+SELECT pg_temp.expect('pastor field update moved updated_at',
+  pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
+    SELECT (updated_at > created_at)::text
+    FROM public.org_people
+    WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+  $$),
+  'true');
+SELECT pg_temp.expect('after the field update the pastor still sees 0 non-Missio contacts',
+  pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
+    SELECT count(*)::text FROM public.contacts c
+    WHERE c.id <> 'c1111111-1111-1111-1111-111111111111'
+  $$),
+  '0');
 SELECT pg_temp.expect('house church leader sees only their own staff row',
   pg_temp.scalar('a2222222-2222-2222-2222-222222222222', $$
     SELECT count(*)::text || '/' ||
@@ -892,10 +956,33 @@ SELECT pg_temp.expect('service role can insert and remove an organisation',
   'rows=1');
 SELECT pg_temp.exec('service', $$DELETE FROM public.organisations WHERE slug = 'probe'$$);
 
--- ── Label sync ────────────────────────────────────────────
+-- ── Label sync (service role inserts; pastors cannot) ────
+SELECT pg_temp.expect('service role can insert org_people',
+  pg_temp.exec('service', $$
+    INSERT INTO public.org_people (org_id, contact_id)
+    SELECT id, 'c5555555-5555-5555-5555-555555555555'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('service role insert stamped org_people_sync',
+  (SELECT added_via || '/' || coalesce(added_by::text, 'null')
+     FROM public.contact_labels cl
+     JOIN public.labels l ON l.id = cl.label_id
+    WHERE cl.contact_id = 'c5555555-5555-5555-5555-555555555555'
+      AND l.slug = 'missio'),
+  'org_people_sync/null');
+SELECT pg_temp.expect('after the service insert the pastor sees the new Missio contact only',
+  pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
+    SELECT count(*) FILTER (WHERE id = 'c5555555-5555-5555-5555-555555555555')::text
+           || '/' ||
+           count(*) FILTER (WHERE id <> 'c1111111-1111-1111-1111-111111111111'
+                            AND id <> 'c5555555-5555-5555-5555-555555555555')::text
+    FROM public.contacts
+  $$),
+  '1/0');
 -- Move the synced contact. Old label goes, new label arrives.
-SELECT pg_temp.expect('pastor can move the synced person onto another contact',
-  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+SELECT pg_temp.expect('service role can move org_people onto another contact',
+  pg_temp.exec('service', $$
     UPDATE public.org_people
        SET contact_id = 'c7777777-7777-7777-7777-777777777777'
      WHERE contact_id = 'c5555555-5555-5555-5555-555555555555'
@@ -932,7 +1019,7 @@ SELECT pg_temp.expect('delete did not write an unsubscribe',
 INSERT INTO public.contact_labels (contact_id, label_id, added_via, added_by)
 SELECT 'c6666666-6666-6666-6666-666666666666', id, 'manual', NULL
 FROM public.labels WHERE slug = 'missio';
-SELECT pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+SELECT pg_temp.exec('service', $$
   INSERT INTO public.org_people (org_id, contact_id)
   SELECT id, 'c6666666-6666-6666-6666-666666666666'
   FROM public.organisations WHERE slug = 'missio'
@@ -1011,6 +1098,12 @@ SELECT pg_temp.expect('org_people has no DELETE policy',
    JOIN pg_class c ON c.oid = pol.polrelid
    WHERE c.relname = 'org_people' AND pol.polcmd = 'd'),
   '0');
+SELECT pg_temp.expect('org_people has no INSERT policy',
+  (SELECT count(*)::text
+   FROM pg_policy pol
+   JOIN pg_class c ON c.oid = pol.polrelid
+   WHERE c.relname = 'org_people' AND pol.polcmd = 'a'),
+  '0');
 SELECT pg_temp.expect('org_staff_roles has no write policy',
   (SELECT count(*)::text
    FROM pg_policy pol
@@ -1043,13 +1136,28 @@ SELECT pg_temp.expect('anon has no privileges on the three tables',
       OR has_table_privilege('anon', 'public.org_people', 'SELECT')
     )::text),
   'false');
-SELECT pg_temp.expect('authenticated cannot delete org_people or write grants',
+SELECT pg_temp.expect('authenticated cannot insert or delete org_people, or write grants',
   (SELECT (
-      has_table_privilege('authenticated', 'public.org_people', 'DELETE')
+      has_table_privilege('authenticated', 'public.org_people', 'INSERT')
+      OR has_table_privilege('authenticated', 'public.org_people', 'DELETE')
+      OR has_table_privilege('authenticated', 'public.org_people', 'UPDATE')
       OR has_table_privilege('authenticated', 'public.org_staff_roles', 'INSERT')
       OR has_table_privilege('authenticated', 'public.organisations', 'INSERT')
     )::text),
   'false');
+SELECT pg_temp.expect('authenticated updates only the person fields',
+  (SELECT (
+      has_column_privilege('authenticated', 'public.org_people', 'campus', 'UPDATE')
+      AND has_column_privilege('authenticated', 'public.org_people', 'status', 'UPDATE')
+      AND has_column_privilege('authenticated', 'public.org_people', 'joined_at', 'UPDATE')
+      AND has_column_privilege('authenticated', 'public.org_people', 'current_stage', 'UPDATE')
+      AND NOT has_column_privilege('authenticated', 'public.org_people', 'org_id', 'UPDATE')
+      AND NOT has_column_privilege('authenticated', 'public.org_people', 'contact_id', 'UPDATE')
+      AND NOT has_column_privilege('authenticated', 'public.org_people', 'id', 'UPDATE')
+      AND NOT has_column_privilege('authenticated', 'public.org_people', 'created_by', 'UPDATE')
+      AND NOT has_column_privilege('authenticated', 'public.org_people', 'updated_at', 'UPDATE')
+    )::text),
+  'true');
 SELECT pg_temp.expect('second apply did not duplicate the missio org',
   (SELECT count(*)::text FROM public.organisations WHERE slug = 'missio'),
   '1');
