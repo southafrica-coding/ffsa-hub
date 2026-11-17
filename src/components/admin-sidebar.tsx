@@ -20,6 +20,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { LogOut, Menu, KeyRound, RefreshCw, Briefcase, User, Settings } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { OrgSwitcherMount } from "@/components/missio/org-switcher-mount";
 import {
   ADMIN_MODULES,
   SYSTEM_MODULES,
@@ -66,6 +67,7 @@ function Rail({
 }) {
   return (
     <div className="hidden md:flex w-[74px] shrink-0 flex-col items-center bg-ink py-[18px] gap-1.5">
+      <OrgSwitcherMount compact />
       <Link href="/dashboard" className="mb-3.5 block">
         <Image src="/brand/ff-mark-white.png" alt="Fire & Fragrance" width={34} height={34}
                style={{ objectFit: "contain" }} priority />
@@ -237,8 +239,11 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
 
       {/* ── Mobile: black top bar + drawer ── */}
       <div className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between bg-ink px-4 md:hidden">
-        <Image src="/brand/ff-wordmark-white.png" alt="Fire & Fragrance" width={120} height={14}
-               style={{ objectFit: "contain" }} priority />
+        <span className="flex min-w-0 items-center gap-2">
+          <OrgSwitcherMount compact />
+          <Image src="/brand/ff-wordmark-white.png" alt="Fire & Fragrance" width={120} height={14}
+                 style={{ objectFit: "contain" }} priority />
+        </span>
         <button onClick={() => setMobileOpen(true)} aria-label="Open menu" className="flex h-11 w-11 items-center justify-center text-white">
           <Menu className="h-5 w-5" />
         </button>
