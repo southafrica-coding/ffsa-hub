@@ -28,6 +28,11 @@ import {
   REFERENCE_NOT_SENT_MESSAGE,
 } from "@/lib/references/reference-delivery";
 import { Chip, Masthead, StatusPill } from "@/components/ffsa";
+import {
+  REFEREE_OTHER_PERSON_HINT,
+  STAFF_SELF_REFEREE_MESSAGE,
+  isSelfReferee,
+} from "@/lib/references/self-referee";
 import { TrackTab } from "./track-tab";
 import type { PipelinePerson, TrackSummary } from "@/lib/schools/track-pipeline";
 import { RosterTab, AddStudentButton, type RosterFee, type RosterFilter, type RosterTrack } from "./roster-tab";
@@ -1854,6 +1859,16 @@ function ApplicantsTab({
       alert("Reference name and email are both required.");
       return;
     }
+    if (
+      isSelfReferee(editRefEmail, [
+        reviewingResponse?.applicant_email,
+        reviewingResponse?.applicant_info?.email,
+        reviewingResponse?.users?.email,
+      ])
+    ) {
+      alert(STAFF_SELF_REFEREE_MESSAGE);
+      return;
+    }
     setSavingRef(true);
     try {
       const res = await fetch("/api/schools/applications/references", {
@@ -2403,16 +2418,26 @@ function ApplicantsTab({
         alert(data.error || "Failed to update statuses");
         return;
       }
-      // Accepting now also puts people on the roster. Anyone we couldn't
-      // enrol has no account for their email yet and needs the Accept
-      // button, which invites them — say so rather than letting them look
-      // accepted while being absent from the Arrival tab.
-      const stranded = (data.notEnrolled ?? []).length;
-      if (stranded > 0) {
-        alert(
-          `${stranded} applicant${stranded === 1 ? " was" : "s were"} marked accepted but not added to the roster — ` +
-            `they have no account yet. Use Accept on each so they get an invite.`
-        );
+      // Skipped rows were left on their old status. Failed rows were not
+      // saved either. Name both, so a partial bulk change is not a clean success.
+      const skipped = (data.skipped ?? []) as Array<{ id: string; message?: string }>;
+      const failures = (data.failures ?? []) as Array<{ id: string; message?: string }>;
+      const lines = [
+        ...skipped.map((row) => {
+          const applicant = responses.find((item) => item.id === row.id);
+          const who = applicant ? respName(applicant) : "An applicant";
+          return `${who}: ${row.message || "Not marked accepted. Use Accept."}`;
+        }),
+        ...failures.map((row) => {
+          const applicant = responses.find((item) => item.id === row.id);
+          const who = applicant ? respName(applicant) : "An applicant";
+          return `${who}: ${row.message || "The status was not saved."}`;
+        }),
+      ];
+      if (lines.length > 0) {
+        alert(lines.join("\n\n"));
+      } else if (data.partial) {
+        alert("Some of these applications were not updated.");
       }
       const emailWarnings: string[] = data.emailWarnings ?? [];
       if (emailWarnings.length > 0) {
@@ -2616,12 +2641,12 @@ function ApplicantsTab({
 
     try {
       // Accept flow — route through the accept-application pipeline so the
-      // student is automatically enrolled (and, for public applicants, a user
-      // account is created and an invite email is sent). Only do this when the
-      // application is *transitioning* into accepted — if it's already accepted
-      // and we're just editing the notes, fall through to the standard update
-      // below (re-running accept would fail with "already accepted").
-      if (nextStatus === "accepted" && reviewingResponse.status !== "accepted") {
+      // student is enrolled (and, for public applicants, invited and emailed).
+      // An already-accepted row also goes here, whether or not it has a user
+      // id: the missing piece may be the enrolment, not the account. If Accept
+      // finds an enrolment already, it returns already_enrolled and we save
+      // the note with the ordinary status update.
+      if (nextStatus === "accepted") {
         const res = await fetch("/api/admin/accept-application", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2632,20 +2657,24 @@ function ApplicantsTab({
         });
 
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
+        if (data.code === "already_enrolled") {
+          // Already enrolled. Fall through and save the note. Do not show
+          // the route's "already been accepted" error on the way there.
+        } else if (!res.ok) {
           alert(data.error || "Failed to accept application");
           return;
-        }
-        // Accepted, but the email didn't go out — say so. The route has
-        // returned this for months; nothing showed it, so a failed send
-        // looked exactly like a successful one.
-        if (data.emailWarning) {
-          alert(`Accepted — but the student was not emailed.\n\n${data.emailWarning}`);
-        }
+        } else {
+          // Accepted, but the email didn't go out — say so. The route has
+          // returned this for months; nothing showed it, so a failed send
+          // looked exactly like a successful one.
+          if (data.emailWarning) {
+            alert(`Accepted — but the student was not emailed.\n\n${data.emailWarning}`);
+          }
 
-        setReviewingResponse(null);
-        router.refresh();
-        return;
+          setReviewingResponse(null);
+          router.refresh();
+          return;
+        }
       }
 
       // Standard status update for non-accept statuses (rejected, waitlisted, etc.)
@@ -3262,7 +3291,7 @@ function ApplicantsTab({
           interviewFeedback={interviewFeedback}
           acceptConsequence={
             reviewingResponse.status === "accepted"
-              ? "ALREADY ACCEPTED — SAVING AGAIN ONLY UPDATES THE NOTE."
+              ? "ALREADY ACCEPTED — SAVING UPDATES THE NOTE, OR FINISHES ENROLMENT IF IT'S MISSING"
               : "ACCEPTING SENDS THE ACCEPTANCE EMAIL AND CREATES THEIR ENROLMENT."
           }
           busy={reviewLoading}
@@ -3523,6 +3552,7 @@ function ApplicantsTab({
                               placeholder="name@example.com"
                               className="h-8 text-sm"
                             />
+                            <p className="text-xs text-muted-foreground">{REFEREE_OTHER_PERSON_HINT}</p>
                           </div>
                           <p className="text-xs text-muted-foreground">
                             Changing the email sends a fresh invite to the new

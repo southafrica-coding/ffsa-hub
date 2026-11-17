@@ -1,0 +1,4 @@
+# scripts/patch-next-font-extension.cjs compares these fixtures byte for byte
+# with files in node_modules (LF). Keep them exactly as stored, so a Windows
+# checkout with core.autocrlf doesn't turn them into CRLF and fail npm ci.
+scripts/next-font-15.5.14/* -text

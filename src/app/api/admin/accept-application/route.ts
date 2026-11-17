@@ -19,6 +19,78 @@ import {
 } from "@/lib/email/placeholders";
 import { applicantEmailIlikePattern } from "@/lib/applications/applicant-identity";
 
+type EnrollmentLookup = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      ilike: (
+        column: string,
+        value: string
+      ) => {
+        maybeSingle: () => PromiseLike<{
+          data: { id?: string } | null;
+          error: { message: string } | null;
+        }>;
+      };
+      eq: (
+        column: string,
+        value: string
+      ) => {
+        eq: (
+          column: string,
+          value: string
+        ) => {
+          maybeSingle: () => PromiseLike<{
+            data: { id?: string } | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    };
+  };
+};
+
+// An application already marked accepted can still be finished when no
+// enrolment exists (the status dropdown used to save "accepted" and stop).
+// An enrolment row — including a soft-removed one — means Accept must stop,
+// or a second click would enrol, bill, and email again.
+async function acceptedApplicantAlreadyEnrolled(
+  admin: EnrollmentLookup,
+  app: {
+    user_id: string | null;
+    program_id: string;
+    applicant_email: string | null;
+  }
+): Promise<"yes" | "no" | "error"> {
+  let userId = app.user_id;
+  if (!userId) {
+    const email = app.applicant_email;
+    if (!email) return "no";
+    let pattern: string;
+    try {
+      pattern = applicantEmailIlikePattern(email);
+    } catch {
+      return "no";
+    }
+    const { data: account, error } = await admin
+      .from("users")
+      .select("id")
+      .ilike("email", pattern)
+      .maybeSingle();
+    if (error) return "error";
+    if (!account?.id) return "no";
+    userId = account.id as string;
+  }
+
+  const { data: enrollment, error: enrollmentError } = await admin
+    .from("enrollments")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("program_id", app.program_id)
+    .maybeSingle();
+  if (enrollmentError) return "error";
+  return enrollment?.id ? "yes" : "no";
+}
+
 
 export async function POST(request: Request) {
   // Verify the calling user has schools-management access
@@ -86,10 +158,33 @@ export async function POST(request: Request) {
   }
 
   if (appResponse.status === "accepted") {
-    return NextResponse.json(
-      { error: "This application has already been accepted" },
-      { status: 400 }
-    );
+    const infoEmail =
+      appResponse.applicant_info &&
+      typeof appResponse.applicant_info === "object" &&
+      "email" in appResponse.applicant_info &&
+      typeof appResponse.applicant_info.email === "string"
+        ? appResponse.applicant_info.email
+        : null;
+    const alreadyEnrolled = await acceptedApplicantAlreadyEnrolled(adminSupabase, {
+      user_id: appResponse.user_id,
+      program_id: appResponse.program_id,
+      applicant_email: appResponse.applicant_email ?? infoEmail,
+    });
+    if (alreadyEnrolled === "error") {
+      return NextResponse.json(
+        { error: "Could not check whether this applicant is already enrolled." },
+        { status: 500 }
+      );
+    }
+    if (alreadyEnrolled === "yes") {
+      return NextResponse.json(
+        {
+          error: "This application has already been accepted",
+          code: "already_enrolled",
+        },
+        { status: 400 }
+      );
+    }
   }
 
   const applicantInfo = appResponse.applicant_info as {
@@ -158,17 +253,58 @@ export async function POST(request: Request) {
     );
   }
 
-  // Update response status to accepted
-  const { error: statusError } = await adminSupabase
+  // Compare-and-set claim. Two Accepts can both see "no enrolment" and both
+  // pass the check above; only the update that still matches the status we
+  // read is allowed to create an account, send mail, enrol, or bill.
+  //
+  // A finish of an already-accepted row also holds a 5-minute lease on
+  // reviewed_at. Matching only the value this request read is not enough: the
+  // second request can load the reviewed_at the first one just wrote, before
+  // that first request inserts the enrolment, and then its claim matches.
+  // The lease refuses a recent reviewed_at before any write, and the update
+  // itself only matches when reviewed_at is still null or older than the lease.
+  const ACCEPT_LEASE_MS = 5 * 60 * 1000;
+  const reviewedAt = (appResponse as { reviewed_at?: string | null }).reviewed_at ?? null;
+  const nowMs = Date.now();
+  const leaseCutoff = new Date(nowMs - ACCEPT_LEASE_MS).toISOString();
+  if (previousStatus === "accepted" && reviewedAt) {
+    const reviewedMs = Date.parse(reviewedAt);
+    if (!Number.isNaN(reviewedMs) && reviewedMs > nowMs - ACCEPT_LEASE_MS) {
+      return NextResponse.json(
+        {
+          error:
+            "This application was accepted moments ago. If it didn't finish, try again in a few minutes.",
+        },
+        { status: 409 }
+      );
+    }
+  }
+  const claimedAt = new Date().toISOString();
+  const claimBase = adminSupabase
     .from("application_responses")
     .update({
       status: "accepted",
       reviewed_by: authUser.id,
-      reviewed_at: new Date().toISOString(),
+      reviewed_at: claimedAt,
     })
-    .eq("id", response_id);
-  if (statusError) {
-    return NextResponse.json({ error: statusError.message }, { status: 500 });
+    .eq("id", response_id)
+    .eq("status", previousStatus);
+  const claim =
+    previousStatus === "accepted"
+      ? (reviewedAt == null
+          ? claimBase.is("reviewed_at", null)
+          : claimBase.eq("reviewed_at", reviewedAt)
+        ).or(`reviewed_at.is.null,reviewed_at.lt.${leaseCutoff}`)
+      : claimBase;
+  const { data: claimed, error: claimError } = await claim.select("id");
+  if (claimError) {
+    return NextResponse.json({ error: claimError.message }, { status: 500 });
+  }
+  if (!claimed || claimed.length === 0) {
+    return NextResponse.json(
+      { error: "This application is already being accepted. Refresh and check." },
+      { status: 409 }
+    );
   }
 
   if (admin_notes !== undefined) {
@@ -184,6 +320,7 @@ export async function POST(request: Request) {
       { onConflict: "application_response_id" }
     );
     if (notesError) {
+      await revertStatus();
       return NextResponse.json({ error: notesError.message }, { status: 500 });
     }
   }
@@ -404,7 +541,8 @@ export async function POST(request: Request) {
   // and newly-created accounts.
   await ensureStudentRole(adminSupabase, userId, authUser.id);
 
-  // Create enrollment
+  // Create enrollment. insertedThisRequest is false when the unique pair
+  // already existed, so billing must not rebuild a schedule that is there.
   const { data: enrollRow, error: enrollError } = await adminSupabase
     .from("enrollments")
     .insert({
@@ -414,6 +552,7 @@ export async function POST(request: Request) {
     })
     .select("id")
     .single();
+  const insertedThisRequest = Boolean(enrollRow?.id);
 
   if (enrollError && !enrollError.message.includes("duplicate")) {
     return NextResponse.json(
@@ -475,7 +614,22 @@ export async function POST(request: Request) {
 
   // Auto-set up the full-program billing schedule and generate the deposit
   // invoice. Non-throwing — never blocks acceptance if billing isn't configured.
-  if (enrollmentId) {
+  // replaceScheduledRows rewrites the whole schedule, so a second call can
+  // send a second deposit. Bill only for the row this request inserted, or
+  // when that enrolment has no plan yet.
+  let billingAlreadyExists = false;
+  if (enrollmentId && !insertedThisRequest) {
+    // student_billing_plans predates the generated Database types, same as
+    // the segment tables above.
+    const planDb = adminSupabase as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const { data: plan, error: planError } = await planDb
+      .from("student_billing_plans")
+      .select("id")
+      .eq("enrollment_id", enrollmentId)
+      .maybeSingle();
+    if (planError || plan?.id) billingAlreadyExists = true;
+  }
+  if (enrollmentId && !billingAlreadyExists) {
     const billing = await setupProgramBillingOnAcceptance(
       adminSupabase,
       enrollmentId,

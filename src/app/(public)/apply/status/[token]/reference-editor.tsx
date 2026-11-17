@@ -1,6 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import {
+  REFEREE_OTHER_PERSON_HINT,
+  SELF_REFEREE_MESSAGE,
+  isSelfReferee,
+} from "@/lib/references/self-referee";
 
 // Dark-shell palette (mirrors PUBLIC_SHELL_TOKENS — kept local so this client
 // component doesn't pull the server shell module into the browser bundle).
@@ -40,10 +45,12 @@ export function ReferenceEditor({
   statusToken,
   references,
   missingSlots = [],
+  applicantEmails = [],
 }: {
   statusToken: string;
   references: EditableReference[];
   missingSlots?: MissingSlot[];
+  applicantEmails?: Array<string | null | undefined>;
 }) {
   const [rows, setRows] = useState<EditableReference[]>(references);
   const [pendingSlots, setPendingSlots] = useState<MissingSlot[]>(missingSlots);
@@ -69,6 +76,10 @@ export function ReferenceEditor({
     }
     if (!EMAIL_RE.test(trimmedEmail)) {
       setAddError((prev) => ({ ...prev, [slot.id]: "Please enter a valid email address." }));
+      return;
+    }
+    if (isSelfReferee(trimmedEmail, applicantEmails)) {
+      setAddError((prev) => ({ ...prev, [slot.id]: SELF_REFEREE_MESSAGE }));
       return;
     }
     setAddingSlotId(slot.id);
@@ -144,6 +155,10 @@ export function ReferenceEditor({
     }
     if (!EMAIL_RE.test(trimmedEmail)) {
       setError("Please enter a valid email address.");
+      return;
+    }
+    if (isSelfReferee(trimmedEmail, applicantEmails)) {
+      setError(SELF_REFEREE_MESSAGE);
       return;
     }
     setSaving(true);
@@ -338,6 +353,7 @@ export function ReferenceEditor({
                       style={inputStyle}
                     />
                   </label>
+                  <p style={{ fontSize: 11, color: C.faint, marginTop: 6 }}>{REFEREE_OTHER_PERSON_HINT}</p>
 
                   <p style={{ fontSize: 11, color: C.faint, marginTop: 8 }}>
                     Changing the email sends a fresh request to the new address;
@@ -441,6 +457,7 @@ export function ReferenceEditor({
                         style={inputStyle}
                       />
                     </label>
+                    <p style={{ fontSize: 11, color: C.faint, marginTop: 6 }}>{REFEREE_OTHER_PERSON_HINT}</p>
 
                     {addError[slot.id] && (
                       <p style={{ fontSize: 12, color: "hsl(0 75% 70%)", marginTop: 6 }}>

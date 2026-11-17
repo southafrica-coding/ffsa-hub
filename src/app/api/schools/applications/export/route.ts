@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { applicationExpiryDenial } from "@/lib/auth/application-expiry";
 import { adminNotesByResponse } from "@/lib/schools/admin-notes";
+import { REFERENCE_REQUEST_WITH_SLOT_LABEL } from "@/lib/references/reference-request-columns";
 
 function escapeCsvValue(value: string): string {
   if (
@@ -107,7 +108,7 @@ export async function GET(request: Request) {
   if (applicationIds.length > 0) {
     const { data: refRequests } = await (supabase as any)
       .from("reference_requests")
-      .select("*, reference_slots(label)")
+      .select(REFERENCE_REQUEST_WITH_SLOT_LABEL)
       .in("application_id", applicationIds);
 
     for (const ref of (refRequests ?? []) as any[]) {

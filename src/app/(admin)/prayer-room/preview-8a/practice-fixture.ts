@@ -59,6 +59,7 @@ export const PRACTICE: PracticeWeek = {
     pb("2026-08-07", "16:30", "17:30", "drums", ["Sample Person 199"]),
     pb("2026-08-07", "16:30", "17:30", "bass", ["Sample Person 190"]),
   ],
+  closures: [],
   days: ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07"],
   opensAt: "2026-08-02T00:00",
   nextOpensAt: "2026-08-09T00:00",

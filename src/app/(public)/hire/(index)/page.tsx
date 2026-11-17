@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils/cn";
 import { rangeLabel, readRange, sastToday } from "@/lib/equipment/dates";
 import { categoryIds, loadStore, withDates } from "@/lib/equipment/storefront";
-import { DateBar, ItemCard } from "../_components/store-ui";
+import { DateBar, HelperBanner, ItemCard } from "../_components/store-ui";
 
 export default async function HireHome({
   searchParams,
@@ -70,6 +70,8 @@ export default async function HireHome({
         </section>
       ) : (
         <>
+          <HelperBanner range={range} className="mx-[18px] mt-4 md:mx-10" />
+
           {/* ── Browse ── */}
           <section className="px-[18px] pt-6 md:px-10 md:pt-14">
             <div className="mb-3 flex items-baseline justify-between md:mb-5">

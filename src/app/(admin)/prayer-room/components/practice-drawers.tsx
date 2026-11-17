@@ -32,6 +32,7 @@ import {
   type PracticeWeek,
   type RowState,
 } from "@/lib/prayer-room/practice";
+import { closureCovering } from "@/lib/prayer-room/room-closure";
 import { fullName, type Person } from "./helpers";
 
 type Pick = { id: string; name: string };
@@ -173,7 +174,9 @@ function Foot({ children }: { children: React.ReactNode }) {
 }
 
 /** Why the primary button can't be pressed, or null when it can. */
-function blockedReason(week: PracticeWeek, date: string, end: number): string | null {
+function blockedReason(week: PracticeWeek, date: string, start: number, end: number): string | null {
+  const shut = closureCovering(week.closures, date, start, end);
+  if (shut) return shut.label.toUpperCase();
   if (!week.me.canBook) return "ONLY PEOPLE IN THE PRAYER ROOM CAN BOOK";
   if (isPast(week, date, end)) return "THIS TIME HAS GONE";
   if (!isOpenYet(week)) return `OPENS ${shortDayLabel(week.opensAt)}`;
@@ -231,6 +234,8 @@ function StationDrawer({
   const longer = useMemo(() => {
     if (!station) return { ok: false, note: "" };
     if (!next) return { ok: false, note: `Practice ends at ${settings.end_time}.` };
+    const nextShut = closureCovering(week.closures, date, start + slot, start + 2 * slot);
+    if (nextShut) return { ok: false, note: `${nextShut.label}.` };
     if (next.band) return { ok: false, note: `A band has the room at ${hhmm(start + slot)}.` };
     if (next.byStation.has(station.id)) {
       return { ok: false, note: `${station.label} is taken at ${hhmm(start + slot)}.` };
@@ -239,14 +244,14 @@ function StationDrawer({
       ok: true,
       note: `${station.label} is free at ${hhmm(start + slot)} too. You'll have ${hhmm(start)}–${hhmm(start + 2 * slot)}.`,
     };
-  }, [station, next, settings.end_time, start, slot]);
+  }, [station, next, settings.end_time, start, slot, week.closures, date]);
 
   useEffect(() => {
     if (!longer.ok && minutes > slot) setMinutes(slot);
   }, [longer.ok, minutes, slot]);
 
   const end = start + minutes;
-  const blocked = blockedReason(week, date, end);
+  const blocked = blockedReason(week, date, start, end);
   const taken = row.byStation.size;
   const people = group ? singers.length + 1 : 1;
 
@@ -599,7 +604,7 @@ function BandDrawer({
   const flatLineup = () =>
     Object.entries(lineup).flatMap(([station_id, ps]) => ps.map((p) => ({ station_id, user_id: p.id })));
 
-  const blocked = span ? blockedReason(week, date, span.end) : null;
+  const blocked = span ? blockedReason(week, date, span.start, span.end) : null;
 
   async function book() {
     if (!span) return;
@@ -668,6 +673,7 @@ function BandDrawer({
           {rows.map((r) => {
             const on = picked.includes(r.start);
             const gone = isPast(week, date, r.end);
+            const shut = closureCovering(week.closures, date, r.start, r.end);
             if (r.band) {
               return (
                 <div key={r.start} className="flex items-center gap-3 border border-[#E7E4D9] bg-[#FBFAF6] px-3.5 py-3">
@@ -682,7 +688,7 @@ function BandDrawer({
             }
             // A row with people in it is greyed for everyone (rule 8). Only an
             // admin can pick it anyway, and that goes through 36d.
-            const locked = (r.people > 0 && !week.me.isStaff) || gone;
+            const locked = !!shut || (r.people > 0 && !week.me.isStaff) || gone;
             return (
               <button
                 key={r.start}
@@ -693,7 +699,7 @@ function BandDrawer({
                   PLAIN_BUTTON,
                   "flex items-start gap-3 px-3.5 py-3 text-left",
                   on ? "border-2 border-ink" : "border border-[#E7E4D9]",
-                  (r.people > 0 || gone) && !on && "bg-[#FBFAF6]"
+                  (shut || r.people > 0 || gone) && !on && "bg-[#E7E4D9]"
                 )}
               >
                 <span
@@ -707,7 +713,7 @@ function BandDrawer({
                     <span
                       className={cn(
                         "font-mono text-[11px] font-bold",
-                        r.people > 0 || gone ? "text-[#9A9689]" : "text-ink"
+                        shut || r.people > 0 || gone ? "text-[#9A9689]" : "text-ink"
                       )}
                     >
                       {range(r.start, r.end)}
@@ -716,10 +722,10 @@ function BandDrawer({
                     <span
                       className={cn(
                         "font-mono text-[9px] font-bold tracking-[0.1em]",
-                        gone ? "text-[#9A9689]" : r.people ? "text-[#8A6400]" : "text-[#3E7F2B]"
+                        shut || gone ? "text-[#9A9689]" : r.people ? "text-[#8A6400]" : "text-[#3E7F2B]"
                       )}
                     >
-                      {gone ? "GONE" : r.people ? `${r.people} PRACTISING` : "EMPTY"}
+                      {shut ? shut.label.toUpperCase() : gone ? "GONE" : r.people ? `${r.people} PRACTISING` : "EMPTY"}
                     </span>
                   </div>
                   {r.people > 0 && !gone && (

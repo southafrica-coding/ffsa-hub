@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import { shiftDays, weekRangeLabel } from "@/lib/bookings/dates";
+import { closureCovering } from "@/lib/prayer-room/room-closure";
 import {
   PLAIN_BUTTON,
   bookingNames,
@@ -280,8 +281,26 @@ export function AfternoonWall({
                   {rows.map((r) => {
                     const st = rowState(week.bookings, stations, iso, r.start, r.end);
                     if (st.band) return null; // drawn once, below
+                    const shut = closureCovering(week.closures, iso, r.start, r.end);
                     const { text, mine } = rowNames(st, week, userId);
                     const taken = st.byStation.size;
+                    if (shut && taken === 0) {
+                      return (
+                        <div
+                          key={r.start}
+                          title={shut.label}
+                          className="absolute inset-x-1 py-0.5"
+                          style={{ top: y(r.start), height: (r.end - r.start) * PX }}
+                        >
+                          <div className="flex h-full items-center gap-[7px] overflow-hidden border border-[#C7C3B5] bg-[#E7E4D9] px-2">
+                            <span className="font-mono text-[9px] font-bold text-[#6B675C]">{hhmm(r.start)}</span>
+                            <span className="truncate font-mono text-[8.5px] font-bold uppercase tracking-[0.1em] text-[#55524A]">
+                              {shut.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
                     return (
                       <button
                         key={r.start}
@@ -292,8 +311,9 @@ export function AfternoonWall({
                       >
                         <div
                           className={cn(
-                            "flex h-full flex-col justify-center gap-[3px] overflow-hidden bg-white px-2 py-1 hover:border-ink",
-                            mine ? "border-[1.5px] border-ink" : "border border-rule-strong"
+                            "flex h-full flex-col justify-center gap-[3px] overflow-hidden px-2 py-1 hover:border-ink",
+                            shut ? "border border-[#C7C3B5] bg-[#E7E4D9]" : "bg-white",
+                            mine ? "border-[1.5px] border-ink" : !shut && "border border-rule-strong"
                           )}
                         >
                           <div className="flex items-center gap-[7px]">
@@ -306,7 +326,7 @@ export function AfternoonWall({
                                 taken ? "text-[#55524A]" : "text-[#3E7F2B]"
                               )}
                             >
-                              {stations.length - taken} OPEN
+                              {shut ? shut.label : `${stations.length - taken} OPEN`}
                             </span>
                           </div>
                           <div
@@ -325,6 +345,7 @@ export function AfternoonWall({
                   {dayBands.map((b) => {
                     const a = toMin(b.start_time);
                     const e = toMin(b.end_time);
+                    const shut = closureCovering(week.closures, iso, a, e);
                     return (
                       <button
                         key={b.id}
@@ -333,14 +354,21 @@ export function AfternoonWall({
                         className={cn("absolute inset-x-1 py-0.5 text-left", PLAIN_BUTTON)}
                         style={{ top: y(a), height: (e - a) * PX }}
                       >
-                        <div className="flex h-full flex-col justify-center gap-[3px] overflow-hidden border-2 border-ink bg-white px-2 py-1">
+                        <div
+                          className={cn(
+                            "flex h-full flex-col justify-center gap-[3px] overflow-hidden border-2 px-2 py-1",
+                            shut ? "border-[#C7C3B5] bg-[#E7E4D9]" : "border-ink bg-white"
+                          )}
+                        >
                           <div className="flex items-center gap-[7px]">
                             <span className="font-mono text-[9px] font-bold text-ink">
                               {hhmm(a)} – {hhmm(e)}
                             </span>
                             <Squares stations={week.stations.map(() => true)} />
                             <span className="flex-1" />
-                            <span className="font-mono text-[8px] font-bold tracking-[0.08em] text-ink">FULL BAND</span>
+                            <span className="font-mono text-[8px] font-bold tracking-[0.08em] text-ink">
+                              {shut ? shut.label : "FULL BAND"}
+                            </span>
                           </div>
                           <div className="truncate text-[10.5px] font-bold text-ink">{b.band_name}</div>
                         </div>
@@ -450,21 +478,31 @@ export function PhonePractice({
         ) : (
           rows.map((r) => {
             const st = rowState(week.bookings, stations, day, r.start, r.end);
+            const shut = closureCovering(week.closures, day, r.start, r.end);
             return (
               <div key={r.start} className="border border-ink">
-                <div className="flex items-baseline justify-between border-b border-ink bg-bone px-3 py-2.5">
+                <div
+                  className={cn(
+                    "flex items-baseline justify-between border-b border-ink px-3 py-2.5",
+                    shut ? "bg-[#E7E4D9]" : "bg-bone"
+                  )}
+                >
                   <span className="font-display text-[19px] font-black leading-none tabular-nums text-ink">
                     {hhmm(r.start)} – {hhmm(r.end)}
                   </span>
                   <span className="font-mono text-[9px] font-bold tracking-[0.1em] text-[#55524A]">
-                    {st.band ? "FULL BAND" : `${st.open} OF ${stations.length} OPEN`}
+                    {shut ? shut.label : st.band ? "FULL BAND" : `${st.open} OF ${stations.length} OPEN`}
                   </span>
                 </div>
                 {st.band ? (
                   <button
                     type="button"
                     onClick={() => onOpen({ kind: "row", date: day, start: r.start })}
-                    className={cn("block min-h-[48px] w-full px-3 py-3 text-left", PLAIN_BUTTON)}
+                    className={cn(
+                      "block min-h-[48px] w-full px-3 py-3 text-left",
+                      PLAIN_BUTTON,
+                      shut && "bg-[#E7E4D9]"
+                    )}
                   >
                     <div className="font-display text-[18px] font-black uppercase leading-none text-ink">
                       {st.band.band_name}
@@ -482,13 +520,21 @@ export function PhonePractice({
                         <button
                           key={s.id}
                           type="button"
-                          onClick={() => onOpen({ kind: "row", date: day, start: r.start, stationId: b ? undefined : s.id })}
+                          onClick={() => {
+                            if (shut && !b) {
+                              toast(shut.label);
+                              return;
+                            }
+                            onOpen({ kind: "row", date: day, start: r.start, stationId: b ? undefined : s.id });
+                          }}
                           className={cn(
                             PLAIN_BUTTON,
                             "flex min-h-[48px] flex-col items-center justify-center gap-0.5 p-1",
-                            b
-                              ? cn("bg-bone", mine ? "border-[1.5px] border-ink" : "border border-[#E7E4D9]")
-                              : "border border-ink bg-white"
+                            shut && !b
+                              ? "border border-[#C7C3B5] bg-[#E7E4D9] text-[#6B675C]"
+                              : b
+                                ? cn("bg-bone", mine ? "border-[1.5px] border-ink" : "border border-[#E7E4D9]")
+                                : "border border-ink bg-white"
                           )}
                         >
                           <span
@@ -502,27 +548,35 @@ export function PhonePractice({
                           <span
                             className={cn(
                               "max-w-full truncate text-[10.5px]",
-                              b ? (mine ? "font-bold text-ink" : "text-[#55524A]") : "text-[#3E7F2B]"
+                              b
+                                ? mine
+                                  ? "font-bold text-ink"
+                                  : "text-[#55524A]"
+                                : shut
+                                  ? "text-[#6B675C]"
+                                  : "text-[#3E7F2B]"
                             )}
                           >
-                            {b ? (mine ? "You" : bookingNames(b)) : "Open"}
+                            {b ? (mine ? "You" : bookingNames(b)) : shut ? "Closed" : "Open"}
                           </span>
                         </button>
                       );
                     })}
                     <button
                       type="button"
-                      aria-disabled={st.people > 0}
+                      aria-disabled={!!shut || st.people > 0}
                       onClick={() =>
-                        st.people > 0
-                          ? toast(`${practisingPhrase(st.people)}.`, {
-                              description: "A band can only book an empty row. Only an admin can move people.",
-                            })
-                          : onOpen({ kind: "band", date: day, start: r.start })
+                        shut
+                          ? toast(shut.label)
+                          : st.people > 0
+                            ? toast(`${practisingPhrase(st.people)}.`, {
+                                description: "A band can only book an empty row. Only an admin can move people.",
+                              })
+                            : onOpen({ kind: "band", date: day, start: r.start })
                       }
                       className={cn(
                         "flex min-h-[48px] items-center justify-center border border-dashed border-rule-strong text-center font-mono text-[8.5px] font-bold leading-tight tracking-[0.06em]",
-                        st.people > 0 ? "text-rule-strong" : "text-ink"
+                        shut || st.people > 0 ? "text-rule-strong" : "text-ink"
                       )}
                     >
                       FULL

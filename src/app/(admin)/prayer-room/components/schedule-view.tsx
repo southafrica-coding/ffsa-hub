@@ -31,6 +31,7 @@ import {
   monthParam,
 } from "@/lib/bookings/dates";
 import { ROLES, roleLabel, fullName, toISODate, addDays, formatDateLabel } from "./helpers";
+import { AUDITORIUM_BOOKED_LABEL, auditoriumClosuresToDraw, type RoomClosure } from "@/lib/prayer-room/room-closure";
 
 type ViewKind = "wall" | "month" | "day" | "list";
 
@@ -59,6 +60,32 @@ interface Props {
 
 function ymOf(iso: string) {
   return { year: parseInt(iso.slice(0, 4), 10), month: parseInt(iso.slice(5, 7), 10) };
+}
+
+/** Approved auditorium bookings, labelled generically. A failed read is logged
+ *  and leaves the wall up — it must not take the schedule down with it. */
+async function loadAuditoriumBlocks(from: string, to: string): Promise<CalendarBlockout[]> {
+  try {
+    const res = await fetch(`/api/prayer-room/room-closures?from=${from}&to=${to}`);
+    if (!res.ok) {
+      console.error("Auditorium bookings could not be loaded for the prayer room", res.status);
+      return [];
+    }
+    const rows: unknown = await res.json();
+    if (!Array.isArray(rows)) return [];
+    return (rows as RoomClosure[]).map((c) => ({
+      id: c.id,
+      block_date: c.block_date,
+      end_date: c.end_date,
+      start_time: c.start_time,
+      end_time: c.end_time,
+      reason: AUDITORIUM_BOOKED_LABEL,
+      relocation_note: null,
+    }));
+  } catch (e) {
+    console.error("Auditorium bookings could not be loaded for the prayer room", e);
+    return [];
+  }
 }
 
 /** Date range to fetch for the current view + anchor. */
@@ -97,14 +124,17 @@ export default function ScheduleView({ userId, isStaff, isMember, inCatalogue, t
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [setsRes, blockoutsRes, sugRes] = await Promise.all([
+      const [setsRes, blockoutsRes, sugRes, auditorium] = await Promise.all([
         fetch(`/api/prayer-room/sets?dateFrom=${from}&dateTo=${to}`),
         fetch(`/api/prayer-room/blockouts?from=${from}&to=${to}`),
         // Staff also see Space Bookings still waiting on a block-out.
         isStaff ? fetch("/api/prayer-room/booking-suggestions") : Promise.resolve(null),
+        loadAuditoriumBlocks(from, to),
       ]);
       setSets(setsRes.ok ? await setsRes.json() : []);
-      const real: CalendarBlockout[] = blockoutsRes.ok ? await blockoutsRes.json() : [];
+      const real: (CalendarBlockout & { source_booking_id?: string | null })[] = blockoutsRes.ok
+        ? await blockoutsRes.json()
+        : [];
       const pending: CalendarBlockout[] = [];
       if (sugRes?.ok) {
         const { suggestions } = (await sugRes.json()) as SuggestionsPayload;
@@ -124,7 +154,13 @@ export default function ScheduleView({ userId, isStaff, isMember, inCatalogue, t
           }
         }
       }
-      setBlockouts([...real, ...pending]);
+      // A booking that already has a block-out or a pending suggestion is
+      // drawn by that layer alone, so the hatch is not doubled.
+      const covered = [
+        ...real.map((b) => b.source_booking_id).filter((id): id is string => !!id),
+        ...pending.map((p) => (p.id.startsWith("pending:") ? p.id.slice("pending:".length) : "")),
+      ].filter(Boolean);
+      setBlockouts([...auditoriumClosuresToDraw(auditorium, covered), ...real, ...pending]);
     } finally {
       setLoading(false);
     }

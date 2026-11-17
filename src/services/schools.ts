@@ -1,4 +1,13 @@
 import { applicantEmailIlikePattern } from "@/lib/applications/applicant-identity";
+import {
+  REFERENCE_REQUEST_COLUMN_LIST,
+  REFERENCE_REQUEST_WITH_SLOT,
+} from "@/lib/references/reference-request-columns";
+import {
+  isSelfReferee,
+  loadApplicantEmails,
+  SELF_REFEREE_MESSAGE,
+} from "@/lib/references/self-referee";
 import { redactInterviewNotesForViewer } from "@/lib/schools/interview-review-form";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -347,12 +356,14 @@ export async function removeEnrollmentForApplicant(
  * A public application carries no user_id, so we resolve the account by email
  * first — case-insensitively, because a self-registered address rarely matches
  * the typed one exactly — and link the application to it. If there is still no
- * account we stop: creating one means invites and acceptance emails, which is
- * the Accept route's job, not a status change's.
+ * account we stop and write nothing: creating one means invites and acceptance
+ * emails, which is the Accept route's job. Callers must not persist
+ * status = accepted when the outcome is no_account.
  *
  * Returns { enrollmentId, outcome } so the caller can tell the difference
- * between "already fine", "created", "restored" and "no account to enrol".
- * Call with the service-role client.
+ * between "already fine", "created", "restored", "no account to enrol" and
+ * "the enrolment write failed". A database error is enroll_failed, never
+ * no_account. Call with the service-role client.
  */
 export async function ensureEnrollmentForApplicant(
   supabase: Client,
@@ -360,7 +371,7 @@ export async function ensureEnrollmentForApplicant(
   actorId: string
 ): Promise<{
   enrollmentId: string | null;
-  outcome: "existing" | "created" | "restored" | "no_account";
+  outcome: "existing" | "created" | "restored" | "no_account" | "enroll_failed";
 }> {
   let userId = response.user_id;
 
@@ -368,12 +379,29 @@ export async function ensureEnrollmentForApplicant(
     const email = response.applicant_email?.trim();
     if (!email) return { enrollmentId: null, outcome: "no_account" };
 
-    const { data: account } = await supabase
+    let pattern: string;
+    try {
+      pattern = applicantEmailIlikePattern(email);
+    } catch {
+      // `*` cannot be escaped in a PostgREST filter (a backslash does not
+      // stop it acting as a wildcard). Refuse the lookup rather than risk
+      // linking the wrong account. Callers treat this like no account.
+      return { enrollmentId: null, outcome: "no_account" };
+    }
+
+    const { data: account, error: accountError } = await supabase
       .from("users")
       .select("id")
-      .ilike("email", email)
+      .ilike("email", pattern)
       .maybeSingle();
 
+    if (accountError) {
+      console.error(
+        "[schools] failed to look up an account for an accepted applicant:",
+        accountError.message
+      );
+      return { enrollmentId: null, outcome: "enroll_failed" };
+    }
     if (!account) return { enrollmentId: null, outcome: "no_account" };
     userId = account.id as string;
 
@@ -383,12 +411,20 @@ export async function ensureEnrollmentForApplicant(
       .eq("id", response.id);
   }
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("enrollments")
     .select("id, removed_at")
     .eq("user_id", userId)
     .eq("program_id", response.program_id)
     .maybeSingle();
+
+  if (existingError) {
+    console.error(
+      "[schools] failed to read enrollment for accepted applicant:",
+      existingError.message
+    );
+    return { enrollmentId: null, outcome: "enroll_failed" };
+  }
 
   if (existing) {
     // (user_id, program_id) is unique, so a re-accepted applicant reuses the
@@ -406,7 +442,7 @@ export async function ensureEnrollmentForApplicant(
         "[schools] failed to restore enrollment for accepted applicant:",
         error.message
       );
-      return { enrollmentId: null, outcome: "no_account" };
+      return { enrollmentId: null, outcome: "enroll_failed" };
     }
     return { enrollmentId: existing.id as string, outcome: "restored" };
   }
@@ -427,7 +463,7 @@ export async function ensureEnrollmentForApplicant(
       "[schools] failed to create enrollment for accepted applicant:",
       error.message
     );
-    return { enrollmentId: null, outcome: "no_account" };
+    return { enrollmentId: null, outcome: "enroll_failed" };
   }
   return { enrollmentId: created.id as string, outcome: "created" };
 }
@@ -948,13 +984,32 @@ export async function deleteReferenceSlot(supabase: Client, id: string) {
 // REFERENCE REQUESTS
 // ────────────────────────────────────────────────────────────
 
+function referenceWriteRefusal(message: string) {
+  return {
+    data: null,
+    error: { message, details: "", hint: "", code: "self_referee" },
+  };
+}
+
 export async function createReferenceRequest(supabase: Client, data: {
   application_id: string;
   slot_id: string;
   referee_name: string;
   referee_email: string;
 }) {
-  return supabase.from("reference_requests").insert(data).select().single();
+  const loaded = await loadApplicantEmails(supabase, data.application_id);
+  if (loaded.error) return referenceWriteRefusal(loaded.error);
+  if (isSelfReferee(data.referee_email, loaded.emails)) {
+    return referenceWriteRefusal(SELF_REFEREE_MESSAGE);
+  }
+  // The column default generates token. RETURNING it requires SELECT on token,
+  // which only service_role still has. A user client fails closed here.
+  // Callers are the admin invite paths and they email this token.
+  return supabase
+    .from("reference_requests")
+    .insert(data)
+    .select("id, application_id, slot_id, referee_name, referee_email, status, token")
+    .single();
 }
 
 // Update a reference request's contact details (and, when the email is being
@@ -974,12 +1029,26 @@ export async function updateReferenceRequest(
     reminder_sent_at?: string | null;
   }
 ) {
+  if (typeof data.referee_email === "string") {
+    const { data: row, error: rowError } = await supabase
+      .from("reference_requests")
+      .select("application_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (rowError) return { data: null, error: rowError };
+    if (!row?.application_id) return referenceWriteRefusal("Application not found.");
+    const loaded = await loadApplicantEmails(supabase, row.application_id);
+    if (loaded.error) return referenceWriteRefusal(loaded.error);
+    if (isSelfReferee(data.referee_email, loaded.emails)) {
+      return referenceWriteRefusal(SELF_REFEREE_MESSAGE);
+    }
+  }
   return supabase
     .from("reference_requests")
     .update(data)
     .eq("id", id)
     .eq("status", "pending")
-    .select()
+    .select(REFERENCE_REQUEST_COLUMN_LIST)
     .single();
 }
 
@@ -1023,15 +1092,19 @@ export async function getInterviewReviewSummaries(
 export async function getReferenceRequestsByApplication(supabase: Client, applicationId: string) {
   return supabase
     .from("reference_requests")
-    .select("*, reference_slots(label, description)")
+    .select(REFERENCE_REQUEST_WITH_SLOT)
     .eq("application_id", applicationId)
     .order("created_at", { ascending: true });
 }
 
 export async function getReferenceRequestByToken(supabase: Client, token: string) {
+  // Filter is the invite secret. Authenticated cannot use that column;
+  // callers pass the service-role client.
   return supabase
     .from("reference_requests")
-    .select("*, reference_slots(label, description), application_responses(id, program_id, user_id, applicant_email, applicant_info, programs(name, code))")
+    .select(
+      `${REFERENCE_REQUEST_COLUMN_LIST}, reference_slots(label, description), application_responses(id, program_id, user_id, applicant_email, applicant_info, programs(name, code))`
+    )
     .eq("token", token)
     .single();
 }
@@ -1050,7 +1123,7 @@ export async function submitReference(
     })
     .eq("token", token)
     .eq("status", "pending")
-    .select()
+    .select(REFERENCE_REQUEST_COLUMN_LIST)
     .single();
 }
 

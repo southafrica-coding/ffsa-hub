@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils/cn";
 import { MapPin } from "lucide-react";
 import { displayName, offSiteLocation, type Person } from "./helpers";
 import { weekDays } from "@/lib/bookings/dates";
+import { closureCovering } from "@/lib/prayer-room/room-closure";
 import {
   boWin,
   blockoutTip,
@@ -637,6 +638,21 @@ function PracticeColumn({
       />
       {rows.map((r) => {
         if (r.band) return null;
+        const shut = closureCovering(week.closures, iso, r.start, r.end);
+        if (shut && r.byStation.size === 0) {
+          return (
+            <div
+              key={r.start}
+              title={shut.label}
+              className="absolute left-0 right-0 z-10 mx-[1px] flex items-center overflow-hidden border border-[#C7C3B5] bg-[#E7E4D9] px-1"
+              style={{ top: top(r.start) + 1.5, height: (r.end - r.start) * PX_PER_MIN - 3 }}
+            >
+              <span className="truncate font-mono text-[7.5px] font-bold uppercase tracking-[0.08em] text-[#55524A]">
+                {shut.label}
+              </span>
+            </div>
+          );
+        }
         let mine = false;
         const names = week.stations
           .filter((s) => r.byStation.has(s.id))
@@ -653,11 +669,16 @@ function PracticeColumn({
             key={r.start}
             type="button"
             onClick={() => onOpen?.(iso, r.start)}
-            title={`Practice ${hhmm(r.start)}–${hhmm(r.end)} · ${r.open} of ${week.stations.length} open${names.length ? ` · ${names.join(", ")}` : ""}`}
+            title={
+              shut
+                ? `${shut.label} · ${hhmm(r.start)}–${hhmm(r.end)}`
+                : `Practice ${hhmm(r.start)}–${hhmm(r.end)} · ${r.open} of ${week.stations.length} open${names.length ? ` · ${names.join(", ")}` : ""}`
+            }
             className={cn(
               PLAIN_BUTTON,
-              "absolute left-0 right-0 z-10 mx-[1px] flex items-center gap-1 overflow-hidden bg-white px-1 text-left hover:border-ink",
-              mine ? "border-[1.5px] border-ink" : "border border-rule-strong"
+              "absolute left-0 right-0 z-10 mx-[1px] flex items-center gap-1 overflow-hidden px-1 text-left hover:border-ink",
+              shut ? "border border-[#C7C3B5] bg-[#E7E4D9]" : "bg-white",
+              mine ? "border-[1.5px] border-ink" : !shut && "border border-rule-strong"
             )}
             style={{ top: top(r.start) + 1.5, height: (r.end - r.start) * PX_PER_MIN - 3 }}
           >
@@ -679,7 +700,7 @@ function PracticeColumn({
                 mine ? "font-bold text-ink" : "text-[#55524A]"
               )}
             >
-              {names.length ? names.join(" · ") : `${r.open} open`}
+              {shut ? shut.label : names.length ? names.join(" · ") : `${r.open} open`}
             </span>
           </button>
         );
@@ -687,15 +708,17 @@ function PracticeColumn({
       {bands.map((b) => {
         const a = practiceMin(b.start_time);
         const e = practiceMin(b.end_time);
+        const shut = closureCovering(week.closures, iso, a, e);
         return (
           <button
             key={b.id}
             type="button"
             onClick={() => onOpen?.(iso, a)}
-            title={`Full band · ${b.band_name} · ${hhmm(a)}–${hhmm(e)}`}
+            title={shut ? `${shut.label} · ${b.band_name}` : `Full band · ${b.band_name} · ${hhmm(a)}–${hhmm(e)}`}
             className={cn(
               PLAIN_BUTTON,
-              "absolute left-0 right-0 z-10 mx-[1px] flex items-center gap-1 overflow-hidden border-2 border-ink bg-white px-1 text-left"
+              "absolute left-0 right-0 z-10 mx-[1px] flex items-center gap-1 overflow-hidden border-2 px-1 text-left",
+              shut ? "border-[#C7C3B5] bg-[#E7E4D9]" : "border-ink bg-white"
             )}
             style={{ top: top(a) + 1.5, height: (e - a) * PX_PER_MIN - 3 }}
           >

@@ -10,6 +10,7 @@ import {
   setResponseRemoved,
   removeEnrollmentForApplicant,
   ensureEnrollmentForApplicant,
+  setEnrollmentRemoved,
 } from "@/services/schools";
 import {
   programIdsForTargets,
@@ -42,6 +43,7 @@ import { sendAcceptanceToLinkedAccount } from "@/lib/schools/acceptance-email";
 import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-rejected";
 import { applicationWaitlistedEmailHtml } from "@/lib/email/templates/application-waitlisted";
 import { interviewScheduledEmailHtml } from "@/lib/email/templates/interview-scheduled";
+import { selfRefereeError } from "@/lib/references/self-referee";
 
 
 export async function POST(request: Request) {
@@ -176,6 +178,26 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+  }
+
+  const { data: account, error: accountError } = await supabase
+    .from("users")
+    .select("email")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (accountError) {
+    return NextResponse.json(
+      { error: "Could not check the referee email." },
+      { status: 500 }
+    );
+  }
+  const selfReferee = selfRefereeError(
+    submittedRefs,
+    [user.email, account?.email],
+    requiredSlotsCheck ?? []
+  );
+  if (selfReferee) {
+    return NextResponse.json({ error: selfReferee }, { status: 400 });
   }
 
   // Persist nationality / home country the same way the public flow does, so
@@ -382,6 +404,24 @@ function getApplicantDetails(response: any) {
   return { email, firstName: firstName || "there" };
 }
 
+// Shown when a status change would mark someone accepted without an account
+// to enrol. The Accept action is what invites them.
+const NO_ACCOUNT_ACCEPT_MESSAGE =
+  "This applicant has no account yet, so they were not marked accepted. Use Accept to invite them, enrol them, and send the acceptance email.";
+
+const ENROLL_FAILED_MESSAGE =
+  "Could not enrol this applicant, so they were not marked accepted.";
+
+const ENROLL_FAILED_SINGLE = "Could not enrol; status unchanged.";
+
+type ApplicantForEnrollment = {
+  id: string;
+  status?: string;
+  user_id?: string | null;
+  program_id?: string | null;
+  applicant_email?: string | null;
+};
+
 // Status, acceptance, and admin notes stay with people who manage the
 // school. Program staff write application_staff_reviews instead, and
 // userCanManageProgram is false for them.
@@ -437,13 +477,14 @@ export async function PUT(request: Request) {
     const adminSupabase = createAdminClient();
     const { data: existingRows, error: existingError } = await adminSupabase
       .from("application_responses")
-      .select("id, status")
+      .select("id, status, user_id, program_id, applicant_email")
       .in("id", ids);
     if (existingError) {
       return NextResponse.json({ error: existingError.message }, { status: 500 });
     }
+    const rows = (existingRows ?? []) as ApplicantForEnrollment[];
     if (
-      (existingRows ?? []).some((row) =>
+      rows.some((row) =>
         acceptedRegressNeedsConfirm(row.status, status, confirmRegress)
       )
     ) {
@@ -456,29 +497,57 @@ export async function PUT(request: Request) {
         { status: 409 }
       );
     }
-    const previousById = new Map(
-      (existingRows ?? []).map((row) => [row.id as string, row.status as string])
-    );
+    const previousById = new Map(rows.map((row) => [row.id, row.status as string]));
+    const rowById = new Map(rows.map((row) => [row.id, row]));
     let updated = 0;
-    // Accepted applicants we could not put on the roster because no account
-    // exists for their email yet. Reported back rather than swallowed — they
-    // need the Accept button, which invites them.
-    const notEnrolled: string[] = [];
+    // Rows left on their previous status. no_account needs Accept; enroll_failed
+    // is a database error and must not be described as a missing account.
+    const skipped: Array<{
+      id: string;
+      code: "no_account" | "enroll_failed";
+      message: string;
+    }> = [];
+    const failures: Array<{ id: string; code: "status_failed"; message: string }> = [];
     // Acceptance emails that could not be delivered — returned so the admin
     // sees them instead of a clean success.
     const emailWarnings: string[] = [];
 
-    // Previous statuses, so re-saving an already-accepted application doesn't
-    // email the student a second time.
-    const { data: prevRows } = await adminSupabase
-      .from("application_responses")
-      .select("id, status")
-      .in("id", ids);
-    const prevStatusById = new Map<string, string>(
-      ((prevRows ?? []) as Array<{ id: string; status: string }>).map((r) => [r.id, r.status])
-    );
-
     for (const responseId of ids) {
+      // Enrol before the status write. no_account writes nothing, so the row
+      // stays where it was. An account is enrolled first, then marked accepted,
+      // so a saved "accepted" always has an enrolment behind it.
+      let enrollmentResult: Awaited<ReturnType<typeof ensureEnrollmentForApplicant>> | null =
+        null;
+      if (status === "accepted") {
+        const row = rowById.get(responseId);
+        enrollmentResult = await ensureEnrollmentForApplicant(
+          adminSupabase,
+          {
+            id: responseId,
+            user_id: row?.user_id ?? null,
+            program_id: row?.program_id ?? "",
+            applicant_email: row?.applicant_email ?? null,
+          },
+          user.id
+        );
+        if (enrollmentResult.outcome === "no_account") {
+          skipped.push({
+            id: responseId,
+            code: "no_account",
+            message: NO_ACCOUNT_ACCEPT_MESSAGE,
+          });
+          continue;
+        }
+        if (enrollmentResult.outcome === "enroll_failed") {
+          skipped.push({
+            id: responseId,
+            code: "enroll_failed",
+            message: ENROLL_FAILED_MESSAGE,
+          });
+          continue;
+        }
+      }
+
       const { data: resp, error } = await updateResponseStatus(
         supabase,
         responseId,
@@ -487,7 +556,22 @@ export async function PUT(request: Request) {
         admin_notes
       );
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        // The enrolment was written before this RLS update. If that write
+        // created the row and the status did not stick, take it back off the
+        // roster. Keep going so the rest of the batch still reports.
+        if (
+          status === "accepted" &&
+          (enrollmentResult?.outcome === "created" || enrollmentResult?.outcome === "restored") &&
+          enrollmentResult.enrollmentId
+        ) {
+          await setEnrollmentRemoved(adminSupabase, enrollmentResult.enrollmentId, user.id);
+        }
+        failures.push({
+          id: responseId,
+          code: "status_failed",
+          message: error.message,
+        });
+        continue;
       }
       if (resp) {
         updated++;
@@ -497,16 +581,10 @@ export async function PUT(request: Request) {
         // Accepting has to put them on the roster, or they are accepted and
         // invisible: the Arrival tab and every headcount read enrollments, not
         // application status. The dedicated Accept route already does this —
-        // this path used to change the status and stop there.
+        // this path used to change the status and stop there. The enrolment
+        // itself was created above, before this status write.
         if (status === "accepted") {
-          const result = await ensureEnrollmentForApplicant(
-            adminSupabase,
-            resp,
-            user.id
-          );
-          if (result.outcome === "no_account") {
-            notEnrolled.push(responseId);
-          } else if (send_email && prevStatusById.get(responseId) !== "accepted") {
+          if (send_email && previousById.get(responseId) !== "accepted") {
             // They have an account and are now enrolled — tell them. This
             // path used to send nothing on "accepted" (see sendStatusEmail).
             const sent = await sendAcceptanceToLinkedAccount(adminSupabase, responseId);
@@ -547,7 +625,15 @@ export async function PUT(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, updated, notEnrolled, emailWarnings });
+    const partial = skipped.length > 0 || failures.length > 0;
+    return NextResponse.json({
+      success: true,
+      updated,
+      skipped,
+      failures,
+      partial,
+      emailWarnings,
+    });
   }
 
   // ── Single status update ──
@@ -564,11 +650,11 @@ export async function PUT(request: Request) {
   const denied = await denyUnlessCanDecide(supabase, user.id, [id]);
   if (denied) return denied;
 
-  // Get the current response to check previous status
+  // Get the current response to check previous status and whether we can enrol.
   const adminSupabase = createAdminClient();
   const { data: prevResponse, error: prevError } = await adminSupabase
     .from("application_responses")
-    .select("status")
+    .select("id, status, user_id, program_id, applicant_email")
     .eq("id", id)
     .single();
   if (prevError) return NextResponse.json({ error: prevError.message }, { status: 500 });
@@ -585,24 +671,52 @@ export async function PUT(request: Request) {
     );
   }
 
+  // Same rule as the bulk path: do not save accepted unless an enrolment exists.
+  // no_account is side-effect free, so this refusal leaves the previous status.
+  // enroll_failed is a database error and must not be saved as accepted either.
+  let enrollmentResult: Awaited<ReturnType<typeof ensureEnrollmentForApplicant>> | null =
+    null;
+  if (status === "accepted") {
+    const current = prevResponse as ApplicantForEnrollment | null;
+    enrollmentResult = await ensureEnrollmentForApplicant(
+      adminSupabase,
+      {
+        id,
+        user_id: current?.user_id ?? null,
+        program_id: current?.program_id ?? "",
+        applicant_email: current?.applicant_email ?? null,
+      },
+      user.id
+    );
+    if (enrollmentResult.outcome === "no_account") {
+      return NextResponse.json(
+        { error: NO_ACCOUNT_ACCEPT_MESSAGE, code: "no_account" },
+        { status: 409 }
+      );
+    }
+    if (enrollmentResult.outcome === "enroll_failed") {
+      return NextResponse.json({ error: ENROLL_FAILED_SINGLE }, { status: 500 });
+    }
+  }
+
   const { data, error } = await updateResponseStatus(supabase, id, status, user.id, admin_notes);
 
   if (error) {
+    if (
+      status === "accepted" &&
+      (enrollmentResult?.outcome === "created" || enrollmentResult?.outcome === "restored") &&
+      enrollmentResult.enrollmentId
+    ) {
+      await setEnrollmentRemoved(adminSupabase, enrollmentResult.enrollmentId, user.id);
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Accepting puts them on the roster — see the bulk path above.
-  let notEnrolled = false;
+  // The enrolment was created above, before this status write.
   let emailWarning: string | null = null;
-  if (status === "accepted" && data) {
-    const result = await ensureEnrollmentForApplicant(adminSupabase, data, user.id);
-    notEnrolled = result.outcome === "no_account";
-    // Account exists and they're enrolled — send the acceptance email. This
-    // path used to send nothing on "accepted".
-    if (!notEnrolled && send_email && previousStatus !== "accepted") {
-      const sent = await sendAcceptanceToLinkedAccount(adminSupabase, id);
-      emailWarning = sent.warning;
-    }
+  if (status === "accepted" && data && send_email && previousStatus !== "accepted") {
+    const sent = await sendAcceptanceToLinkedAccount(adminSupabase, id);
+    emailWarning = sent.warning;
   }
 
   // Leaving a school (rejected/cancelled) deactivates a student-level account.
@@ -646,7 +760,6 @@ export async function PUT(request: Request) {
   return NextResponse.json({
     success: true,
     response: data,
-    notEnrolled,
     ...(emailWarning ? { emailWarning } : {}),
   });
 }
@@ -729,7 +842,10 @@ async function sendStatusEmail(
 
 // ── PATCH: Reference reminder ──
 const REFERENCE_REMINDER_SELECT =
-  "id, status, reminder_sent_at, referee_email, referee_name, token, application_id, reference_slots(label), application_responses(id, program_id, applicant_info, applicant_email, user_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name))";
+  "id, status, reminder_sent_at, referee_email, referee_name, application_id, reference_slots(label), application_responses(id, program_id, applicant_info, applicant_email, user_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name))";
+
+// Loaded only after the caller is allowed to remind this reference.
+const REFERENCE_REMINDER_SEND_SELECT = `${REFERENCE_REMINDER_SELECT}, token`;
 
 type ReminderApplication = {
   id?: string;
@@ -923,7 +1039,19 @@ export async function PATCH(request: Request) {
     const preview = previewRefusalResponse();
     if (preview) return preview;
 
-    const result = await deliverReferenceReminder(adminSupabase, refReq as ReminderRequestRow);
+    const { data: secret } = await (adminSupabase as any)
+      .from("reference_requests")
+      .select("token")
+      .eq("id", reference_request_id)
+      .single();
+    if (!secret?.token) {
+      return NextResponse.json({ error: "Reference request not found" }, { status: 404 });
+    }
+
+    const result = await deliverReferenceReminder(adminSupabase, {
+      ...(refReq as ReminderRequestRow),
+      token: secret.token as string,
+    });
     return reminderAttemptResponse(result);
   }
 
@@ -955,7 +1083,7 @@ export async function PATCH(request: Request) {
 
     const { data: refs, error: refsError } = await (adminSupabase as any)
       .from("reference_requests")
-      .select(REFERENCE_REMINDER_SELECT)
+      .select(REFERENCE_REMINDER_SEND_SELECT)
       .eq("application_id", application_id);
 
     if (refsError) {

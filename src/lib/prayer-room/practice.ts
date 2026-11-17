@@ -11,6 +11,8 @@
  * Practice is never coverage: none of this touches prayer_room_sets.
  */
 
+import type { RoomClosure } from "./room-closure";
+
 export type PracticeSettings = {
   start_time: string;
   end_time: string;
@@ -67,6 +69,8 @@ export type PracticeWeek = {
   settings: PracticeSettings;
   stations: PracticeStation[];
   bookings: PracticeBooking[];
+  /** Approved auditorium bookings and block-outs covering this week. */
+  closures: RoomClosure[];
   /** Mon–Fri ISO dates of the week asked for. */
   days: string[];
   /** When the week asked for opens / opened, "YYYY-MM-DDTHH:MM" SAST. */

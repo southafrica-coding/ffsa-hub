@@ -101,7 +101,7 @@ export default async function ApplyPage({
   // (still required — they can confirm or change it).
   const { data: profile } = await supabase
     .from("users")
-    .select("nationality")
+    .select("nationality, email")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -150,6 +150,7 @@ export default async function ApplyPage({
         referenceSlots={referenceSlots ?? []}
         countries={countries}
         initialNationality={profile?.nationality ?? ""}
+        applicantEmails={[user.email, profile?.email]}
         segments={segments}
         hasWholeProgramOption={hasWholeProgramOption}
       />

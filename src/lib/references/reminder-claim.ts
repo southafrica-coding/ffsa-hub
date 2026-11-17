@@ -46,7 +46,7 @@ async function restoreClaim(
     .update({ reminder_sent_at: previous })
     .eq("id", refId)
     .eq("reminder_sent_at", claimedAt)
-    .select();
+    .select("id");
   if (error) return { error: error.message || "Could not restore the reminder time." };
   return {};
 }
@@ -79,7 +79,7 @@ export async function claimThenSendReferenceReminder(input: {
     .eq("id", input.refId)
     .neq("status", "submitted")
     .or(reminderClaimOrFilter(now))
-    .select();
+    .select("id");
 
   if (claimed?.error) {
     return {

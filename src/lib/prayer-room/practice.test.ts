@@ -120,5 +120,14 @@ describe("practiceErrorMessage", () => {
     expect(practiceErrorMessage({ code: "23514", message: "There is no practice on Tuesdays." })).toBe(
       "There is no practice on Tuesdays."
     );
+    expect(
+      practiceErrorMessage({ code: "23514", message: "The Auditorium is booked then, so practice is closed." })
+    ).toBe("The Auditorium is booked then, so practice is closed.");
+    expect(
+      practiceErrorMessage({
+        code: "23514",
+        message: "The prayer room could not be checked against Auditorium bookings. Nothing was booked.",
+      })
+    ).toMatch(/Nothing was booked/);
   });
 });

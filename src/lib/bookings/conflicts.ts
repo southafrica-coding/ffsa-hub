@@ -28,17 +28,42 @@ function isMultiDay(b: BookingWindow): boolean {
   return b.end_date != null && b.end_date > b.booking_date;
 }
 
+function nullSafeMin(a: number | null, b: number | null): number | null {
+  if (a == null) return b;
+  if (b == null) return a;
+  return Math.min(a, b);
+}
+
+function nullSafeMax(a: number | null, b: number | null): number | null {
+  if (a == null) return b;
+  if (b == null) return a;
+  return Math.max(a, b);
+}
+
 /**
- * The minutes-of-day window the venue is actually occupied: from set-up (or
- * event start) through set-down (or event end). Multi-day bookings and
- * bookings with no times are treated as occupying the whole day.
+ * The minutes-of-day window the venue is actually occupied.
+ *
+ * Start is the earlier of set-up and event start (a later set-up must not
+ * shrink the window). End is the later of set-down and event end. Multi-day
+ * bookings and bookings with no times occupy the whole day. A single-day
+ * booking whose set-down is earlier than its set-up runs through 24:00 on
+ * that booking's own date. The morning after is not blocked: 01:00 is stored
+ * on this row, and there is no following-day column for the teardown to spill
+ * into. Shared with Space Bookings clash warnings and with the prayer-room
+ * "Block out & notify" suggestion windows.
  */
 export function occupiedWindow(b: BookingWindow): { start: number; end: number } {
   if (isMultiDay(b)) return { start: DAY_START, end: DAY_END };
-  const start = toMinutes(b.setup_time) ?? toMinutes(b.start_time);
-  const end = toMinutes(b.setdown_time) ?? toMinutes(b.end_time);
+  const setup = toMinutes(b.setup_time);
+  const eventStart = toMinutes(b.start_time);
+  const eventEnd = toMinutes(b.end_time);
+  const setdown = toMinutes(b.setdown_time);
+  const start = nullSafeMin(setup, eventStart);
+  let end = nullSafeMax(setdown, eventEnd);
   if (start == null || end == null) return { start: DAY_START, end: DAY_END };
-  return { start, end: Math.max(end, start) };
+  const overnight = (setdown != null && setup != null && setdown < setup) || end < start;
+  if (overnight) end = DAY_END;
+  return { start, end };
 }
 
 /** Denied / cancelled bookings never clash with anything. */

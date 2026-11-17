@@ -11,7 +11,7 @@ import { dayCount, rangeLabel, readRange, sastToday } from "@/lib/equipment/date
 import { periodForDates, periodLabel } from "@/lib/equipment/pricing";
 import { categoryIds, categoryTree, loadStore, withDates, type StoreCategory } from "@/lib/equipment/storefront";
 import { listCategories, type EquipmentCategory } from "@/services/equipment";
-import { DateBar, ItemCard } from "../../_components/store-ui";
+import { DateBar, HelperBanner, ItemCard } from "../../_components/store-ui";
 import CategorySkeleton from "./skeleton";
 
 type Params = { from?: string; to?: string; only?: string; type?: string; q?: string };
@@ -152,6 +152,8 @@ async function CategoryCatalogue({ slug, sp }: { slug: string; sp: Params }) {
             ))}
         </div>
       </header>
+
+      <HelperBanner range={range} className="mx-[18px] mt-4 md:mx-10" />
 
       <div className="md:grid md:grid-cols-[260px_minmax(0,1fr)]">
         {/* Desktop filters (46a). */}

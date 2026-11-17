@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { adminNotesByResponse } from "@/lib/schools/admin-notes";
+import { REFERENCE_REQUEST_WITH_SLOT } from "@/lib/references/reference-request-columns";
 
 function escapeHtml(text: string): string {
   return text
@@ -106,7 +107,7 @@ export async function GET(request: Request) {
   // Fetch reference requests with full data
   const { data: refRequests } = await (supabase as any)
     .from("reference_requests")
-    .select("*, reference_slots(label, description)")
+    .select(REFERENCE_REQUEST_WITH_SLOT)
     .eq("application_id", responseId)
     .order("created_at", { ascending: true });
 

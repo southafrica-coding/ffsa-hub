@@ -23,6 +23,9 @@ import {
   type PracticeStation,
   type PracticeWeek,
 } from "@/lib/prayer-room/practice";
+import { blockoutClosure, type RoomClosure } from "@/lib/prayer-room/room-closure";
+import { getBlockouts } from "@/services/prayer-room";
+import { getAuditoriumClosures } from "@/services/prayer-room-room-closures";
 
 // The practice tables are not in the generated Database types yet (same loose
 // client convention as services/prayer-room.ts).
@@ -131,6 +134,32 @@ async function defaultStationFor(supabase: Client, userId: string, stations: Pra
   return null;
 }
 
+/**
+ * Closures for the practice week. An auditorium read that fails is logged
+ * and contributes nothing here — the page still renders. The booking itself
+ * is refused in the database if that check cannot be made.
+ */
+export async function getPracticeClosures(
+  supabase: Client,
+  admin: Client,
+  from: string,
+  to: string
+): Promise<RoomClosure[]> {
+  const [auditorium, blockouts] = await Promise.all([
+    getAuditoriumClosures(admin, from, to),
+    getBlockouts(supabase, { from, to }),
+  ]);
+  if (auditorium.error) {
+    console.error("Auditorium bookings could not be loaded for practice", auditorium.error.message);
+  }
+  if (blockouts.error) {
+    console.error("Prayer room block-outs could not be loaded for practice", blockouts.error.message);
+  }
+  const fromBookings = auditorium.error ? [] : auditorium.data;
+  const fromBlockouts = blockouts.error ? [] : ((blockouts.data ?? []) as Parameters<typeof blockoutClosure>[0][]).map(blockoutClosure);
+  return [...fromBookings, ...fromBlockouts];
+}
+
 export async function getPracticeWeek(
   supabase: Client,
   admin: Client,
@@ -138,14 +167,16 @@ export async function getPracticeWeek(
 ): Promise<PracticeWeek> {
   const days = practiceDays(args.anchor);
   const [settings, stations] = await Promise.all([getPracticeSettings(supabase), getPracticeStations(supabase)]);
-  const [bookings, defaultStationId] = await Promise.all([
+  const [bookings, defaultStationId, closures] = await Promise.all([
     getPracticeBookings(supabase, admin, days[0], days[4]),
     defaultStationFor(supabase, args.userId, stations),
+    getPracticeClosures(supabase, admin, days[0], days[4]),
   ]);
   return {
     settings,
     stations,
     bookings,
+    closures,
     days,
     opensAt: opensAt(settings, days[0]),
     nextOpensAt: opensAt(settings, shiftISO(days[0], 7)),

@@ -12,16 +12,16 @@
 
 import { occupiedWindow, type BookingWindow } from "@/lib/bookings/conflicts";
 import { sastNow } from "@/lib/prayer-room/practice";
+import { PRAYER_ROOM_VENUE_SLUG } from "@/lib/prayer-room/venue";
 import { shiftDays } from "@/lib/bookings/dates";
 import { createBlockout, stampRelocation } from "@/services/prayer-room";
 import { announceBlockout } from "@/lib/prayer-room/blockout-announce";
 import type { SlackResult } from "@/lib/slack/prayer-room";
 
+export { PRAYER_ROOM_VENUE_SLUG };
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
-
-/** The Space Bookings venue that IS the prayer room. */
-export const PRAYER_ROOM_VENUE_SLUG = "auditorium";
 /** How far ahead bookings are checked against the schedule. */
 const HORIZON_DAYS = 180;
 const PAGE = 1000; // PostgREST's silent row cap — page past it.

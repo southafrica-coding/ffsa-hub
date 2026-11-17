@@ -308,6 +308,7 @@ async function ItemBody({
 
           <div className="hidden md:block">
             <ItemBooking
+              slug={product.slug}
               variant="box"
               product={quoteProduct}
               settings={qSettings}
@@ -463,6 +464,7 @@ async function ItemBody({
         style={{ bottom: "calc(58px + max(10px, env(safe-area-inset-bottom, 0px)))" }}
       >
         <ItemBooking
+          slug={product.slug}
           variant="bar"
           product={quoteProduct}
           settings={qSettings}
