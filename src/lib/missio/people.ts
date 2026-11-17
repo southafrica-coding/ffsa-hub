@@ -21,8 +21,10 @@ const STATUS = ["visitor", "active", "inactive"] as const;
 
 const NAME_COLUMNS = ["first_name", "last_name", "preferred_name"] as const;
 
-const PERSON_COLUMNS =
-  "id, contact_id, campus, status, joined_at, current_stage, contacts(first_name, last_name)";
+const DIRECTORY = "org_people_directory";
+
+const DIRECTORY_COLUMNS =
+  "id, org_id, contact_id, campus, status, joined_at, current_stage, created_at, updated_at, first_name, last_name, preferred_name";
 
 function escapeIlike(value: string): string {
   return value.replace(/[\\%_]/g, (character) => `\\${character}`);
@@ -83,8 +85,6 @@ export const updateSchema = z
   })
   .strict();
 
-type ContactEmbed = { first_name?: string | null; last_name?: string | null };
-
 type PersonRow = {
   id: string;
   contact_id: string;
@@ -92,20 +92,17 @@ type PersonRow = {
   status: MissioStatus;
   joined_at: string | null;
   current_stage: string | null;
-  contacts?: ContactEmbed | ContactEmbed[] | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  preferred_name?: string | null;
 };
 
-function one<T>(value: T | T[] | null | undefined): T | null {
-  if (!value) return null;
-  return Array.isArray(value) ? (value[0] ?? null) : value;
-}
-
 export function toMissioPerson(row: PersonRow): MissioPerson {
-  const contact = one(row.contacts);
-  const name = [contact?.first_name, contact?.last_name]
+  const legal = [row.first_name, row.last_name]
     .map((part) => (part ?? "").trim())
     .filter(Boolean)
     .join(" ");
+  const name = legal || (row.preferred_name ?? "").trim();
   return {
     id: row.id,
     contactId: row.contact_id,
@@ -154,8 +151,8 @@ export async function listPeople(auth: OrgAccess, query: z.infer<typeof peopleQu
   | { ok: false; status: number; error: string }
 > {
   let request = auth.supabase
-    .from("org_people")
-    .select(PERSON_COLUMNS.replace("contacts(", "contacts!inner("), { count: "exact" })
+    .from(DIRECTORY)
+    .select(DIRECTORY_COLUMNS, { count: "exact" })
     .eq("org_id", auth.orgId);
 
   if (query.campus) request = request.eq("campus", query.campus);
@@ -168,10 +165,7 @@ export async function listPeople(auth: OrgAccess, query: z.infer<typeof peopleQu
     .filter(Boolean);
   for (const token of tokens) {
     const term = `%${escapeIlike(token)}%`;
-    request = request.or(
-      NAME_COLUMNS.map((column) => `${column}.ilike.${term}`).join(","),
-      { referencedTable: "contacts" }
-    );
+    request = request.or(NAME_COLUMNS.map((column) => `${column}.ilike.${term}`).join(","));
   }
 
   const { data, error, count } = await request
@@ -229,7 +223,7 @@ export async function searchContacts(
 
   const [contacts, membership] = await Promise.all([
     admin.client.from("contacts").select("id, first_name, last_name, email, phone").in("id", ids),
-    auth.supabase.from("org_people").select("contact_id").eq("org_id", auth.orgId).in("contact_id", ids),
+    auth.supabase.from(DIRECTORY).select("contact_id").eq("org_id", auth.orgId).in("contact_id", ids),
   ]);
   if (contacts.error || membership.error) {
     console.error(
@@ -347,8 +341,8 @@ async function loadPerson(
   personId: string
 ): Promise<{ person: MissioPerson } | { error: string; status: number }> {
   const { data, error } = await supabase
-    .from("org_people")
-    .select(PERSON_COLUMNS)
+    .from(DIRECTORY)
+    .select(DIRECTORY_COLUMNS)
     .eq("id", personId)
     .eq("org_id", orgId)
     .maybeSingle();
@@ -565,14 +559,16 @@ export async function updatePerson(
     .update(patch)
     .eq("id", personId)
     .eq("org_id", auth.orgId)
-    .select(PERSON_COLUMNS)
+    .select("id")
     .maybeSingle();
   if (updated.error) {
     console.error("[missio] person update failed", updated.error.message);
     return { ok: false, status: 500, error: "Something went wrong." };
   }
   if (!updated.data) return { ok: false, status: 404, error: "Person not found." };
-  return { ok: true, person: toMissioPerson(updated.data as PersonRow) };
+  const loaded = await loadPerson(auth.supabase, auth.orgId, personId);
+  if ("error" in loaded) return { ok: false, status: loaded.status, error: loaded.error };
+  return { ok: true, person: loaded.person };
 }
 
 export function readPeopleQuery(url: URL) {

@@ -253,8 +253,29 @@ const state = vi.hoisted(() => {
     return out;
   }
 
+  function directoryRows(): Row[] {
+    return (state.tables.org_people ?? []).map((person) => {
+      const contact = (state.tables.contacts ?? []).find((row) => row.id === person.contact_id);
+      return {
+        id: person.id,
+        org_id: person.org_id,
+        contact_id: person.contact_id,
+        campus: person.campus,
+        status: person.status,
+        joined_at: person.joined_at ?? null,
+        current_stage: person.current_stage ?? null,
+        created_at: person.created_at,
+        updated_at: person.updated_at,
+        first_name: contact?.first_name ?? null,
+        last_name: contact?.last_name ?? null,
+        preferred_name: contact?.preferred_name ?? null,
+      };
+    });
+  }
+
   function doSelect(table: string, op: Op, maybe: boolean, single: boolean) {
-    let rows = state.tables[table].filter((row) => matches(table, row, op));
+    const source = table === "org_people_directory" ? directoryRows() : state.tables[table];
+    let rows = source.filter((row) => matches(table, row, op));
     if (op.select?.includes("!inner")) {
       rows = rows.filter((row) => {
         const embedNames = [...op.select!.matchAll(/(\w+)!inner\(/g)].map((match) => match[1]);
@@ -479,6 +500,14 @@ const patch = (id: string, body: unknown) =>
     { params: Promise.resolve({ id }) }
   );
 
+function expectUserDirectoryReads() {
+  const reads = state.ops.filter((op) => op.table === "org_people_directory");
+  expect(reads.length).toBeGreaterThan(0);
+  expect(reads.every((op) => op.client === "user" && op.op.action === "select")).toBe(true);
+  expect(state.ops.some((op) => op.client === "user" && op.table === "contacts")).toBe(false);
+  expect(reads.some((op) => op.op.select?.includes("contacts("))).toBe(false);
+}
+
 beforeEach(() => {
   reset();
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -551,7 +580,7 @@ describe("access on every Missio data route", () => {
       expect(JSON.stringify(await res.json())).not.toContain("Hidden");
     }
     expect(state.adminBuilds).toBe(0);
-    expect(state.ops.some((op) => op.table === "org_people" || op.table === "contacts" || op.table === "contact_emails")).toBe(
+    expect(state.ops.some((op) => op.table === "org_people" || op.table === "org_people_directory" || op.table === "contacts" || op.table === "contact_emails")).toBe(
       false
     );
     expect(state.writes).toEqual([]);
@@ -625,7 +654,8 @@ describe("GET /api/missio/people", () => {
       },
     ]);
     expect(state.adminBuilds).toBe(0);
-    expect(state.ops.find((op) => op.table === "org_people")?.client).toBe("user");
+    expectUserDirectoryReads();
+    expect(state.ops.find((op) => op.table === "org_people_directory")?.client).toBe("user");
 
     state.ops = [];
     const paged = await get("/api/missio/people?limit=1&offset=1");
@@ -633,12 +663,12 @@ describe("GET /api/missio/people", () => {
     expect(page.total).toBe(3);
     expect(page.rows).toHaveLength(1);
     expect(page.rows[0].id).toBe("p2");
-    const list = state.ops.find((op) => op.table === "org_people" && op.op.range);
+    const list = state.ops.find((op) => op.table === "org_people_directory" && op.op.range);
     expect(list?.op.range).toEqual({ from: 1, to: 1 });
 
     state.ops = [];
     await get("/api/missio/people");
-    expect(state.ops.find((op) => op.table === "org_people")?.op.range).toEqual({ from: 0, to: 49 });
+    expect(state.ops.find((op) => op.table === "org_people_directory")?.op.range).toEqual({ from: 0, to: 49 });
   });
 
   it("rejects an unknown campus, status, or an oversized limit", async () => {
@@ -687,6 +717,8 @@ describe("GET /api/missio/people", () => {
     const byEmail = await get("/api/missio/people?q=jane%40gmail.com");
     expect((await byEmail.json()).rows).toEqual([]);
     expect(state.ops.some((op) => op.table === "contact_emails" || op.table === "contact_phones")).toBe(false);
+    expectUserDirectoryReads();
+    expect(state.ops.filter((op) => op.table === "org_people_directory").every((op) => op.op.ors.every((clause) => !clause.table))).toBe(true);
   });
 });
 
@@ -738,6 +770,8 @@ describe("GET /api/missio/contacts/search", () => {
     expect(raw).not.toContain("27821234567");
     const emailOp = state.ops.find((op) => op.table === "contact_emails");
     expect(emailOp?.client).toBe("admin");
+    expect(state.ops.filter((op) => op.table === "contacts").every((op) => op.client === "admin")).toBe(true);
+    expectUserDirectoryReads();
     expect(emailOp?.op.filters).toContainEqual({ type: "eq", col: "email_normalized", val: "jane@gmail.com" });
 
     state.ops = [];
@@ -839,6 +873,7 @@ describe("POST /api/missio/people", () => {
     });
     expect(state.tables.contact_phones[0]).toMatchObject({ phone_normalized: "+27821234567" });
     expect(state.writes.find((write) => write.table === "org_people" && write.op === "insert")?.client).toBe("admin");
+    expectUserDirectoryReads();
     const contactInsert = state.writes.find((write) => write.table === "contacts" && write.op === "insert");
     const contactPayload = Array.isArray(contactInsert?.payload) ? contactInsert?.payload[0] : contactInsert?.payload;
     expect(contactPayload).not.toHaveProperty("campus");
@@ -924,6 +959,7 @@ describe("PATCH /api/missio/people/[id]", () => {
     });
     expect(state.writes[0]).toMatchObject({ client: "user", table: "org_people", op: "update" });
     expect(state.adminBuilds).toBe(0);
+    expectUserDirectoryReads();
   });
 
   it("rejects an empty body, an unknown field, and a bad value", async () => {

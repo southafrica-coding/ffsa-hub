@@ -4,11 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { MissioOrgRole } from "@/lib/missio/types";
 
 // Hard wall: an FFSA admin or super_admin is not a pass. has_org_role runs
-// first and counts only org_staff_roles. Migration 329 (draft #599, 36285f3e)
-// revokes INSERT on org_people from authenticated, so a new row is
-// service-role only, and only after that check plus a verified email or
-// phone. Reads and PATCH use the signed-in user's client. PATCH may change
-// only campus, status, joined_at, and current_stage.
+// first and counts only org_staff_roles. org_people INSERT is service-role
+// only, after that check and a verified email or phone. Directory reads use
+// org_people_directory on the user client — not a contacts join, which would
+// expose notes, date of birth, and addresses. PATCH uses the user client and
+// may change only campus, status, joined_at, and current_stage.
+// org_staff_roles.campus is informational in Phase 0 and is not enforced.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
