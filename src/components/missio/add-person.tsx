@@ -28,6 +28,11 @@ type Searched = { kind: "email" | "phone"; value: string };
 type Notice = { tone: "alert" | "success" | "info"; text: string };
 
 const EXISTS_NOTICE: Notice = { tone: "info", text: EXISTS_USE_SEARCH_MESSAGE };
+const NOT_FOUND_COPY = "We couldn't find the existing contact. Check the email and phone, or ask the FFSA office.";
+
+function hasOpenMatch(matches: ContactMatch[]): boolean {
+  return matches.some((match) => !match.alreadyInOrg);
+}
 
 export function AddPersonDialog({
   client,
@@ -52,6 +57,7 @@ export function AddPersonDialog({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [blockedQuery, setBlockedQuery] = useState<string | null>(null);
   const [lockedUntil, setLockedUntil] = useState(0);
   const [submitLockedUntil, setSubmitLockedUntil] = useState(0);
   const [clock, setClock] = useState(() => Date.now());
@@ -86,6 +92,7 @@ export function AddPersonDialog({
       return;
     }
     setPending(true);
+    setBlockedQuery(null);
     setQuery(value);
     setStep("search");
     setNotice(keep ? { tone: "alert", text: keep } : null);
@@ -119,45 +126,77 @@ export function AddPersonDialog({
   function startCreate() {
     setStep("create");
     setNotice(null);
-    if (searched?.kind === "email") setEmail(searched.value);
-    if (searched?.kind === "phone") setPhone(searched.value);
+    const kind = searched?.kind ?? classifyContactQuery(query);
+    const value = (searched?.value ?? query).trim();
+    if (kind === "email") {
+      setEmail(value);
+      if (blockedQuery) setPhone("");
+    } else if (kind === "phone") {
+      setPhone(value);
+      if (blockedQuery) setEmail("");
+    }
+  }
+
+  function searchLockSeconds(): number | null {
+    const remaining = lockedUntil - Date.now();
+    if (remaining <= 0) return null;
+    return Math.max(1, Math.ceil(remaining / 1000));
+  }
+
+  function showNotFound(prefill: string) {
+    const value = prefill.trim();
+    setStep("search");
+    setQuery(value);
+    setSearched(null);
+    setMatches([]);
+    setBlockedQuery(value);
+    setNotice({ tone: "alert", text: NOT_FOUND_COPY });
   }
 
   /**
    * A create 409 means one of the typed identifiers already exists.
-   * Search the email first. Only when that comes back empty, search the phone.
-   * The field and the later link both use the identifier that produced the hit.
+   * Search the email first. An empty result, or one where every hit is already
+   * in Missio, is a miss — then search the phone. The field and the later link
+   * use the identifier that produced a non-member hit. A search lock blocks this.
    * pending stays true until this finishes.
    */
   async function revealExisting(emailRaw: string, phoneRaw: string) {
     setStep("search");
-    setNotice(EXISTS_NOTICE);
-    const candidates: Searched[] = [];
     const emailValue = emailRaw.trim();
     const phoneValue = phoneRaw.trim();
+    const candidates: Searched[] = [];
     if (classifyContactQuery(emailValue) === "email") candidates.push({ kind: "email", value: emailValue });
     if (classifyContactQuery(phoneValue) === "phone") candidates.push({ kind: "phone", value: phoneValue });
+    const locked = searchLockSeconds();
+    if (locked != null) {
+      setQuery(candidates[0]?.value ?? (emailValue || phoneValue));
+      setNotice({ tone: "alert", text: `Too many searches, try again in ${locked} seconds` });
+      setPending(false);
+      return;
+    }
     if (candidates.length === 0) {
-      setMatches(null);
-      setSearched(null);
+      showNotFound(emailValue || phoneValue);
       setPending(false);
       return;
     }
     setQuery(candidates[0].value);
     try {
       for (const candidate of candidates) {
+        const wait = searchLockSeconds();
+        if (wait != null) {
+          setNotice({ tone: "alert", text: `Too many searches, try again in ${wait} seconds` });
+          return;
+        }
         const result = await client.searchContacts(candidate.value);
-        if (result.matches.length === 0) continue;
+        if (!hasOpenMatch(result.matches)) continue;
         setQuery(candidate.value);
         setSearched(candidate);
         setMatches(result.matches);
+        setBlockedQuery(null);
         setNotice(EXISTS_NOTICE);
         return;
       }
-      setQuery(candidates[0].value);
-      setSearched(null);
-      setMatches([]);
-      setNotice(EXISTS_NOTICE);
+      showNotFound(candidates[0].value);
     } catch (error) {
       setMatches(null);
       setSearched(null);
@@ -259,8 +298,10 @@ export function AddPersonDialog({
             className={notice.tone === "success" ? styles.success : notice.tone === "info" ? styles.info : styles.alert}
             role={notice.tone === "alert" ? "alert" : "status"}
             data-testid={
-              notice.tone === "info"
-                ? "exists-use-search"
+              notice.text === NOT_FOUND_COPY
+                ? "existing-not-found"
+                : notice.tone === "info"
+                  ? "exists-use-search"
                 : notice.text === "Linked to an existing contact"
                   ? "linked-existing"
                   : notice.text === "That match expired, search again"
@@ -356,7 +397,7 @@ export function AddPersonDialog({
                 </ul>
               </div>
             ) : null}
-            {matches && matches.length === 0 ? (
+            {matches && matches.length === 0 && blockedQuery !== query.trim() ? (
               <div className={styles.actions}>
                 <button type="button" className={styles.primary} onClick={startCreate}>
                   Create new person

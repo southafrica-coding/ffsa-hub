@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { missioSkinVars } from "./access";
 import styles from "./shell.module.css";
@@ -44,7 +44,7 @@ export function MissioDialog({
   testId: string;
   children: React.ReactNode;
 }) {
-  const faces = dialogStyle();
+  const faces = useMemo(() => dialogStyle(), []);
   return (
     <Dialog.Root
       open

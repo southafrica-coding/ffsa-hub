@@ -7,6 +7,19 @@ import { MissioApiError, EXISTS_USE_SEARCH_MESSAGE, type MissioClient } from "./
 import styles from "./shell.module.css";
 import type { ContactMatch, CreateMissioPersonInput, MissioPerson } from "./types-shim";
 
+const { validation } = vi.hoisted(() => ({
+  validation: { override: null as null | (() => string | null) },
+}));
+
+vi.mock("./access", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./access")>();
+  return {
+    ...actual,
+    validateNewPerson: (fields: { name: string; email: string; phone: string }) =>
+      validation.override ? validation.override() : actual.validateNewPerson(fields),
+  };
+});
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const person: MissioPerson = {
@@ -81,6 +94,7 @@ describe("add person", () => {
   const hosts: HTMLElement[] = [];
 
   afterEach(() => {
+    validation.override = null;
     while (roots.length) act(() => roots.pop()?.unmount());
     document.body.innerHTML = "";
   });
@@ -477,5 +491,150 @@ describe("add person", () => {
       campus: "potch",
       status: "visitor",
     });
+  });
+
+  it("keeps searching when the email only matches people already in Missio", async () => {
+    const calls: string[] = [];
+    const member: ContactMatch = { ...takenMatch, matchToken: "tok-member" };
+    const outsider: ContactMatch = { ...openMatch, matchToken: "tok-outsider" };
+    const searchContacts = vi.fn(async (q: string) => {
+      calls.push(q);
+      if (q === "mina.osei@example.com") return { matches: [member] };
+      if (q === "0825550199") return { matches: [outsider] };
+      return { matches: [] as ContactMatch[] };
+    });
+    const createPerson = vi.fn(async (input: CreateMissioPersonInput) => {
+      if ("name" in input) throw new MissioApiError(409, "RAW", null, "exists_use_search");
+      return { person, linkedExisting: true };
+    });
+    const { host, root } = render(
+      <AddPersonDialog client={client({ searchContacts, createPerson })} onClose={() => {}} onCreated={() => {}} />
+    );
+    roots.push(root);
+    hosts.push(host);
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "new.person@example.com");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    setValue(host.querySelector("[aria-label=Name]") as HTMLInputElement, "Ada Mokoena");
+    setValue(host.querySelector("[aria-label=Email]") as HTMLInputElement, "mina.osei@example.com");
+    setValue(host.querySelector("[aria-label=Phone]") as HTMLInputElement, "0825550199");
+    await click(host, "Create person");
+    expect(calls).toContain("mina.osei@example.com");
+    expect(calls).toContain("0825550199");
+    expect((host.querySelector("[aria-label='Email or phone']") as HTMLInputElement).value).toBe("0825550199");
+    expect(host.querySelector("[data-testid=exists-use-search]")?.textContent).toBe(EXISTS_USE_SEARCH_MESSAGE);
+    await click(host, "Use this contact");
+    expect(createPerson).toHaveBeenLastCalledWith({
+      matchToken: "tok-outsider",
+      matchedBy: { phone: "0825550199" },
+      campus: "potch",
+      status: "visitor",
+    });
+  });
+
+  it("hides Create when both identifiers miss, and shows it again after an edit", async () => {
+    const searchContacts = vi.fn(async () => ({ matches: [] as ContactMatch[] }));
+    const { host, root } = render(
+      <AddPersonDialog
+        client={client({
+          searchContacts,
+          createPerson: async () => {
+            throw new MissioApiError(409, "RAW", null, "exists_use_search");
+          },
+        })}
+        onClose={() => {}}
+        onCreated={() => {}}
+      />
+    );
+    roots.push(root);
+    hosts.push(host);
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "new.person@example.com");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    setValue(host.querySelector("[aria-label=Name]") as HTMLInputElement, "Ada Mokoena");
+    setValue(host.querySelector("[aria-label=Email]") as HTMLInputElement, "mina.osei@example.com");
+    setValue(host.querySelector("[aria-label=Phone]") as HTMLInputElement, "0825550199");
+    await click(host, "Create person");
+    expect(host.querySelector("[data-testid=existing-not-found]")?.textContent).toBe(
+      "We couldn't find the existing contact. Check the email and phone, or ask the FFSA office.",
+    );
+    expect(host.querySelector("[data-testid=exists-use-search]")).toBeNull();
+    expect(host.textContent).not.toContain("Create new person");
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "other.person@example.com");
+    expect([...host.querySelectorAll("button")].some((item) => item.textContent?.trim() === "Create new person")).toBe(true);
+  });
+
+  it("uses the not-found copy when neither identifier can be searched", async () => {
+    validation.override = () => null;
+    const searchContacts = vi.fn(async () => ({ matches: [] as ContactMatch[] }));
+    const { host, root } = render(
+      <AddPersonDialog
+        client={client({
+          searchContacts,
+          createPerson: async () => {
+            throw new MissioApiError(409, "RAW", null, "exists_use_search");
+          },
+        })}
+        onClose={() => {}}
+        onCreated={() => {}}
+      />
+    );
+    roots.push(root);
+    hosts.push(host);
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "new.person@example.com");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    setValue(host.querySelector("[aria-label=Name]") as HTMLInputElement, "Ada Mokoena");
+    setValue(host.querySelector("[aria-label=Email]") as HTMLInputElement, "not-an-email");
+    setValue(host.querySelector("[aria-label=Phone]") as HTMLInputElement, "12");
+    const callsBefore = searchContacts.mock.calls.length;
+    const form = host.querySelector("[data-testid=create-person-form]") as HTMLFormElement;
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(searchContacts.mock.calls.length).toBe(callsBefore);
+    expect(host.querySelector("[data-testid=existing-not-found]")?.textContent).toBe(
+      "We couldn't find the existing contact. Check the email and phone, or ask the FFSA office.",
+    );
+    expect(host.textContent).not.toContain("pick Use this contact");
+    expect(host.textContent).not.toContain("Create new person");
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "0825550199");
+    expect([...host.querySelectorAll("button")].some((item) => item.textContent?.trim() === "Create new person")).toBe(true);
+  });
+
+  it("does not search again when a follow-up search is rate limited", async () => {
+    const calls: string[] = [];
+    const searchContacts = vi.fn(async (q: string) => {
+      calls.push(q);
+      if (q === "mina.osei@example.com") throw new MissioApiError(429, "slow", 30, "rate_limited");
+      return { matches: [] as ContactMatch[] };
+    });
+    const { host, root } = render(
+      <AddPersonDialog
+        client={client({
+          searchContacts,
+          createPerson: async () => {
+            throw new MissioApiError(409, "RAW", null, "exists_use_search");
+          },
+        })}
+        onClose={() => {}}
+        onCreated={() => {}}
+      />
+    );
+    roots.push(root);
+    hosts.push(host);
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "new.person@example.com");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    setValue(host.querySelector("[aria-label=Name]") as HTMLInputElement, "Ada Mokoena");
+    setValue(host.querySelector("[aria-label=Email]") as HTMLInputElement, "mina.osei@example.com");
+    setValue(host.querySelector("[aria-label=Phone]") as HTMLInputElement, "0825550199");
+    await click(host, "Create person");
+    expect(calls.filter((q) => q === "0825550199")).toEqual([]);
+    expect(host.querySelector("[data-testid=search-rate-limit]")?.textContent).toBe(
+      "Too many searches, try again in 30 seconds",
+    );
+    const find = [...host.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Find contact");
+    expect(find?.hasAttribute("disabled")).toBe(true);
   });
 });

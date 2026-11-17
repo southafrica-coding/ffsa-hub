@@ -408,6 +408,20 @@
   outline-offset: 2px;
 }
 
+/* The dialog is portaled outside the shell. A local class outranks the hub
+   button rule for the properties that rule does not mark important. */
+.dialog button,
+.dialog button:hover,
+.dialog button:focus,
+.dialog button:focus-visible {
+  font-family: var(--body), Archivo, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: 0;
+  text-transform: none;
+  border-radius: 6px;
+}
+
 .headRow {
   display: flex;
   align-items: flex-end;
