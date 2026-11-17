@@ -3110,6 +3110,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "org_people_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "org_people_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
@@ -3147,6 +3154,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "org_staff_roles_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "org_staff_roles_org_id_fkey"
             columns: ["org_id"]
@@ -5747,6 +5761,38 @@ export type Database = {
       }
     }
     Views: {
+      org_people_directory: {
+        Row: {
+          campus: string | null
+          contact_id: string | null
+          created_at: string | null
+          current_stage: string | null
+          first_name: string | null
+          id: string | null
+          joined_at: string | null
+          last_name: string | null
+          org_id: string | null
+          preferred_name: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_people_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_people_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_campaign_audience: {
         Row: {
           campaign_id: string | null

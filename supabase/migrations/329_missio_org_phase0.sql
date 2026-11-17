@@ -6,10 +6,10 @@
 -- this in the Supabase SQL editor until Lead says so.
 --
 -- Phase 0 is the wall between a Missio org and the FFSA directory.
--- Three new tables, two membership helpers, one extra SELECT policy
--- on contacts, and a label mirror. No backfill: the contacts that
--- already carry the 'missio' label stay where they are until a
--- separate, Jack-approved step copies them into org_people.
+-- Three new tables, two membership helpers, a names-only directory
+-- view, and a label mirror. No new policy on contacts. No backfill:
+-- the contacts that already carry the 'missio' label stay where they
+-- are until a separate, Jack-approved step copies them into org_people.
 --
 -- HARD WALL. is_admin() and super_admin do not appear in any policy
 -- on organisations, org_staff_roles, or org_people, and the two
@@ -21,8 +21,16 @@
 -- org_people inserts are service-role only. contact_labels is
 -- readable by any signed-in user (042), so a Missio pastor can see
 -- every contact_id. An INSERT or an update of contact_id / org_id
--- would attach that FFSA contact, the contacts policy would return
--- the full row, and the label mirror would tag it Missio.
+-- would attach that FFSA contact. There is no contacts policy for
+-- org roles: a Missio role reads names only, through
+-- org_people_directory. authenticated's table-wide SELECT on
+-- contacts would otherwise return notes, DOB, address, email and
+-- phone, and v_contact_summary / v_campaign_audience run as the
+-- caller (166) so they would too.
+--
+-- campus on org_staff_roles is informational in Phase 0. Scoping is
+-- not enforced: a role with campus potch or jhb currently sees the
+-- whole org. Enforcing it is Phase 1.
 --
 -- Authenticated may UPDATE only campus, status, joined_at and
 -- current_stage (column privileges, not just the RLS policy).
@@ -42,12 +50,11 @@
 --   4. Do not backfill org_people from the existing missio label
 --      in this migration.
 --
--- contacts keeps every existing policy. The one new SELECT policy
--- reaches a contact only through an org_people row in an org where
--- the caller holds some org_staff_roles row. No new INSERT, UPDATE,
--- or DELETE on contacts. contact_emails, contact_phones, labels, and
--- contact_labels are untouched. labels and contact_labels stay
--- readable by any signed-in user — that is the pre-existing policy
+-- contacts keeps every existing policy and gains none. No new
+-- INSERT, UPDATE, or DELETE on contacts. contact_emails,
+-- contact_phones, labels, and contact_labels are untouched. labels
+-- and contact_labels stay readable by any signed-in user — that is
+-- the pre-existing policy
 -- from 042, which later permission work did not narrow. This file
 -- does not widen it.
 --
@@ -94,9 +101,9 @@ CREATE TABLE IF NOT EXISTS public.org_staff_roles (
   role       text NOT NULL CHECK (role IN (
                'pastor', 'admin', 'house_church_leader', 'team_leader', 'finance'
              )),
-  -- Null campus means every campus of this org.
+  -- Informational in Phase 0. Not enforced; see the column comment.
   campus     text CHECK (campus IS NULL OR campus IN ('potch', 'jhb')),
-  granted_by uuid,
+  granted_by uuid REFERENCES public.users (id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (user_id, org_id, role)
 );
@@ -108,7 +115,7 @@ COMMENT ON TABLE public.org_staff_roles IS
   'Who holds a Missio (or other org) role. Not an FFSA user_roles row. Inserts are service-role only: there is no write policy.';
 
 COMMENT ON COLUMN public.org_staff_roles.campus IS
-  'potch or jhb. NULL means the grant covers every campus.';
+  'potch, jhb, or NULL. Informational in Phase 0: campus scoping is not enforced, so a campus-scoped role currently sees the whole org. Enforcement is Phase 1.';
 
 -- ────────────────────────────────────────────────────────────
 -- 3. org_people
@@ -123,7 +130,7 @@ CREATE TABLE IF NOT EXISTS public.org_people (
   status        text NOT NULL DEFAULT 'active' CHECK (status IN ('visitor', 'active', 'inactive')),
   joined_at     date,
   current_stage text,
-  created_by    uuid,
+  created_by    uuid REFERENCES public.users (id) ON DELETE SET NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   UNIQUE (org_id, contact_id)
@@ -134,6 +141,27 @@ CREATE INDEX IF NOT EXISTS org_people_contact_id_idx
 
 COMMENT ON TABLE public.org_people IS
   'A contact inside one org. Inserts are service-role only. Authenticated pastors and org admins may update campus, status, joined_at and current_stage. Not backfilled from existing labels.';
+
+-- CREATE TABLE IF NOT EXISTS does not add constraints to a table
+-- that already exists. These two FKs are part of the table above;
+-- the block covers a re-run against that earlier shape.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'org_staff_roles_granted_by_fkey'
+  ) THEN
+    ALTER TABLE public.org_staff_roles
+      ADD CONSTRAINT org_staff_roles_granted_by_fkey
+      FOREIGN KEY (granted_by) REFERENCES public.users (id) ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'org_people_created_by_fkey'
+  ) THEN
+    ALTER TABLE public.org_people
+      ADD CONSTRAINT org_people_created_by_fkey
+      FOREIGN KEY (created_by) REFERENCES public.users (id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 DROP TRIGGER IF EXISTS set_updated_at ON public.org_people;
 CREATE TRIGGER set_updated_at
@@ -211,8 +239,9 @@ COMMENT ON FUNCTION public.has_org_role(text, text[]) IS
 --
 --    org_people has no INSERT grant for authenticated. UPDATE is
 --    column-level: campus, status, joined_at, current_stage.
---    REVOKE ALL does not clear column grants, so the column list
---    is revoked and re-granted on every run.
+--    REVOKE ALL on a table removes table privileges and column
+--    grants, so the GRANTs below are the whole authenticated set
+--    on every run.
 -- ────────────────────────────────────────────────────────────
 
 ALTER TABLE public.organisations ENABLE ROW LEVEL SECURITY;
@@ -226,10 +255,6 @@ REVOKE ALL ON TABLE public.org_people FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON TABLE public.organisations TO authenticated;
 GRANT SELECT ON TABLE public.org_staff_roles TO authenticated;
 GRANT SELECT ON TABLE public.org_people TO authenticated;
-REVOKE UPDATE (
-  id, org_id, contact_id, campus, status, joined_at, current_stage,
-  created_by, created_at, updated_at
-) ON TABLE public.org_people FROM authenticated;
 GRANT UPDATE (campus, status, joined_at, current_stage)
   ON TABLE public.org_people TO authenticated;
 
@@ -281,22 +306,48 @@ CREATE POLICY "Org pastors and admins can update org people"
   USING (public.has_org_role_id(org_id, ARRAY['pastor', 'admin']))
   WITH CHECK (public.has_org_role_id(org_id, ARRAY['pastor', 'admin']));
 
--- contacts: one new SELECT. Existing policies are not replaced.
--- A Missio role reaches a contact only when org_people links them
--- and has_org_role_id is true for that org. is_admin() is not a branch.
+-- contacts: no new policy. Drop the one this file used to add, so a
+-- re-run removes it. authenticated already has table-wide SELECT;
+-- a policy here would return the whole contact row (notes, DOB,
+-- address, email, phone) to every Missio role. Names are the view
+-- below, and nothing else.
 DROP POLICY IF EXISTS "Org staff can read their org's people" ON public.contacts;
-CREATE POLICY "Org staff can read their org's people"
-  ON public.contacts
-  FOR SELECT
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1
-      FROM public.org_people op
-      WHERE op.contact_id = contacts.id
-        AND public.has_org_role_id(op.org_id)
-    )
-  );
+
+-- ────────────────────────────────────────────────────────────
+-- 5b. org_people_directory
+--     Owner rights (security_invoker = false) so the view can read
+--     contacts the caller cannot. security_barrier so a caller's
+--     WHERE cannot see rows has_org_role_id rejects. The column
+--     list is the whole contract: names only.
+-- ────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE VIEW public.org_people_directory
+WITH (security_invoker = false, security_barrier = true) AS
+SELECT
+  op.id,
+  op.org_id,
+  op.contact_id,
+  op.campus,
+  op.status,
+  op.joined_at,
+  op.current_stage,
+  op.created_at,
+  op.updated_at,
+  c.first_name,
+  c.last_name,
+  c.preferred_name
+FROM public.org_people op
+JOIN public.contacts c ON c.id = op.contact_id
+WHERE public.has_org_role_id(op.org_id);
+
+ALTER VIEW public.org_people_directory SET (security_invoker = false, security_barrier = true);
+ALTER VIEW public.org_people_directory OWNER TO postgres;
+
+REVOKE ALL ON TABLE public.org_people_directory FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.org_people_directory TO authenticated, service_role;
+
+COMMENT ON VIEW public.org_people_directory IS
+  'The only way an org role reads a contact name. Columns are the org_people fields plus first_name, last_name and preferred_name. Names only are intentional: email, phone, notes, address and the rest of the contact row are not here. Runs as the owner, then keeps rows where has_org_role_id(org_id) is true.';
 
 -- ────────────────────────────────────────────────────────────
 -- 6. Label mirror
@@ -305,8 +356,12 @@ CREATE POLICY "Org staff can read their org's people"
 --    Removing the last such row removes only that synced label.
 --    A label added any other way (added_via <> 'org_people_sync')
 --    is left in place. contact_labels' primary key is
---    (contact_id, label_id), so a second insert is a no-op and
---    does not overwrite a manual row.
+--    (contact_id, label_id). ON CONFLICT DO NOTHING does not
+--    change added_via. Accepted for Phase 0: if staff later re-add
+--    that same label by hand while the sync row still exists, it
+--    keeps added_via = 'org_people_sync' and is still removed when
+--    the person leaves the org. A label that was manual before any
+--    sync row existed is not overwritten and is not removed.
 --
 --    The function is SECURITY DEFINER with an empty search_path
 --    so a pastor, who cannot write contact_labels, still gets the
@@ -373,10 +428,9 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.sync_org_people_contact_label() FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.sync_org_people_contact_label() TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.sync_org_people_contact_label() IS
-  'Mirrors organisations.contact_label_id onto contact_labels while an org_people row exists. Deletes only rows it added (added_via = org_people_sync), and only when no other org_people row still links that contact to that org.';
+  'Mirrors organisations.contact_label_id onto contact_labels while an org_people row exists. Deletes only rows it added (added_via = org_people_sync), and only when no other org_people row still links that contact to that org. ON CONFLICT DO NOTHING leaves added_via alone, so a hand re-add of a synced label keeps org_people_sync and is still removed when the person leaves. Accepted for Phase 0.';
 
 DROP TRIGGER IF EXISTS trg_org_people_sync_contact_label ON public.org_people;
 CREATE TRIGGER trg_org_people_sync_contact_label
