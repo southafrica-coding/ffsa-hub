@@ -25,10 +25,9 @@ export type MissioErrorCode =
 
 /**
  * GET /api/missio/me.
- * `currentOrg` is `"missio"` only when this viewer may open the church.
- * `rolesByOrg` is keyed by organisation slug. Phase 0 grants `pastor` only;
- * an FFSA `admin` role does not appear here unless the same person also
- * holds a Missio role, and it still does not open /missio by itself.
+ * `currentOrg` is `"missio"` whenever the viewer holds any Missio role.
+ * Opening the church still requires `rolesByOrg.missio` to include `pastor`.
+ * An FFSA role never satisfies that check on its own.
  */
 export interface MissioMe {
   orgs: Array<{

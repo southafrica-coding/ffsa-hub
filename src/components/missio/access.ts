@@ -37,8 +37,9 @@ export function skinForOrg(slug: string): OrgSkin {
 }
 
 /**
- * Phase 0 gate. The API's `currentOrg` must be Missio, and the Missio org
- * must list the pastor role. An FFSA admin role never satisfies this.
+ * Phase 0 gate. `currentOrg` is `"missio"` for any Missio role, so this
+ * still requires `rolesByOrg.missio` to include `pastor`. An FFSA role
+ * never satisfies that check.
  */
 export function canAccessMissio(me: MissioMe): boolean {
   if (me.currentOrg !== "missio") return false;
