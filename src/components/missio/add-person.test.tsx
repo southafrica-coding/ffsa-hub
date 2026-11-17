@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AddPersonDialog } from "./add-person";
 import { MissioApiError, EXISTS_USE_SEARCH_MESSAGE, type MissioClient } from "./api";
+import styles from "./shell.module.css";
 import type { ContactMatch, CreateMissioPersonInput, MissioPerson } from "./types-shim";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -184,7 +185,10 @@ describe("add person", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(host.textContent).toContain(EXISTS_USE_SEARCH_MESSAGE);
+    const callout = host.querySelector("[data-testid=exists-use-search]");
+    expect(callout?.textContent).toBe(EXISTS_USE_SEARCH_MESSAGE);
+    expect(callout?.getAttribute("role")).toBe("status");
+    expect(callout?.classList.contains(styles.info)).toBe(true);
     expect(host.textContent).not.toContain("RAW 409 TEXT");
     const field = host.querySelector("[aria-label='Email or phone']") as HTMLInputElement;
     expect(field.value).toBe("mina.osei@example.com");
@@ -364,9 +368,18 @@ describe("add person", () => {
     expect(host.textContent).toMatch(/No contact uses that email or phone/);
     await click(host, "Create new person");
     setValue(host.querySelector("[aria-label=Name]") as HTMLInputElement, "Mina Osei");
-    setValue(host.querySelector("[aria-label=Email]") as HTMLInputElement, "mina.osei@example.com");
+    const emailInput = host.querySelector("[aria-label=Email]") as HTMLInputElement;
+    const phoneInput = host.querySelector("[aria-label=Phone]") as HTMLInputElement;
+    expect(emailInput.type).toBe("email");
+    expect(emailInput.autocomplete).toBe("email");
+    expect(phoneInput.type).toBe("tel");
+    expect(phoneInput.inputMode).toBe("tel");
+    expect(phoneInput.autocomplete).toBe("tel");
+    setValue(emailInput, "mina.osei@example.com");
     setValue(host.querySelector("[aria-label='Status for new person']") as HTMLSelectElement, "active");
     setValue(host.querySelector("[aria-label='Joined date']") as HTMLInputElement, "2026-01-04");
+    expect(host.textContent).toContain("4 Jan 2026");
+    expect(host.textContent).not.toContain("DD/MM/YYYY");
     await click(host, "Create person");
     expect(createPerson).toHaveBeenCalledWith({
       name: "Mina Osei",
@@ -378,5 +391,91 @@ describe("add person", () => {
     });
     expect(createPerson.mock.calls[0][0]).not.toHaveProperty("label");
     expect(host.textContent).toContain("Person added");
+  });
+
+  it("searches the phone when the email misses, and links with that phone", async () => {
+    const calls: string[] = [];
+    let release: (value: { matches: ContactMatch[] }) => void = () => {};
+    const phoneMatch: ContactMatch = { ...openMatch, matchToken: "tok-phone" };
+    const phoneReady = new Promise<{ matches: ContactMatch[] }>((resolve) => {
+      release = resolve;
+    });
+    const searchContacts = vi.fn(async (q: string) => {
+      calls.push(q);
+      if (q === "0825550199") return phoneReady;
+      return { matches: [] as ContactMatch[] };
+    });
+    const createPerson = vi.fn(async (input: CreateMissioPersonInput) => {
+      if ("name" in input) throw new MissioApiError(409, "RAW", null, "exists_use_search");
+      return { person, linkedExisting: true };
+    });
+    const { host, root } = render(
+      <AddPersonDialog client={client({ searchContacts, createPerson })} onClose={() => {}} onCreated={() => {}} />
+    );
+    roots.push(root);
+    hosts.push(host);
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "new.person@example.com");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    setValue(host.querySelector("[aria-label=Name]") as HTMLInputElement, "Ada Mokoena");
+    setValue(host.querySelector("[aria-label=Email]") as HTMLInputElement, "mina.osei@example.com");
+    setValue(host.querySelector("[aria-label=Phone]") as HTMLInputElement, "0825550199");
+    const create = [...host.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Create person");
+    await act(async () => {
+      create?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    const find = [...host.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Find contact");
+    expect(find?.hasAttribute("disabled")).toBe(true);
+    expect(calls).toContain("mina.osei@example.com");
+    expect(calls).toContain("0825550199");
+    await act(async () => {
+      release({ matches: [phoneMatch] });
+      await phoneReady;
+    });
+    expect((host.querySelector("[aria-label='Email or phone']") as HTMLInputElement).value).toBe("0825550199");
+    expect(host.querySelector("[data-testid=exists-use-search]")?.textContent).toBe(EXISTS_USE_SEARCH_MESSAGE);
+    await click(host, "Use this contact");
+    expect(createPerson).toHaveBeenLastCalledWith({
+      matchToken: "tok-phone",
+      matchedBy: { phone: "0825550199" },
+      campus: "potch",
+      status: "visitor",
+    });
+  });
+
+  it("does not search the phone when the email already matches", async () => {
+    const calls: string[] = [];
+    const searchContacts = vi.fn(async (q: string) => {
+      calls.push(q);
+      if (q === "mina.osei@example.com") return { matches: [openMatch] };
+      return { matches: [] as ContactMatch[] };
+    });
+    const createPerson = vi.fn(async (input: CreateMissioPersonInput) => {
+      if ("name" in input) throw new MissioApiError(409, "RAW", null, "exists_use_search");
+      return { person, linkedExisting: true };
+    });
+    const { host, root } = render(
+      <AddPersonDialog client={client({ searchContacts, createPerson })} onClose={() => {}} onCreated={() => {}} />
+    );
+    roots.push(root);
+    hosts.push(host);
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "new.person@example.com");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    setValue(host.querySelector("[aria-label=Name]") as HTMLInputElement, "Ada Mokoena");
+    setValue(host.querySelector("[aria-label=Email]") as HTMLInputElement, "mina.osei@example.com");
+    setValue(host.querySelector("[aria-label=Phone]") as HTMLInputElement, "0825550199");
+    await click(host, "Create person");
+    expect(calls.filter((q) => q === "0825550199")).toEqual([]);
+    expect(calls.filter((q) => q === "mina.osei@example.com")).toEqual(["mina.osei@example.com"]);
+    expect((host.querySelector("[aria-label='Email or phone']") as HTMLInputElement).value).toBe("mina.osei@example.com");
+    await click(host, "Use this contact");
+    expect(createPerson).toHaveBeenLastCalledWith({
+      matchToken: "tok-mina",
+      matchedBy: { email: "mina.osei@example.com" },
+      campus: "potch",
+      status: "visitor",
+    });
   });
 });

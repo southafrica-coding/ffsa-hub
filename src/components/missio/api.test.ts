@@ -133,6 +133,16 @@ describe("missio client", () => {
     });
   });
 
+  it("caps Retry-After at ten minutes", async () => {
+    const fetchMock = mockFetch(async () => jsonResponse({ error: "slow down" }, 429, { "retry-after": "9000" }));
+    const client = createMissioClient(fetchMock as unknown as typeof fetch);
+    await expect(client.searchContacts("mina.osei@example.com")).rejects.toMatchObject({
+      status: 429,
+      retryAfterSeconds: 600,
+      message: "Too many searches, try again in 600 seconds",
+    });
+  });
+
   it("reads Retry-After when creating a person is rate limited", async () => {
     const fetchMock = mockFetch(async () => jsonResponse({ error: "slow down" }, 429, { "retry-after": "12" }));
     const client = createMissioClient(fetchMock as unknown as typeof fetch);

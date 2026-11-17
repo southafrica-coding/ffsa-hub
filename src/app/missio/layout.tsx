@@ -1,20 +1,6 @@
 import type { Metadata } from "next";
-import { Archivo, Fraunces } from "next/font/google";
 import { MissioFrame } from "@/components/missio/shell";
-
-const archivo = Archivo({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-missio-body",
-  display: "swap",
-});
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-missio-display",
-  display: "swap",
-});
+import { missioBody, missioDisplay } from "@/components/missio/fonts";
 
 export const metadata: Metadata = {
   title: { absolute: "Missio" },
@@ -22,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function MissioLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`${archivo.variable} ${fraunces.variable} ${archivo.className}`}>
+    <div data-missio-font="" className={`${missioBody.variable} ${missioDisplay.variable} ${missioBody.className}`}>
       <MissioFrame>{children}</MissioFrame>
     </div>
   );

@@ -122,6 +122,19 @@
 
   a { color: var(--ink); text-decoration: none; }
   a:hover { color: var(--blue); }
+
+  /* Missio dialogs portal outside the church shell. This layer is earlier than
+     the button rule below, so !important here keeps the church face on focus too. */
+  [data-missio-dialog] button,
+  [data-missio-dialog] button:hover,
+  [data-missio-dialog] button:focus,
+  [data-missio-dialog] button:focus-visible {
+    font-family: var(--body), Archivo, system-ui, sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 12.5px !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+  }
 }
 
 /* ─────────────────────────────────────────────────────

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { orgHref, shouldShowOrgSwitcher } from "./access";
-import { clearMissioMeCache, loadMissioMe } from "./me-cache";
+import { clearMissioMeCache, loadMissioMe, subscribeMissioSignOut } from "./me-cache";
 import type { MissioMe } from "./types-shim";
 import { OrgSwitcher } from "./org-switcher";
 
@@ -21,7 +22,19 @@ export function OrgSwitcherMount({ compact = false }: { compact?: boolean }) {
       setMe(null);
     }
     document.addEventListener("submit", onSubmit, true);
-    return () => document.removeEventListener("submit", onSubmit, true);
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = subscribeMissioSignOut(createClient().auth, () => {
+        clearMissioMeCache();
+        setMe(null);
+      });
+    } catch {
+      // The browser client isn't available. The sign-out form above still clears the cache.
+    }
+    return () => {
+      document.removeEventListener("submit", onSubmit, true);
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

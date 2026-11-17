@@ -58,7 +58,7 @@ export interface MissioPerson {
 }
 
 /**
- * One exact contact hit from GET /api/missio/contacts/search.
+ * One exact contact hit from POST /api/missio/contacts/search.
  * People who are not in Missio have no full name and no contact id — only
  * `maskedName` and the opaque `matchToken` used to link them.
  * `name` and `personId` are set only when `alreadyInOrg` is true.

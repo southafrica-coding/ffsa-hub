@@ -96,12 +96,21 @@ function errorMessage(body: Record<string, unknown>, fallback: string): string {
   return fallback;
 }
 
+/** A lockout longer than this is treated as ten minutes. */
+export const MAX_RETRY_AFTER_SECONDS = 10 * 60;
+
+/** Clamp a Retry-After value. Missing or unreadable values wait 60 seconds. */
+export function capRetryAfterSeconds(seconds: number | null | undefined): number {
+  if (seconds == null || !Number.isFinite(seconds)) return 60;
+  return Math.min(MAX_RETRY_AFTER_SECONDS, Math.max(0, Math.ceil(seconds)));
+}
+
 function retryAfterSeconds(header: string | null): number {
   if (!header) return 60;
   const asNumber = Number(header);
-  if (Number.isFinite(asNumber) && asNumber >= 0) return Math.ceil(asNumber);
+  if (Number.isFinite(asNumber) && asNumber >= 0) return capRetryAfterSeconds(asNumber);
   const at = Date.parse(header);
-  if (!Number.isNaN(at)) return Math.max(0, Math.ceil((at - Date.now()) / 1000));
+  if (!Number.isNaN(at)) return capRetryAfterSeconds(Math.max(0, Math.ceil((at - Date.now()) / 1000)));
   return 60;
 }
 
@@ -144,7 +153,7 @@ function messageFor(code: MissioErrorCode, body: Record<string, unknown>, second
 /** Copy for a failed call. Search and add/link use different rate-limit wording. */
 export function missioErrorCopy(error: MissioApiError, call: "search" | "submit"): string {
   if (error.code === "rate_limited") {
-    const seconds = error.retryAfterSeconds ?? 60;
+    const seconds = capRetryAfterSeconds(error.retryAfterSeconds);
     return call === "search"
       ? `Too many searches, try again in ${seconds} seconds`
       : `Too many attempts, try again in ${seconds} seconds`;

@@ -372,10 +372,13 @@
   cursor: pointer;
 }
 
-.primary {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  color: var(--accent-ink);
+.primary,
+.dialog .primary:hover,
+.dialog .primary:focus,
+.dialog .primary:focus-visible {
+  background: var(--accent, #b4532e);
+  border: 1px solid var(--accent, #b4532e);
+  color: var(--accent-ink, #fff8ee);
 }
 
 .primary:disabled,
@@ -386,10 +389,23 @@
 }
 
 .ghost,
-.textButton {
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  color: var(--ink);
+.textButton,
+.dialog .ghost:hover,
+.dialog .ghost:focus,
+.dialog .ghost:focus-visible,
+.dialog .textButton:hover,
+.dialog .textButton:focus,
+.dialog .textButton:focus-visible {
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, #ddd7c8);
+  color: var(--ink, #1c1b17);
+}
+
+.dialog .primary:focus-visible,
+.dialog .ghost:focus-visible,
+.dialog .textButton:focus-visible {
+  outline: 2px solid var(--ink, #1c1b17);
+  outline-offset: 2px;
 }
 
 .headRow {
@@ -539,12 +555,17 @@
   font-family: var(--body), Archivo, system-ui, sans-serif;
 }
 
-.dialog h2 {
-  font-family: var(--display);
+.dialog h2,
+.dialogTitle,
+.dialogTitle:focus {
+  font-family: var(--display), Fraunces, Georgia, serif;
   font-weight: 560;
   font-size: 22px;
   letter-spacing: -0.3px;
   text-transform: none;
+  line-height: 1.25;
+  color: var(--ink, #1c1b17);
+  margin: 0 0 8px;
 }
 
 .help {
@@ -564,10 +585,13 @@
   font-weight: 600;
 }
 
-.hint {
-  margin-left: 8px;
-  font-weight: 400;
-  color: var(--quiet, #7a7466);
+.dateReadout {
+  font-family: var(--body), Archivo, system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 12.5px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink, #1c1b17);
 }
 
 .field input,
@@ -599,9 +623,20 @@
   margin: 0 0 12px;
   padding: 8px 10px;
   border-radius: 6px;
-  background: var(--warn-soft);
-  color: var(--warn);
+  background: var(--warn-soft, #f5e8cf);
+  color: var(--warn, #94631a);
   font-size: 12.5px;
+}
+
+.info {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--accent-soft, #f6e4d9);
+  color: var(--ink, #1c1b17);
+  border: 1px solid var(--accent, #b4532e);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .success {
