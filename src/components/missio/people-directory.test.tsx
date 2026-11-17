@@ -177,7 +177,7 @@ describe("people directory", () => {
         throw new Error("unused");
       },
       updatePerson: async () => {
-        throw new MissioApiError(404, "missing");
+        throw new MissioApiError(404, "missing", null, "not_found");
       },
     };
     const { host, root } = render(<PeopleDirectory client={client} />);

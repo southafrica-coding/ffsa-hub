@@ -70,9 +70,11 @@ describe("missio client", () => {
     );
     const client = createMissioClient(fetchMock as unknown as typeof fetch);
     const result = await client.searchContacts("mina.osei@example.com");
-    expect(String(fetchMock.mock.calls[0][0])).toBe(
-      "/api/missio/contacts/search?q=mina.osei%40example.com"
-    );
+    expect(String(fetchMock.mock.calls[0][0])).toBe("/api/missio/contacts/search");
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("mina.osei");
+    const init = fetchMock.mock.calls[0][1];
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ q: "mina.osei@example.com" });
     expect(result.matches[0].alreadyInOrg).toBe(false);
     expect(result.matches[0].matchToken).toBe("tok-1");
     expect(result.matches[0]).not.toHaveProperty("contactId");
@@ -101,17 +103,43 @@ describe("missio client", () => {
     expect(body).not.toHaveProperty("contactId");
     await expect(
       client.createPerson({ name: "Mina Osei", email: "mina.osei@example.com" })
-    ).rejects.toMatchObject({ status: 409, message: "conflict" });
+    ).rejects.toMatchObject({ status: 409, code: "already_in_org", message: "Already in Missio" });
   });
 
-  it("uses the 409 error text when email and phone belong to different people", async () => {
-    const fetchMock = mockFetch(async () =>
-      jsonResponse({ error: "Email and phone belong to different people" }, 409)
-    );
+  it("uses the 409 error text and code, and treats exists_use_search as its own case", async () => {
+    const fetchMock = mockFetch()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            error: "This person already exists. Search by their email or phone to add them.",
+            code: "exists_use_search",
+          },
+          409,
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse({ error: "Already in Missio", code: "already_in_org" }, 409));
     const client = createMissioClient(fetchMock as unknown as typeof fetch);
-    await expect(client.createPerson({ name: "Mina Osei", email: "mina.osei@example.com", phone: "0825550199" })).rejects.toMatchObject({
+    await expect(client.createPerson({ name: "Mina Osei", email: "mina.osei@example.com" })).rejects.toMatchObject({
       status: 409,
-      message: "Email and phone belong to different people",
+      code: "exists_use_search",
+      message: "This person is already in FFSA's contacts. Search for them and pick Use this contact.",
+    });
+    await expect(
+      client.createPerson({ matchToken: "tok-1", matchedBy: { email: "mina.osei@example.com" } }),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "already_in_org",
+      message: "Already in Missio",
+    });
+  });
+
+  it("reads Retry-After when creating a person is rate limited", async () => {
+    const fetchMock = mockFetch(async () => jsonResponse({ error: "slow down" }, 429, { "retry-after": "12" }));
+    const client = createMissioClient(fetchMock as unknown as typeof fetch);
+    await expect(client.createPerson({ name: "Mina Osei", email: "mina.osei@example.com" })).rejects.toMatchObject({
+      status: 429,
+      retryAfterSeconds: 12,
+      message: "Too many searches, try again in 12 seconds",
     });
   });
 

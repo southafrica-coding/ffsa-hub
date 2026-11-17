@@ -3,21 +3,9 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { orgHref, shouldShowOrgSwitcher } from "./access";
-import { MissioApiError, missioClient } from "./api";
+import { clearMissioMeCache, loadMissioMe } from "./me-cache";
 import type { MissioMe } from "./types-shim";
 import { OrgSwitcher } from "./org-switcher";
-
-let cached: Promise<MissioMe | null> | null = null;
-
-function loadMe(): Promise<MissioMe | null> {
-  if (!cached) {
-    cached = missioClient.getMe().catch((error: unknown) => {
-      if (error instanceof MissioApiError) return null;
-      return null;
-    });
-  }
-  return cached;
-}
 
 /** FFSA shell slot. Hides itself unless /api/missio/me lists more than one org. */
 export function OrgSwitcherMount({ compact = false }: { compact?: boolean }) {
@@ -25,8 +13,20 @@ export function OrgSwitcherMount({ compact = false }: { compact?: boolean }) {
   const [me, setMe] = useState<MissioMe | null>(null);
 
   useEffect(() => {
+    function onSubmit(event: Event) {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      if (!form.getAttribute("action")?.includes("/auth/sign-out")) return;
+      clearMissioMeCache();
+      setMe(null);
+    }
+    document.addEventListener("submit", onSubmit, true);
+    return () => document.removeEventListener("submit", onSubmit, true);
+  }, []);
+
+  useEffect(() => {
     let active = true;
-    loadMe().then((next) => {
+    loadMissioMe().then((next) => {
       if (active) setMe(next);
     });
     return () => {

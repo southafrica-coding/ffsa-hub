@@ -1,14 +1,27 @@
 // TODO: Hub Backend owns src/lib/missio/types.ts. Do not add that file on
 // this branch. The exports below match the contract Backend will publish
 // (MissioMe, MissioPerson, MissioCampus, MissioStatus, ContactMatch,
-// CreateMissioPersonInput, UpdateMissioPersonInput). When that module
-// merges, switch these imports over to it and delete this shim.
+// CreateMissioPersonInput, UpdateMissioPersonInput, MissioErrorCode). When
+// that module merges, switch these imports over to it and delete this shim.
 
 /** Campus stored on a Missio person. Potch is the main church. */
 export type MissioCampus = "potch" | "jhb";
 
 /** Visitor, active, or inactive. Inactive is the end state — there is no delete. */
 export type MissioStatus = "visitor" | "active" | "inactive";
+
+/** Codes returned as `{ error, code }` by every Missio route. */
+export type MissioErrorCode =
+  | "exists_use_search"
+  | "already_in_org"
+  | "invalid_token"
+  | "invalid_input"
+  | "rate_limited"
+  | "unauthenticated"
+  | "forbidden"
+  | "not_found"
+  | "server_error"
+  | "method_not_allowed";
 
 /**
  * GET /api/missio/me.
@@ -68,6 +81,9 @@ export interface ContactMatch {
  * matchedBy is the email or phone they typed, unchanged.
  * The UI never sends a Missio label — a database trigger sets that.
  * A new contact needs a name and at least one of email or phone.
+ * That form does not link an existing contact. If the email or phone
+ * already belongs to someone, the route returns 409 code `exists_use_search`.
+ * `linkedExisting` is only meaningful on the matchToken path.
  */
 export type CreateMissioPersonInput =
   | {

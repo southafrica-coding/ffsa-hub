@@ -9,8 +9,9 @@ import {
   formatJoined,
   type PeopleQuery,
 } from "./access";
-import { MissioApiError, missioClient, type MissioClient } from "./api";
+import { MissioApiError, missioClient, missioErrorCopy, type MissioClient } from "./api";
 import { AddPersonDialog } from "./add-person";
+import { MissioDialog } from "./missio-dialog";
 import type { MissioCampus, MissioPerson, MissioStatus } from "./types-shim";
 import styles from "./shell.module.css";
 
@@ -283,24 +284,15 @@ function EditPerson({
       await client.updatePerson(person.id, patch);
       onSaved();
     } catch (caught) {
-      const missing = caught instanceof MissioApiError && caught.status === 404;
-      setError(missing ? "This person couldn’t be found" : caught instanceof Error ? caught.message : "Couldn’t save.");
+      const missing = caught instanceof MissioApiError && caught.code === "not_found";
+      setError(missing ? "This person couldn’t be found" : caught instanceof MissioApiError ? missioErrorCopy(caught, "submit") : "Couldn’t save.");
       if (missing) onNotFound();
       setPending(false);
     }
   }
 
   return (
-    <div className={styles.backdrop} role="presentation" onMouseDown={onClose}>
-      <div
-        className={styles.dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-person-title"
-        data-testid="edit-person"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <h2 id="edit-person-title">Edit {person.name}</h2>
+    <MissioDialog onClose={onClose} title={`Edit ${person.name}`} testId="edit-person">
         <p className={styles.help}>Campus and status only. There’s no delete — mark someone inactive when they leave.</p>
         {error ? (
           <p className={styles.alert} role="alert">
@@ -344,7 +336,6 @@ function EditPerson({
             Save
           </button>
         </div>
-      </div>
-    </div>
+    </MissioDialog>
   );
 }

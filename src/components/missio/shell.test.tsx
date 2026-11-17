@@ -110,7 +110,7 @@ describe("Missio access state", () => {
     const { host, root } = render(
       <MissioFrame
         client={client(async () => {
-          throw new MissioApiError(403, "No Missio pastor role");
+          throw new MissioApiError(403, "No Missio pastor role", null, "forbidden");
         })}
       >
         <p>People live here</p>

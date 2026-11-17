@@ -7,7 +7,8 @@ import {
   classifyContactQuery,
   validateNewPerson,
 } from "./access";
-import { MissioApiError, type MissioClient } from "./api";
+import { MissioApiError, EXISTS_USE_SEARCH_MESSAGE, missioErrorCopy, type MissioClient } from "./api";
+import { MissioDialog } from "./missio-dialog";
 import type {
   ContactMatch,
   CreateMissioPersonInput,
@@ -42,24 +43,28 @@ export function AddPersonDialog({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [lockedUntil, setLockedUntil] = useState(0);
+  const [submitLockedUntil, setSubmitLockedUntil] = useState(0);
   const [clock, setClock] = useState(() => Date.now());
 
   useEffect(() => {
-    if (lockedUntil <= Date.now()) return;
+    const until = Math.max(lockedUntil, submitLockedUntil);
+    if (until <= Date.now()) return;
     const timer = window.setInterval(() => setClock(Date.now()), 500);
     return () => window.clearInterval(timer);
-  }, [lockedUntil]);
+  }, [lockedUntil, submitLockedUntil]);
 
   const searchLocked = lockedUntil > clock;
+  const submitLocked = submitLockedUntil > clock;
 
-  async function findContact(event: React.FormEvent) {
-    event.preventDefault();
-    if (searchLocked) return;
-    setNotice(null);
-    const kind = classifyContactQuery(query);
+  async function runSearch(raw: string, keep?: string) {
+    if (lockedUntil > Date.now()) return;
+    const value = raw.trim();
+    const kind = classifyContactQuery(value);
     if (kind === "empty" || kind === "name") {
       setMatches(null);
       setSearched(null);
+      setStep("search");
+      setQuery(value);
       setNotice({
         tone: "alert",
         text: "Enter an email address or a phone number. A name isn’t accepted — Missio matches an existing contact exactly, and a name would be a guess.",
@@ -67,26 +72,34 @@ export function AddPersonDialog({
       return;
     }
     setPending(true);
+    setQuery(value);
+    setStep("search");
+    setNotice(keep ? { tone: "alert", text: keep } : null);
     try {
-      const result = await client.searchContacts(query.trim());
-      setSearched({ kind, value: query.trim() });
+      const result = await client.searchContacts(value);
+      setSearched({ kind, value });
       setMatches(result.matches);
-      if (result.matches.length === 0) {
-        setNotice({ tone: "alert", text: "No contact uses that email or phone." });
-      }
+      if (keep) setNotice({ tone: "alert", text: keep });
+      else if (result.matches.length === 0) setNotice({ tone: "alert", text: "No contact uses that email or phone." });
+      else setNotice(null);
     } catch (error) {
       setMatches(null);
-      if (error instanceof MissioApiError && error.status === 429) {
+      if (error instanceof MissioApiError && error.code === "rate_limited") {
         const seconds = error.retryAfterSeconds ?? 60;
         setLockedUntil(Date.now() + seconds * 1000);
-        setNotice({ tone: "alert", text: `Too many searches, try again in ${seconds} seconds` });
+        setNotice({ tone: "alert", text: missioErrorCopy(error, "search") });
       } else {
-        const text = error instanceof MissioApiError ? error.message : "The contact search didn’t respond.";
+        const text = error instanceof MissioApiError ? missioErrorCopy(error, "search") : "The contact search didn’t respond.";
         setNotice({ tone: "alert", text });
       }
     } finally {
       setPending(false);
     }
+  }
+
+  function findContact(event: React.FormEvent) {
+    event.preventDefault();
+    void runSearch(query);
   }
 
   function startCreate() {
@@ -97,32 +110,47 @@ export function AddPersonDialog({
   }
 
   async function submit(input: CreateMissioPersonInput) {
+    if (submitLocked) return;
     setPending(true);
     setNotice(null);
+    const linking = "matchToken" in input;
     try {
       const result = await client.createPerson(input);
       setNotice({
         tone: "success",
-        text: result.linkedExisting ? "Linked to an existing contact" : "Person added",
+        text: linking && result.linkedExisting ? "Linked to an existing contact" : "Person added",
       });
       onCreated();
     } catch (error) {
-      if (error instanceof MissioApiError && error.status === 400 && "matchToken" in input) {
+      if (!(error instanceof MissioApiError)) {
+        setNotice({ tone: "alert", text: "Couldn’t add this person." });
+        return;
+      }
+      if (error.code === "invalid_token") {
         setStep("search");
         setMatches(null);
         setSearched(null);
-        setNotice({ tone: "alert", text: "That match expired, search again" });
+        setNotice({ tone: "alert", text: missioErrorCopy(error, "submit") });
         return;
       }
-      const conflict = error instanceof MissioApiError && error.status === 409;
-      setNotice({
-        tone: "alert",
-        text: conflict
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : "Couldn’t add this person.",
-      });
+      if (error.code === "rate_limited") {
+        const seconds = error.retryAfterSeconds ?? 60;
+        const until = Date.now() + seconds * 1000;
+        setSubmitLockedUntil(until);
+        setNotice({ tone: "alert", text: missioErrorCopy(error, "submit") });
+        return;
+      }
+      if (error.code === "exists_use_search" && !linking) {
+        const value = email.trim() || phone.trim();
+        setNotice({ tone: "alert", text: EXISTS_USE_SEARCH_MESSAGE });
+        void runSearch(value, EXISTS_USE_SEARCH_MESSAGE);
+        return;
+      }
+      if (error.code === "already_in_org") {
+        setNotice({ tone: "alert", text: "Already in Missio" });
+        return;
+      }
+      setNotice({ tone: "alert", text: missioErrorCopy(error, "submit") });
     } finally {
       setPending(false);
     }
@@ -160,16 +188,7 @@ export function AddPersonDialog({
   }
 
   return (
-    <div className={styles.backdrop} role="presentation" onMouseDown={onClose}>
-      <div
-        className={styles.dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="add-person-title"
-        data-testid="add-person"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <h2 id="add-person-title">Add person</h2>
+    <MissioDialog onClose={onClose} title="Add person" testId="add-person">
         {notice ? (
           <p
             className={notice.tone === "success" ? styles.success : styles.alert}
@@ -181,7 +200,9 @@ export function AddPersonDialog({
                   ? "match-expired"
                   : notice.text.startsWith("Too many searches")
                     ? "search-rate-limit"
-                    : undefined
+                    : notice.text.startsWith("Too many attempts")
+                      ? "submit-rate-limit"
+                      : undefined
             }
           >
             {notice.text}
@@ -199,10 +220,10 @@ export function AddPersonDialog({
                 Email or phone
                 <input
                   disabled={searchLocked}
+                  type="text"
+                  autoComplete="off"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  autoComplete="off"
-                  inputMode="email"
                   aria-label="Email or phone"
                 />
               </label>
@@ -256,7 +277,7 @@ export function AddPersonDialog({
                       <button
                         type="button"
                         className={styles.primary}
-                        disabled={match.alreadyInOrg || pending}
+                        disabled={match.alreadyInOrg || pending || submitLocked}
                         aria-label={`Use this contact, ${label ?? match.maskedName}`}
                         onClick={() => linkContact(match)}
                       >
@@ -304,14 +325,13 @@ export function AddPersonDialog({
               <button type="button" className={styles.ghost} onClick={() => setStep("search")}>
                 Back
               </button>
-              <button type="submit" className={styles.primary} disabled={pending}>
+              <button type="submit" className={styles.primary} disabled={pending || submitLocked}>
                 Create person
               </button>
             </div>
           </form>
         )}
-      </div>
-    </div>
+    </MissioDialog>
   );
 }
 
@@ -355,6 +375,7 @@ function CampusFields({
       </label>
       <label className={styles.field} style={{ gridColumn: "1 / -1" }}>
         Joined
+        <span className={styles.hint}>DD/MM/YYYY</span>
         <input aria-label="Joined date" type="date" value={joinedAt} onChange={(event) => onJoined(event.target.value)} />
       </label>
     </div>

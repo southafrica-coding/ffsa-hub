@@ -37,9 +37,9 @@ export function MissioFrame({
       },
       (error: unknown) => {
         if (!active) return;
-        const status = error instanceof MissioApiError ? error.status : 0;
-        if (status === 401) setGate({ kind: "no-access", status: 401 });
-        else if (status === 403) setGate({ kind: "no-access", status: 403 });
+        const code = error instanceof MissioApiError ? error.code : null;
+        if (code === "unauthenticated") setGate({ kind: "no-access", status: 401 });
+        else if (code === "forbidden") setGate({ kind: "no-access", status: 403 });
         else setGate({ kind: "error" });
       }
     );
@@ -82,7 +82,7 @@ export function MissioFrame({
     <div data-missio-shell="" data-skin="missio" data-access="ready" className={styles.shell} style={skinStyle}>
       <MissioSidebar me={gate.me} />
       <div className={styles.main}>
-        <MissioTop />
+        <MissioTop orgName={gate.me.orgs.find((org) => org.slug === "missio")?.name ?? "Missio"} />
         <div className={styles.content}>{children}</div>
       </div>
     </div>
@@ -138,29 +138,43 @@ function MissioSidebar({ me }: { me: MissioMe }) {
       <div className={styles.me}>
         <span className={styles.avatar}>M</span>
         <div>
-          <div className={styles.who}>Pastor</div>
-          <div className={styles.role}>Missio</div>
+          <div className={styles.who}>{roleLabel(me.rolesByOrg.missio ?? [])}</div>
+          <div className={styles.role}>{missio?.name ?? "Missio"}</div>
         </div>
       </div>
     </aside>
   );
 }
 
-function MissioTop() {
+function MissioTop({ orgName }: { orgName: string }) {
   const pathname = usePathname();
   const section = pathname.startsWith("/missio/people") ? "People" : "Home";
   return (
     <div className={styles.top}>
       <span className={styles.crumb}>
-        Missio / <b>{section}</b>
+        {orgName} / <b>{section}</b>
       </span>
       <span className={styles.spacer} />
       <span className={styles.ent}>
         <span className={styles.dot} />
-        Missio Church
+        {orgName}
       </span>
     </div>
   );
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  pastor: "Pastor",
+  admin: "Admin",
+  house_church_leader: "House church leader",
+  team_leader: "Team leader",
+  finance: "Finance",
+};
+
+function roleLabel(roles: string[]): string {
+  const role = roles.find((item) => item === "pastor") ?? roles[0];
+  if (!role) return "";
+  return ROLE_LABEL[role] ?? role;
 }
 
 export function NoAccess({ status }: { status: 401 | 403 }) {

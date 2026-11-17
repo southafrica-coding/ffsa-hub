@@ -3,7 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AddPersonDialog } from "./add-person";
-import { MissioApiError, type MissioClient } from "./api";
+import { MissioApiError, EXISTS_USE_SEARCH_MESSAGE, type MissioClient } from "./api";
 import type { ContactMatch, CreateMissioPersonInput, MissioPerson } from "./types-shim";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -50,11 +50,11 @@ function client(partial: Partial<MissioClient>): MissioClient {
 }
 
 function render(node: ReactNode) {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
+  const mount = document.createElement("div");
+  document.body.appendChild(mount);
+  const root = createRoot(mount);
   act(() => root.render(node));
-  return { host, root };
+  return { host: document.body, root, mount };
 }
 
 function setValue(input: HTMLInputElement | HTMLSelectElement, value: string) {
@@ -81,7 +81,7 @@ describe("add person", () => {
 
   afterEach(() => {
     while (roots.length) act(() => roots.pop()?.unmount());
-    while (hosts.length) hosts.pop()?.remove();
+    document.body.innerHTML = "";
   });
 
   it("rejects a name before searching", async () => {
@@ -157,13 +157,17 @@ describe("add person", () => {
     expect(host.querySelector("[data-testid=linked-existing]")?.textContent).toBe("Linked to an existing contact");
   });
 
-  it("shows the route's 409 text, including when email and phone belong to different people", async () => {
+  it("steers a create-form exists_use_search 409 back to search with the typed email", async () => {
+    const searchContacts = vi
+      .fn<(q: string) => Promise<{ matches: ContactMatch[] }>>()
+      .mockResolvedValueOnce({ matches: [] })
+      .mockResolvedValueOnce({ matches: [openMatch] });
     const { host, root } = render(
       <AddPersonDialog
         client={client({
-          searchContacts: async () => ({ matches: [openMatch] }),
+          searchContacts,
           createPerson: async () => {
-            throw new MissioApiError(409, "Email and phone belong to different people");
+            throw new MissioApiError(409, "RAW 409 TEXT", null, "exists_use_search");
           },
         })}
         onClose={() => {}}
@@ -174,8 +178,125 @@ describe("add person", () => {
     hosts.push(host);
     setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "mina.osei@example.com");
     await click(host, "Find contact");
-    await click(document.body, "Use this contact");
-    expect(host.textContent).toContain("Email and phone belong to different people");
+    await click(host, "Create new person");
+    setValue(host.querySelector("[aria-label=Name]") as HTMLInputElement, "Mina Osei");
+    await click(host, "Create person");
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain(EXISTS_USE_SEARCH_MESSAGE);
+    expect(host.textContent).not.toContain("RAW 409 TEXT");
+    const field = host.querySelector("[aria-label='Email or phone']") as HTMLInputElement;
+    expect(field.value).toBe("mina.osei@example.com");
+    expect(searchContacts).toHaveBeenLastCalledWith("mina.osei@example.com");
+    expect(host.textContent).toContain("Name (masked)");
+    expect(host.textContent).toContain("M••• O•••");
+  });
+
+  it("keeps a different 409 as Already in Missio and does not steer to search", async () => {
+    const { host, root } = render(
+      <AddPersonDialog
+        client={client({
+          searchContacts: async () => ({ matches: [] }),
+          createPerson: async () => {
+            throw new MissioApiError(409, "Already in Missio", null, "already_in_org");
+          },
+        })}
+        onClose={() => {}}
+        onCreated={() => {}}
+      />
+    );
+    roots.push(root);
+    hosts.push(host);
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "mina.osei@example.com");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    setValue(host.querySelector("[aria-label=Name]") as HTMLInputElement, "Mina Osei");
+    await click(host, "Create person");
+    expect(host.textContent).toContain("Already in Missio");
+    expect(host.querySelector("[data-testid=exists-use-search]")).toBeNull();
+    expect(host.querySelector("[data-testid=create-person-form]")).not.toBeNull();
+  });
+
+  it("does not treat linkedExisting on the create form as a link", async () => {
+    const { host, root } = render(
+      <AddPersonDialog
+        client={client({
+          searchContacts: async () => ({ matches: [] }),
+          createPerson: async () => ({ person, linkedExisting: true }),
+        })}
+        onClose={() => {}}
+        onCreated={() => {}}
+      />
+    );
+    roots.push(root);
+    hosts.push(host);
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "new.person@example.com");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    setValue(host.querySelector("[aria-label=Name]") as HTMLInputElement, "Ada Mokoena");
+    await click(host, "Create person");
+    expect(host.textContent).toContain("Person added");
+    expect(host.querySelector("[data-testid=linked-existing]")).toBeNull();
+  });
+
+  it("disables create after a POST 429", async () => {
+    const { host, root } = render(
+      <AddPersonDialog
+        client={client({
+          searchContacts: async () => ({ matches: [] }),
+          createPerson: async () => {
+            throw new MissioApiError(429, "slow down", 15, "rate_limited");
+          },
+        })}
+        onClose={() => {}}
+        onCreated={() => {}}
+      />
+    );
+    roots.push(root);
+    hosts.push(host);
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "new.person@example.com");
+    await click(host, "Find contact");
+    await click(host, "Create new person");
+    setValue(host.querySelector("[aria-label=Name]") as HTMLInputElement, "Ada Mokoena");
+    await click(host, "Create person");
+    expect(host.querySelector("[data-testid=submit-rate-limit]")?.textContent).toBe(
+      "Too many attempts, try again in 15 seconds"
+    );
+    const submit = [...host.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Create person");
+    expect(submit?.hasAttribute("disabled")).toBe(true);
+    await click(host, "Back");
+    const search = host.querySelector("[aria-label='Email or phone']") as HTMLInputElement;
+    const find = [...host.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Find contact");
+    expect(search.disabled).toBe(false);
+    expect(find?.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("locks Use this contact on a link 429 without locking search", async () => {
+    const { host, root } = render(
+      <AddPersonDialog
+        client={client({
+          searchContacts: async () => ({ matches: [openMatch] }),
+          createPerson: async () => {
+            throw new MissioApiError(429, "slow down", 15, "rate_limited");
+          },
+        })}
+        onClose={() => {}}
+        onCreated={() => {}}
+      />
+    );
+    roots.push(root);
+    hosts.push(host);
+    setValue(host.querySelector("[aria-label='Email or phone']") as HTMLInputElement, "mina.osei@example.com");
+    await click(host, "Find contact");
+    await click(host, "Use this contact");
+    expect(host.querySelector("[data-testid=submit-rate-limit]")?.textContent).toBe(
+      "Too many attempts, try again in 15 seconds"
+    );
+    const use = [...host.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Use this contact");
+    const find = [...host.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Find contact");
+    expect(use?.hasAttribute("disabled")).toBe(true);
+    expect(find?.hasAttribute("disabled")).toBe(false);
   });
 
   it("sends the pastor back to search when the match token has expired", async () => {
@@ -184,7 +305,7 @@ describe("add person", () => {
         client={client({
           searchContacts: async () => ({ matches: [openMatch] }),
           createPerson: async () => {
-            throw new MissioApiError(400, "invalid token");
+            throw new MissioApiError(400, "invalid token", null, "invalid_token");
           },
         })}
         onClose={() => {}}
@@ -206,7 +327,7 @@ describe("add person", () => {
       <AddPersonDialog
         client={client({
           searchContacts: async () => {
-            throw new MissioApiError(429, "Too many searches, try again in 20 seconds", 20);
+            throw new MissioApiError(429, "Too many searches, try again in 20 seconds", 20, "rate_limited");
           },
         })}
         onClose={() => {}}

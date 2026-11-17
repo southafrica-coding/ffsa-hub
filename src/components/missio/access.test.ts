@@ -53,15 +53,19 @@ describe("Missio pastor gate", () => {
     ).toBe(false);
   });
 
-  it("refuses a Missio role that is not pastor", () => {
-    expect(
-      canAccessMissio(
-        me({
-          rolesByOrg: { missio: ["admin"], ffsa: ["admin"] },
-          currentOrg: "missio",
-        })
-      )
-    ).toBe(false);
+  it("refuses a Missio admin whose currentOrg is missio, and the other non-pastor roles", () => {
+    // Any Missio role sets currentOrg to missio. Access still requires pastor.
+    for (const role of ["admin", "house_church_leader", "team_leader", "finance"] as const) {
+      expect(
+        canAccessMissio(
+          me({
+            orgs: [{ id: "org-missio", slug: "missio", name: "Missio" }],
+            rolesByOrg: { missio: [role] },
+            currentOrg: "missio",
+          })
+        )
+      ).toBe(false);
+    }
   });
 
   it("allows a pastor, including one who is also an FFSA admin", () => {
