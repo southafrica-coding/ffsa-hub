@@ -86,3 +86,16 @@ export type UpdateMissioPersonInput = {
   joinedAt?: string | null;
   currentStage?: string | null;
 };
+
+/** Machine-readable code on every Missio error response. */
+export type MissioErrorCode =
+  | "exists_use_search"
+  | "already_in_org"
+  | "invalid_token"
+  | "invalid_input"
+  | "rate_limited"
+  | "unauthenticated"
+  | "forbidden"
+  | "not_found"
+  | "server_error"
+  | "method_not_allowed";

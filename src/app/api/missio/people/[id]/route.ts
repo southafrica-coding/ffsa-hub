@@ -4,7 +4,7 @@ import { updatePerson } from "@/lib/missio/people";
 
 // PATCH /api/missio/people/[id]  { campus?, status?, joinedAt?, currentStage? }
 //
-// Same pastor / org-admin gate as the list. The update runs on the user
+// Pastors only. The update runs on the user
 // client and may change only campus, status, joined_at, and current_stage.
 // contact_id and org_id are refused. A row the caller cannot see is a 404.
 // There is no delete: set status to inactive.
@@ -23,16 +23,16 @@ export async function PATCH(request: Request, context: Ctx) {
 
   const { id } = await context.params;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    return json({ error: "Person not found." }, 404);
+    return json({ error: "Person not found.", code: "not_found" }, 404);
   }
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return json({ error: "Check the fields and try again." }, 400);
+    return json({ error: "Check the fields and try again.", code: "invalid_input" }, 400);
   }
 
   const result = await updatePerson(auth, id, body);
-  if (!result.ok) return json({ error: result.error }, result.status);
+  if (!result.ok) return json({ error: result.error, code: result.code }, result.status);
   return json({ person: result.person });
 }

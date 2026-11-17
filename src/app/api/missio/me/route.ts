@@ -14,13 +14,13 @@ export async function GET() {
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return NextResponse.json({ error: "Not authenticated", code: "unauthenticated" }, { status: 401 });
   }
 
   const mine = await getMyOrgs(supabase, user.id);
   if ("error" in mine) {
     console.error("[missio] membership lookup failed", mine.error.message);
-    return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
+    return NextResponse.json({ error: "Something went wrong.", code: "server_error" }, { status: 500 });
   }
 
   const body: MissioMe = {

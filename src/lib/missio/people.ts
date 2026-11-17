@@ -4,15 +4,20 @@ import { normalizeEmail, normalizePhoneE164 } from "@/lib/phone";
 import { addContactEmail, addContactPhone } from "@/services/contact-identifiers";
 import { MISSIO_SLUG, type OrgAccess } from "@/lib/missio/access";
 import { maskEmail, maskName, maskPhone } from "@/lib/missio/mask";
-import { missioMatchToken, sha256Hex } from "@/lib/missio/match-token";
+import { matchTokenFits, missioMatchToken, queryHmac } from "@/lib/missio/match-token";
 import type {
   ContactMatch,
   CreateMissioPersonResponse,
   MissioCampus,
+  MissioErrorCode,
   MissioPeopleResponse,
   MissioPerson,
   MissioStatus,
 } from "@/lib/missio/types";
+
+function fail(status: number, code: MissioErrorCode, error: string) {
+  return { ok: false as const, status, code, error };
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -149,7 +154,7 @@ function adminClient(): { client: Client } | { error: string } {
 
 export async function listPeople(auth: OrgAccess, query: z.infer<typeof peopleQuerySchema>): Promise<
   | { ok: true; body: MissioPeopleResponse }
-  | { ok: false; status: number; error: string }
+  | { ok: false; status: number; error: string; code: MissioErrorCode }
 > {
   let request = auth.supabase
     .from(DIRECTORY)
@@ -175,7 +180,7 @@ export async function listPeople(auth: OrgAccess, query: z.infer<typeof peopleQu
 
   if (error) {
     console.error("[missio] people list failed", error.message ?? "query error");
-    return { ok: false, status: 500, error: "Something went wrong." };
+    return fail(500, "server_error", "Something went wrong.");
   }
 
   const rows = ((data ?? []) as PersonRow[]).map(toMissioPerson);
@@ -187,14 +192,14 @@ const SEARCH_CAP = 5;
 export async function searchContacts(
   auth: OrgAccess,
   q: string
-): Promise<{ ok: true; matches: ContactMatch[] } | { ok: false; status: number; error: string }> {
+): Promise<{ ok: true; matches: ContactMatch[] } | { ok: false; status: number; error: string; code: MissioErrorCode }> {
   const lookup = classifyLookup(q);
   if (lookup.kind === "reject") {
-    return { ok: false, status: 400, error: "Search by an email address or a phone number." };
+    return fail(400, "invalid_input", "Search by an email address or a phone number.");
   }
 
   const admin = adminClient();
-  if ("error" in admin) return { ok: false, status: 500, error: admin.error };
+  if ("error" in admin) return fail(500, "server_error", admin.error);
 
   const identifier = lookup.kind === "email"
     ? await admin.client
@@ -210,7 +215,13 @@ export async function searchContacts(
 
   if (identifier.error) {
     console.error("[missio] contact search failed", identifier.error.message ?? "query error");
-    return { ok: false, status: 500, error: "Something went wrong." };
+    return fail(500, "server_error", "Something went wrong.");
+  }
+
+  const hmac = queryHmac(lookup.value);
+  if (!hmac) {
+    console.error("[missio] search audit key missing");
+    return fail(500, "server_error", "Something went wrong.");
   }
 
   const ids = [
@@ -220,7 +231,10 @@ export async function searchContacts(
         .filter((id): id is string => typeof id === "string")
     ),
   ].slice(0, SEARCH_CAP);
-  if (ids.length === 0) return { ok: true, matches: [] };
+  if (ids.length === 0) {
+    await logSearchAudit(admin.client, auth.user.id, hmac, 0);
+    return { ok: true, matches: [] };
+  }
 
   const [contacts, membership] = await Promise.all([
     admin.client.from("contacts").select("id, first_name, last_name, email, phone").in("id", ids),
@@ -235,7 +249,7 @@ export async function searchContacts(
       "[missio] contact search failed",
       contacts.error?.message ?? membership.error?.message ?? "query error"
     );
-    return { ok: false, status: 500, error: "Something went wrong." };
+    return fail(500, "server_error", "Something went wrong.");
   }
 
   const inOrg = new Map<string, { id: string; name: string }>();
@@ -254,49 +268,76 @@ export async function searchContacts(
     inOrg.set(row.contact_id, { id: row.id, name: legal || (row.preferred_name ?? "").trim() });
   }
 
-  const matches: ContactMatch[] = ((contacts.data ?? []) as Array<{
+  const matches: ContactMatch[] = [];
+  for (const contact of (contacts.data ?? []) as Array<{
     id: string;
     first_name?: string | null;
     last_name?: string | null;
     email?: string | null;
     phone?: string | null;
-  }>)
-    .map((contact) => {
-      const member = inOrg.get(contact.id);
-      const match: ContactMatch = {
-        matchToken: missioMatchToken(auth.user.id, contact.id, lookup.value),
-        maskedName: maskName(contact.first_name, contact.last_name),
-        maskedEmail: maskEmail(contact.email),
-        maskedPhone: maskPhone(contact.phone),
-        alreadyInOrg: Boolean(member),
-      };
-      if (member) {
-        match.personId = member.id;
-        match.name = member.name;
-      }
-      return match;
-    })
-    .sort((a, b) => a.maskedName.localeCompare(b.maskedName) || a.matchToken.localeCompare(b.matchToken))
-    .slice(0, SEARCH_CAP);
+  }>) {
+    const token = missioMatchToken({
+      userId: auth.user.id,
+      orgId: auth.orgId,
+      contactId: contact.id,
+      normalizedValue: lookup.value,
+    });
+    if (!token) {
+      console.error("[missio] match token key missing");
+      return fail(500, "server_error", "Something went wrong.");
+    }
+    const member = inOrg.get(contact.id);
+    const match: ContactMatch = {
+      matchToken: token,
+      maskedName: maskName(contact.first_name, contact.last_name),
+      maskedEmail: maskEmail(contact.email),
+      maskedPhone: maskPhone(contact.phone),
+      alreadyInOrg: Boolean(member),
+    };
+    if (member) {
+      match.personId = member.id;
+      match.name = member.name;
+    }
+    matches.push(match);
+  }
+  matches.sort((a, b) => a.maskedName.localeCompare(b.maskedName) || a.matchToken.localeCompare(b.matchToken));
+  matches.splice(SEARCH_CAP);
 
-  await logSearchAudit(admin.client, auth.user.id, lookup.value, matches.length);
+  await logSearchAudit(admin.client, auth.user.id, hmac, matches.length);
   return { ok: true, matches };
 }
 
 /**
- * One audit row per completed search. The query is stored only as a sha256
- * of the normalised value. audit_logs is the existing staff audit table.
+ * One audit_logs row per completed search, including an empty result.
+ * changes.queryHmac is an HMAC of the normalised query. The query is not stored.
  */
-async function logSearchAudit(admin: Client, userId: string, normalizedQuery: string, resultCount: number) {
+async function logSearchAudit(admin: Client, userId: string, hmac: string, resultCount: number) {
   const { error } = await admin.from("audit_logs").insert({
     user_id: userId,
     action: "missio.contact_search",
     resource_type: "missio_contact_search",
     resource_id: userId,
-    changes: { querySha256: sha256Hex(normalizedQuery), resultCount },
+    changes: { queryHmac: hmac, resultCount },
     created_at: new Date().toISOString(),
   });
   if (error) console.error("[missio] search audit failed", error.message ?? "insert failed");
+}
+
+async function logCreateAudit(
+  admin: Client,
+  userId: string,
+  hmac: string,
+  changes: { linkedExisting: boolean; created: boolean; outcome: string }
+) {
+  const { error } = await admin.from("audit_logs").insert({
+    user_id: userId,
+    action: "missio.person_create",
+    resource_type: "missio_person_create",
+    resource_id: userId,
+    changes: { queryHmac: hmac, ...changes },
+    created_at: new Date().toISOString(),
+  });
+  if (error) console.error("[missio] create audit failed", error.message ?? "insert failed");
 }
 
 async function contactIdsFor(
@@ -323,40 +364,53 @@ async function contactIdsFor(
 async function resolveMatchToken(
   admin: Client,
   userId: string,
+  orgId: string,
   token: string,
   matchedBy: { email: string } | { phone: string }
-): Promise<{ contactId: string } | { error: string; status: number }> {
+): Promise<{ contactId: string; normalized: string } | { error: string; status: number; code: MissioErrorCode }> {
   const normalized = "email" in matchedBy ? normalizeEmail(matchedBy.email) : normalizePhoneE164(matchedBy.phone);
-  if (!normalized) return { error: "Check the fields and try again.", status: 400 };
+  if (!normalized) return { error: "Check the fields and try again.", status: 400, code: "invalid_input" as const };
   const found =
     "email" in matchedBy
       ? await contactIdsFor(admin, "contact_emails", "email_normalized", normalized)
       : await contactIdsFor(admin, "contact_phones", "phone_normalized", normalized);
-  if ("error" in found) return { error: found.error, status: 500 };
-  const contactId = found.ids.find((id) => missioMatchToken(userId, id, normalized) === token);
-  if (!contactId) return { error: "Check the fields and try again.", status: 400 };
-  return { contactId };
+  if ("error" in found) return { error: found.error, status: 500, code: "server_error" as const };
+  let matched: string | null = null;
+  for (const id of found.ids) {
+    const fits = matchTokenFits({ token, userId, orgId, contactId: id, normalizedValue: normalized });
+    if (fits === "missing_secret") {
+      console.error("[missio] match token key missing");
+      return { error: "Something went wrong.", status: 500, code: "server_error" as const };
+    }
+    if (fits) matched = id;
+  }
+  if (!matched) return { error: "Check the fields and try again.", status: 400, code: "invalid_token" as const };
+  return { contactId: matched, normalized };
 }
 
-async function findExistingContact(
+async function matchedContactIds(
   admin: Client,
   email: string | null,
   phone: string | null
-): Promise<{ contactId: string | null } | { conflict: true } | { error: string }> {
+): Promise<{ ids: string[] } | { error: string }> {
   const emailIds = email ? await contactIdsFor(admin, "contact_emails", "email_normalized", email) : { ids: [] as string[] };
   if ("error" in emailIds) return emailIds;
   const phoneIds = phone ? await contactIdsFor(admin, "contact_phones", "phone_normalized", phone) : { ids: [] as string[] };
   if ("error" in phoneIds) return phoneIds;
-
-  if (email && phone && emailIds.ids.length > 0 && phoneIds.ids.length > 0) {
-    const overlap = emailIds.ids.filter((id) => phoneIds.ids.includes(id));
-    if (overlap.length === 1) return { contactId: overlap[0]! };
-    return { conflict: true };
-  }
-  if (emailIds.ids[0]) return { contactId: emailIds.ids[0] };
-  if (phoneIds.ids[0]) return { contactId: phoneIds.ids[0] };
-  return { contactId: null };
+  return { ids: [...new Set([...emailIds.ids, ...phoneIds.ids])] };
 }
+
+function createQuery(email: string | null, phone: string | null): string {
+  const parts: string[] = [];
+  if (email) parts.push(`email:${email}`);
+  if (phone) parts.push(`phone:${phone}`);
+  return parts.join("|");
+}
+
+const EXISTS_USE_SEARCH = {
+  error: "This person already exists. Search by their email or phone to add them.",
+  code: "exists_use_search",
+} as const;
 
 async function addIdentifiers(
   admin: Client,
@@ -398,7 +452,7 @@ async function loadPerson(
   supabase: Client,
   orgId: string,
   personId: string
-): Promise<{ person: MissioPerson } | { error: string; status: number }> {
+): Promise<{ person: MissioPerson } | { error: string; status: number; code: MissioErrorCode }> {
   const { data, error } = await supabase
     .from(DIRECTORY)
     .select(DIRECTORY_COLUMNS)
@@ -407,9 +461,9 @@ async function loadPerson(
     .maybeSingle();
   if (error) {
     console.error("[missio] person read failed", error.message);
-    return { error: "Something went wrong.", status: 500 };
+    return { error: "Something went wrong.", status: 500, code: "server_error" as const };
   }
-  if (!data) return { error: "Person not found.", status: 404 };
+  if (!data) return { error: "Person not found.", status: 404, code: "not_found" as const };
   return { person: toMissioPerson(data as PersonRow) };
 }
 
@@ -438,9 +492,9 @@ async function linkPerson(
     status?: MissioStatus;
     joinedAt?: string | null;
   }
-): Promise<{ ok: true; body: CreateMissioPersonResponse } | { ok: false; status: number; error: string }> {
+): Promise<{ ok: true; body: CreateMissioPersonResponse } | { ok: false; status: number; error: string; code: MissioErrorCode }> {
   const org = await missioOrgId(admin);
-  if ("error" in org) return { ok: false, status: 500, error: org.error };
+  if ("error" in org) return fail(500, "server_error", org.error);
 
   const existing = await auth.supabase
     .from("org_people")
@@ -450,9 +504,9 @@ async function linkPerson(
     .maybeSingle();
   if (existing.error) {
     console.error("[missio] duplicate check failed", existing.error.message);
-    return { ok: false, status: 500, error: "Something went wrong." };
+    return fail(500, "server_error", "Something went wrong.");
   }
-  if (existing.data) return { ok: false, status: 409, error: "This person is already in Missio." };
+  if (existing.data) return fail(409, "already_in_org", "This person is already in Missio.");
 
   const inserted = await admin
     .from("org_people")
@@ -469,66 +523,117 @@ async function linkPerson(
 
   if (inserted.error) {
     if (inserted.error.code === "23505") {
-      return { ok: false, status: 409, error: "This person is already in Missio." };
+      return fail(409, "already_in_org", "This person is already in Missio.");
     }
     console.error("[missio] org_people insert failed", inserted.error.message);
-    return { ok: false, status: 500, error: "Something went wrong." };
+    return fail(500, "server_error", "Something went wrong.");
   }
 
   const loaded = await loadPerson(auth.supabase, org.orgId, inserted.data.id as string);
-  if ("error" in loaded) return { ok: false, status: loaded.status, error: loaded.error };
+  if ("error" in loaded) return { ok: false, status: loaded.status, error: loaded.error, code: loaded.code };
   return { ok: true, body: { person: loaded.person, linkedExisting: true } };
 }
 
 export async function createPerson(
   auth: OrgAccess,
   body: unknown
-): Promise<{ ok: true; body: CreateMissioPersonResponse } | { ok: false; status: number; error: string }> {
+): Promise<
+  | { ok: true; body: CreateMissioPersonResponse }
+  | { ok: false; status: number; error: string; code?: string }
+> {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return { ok: false, status: 400, error: "Check the fields and try again." };
+    return fail(400, "invalid_input", "Check the fields and try again.");
   }
 
   // The service-role client is opened only after requireOrgRole has already
   // returned. A failed role check never reaches this function.
   if ("matchToken" in body) {
     const parsed = linkSchema.safeParse(body);
-    if (!parsed.success) return { ok: false, status: 400, error: "Check the fields and try again." };
+    if (!parsed.success) return fail(400, "invalid_input", "Check the fields and try again.");
     const admin = adminClient();
-    if ("error" in admin) return { ok: false, status: 500, error: admin.error };
-    const verified = await resolveMatchToken(admin.client, auth.user.id, parsed.data.matchToken, parsed.data.matchedBy);
-    if ("error" in verified) return { ok: false, status: verified.status, error: verified.error };
-    return linkPerson(auth, admin.client, {
+    if ("error" in admin) return fail(500, "server_error", admin.error);
+    const verified = await resolveMatchToken(
+      admin.client,
+      auth.user.id,
+      auth.orgId,
+      parsed.data.matchToken,
+      parsed.data.matchedBy
+    );
+    if ("error" in verified) {
+      return { ok: false, status: verified.status, error: verified.error, code: verified.code };
+    }
+    const hmac = queryHmac(verified.normalized);
+    if (!hmac) return fail(500, "server_error", "Something went wrong.");
+    const linked = await linkPerson(auth, admin.client, {
       contactId: verified.contactId,
       campus: parsed.data.campus,
       status: parsed.data.status,
       joinedAt: parsed.data.joinedAt,
     });
+    if (!linked.ok) {
+      if (linked.status === 409) {
+        await logCreateAudit(admin.client, auth.user.id, hmac, {
+          linkedExisting: false,
+          created: false,
+          outcome: "already_in_missio",
+        });
+      }
+      return linked;
+    }
+    await logCreateAudit(admin.client, auth.user.id, hmac, {
+      linkedExisting: true,
+      created: false,
+      outcome: "linked",
+    });
+    return linked;
   }
 
   const parsed = createSchema.safeParse(body);
-  if (!parsed.success) return { ok: false, status: 400, error: "Check the fields and try again." };
+  if (!parsed.success) return fail(400, "invalid_input", "Check the fields and try again.");
 
   const email = parsed.data.email ? normalizeEmail(parsed.data.email) : null;
   const phone = parsed.data.phone ? normalizePhoneE164(parsed.data.phone) : null;
-  if (parsed.data.email && !email) return { ok: false, status: 400, error: "That email address isn't valid." };
-  if (parsed.data.phone && !phone) return { ok: false, status: 400, error: "That phone number isn't valid." };
-  if (!email && !phone) return { ok: false, status: 400, error: "An email or a phone number is required." };
+  if (parsed.data.email && !email) return fail(400, "invalid_input", "That email address isn't valid.");
+  if (parsed.data.phone && !phone) return fail(400, "invalid_input", "That phone number isn't valid.");
+  if (!email && !phone) return fail(400, "invalid_input", "An email or a phone number is required.");
 
   const admin = adminClient();
-  if ("error" in admin) return { ok: false, status: 500, error: admin.error };
-
-  const found = await findExistingContact(admin.client, email, phone);
-  if ("error" in found) return { ok: false, status: 500, error: found.error };
-  if ("conflict" in found) {
-    return { ok: false, status: 409, error: "That email and phone belong to different people." };
+  if ("error" in admin) return fail(500, "server_error", admin.error);
+  const hmac = queryHmac(createQuery(email, phone));
+  if (!hmac) {
+    console.error("[missio] create audit key missing");
+    return fail(500, "server_error", "Something went wrong.");
   }
-  if (found.contactId) {
-    return linkPerson(auth, admin.client, {
-      contactId: found.contactId,
-      campus: parsed.data.campus,
-      status: parsed.data.status,
-      joinedAt: parsed.data.joinedAt,
+
+  const found = await matchedContactIds(admin.client, email, phone);
+  if ("error" in found) return fail(500, "server_error", found.error);
+  if (found.ids.length > 0) {
+    const members = await auth.supabase
+      .from("org_people")
+      .select("contact_id")
+      .eq("org_id", auth.orgId)
+      .in("contact_id", found.ids);
+    if (members.error) {
+      console.error("[missio] member check failed", members.error.message);
+      return fail(500, "server_error", "Something went wrong.");
+    }
+    const inOrg = new Set(
+      ((members.data ?? []) as Array<{ contact_id?: string }>).map((row) => row.contact_id).filter(Boolean)
+    );
+    if (found.ids.some((id) => !inOrg.has(id))) {
+      await logCreateAudit(admin.client, auth.user.id, hmac, {
+        linkedExisting: false,
+        created: false,
+        outcome: "exists_use_search",
+      });
+      return { ok: false, status: 409, ...EXISTS_USE_SEARCH };
+    }
+    await logCreateAudit(admin.client, auth.user.id, hmac, {
+      linkedExisting: false,
+      created: false,
+      outcome: "already_in_missio",
     });
+    return fail(409, "already_in_org", "This person is already in Missio.");
   }
 
   const { first_name, last_name } = splitName(parsed.data.name);
@@ -551,7 +656,7 @@ export async function createPerson(
     .single();
   if (created.error || !created.data?.id) {
     console.error("[missio] contact insert failed", created.error?.message ?? "no row");
-    return { ok: false, status: 500, error: "Something went wrong." };
+    return fail(500, "server_error", "Something went wrong.");
   }
   const contactId = created.data.id as string;
 
@@ -570,7 +675,7 @@ export async function createPerson(
   });
   if (identifierError) {
     await removeOrphanContact(admin.client, contactId);
-    return { ok: false, status: 500, error: "Something went wrong." };
+    return fail(500, "server_error", "Something went wrong.");
   }
 
   const linked = await linkPerson(auth, admin.client, {
@@ -579,7 +684,15 @@ export async function createPerson(
     status: parsed.data.status,
     joinedAt: parsed.data.joinedAt,
   });
-  if (!linked.ok) return linked;
+  if (!linked.ok) {
+    await removeOrphanContact(admin.client, contactId);
+    return linked;
+  }
+  await logCreateAudit(admin.client, auth.user.id, hmac, {
+    linkedExisting: false,
+    created: true,
+    outcome: "created",
+  });
   return { ok: true, body: { person: linked.body.person, linkedExisting: false } };
 }
 
@@ -587,16 +700,16 @@ export async function updatePerson(
   auth: OrgAccess,
   personId: string,
   body: unknown
-): Promise<{ ok: true; person: MissioPerson } | { ok: false; status: number; error: string }> {
+): Promise<{ ok: true; person: MissioPerson } | { ok: false; status: number; error: string; code: MissioErrorCode }> {
   // Pastors update campus, status, joined_at, and current_stage only.
   // contact_id and org_id would move the person onto another contact or org.
   if (body && typeof body === "object" && !Array.isArray(body)) {
     if ("contact_id" in body || "org_id" in body) {
-      return { ok: false, status: 400, error: "Check the fields and try again." };
+      return fail(400, "invalid_input", "Check the fields and try again.");
     }
   }
   const parsed = updateSchema.safeParse(body);
-  if (!parsed.success) return { ok: false, status: 400, error: "Check the fields and try again." };
+  if (!parsed.success) return fail(400, "invalid_input", "Check the fields and try again.");
 
   const patch: Record<string, unknown> = {};
   if (parsed.data.campus !== undefined) patch.campus = parsed.data.campus;
@@ -604,7 +717,7 @@ export async function updatePerson(
   if (parsed.data.joinedAt !== undefined) patch.joined_at = parsed.data.joinedAt;
   if (parsed.data.currentStage !== undefined) patch.current_stage = parsed.data.currentStage;
   if (Object.keys(patch).length === 0) {
-    return { ok: false, status: 400, error: "Nothing to update." };
+    return fail(400, "invalid_input", "Nothing to update.");
   }
 
   const updated = await auth.supabase
@@ -616,11 +729,11 @@ export async function updatePerson(
     .maybeSingle();
   if (updated.error) {
     console.error("[missio] person update failed", updated.error.message);
-    return { ok: false, status: 500, error: "Something went wrong." };
+    return fail(500, "server_error", "Something went wrong.");
   }
-  if (!updated.data) return { ok: false, status: 404, error: "Person not found." };
+  if (!updated.data) return fail(404, "not_found", "Person not found.");
   const loaded = await loadPerson(auth.supabase, auth.orgId, personId);
-  if ("error" in loaded) return { ok: false, status: loaded.status, error: loaded.error };
+  if ("error" in loaded) return { ok: false, status: loaded.status, error: loaded.error, code: loaded.code };
   return { ok: true, person: loaded.person };
 }
 

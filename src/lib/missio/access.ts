@@ -16,8 +16,8 @@ type Client = any;
 
 const KNOWN_ORG_SLUGS = new Set(["ffsa", "missio"]);
 
-/** Phase 0 people routes: pastors, plus an org admin. Other org roles stay out. */
-export const MISSIO_PEOPLE_ROLES = ["pastor", "admin"] as const;
+/** Phase 0 people, search, and create/update routes. Pastors only. */
+export const MISSIO_PEOPLE_ROLES = ["pastor"] as const;
 
 export const MISSIO_SLUG = "missio";
 
@@ -40,15 +40,15 @@ export function getOrgSlugFromPath(pathname: string): "ffsa" | "missio" | null {
 }
 
 function notAuthenticated() {
-  return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  return NextResponse.json({ error: "Not authenticated", code: "unauthenticated" }, { status: 401 });
 }
 
 function notAuthorized() {
-  return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  return NextResponse.json({ error: "Not authorized", code: "forbidden" }, { status: 403 });
 }
 
 function lookupFailed() {
-  return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
+  return NextResponse.json({ error: "Something went wrong.", code: "server_error" }, { status: 500 });
 }
 
 /**
