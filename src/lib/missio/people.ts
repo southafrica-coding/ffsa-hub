@@ -3,7 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeEmail, normalizePhoneE164 } from "@/lib/phone";
 import { addContactEmail, addContactPhone } from "@/services/contact-identifiers";
 import { MISSIO_SLUG, type OrgAccess } from "@/lib/missio/access";
-import { maskEmail, maskPhone } from "@/lib/missio/mask";
+import { maskEmail, maskName, maskPhone } from "@/lib/missio/mask";
+import { missioMatchToken, sha256Hex } from "@/lib/missio/match-token";
 import type {
   ContactMatch,
   CreateMissioPersonResponse,
@@ -55,7 +56,7 @@ const personFields = {
 
 const linkSchema = z
   .object({
-    contactId: z.string().uuid(),
+    matchToken: z.string().trim().min(20).max(200),
     matchedBy: z.union([
       z.object({ email: z.string().trim().min(3).max(320) }).strict(),
       z.object({ phone: z.string().trim().min(3).max(40) }).strict(),
@@ -223,7 +224,11 @@ export async function searchContacts(
 
   const [contacts, membership] = await Promise.all([
     admin.client.from("contacts").select("id, first_name, last_name, email, phone").in("id", ids),
-    auth.supabase.from(DIRECTORY).select("contact_id").eq("org_id", auth.orgId).in("contact_id", ids),
+    auth.supabase
+      .from(DIRECTORY)
+      .select("id, contact_id, first_name, last_name, preferred_name")
+      .eq("org_id", auth.orgId)
+      .in("contact_id", ids),
   ]);
   if (contacts.error || membership.error) {
     console.error(
@@ -233,9 +238,22 @@ export async function searchContacts(
     return { ok: false, status: 500, error: "Something went wrong." };
   }
 
-  const inOrg = new Set(
-    ((membership.data ?? []) as Array<{ contact_id?: string }>).map((row) => row.contact_id).filter(Boolean)
-  );
+  const inOrg = new Map<string, { id: string; name: string }>();
+  for (const row of (membership.data ?? []) as Array<{
+    id?: string;
+    contact_id?: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    preferred_name?: string | null;
+  }>) {
+    if (!row.contact_id || !row.id) continue;
+    const legal = [row.first_name, row.last_name]
+      .map((part) => (part ?? "").trim())
+      .filter(Boolean)
+      .join(" ");
+    inOrg.set(row.contact_id, { id: row.id, name: legal || (row.preferred_name ?? "").trim() });
+  }
+
   const matches: ContactMatch[] = ((contacts.data ?? []) as Array<{
     id: string;
     first_name?: string | null;
@@ -243,96 +261,137 @@ export async function searchContacts(
     email?: string | null;
     phone?: string | null;
   }>)
-    .map((contact) => ({
-      contactId: contact.id,
-      name: [contact.first_name, contact.last_name]
-        .map((part) => (part ?? "").trim())
-        .filter(Boolean)
-        .join(" "),
-      maskedEmail: maskEmail(contact.email),
-      maskedPhone: maskPhone(contact.phone),
-      alreadyInOrg: inOrg.has(contact.id),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name) || a.contactId.localeCompare(b.contactId))
+    .map((contact) => {
+      const member = inOrg.get(contact.id);
+      const match: ContactMatch = {
+        matchToken: missioMatchToken(auth.user.id, contact.id, lookup.value),
+        maskedName: maskName(contact.first_name, contact.last_name),
+        maskedEmail: maskEmail(contact.email),
+        maskedPhone: maskPhone(contact.phone),
+        alreadyInOrg: Boolean(member),
+      };
+      if (member) {
+        match.personId = member.id;
+        match.name = member.name;
+      }
+      return match;
+    })
+    .sort((a, b) => a.maskedName.localeCompare(b.maskedName) || a.matchToken.localeCompare(b.matchToken))
     .slice(0, SEARCH_CAP);
 
+  await logSearchAudit(admin.client, auth.user.id, lookup.value, matches.length);
   return { ok: true, matches };
 }
 
-async function identifierMatches(
-  admin: Client,
-  contactId: string,
-  matchedBy: { email: string } | { phone: string }
-): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  if ("email" in matchedBy) {
-    const email = normalizeEmail(matchedBy.email);
-    if (!email) return { ok: false, status: 400, error: "That contact does not have this email or phone." };
-    const { data, error } = await admin
-      .from("contact_emails")
-      .select("contact_id")
-      .eq("contact_id", contactId)
-      .eq("email_normalized", email)
-      .limit(1);
-    if (error) {
-      console.error("[missio] email check failed", error.message);
-      return { ok: false, status: 500, error: "Something went wrong." };
-    }
-    if (!data || data.length === 0) {
-      return { ok: false, status: 400, error: "That contact does not have this email or phone." };
-    }
-    return { ok: true };
-  }
+/**
+ * One audit row per completed search. The query is stored only as a sha256
+ * of the normalised value. audit_logs is the existing staff audit table.
+ */
+async function logSearchAudit(admin: Client, userId: string, normalizedQuery: string, resultCount: number) {
+  const { error } = await admin.from("audit_logs").insert({
+    user_id: userId,
+    action: "missio.contact_search",
+    resource_type: "missio_contact_search",
+    resource_id: userId,
+    changes: { querySha256: sha256Hex(normalizedQuery), resultCount },
+    created_at: new Date().toISOString(),
+  });
+  if (error) console.error("[missio] search audit failed", error.message ?? "insert failed");
+}
 
-  const phone = normalizePhoneE164(matchedBy.phone);
-  if (!phone) return { ok: false, status: 400, error: "That contact does not have this email or phone." };
-  const { data, error } = await admin
-    .from("contact_phones")
-    .select("contact_id")
-    .eq("contact_id", contactId)
-    .eq("phone_normalized", phone)
-    .limit(1);
+async function contactIdsFor(
+  admin: Client,
+  table: "contact_emails" | "contact_phones",
+  column: "email_normalized" | "phone_normalized",
+  value: string
+): Promise<{ ids: string[] } | { error: string }> {
+  const { data, error } = await admin.from(table).select("contact_id").eq(column, value).limit(50);
   if (error) {
-    console.error("[missio] phone check failed", error.message);
-    return { ok: false, status: 500, error: "Something went wrong." };
+    console.error("[missio] identifier match failed", error.message);
+    return { error: "Something went wrong." };
   }
-  if (!data || data.length === 0) {
-    return { ok: false, status: 400, error: "That contact does not have this email or phone." };
-  }
-  return { ok: true };
+  const ids = [
+    ...new Set(
+      ((data ?? []) as Array<{ contact_id?: string }>)
+        .map((row) => row.contact_id)
+        .filter((id): id is string => typeof id === "string")
+    ),
+  ];
+  return { ids };
+}
+
+async function resolveMatchToken(
+  admin: Client,
+  userId: string,
+  token: string,
+  matchedBy: { email: string } | { phone: string }
+): Promise<{ contactId: string } | { error: string; status: number }> {
+  const normalized = "email" in matchedBy ? normalizeEmail(matchedBy.email) : normalizePhoneE164(matchedBy.phone);
+  if (!normalized) return { error: "Check the fields and try again.", status: 400 };
+  const found =
+    "email" in matchedBy
+      ? await contactIdsFor(admin, "contact_emails", "email_normalized", normalized)
+      : await contactIdsFor(admin, "contact_phones", "phone_normalized", normalized);
+  if ("error" in found) return { error: found.error, status: 500 };
+  const contactId = found.ids.find((id) => missioMatchToken(userId, id, normalized) === token);
+  if (!contactId) return { error: "Check the fields and try again.", status: 400 };
+  return { contactId };
 }
 
 async function findExistingContact(
   admin: Client,
   email: string | null,
   phone: string | null
-): Promise<{ contactId: string | null } | { error: string }> {
-  if (email) {
-    const { data, error } = await admin
-      .from("contact_emails")
-      .select("contact_id")
-      .eq("email_normalized", email)
-      .limit(1);
-    if (error) {
-      console.error("[missio] email match failed", error.message);
-      return { error: "Something went wrong." };
-    }
-    const contactId = (data?.[0] as { contact_id?: string } | undefined)?.contact_id;
-    if (contactId) return { contactId };
+): Promise<{ contactId: string | null } | { conflict: true } | { error: string }> {
+  const emailIds = email ? await contactIdsFor(admin, "contact_emails", "email_normalized", email) : { ids: [] as string[] };
+  if ("error" in emailIds) return emailIds;
+  const phoneIds = phone ? await contactIdsFor(admin, "contact_phones", "phone_normalized", phone) : { ids: [] as string[] };
+  if ("error" in phoneIds) return phoneIds;
+
+  if (email && phone && emailIds.ids.length > 0 && phoneIds.ids.length > 0) {
+    const overlap = emailIds.ids.filter((id) => phoneIds.ids.includes(id));
+    if (overlap.length === 1) return { contactId: overlap[0]! };
+    return { conflict: true };
   }
-  if (phone) {
-    const { data, error } = await admin
-      .from("contact_phones")
-      .select("contact_id")
-      .eq("phone_normalized", phone)
-      .limit(1);
-    if (error) {
-      console.error("[missio] phone match failed", error.message);
-      return { error: "Something went wrong." };
-    }
-    const contactId = (data?.[0] as { contact_id?: string } | undefined)?.contact_id;
-    if (contactId) return { contactId };
-  }
+  if (emailIds.ids[0]) return { contactId: emailIds.ids[0] };
+  if (phoneIds.ids[0]) return { contactId: phoneIds.ids[0] };
   return { contactId: null };
+}
+
+async function addIdentifiers(
+  admin: Client,
+  args: { contactId: string; email: string | null; phone: string | null; source: string }
+): Promise<string | null> {
+  if (args.email) {
+    const emailRow = await addContactEmail(admin, {
+      contactId: args.contactId,
+      email: args.email,
+      makePrimary: true,
+      source: args.source,
+    });
+    if (emailRow.error) {
+      console.error("[missio] contact email insert failed", (emailRow.error as { message?: string }).message);
+      return "email";
+    }
+  }
+  if (args.phone) {
+    const phoneRow = await addContactPhone(admin, {
+      contactId: args.contactId,
+      phone: args.phone,
+      makePrimary: true,
+      source: args.source,
+    });
+    if (phoneRow.error) {
+      console.error("[missio] contact phone insert failed", (phoneRow.error as { message?: string }).message);
+      return "phone";
+    }
+  }
+  return null;
+}
+
+async function removeOrphanContact(admin: Client, contactId: string) {
+  const removed = await admin.from("contacts").delete().eq("id", contactId);
+  if (removed.error) console.error("[missio] orphan contact cleanup failed", removed.error.message);
 }
 
 async function loadPerson(
@@ -431,22 +490,19 @@ export async function createPerson(
 
   // The service-role client is opened only after requireOrgRole has already
   // returned. A failed role check never reaches this function.
-  if ("contactId" in body) {
+  if ("matchToken" in body) {
     const parsed = linkSchema.safeParse(body);
     if (!parsed.success) return { ok: false, status: 400, error: "Check the fields and try again." };
     const admin = adminClient();
     if ("error" in admin) return { ok: false, status: 500, error: admin.error };
-    const verified = await identifierMatches(admin.client, parsed.data.contactId, parsed.data.matchedBy);
-    // No org_people insert unless this contact really has that email or phone.
-    if (!verified.ok) return verified;
-    const linked = await linkPerson(auth, admin.client, {
-      contactId: parsed.data.contactId,
+    const verified = await resolveMatchToken(admin.client, auth.user.id, parsed.data.matchToken, parsed.data.matchedBy);
+    if ("error" in verified) return { ok: false, status: verified.status, error: verified.error };
+    return linkPerson(auth, admin.client, {
+      contactId: verified.contactId,
       campus: parsed.data.campus,
       status: parsed.data.status,
       joinedAt: parsed.data.joinedAt,
     });
-    if (!linked.ok) return linked;
-    return { ok: true, body: { person: linked.body.person, linkedExisting: false } };
   }
 
   const parsed = createSchema.safeParse(body);
@@ -463,6 +519,9 @@ export async function createPerson(
 
   const found = await findExistingContact(admin.client, email, phone);
   if ("error" in found) return { ok: false, status: 500, error: found.error };
+  if ("conflict" in found) {
+    return { ok: false, status: 409, error: "That email and phone belong to different people." };
+  }
   if (found.contactId) {
     return linkPerson(auth, admin.client, {
       contactId: found.contactId,
@@ -484,6 +543,9 @@ export async function createPerson(
       phone: parsed.data.phone?.trim() ?? null,
       phone_normalized: phone,
       source,
+      // contacts.marketing_status defaults to 'subscribed'. A Missio add has
+      // not confirmed marketing, so it starts pending.
+      marketing_status: "pending",
     })
     .select("id")
     .single();
@@ -495,29 +557,20 @@ export async function createPerson(
 
   // The org label is added by the org_people trigger (added_via = org_people_sync).
   // These routes never write contact_labels.
-  if (email && parsed.data.email) {
-    const emailRow = await addContactEmail(admin.client, {
-      contactId,
-      email: parsed.data.email,
-      makePrimary: true,
-      source,
-    });
-    if (emailRow.error) {
-      console.error("[missio] contact email insert failed", (emailRow.error as { message?: string }).message);
-      return { ok: false, status: 500, error: "Something went wrong." };
-    }
-  }
-  if (phone && parsed.data.phone) {
-    const phoneRow = await addContactPhone(admin.client, {
-      contactId,
-      phone: parsed.data.phone,
-      makePrimary: true,
-      source,
-    });
-    if (phoneRow.error) {
-      console.error("[missio] contact phone insert failed", (phoneRow.error as { message?: string }).message);
-      return { ok: false, status: 500, error: "Something went wrong." };
-    }
+  //
+  // TODO: contact_emails is unique on (contact_id, email_normalized) only, not
+  // on the address itself (migration 068). A second request that creates the
+  // same email at the same time does not hit a unique violation, so we cannot
+  // re-match and link from error 23505. The duplicate check above is the guard.
+  const identifierError = await addIdentifiers(admin.client, {
+    contactId,
+    email: email && parsed.data.email ? parsed.data.email : null,
+    phone: phone && parsed.data.phone ? parsed.data.phone : null,
+    source,
+  });
+  if (identifierError) {
+    await removeOrphanContact(admin.client, contactId);
+    return { ok: false, status: 500, error: "Something went wrong." };
   }
 
   const linked = await linkPerson(auth, admin.client, {

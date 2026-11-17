@@ -1,3 +1,12 @@
+/** First letter of each name part, so a non-member is not named in full. "Jane Mail" → "J*** M***". */
+export function maskName(first: string | null | undefined, last: string | null | undefined): string {
+  const parts = [first, last]
+    .flatMap((value) => (value ?? "").trim().split(/\s+/))
+    .filter(Boolean);
+  if (parts.length === 0) return "***";
+  return parts.map((part) => `${part[0]!.toUpperCase()}***`).join(" ");
+}
+
 /** Mask an address so a pastor can confirm a hit without receiving the FFSA directory. */
 export function maskEmail(email: string | null | undefined): string | null {
   if (!email) return null;

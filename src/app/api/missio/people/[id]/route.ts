@@ -22,6 +22,9 @@ export async function PATCH(request: Request, context: Ctx) {
   if ("response" in auth) return auth.response;
 
   const { id } = await context.params;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return json({ error: "Person not found." }, 404);
+  }
   let body: unknown;
   try {
     body = await request.json();

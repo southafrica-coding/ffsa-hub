@@ -47,6 +47,10 @@ function notAuthorized() {
   return NextResponse.json({ error: "Not authorized" }, { status: 403 });
 }
 
+function lookupFailed() {
+  return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
+}
+
 /**
  * Signed-in caller who holds `roles` in `slug` (or any org role when `roles` is omitted).
  * The check is the has_org_role RPC on the user client. FFSA admin and
@@ -65,16 +69,18 @@ export async function requireOrgRole(
     p_org_slug: slug,
     p_roles: roles ? [...roles] : null,
   });
-  if (error || data !== true) {
-    if (error) console.error("[missio] has_org_role failed", error.message ?? "rpc error");
-    return { response: notAuthorized() };
+  if (error) {
+    console.error("[missio] has_org_role failed", error.message ?? "rpc error");
+    return { response: lookupFailed() };
   }
+  if (data !== true) return { response: notAuthorized() };
 
   const org = await db.from("organisations").select("id").eq("slug", slug).maybeSingle();
-  if (org.error || !org.data?.id) {
-    console.error("[missio] organisation lookup failed", org.error?.message ?? slug);
-    return { response: notAuthorized() };
+  if (org.error) {
+    console.error("[missio] organisation lookup failed", org.error.message ?? slug);
+    return { response: lookupFailed() };
   }
+  if (!org.data?.id) return { response: notAuthorized() };
 
   const roleRows = await db
     .from("org_staff_roles")
@@ -83,7 +89,7 @@ export async function requireOrgRole(
     .eq("org_id", org.data.id);
   if (roleRows.error) {
     console.error("[missio] org role lookup failed", roleRows.error.message);
-    return { response: notAuthorized() };
+    return { response: lookupFailed() };
   }
 
   const held = [

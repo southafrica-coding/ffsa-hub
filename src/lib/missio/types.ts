@@ -32,13 +32,19 @@ export type MissioMe = {
 };
 
 export type ContactMatch = {
-  contactId: string;
-  name: string;
+  /** base64url(sha256(userId|contactId|normalised email or phone)). Not a contact id. */
+  matchToken: string;
+  /** First letter of each name part. Always present. */
+  maskedName: string;
   /** Null when the contact has no email. Never the full address. */
   maskedEmail: string | null;
   /** Null when the contact has no phone. Never the full number. */
   maskedPhone: string | null;
   alreadyInOrg: boolean;
+  /** org_people id. Set only when alreadyInOrg. */
+  personId?: string;
+  /** Full name. Set only when alreadyInOrg. */
+  name?: string;
 };
 
 export type MissioPeopleResponse = {
@@ -53,7 +59,7 @@ export type MissioContactSearchResponse = {
 /** Link a contact the server can re-verify, or create one from a name plus an identifier. */
 export type CreateMissioPersonInput =
   | {
-      contactId: string;
+      matchToken: string;
       matchedBy: { email: string } | { phone: string };
       campus?: MissioCampus;
       status?: MissioStatus;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { MISSIO_PEOPLE_ROLES, MISSIO_SLUG, requireOrgRole } from "@/lib/missio/access";
 import { searchContacts } from "@/lib/missio/people";
+import { getRateLimiter, retryAfterSeconds } from "@/lib/rate-limit";
 
 // GET /api/missio/contacts/search?q=
 //
@@ -18,6 +19,17 @@ function json(body: unknown, status = 200) {
 export async function GET(request: Request) {
   const auth = await requireOrgRole(MISSIO_SLUG, MISSIO_PEOPLE_ROLES);
   if ("response" in auth) return auth.response;
+
+  const limit = await getRateLimiter().hit(`missio:contact-search:${auth.user.id}`, {
+    limit: 20,
+    windowSeconds: 60,
+  });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many searches. Try again shortly." },
+      { status: 429, headers: { "Retry-After": String(retryAfterSeconds(limit)) } }
+    );
+  }
 
   const q = new URL(request.url).searchParams.get("q") ?? "";
   const result = await searchContacts(auth, q);

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { missioMatchToken, sha256Hex } from "@/lib/missio/match-token";
 
 // In-memory stand-in for the two Supabase clients the Missio routes use.
 // The user client can see every org_people row on purpose, so a route that
@@ -35,6 +36,7 @@ const FFSA_ADMIN = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4";
 const BOTH = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5";
 const JANE = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
 const OUTSIDE = "cccccccc-cccc-4ccc-8ccc-ccccccccccc2";
+const PERSON_ADA = "dddddddd-dddd-4ddd-8ddd-ddddddddddd1";
 
 const state = vi.hoisted(() => {
   const state = {
@@ -613,8 +615,9 @@ describe("access on every Missio data route", () => {
     state.rpcError = { message: "connection refused" };
     addContact({ first: "Ada", last: "Lovelace", personId: "person-ada" });
     const res = await get("/api/missio/people");
-    expect([403, 500]).toContain(res.status);
+    expect(res.status).toBe(500);
     const body = await res.json();
+    expect(body.error).toBe("Something went wrong.");
     expect(JSON.stringify(body)).not.toContain("connection refused");
     expect(body.rows).toBeUndefined();
     expect(state.ops.some((op) => op.table === "org_people")).toBe(false);
@@ -727,7 +730,6 @@ describe("GET /api/missio/contacts/search", () => {
     addContact({ first: "Jane", last: "Mail", email: "jane@gmail.com", inOrg: false });
     const res = await search("Jane Mail");
     expect(res.status).toBe(400);
-    expect(state.adminBuilds).toBe(0);
     expect(state.ops.some((op) => op.table === "contact_emails" || op.table === "contacts")).toBe(false);
   });
 
@@ -757,15 +759,29 @@ describe("GET /api/missio/contacts/search", () => {
     const emailBody = await email.json();
     expect(emailBody.matches).toEqual([
       {
-        contactId: JANE,
+        matchToken: missioMatchToken(PASTOR, JANE, "jane@gmail.com"),
+        maskedName: "J*** M***",
         name: "Jane Mail",
+        personId: "person-jane",
         maskedEmail: "j***@g***.com",
         maskedPhone: "*** *** 4567",
         alreadyInOrg: true,
       },
     ]);
     const raw = JSON.stringify(emailBody);
+    expect(raw).not.toContain(JANE);
+    expect(raw).not.toContain("contactId");
     expect(raw).not.toContain("jane@gmail.com");
+    const audit = state.writes.find((write) => write.table === "audit_logs");
+    const auditPayload = Array.isArray(audit?.payload) ? audit?.payload[0] : audit?.payload;
+    expect(audit?.client).toBe("admin");
+    expect(auditPayload).toMatchObject({
+      user_id: PASTOR,
+      action: "missio.contact_search",
+      changes: { querySha256: sha256Hex("jane@gmail.com"), resultCount: 1 },
+    });
+    expect(JSON.stringify(auditPayload)).not.toContain("Jane@Gmail.com");
+    expect(JSON.stringify(auditPayload)).not.toContain("jane@gmail.com");
     expect(raw).not.toContain("+27821234567");
     expect(raw).not.toContain("27821234567");
     const emailOp = state.ops.find((op) => op.table === "contact_emails");
@@ -779,13 +795,21 @@ describe("GET /api/missio/contacts/search", () => {
     expect(phone.status).toBe(200);
     const phoneBody = await phone.json();
     expect(phoneBody.matches).toEqual([
-      expect.objectContaining({
-        contactId: OUTSIDE,
+      {
+        matchToken: missioMatchToken(PASTOR, OUTSIDE, "+27820000000"),
+        maskedName: "J*** O***",
+        maskedEmail: "j***@e***.com",
         maskedPhone: "*** *** 0000",
         alreadyInOrg: false,
-      }),
+      },
     ]);
-    expect(JSON.stringify(phoneBody)).not.toContain("+27820000000");
+    expect(phoneBody.matches[0].name).toBeUndefined();
+    expect(phoneBody.matches[0].personId).toBeUndefined();
+    const phoneRaw = JSON.stringify(phoneBody);
+    expect(phoneRaw).not.toContain(OUTSIDE);
+    expect(phoneRaw).not.toContain("Jon Outside");
+    expect(phoneRaw).not.toContain("contactId");
+    expect(phoneRaw).not.toContain("+27820000000");
     expect(state.ops.find((op) => op.table === "contact_phones")?.op.filters).toContainEqual({
       type: "eq",
       col: "phone_normalized",
@@ -805,13 +829,34 @@ describe("GET /api/missio/contacts/search", () => {
     expect(crowd.status).toBe(200);
     expect((await crowd.json()).matches).toHaveLength(5);
   });
+
+  it("returns 429 after 20 searches in a minute", async () => {
+    const caller = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1";
+    state.userId = caller;
+    state.tables.org_staff_roles.push({
+      id: "role-rate",
+      user_id: caller,
+      org_id: MISSIO,
+      role: "pastor",
+      campus: null,
+    });
+    for (let i = 0; i < 20; i++) {
+      expect((await search(`nobody${i}@example.com`)).status).toBe(200);
+    }
+    const limited = await search("nobody-extra@example.com");
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get("Retry-After"))).toBeGreaterThan(0);
+  });
 });
 
 describe("POST /api/missio/people", () => {
-  it("rejects a contact id whose email or phone does not match", async () => {
-    const contactId = addContact({ id: JANE, first: "Jane", last: "Mail", email: "jane@gmail.com", phone: "+27821234567", phoneNormalized: "+27821234567", inOrg: false });
-    expect((await post({ contactId, matchedBy: { email: "other@gmail.com" } })).status).toBe(400);
-    expect((await post({ contactId, matchedBy: { phone: "0820000000" } })).status).toBe(400);
+  it("rejects a match token that does not belong to this pastor or this identifier", async () => {
+    addContact({ id: JANE, first: "Jane", last: "Mail", email: "jane@gmail.com", phone: "+27821234567", phoneNormalized: "+27821234567", inOrg: false });
+    const otherUser = missioMatchToken("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb9", JANE, "jane@gmail.com");
+    const wrongValue = missioMatchToken(PASTOR, JANE, "other@gmail.com");
+    expect((await post({ matchToken: otherUser, matchedBy: { email: "jane@gmail.com" } })).status).toBe(400);
+    expect((await post({ matchToken: wrongValue, matchedBy: { email: "jane@gmail.com" } })).status).toBe(400);
+    expect((await post({ matchToken: missioMatchToken(PASTOR, JANE, "+27821234567"), matchedBy: { phone: "0820000000" } })).status).toBe(400);
     expect(state.tables.org_people).toEqual([]);
     expect(state.writes.filter((write) => write.table === "org_people")).toEqual([]);
     expect(state.tables.contacts).toHaveLength(1);
@@ -880,6 +925,7 @@ describe("POST /api/missio/people", () => {
     expect(contactPayload).not.toHaveProperty("status");
     expect(contactPayload).not.toHaveProperty("current_stage");
     expect(contactPayload).not.toHaveProperty("currentStage");
+    expect(contactPayload).toMatchObject({ marketing_status: "pending" });
     expect(state.tables.org_people[0]).toMatchObject({
       org_id: MISSIO,
       created_by: PASTOR,
@@ -891,7 +937,7 @@ describe("POST /api/missio/people", () => {
     expect(state.ops.some((op) => op.table === "contact_labels")).toBe(false);
   });
 
-  it("links by the verified contact id", async () => {
+  it("links by a match token for an existing contact", async () => {
     const contactId = addContact({
       id: JANE,
       first: "Jane",
@@ -900,7 +946,7 @@ describe("POST /api/missio/people", () => {
       inOrg: false,
     });
     const res = await post({
-      contactId,
+      matchToken: missioMatchToken(PASTOR, JANE, "jane@gmail.com"),
       matchedBy: { email: "jane@gmail.com" },
       campus: "jhb",
       status: "visitor",
@@ -908,14 +954,35 @@ describe("POST /api/missio/people", () => {
     });
     expect(res.status).toBe(201);
     expect(await res.json()).toMatchObject({
+      linkedExisting: true,
       person: { contactId, name: "Jane Mail", campus: "jhb", status: "visitor", joinedAt: "2024-01-02" },
     });
     expect(state.tables.contacts).toHaveLength(1);
   });
 
+  it("refuses to link when the email and the phone belong to different people", async () => {
+    addContact({ id: JANE, first: "Jane", last: "Mail", email: "jane@gmail.com", inOrg: false });
+    addContact({
+      id: OUTSIDE,
+      first: "Jon",
+      last: "Outside",
+      phone: "+27821234567",
+      phoneNormalized: "+27821234567",
+      inOrg: false,
+    });
+    const res = await post({ name: "Mixed", email: "jane@gmail.com", phone: "0821234567" });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("That email and phone belong to different people.");
+    expect(state.tables.org_people).toEqual([]);
+    expect(state.writes.filter((write) => write.table === "contacts")).toEqual([]);
+  });
+
   it("returns 409 when the contact is already in the org", async () => {
-    const contactId = addContact({ id: JANE, first: "Jane", last: "Mail", email: "jane@gmail.com", inOrg: true, personId: "person-jane" });
-    const res = await post({ contactId, matchedBy: { email: "jane@gmail.com" } });
+    addContact({ id: JANE, first: "Jane", last: "Mail", email: "jane@gmail.com", inOrg: true, personId: "person-jane" });
+    const res = await post({
+      matchToken: missioMatchToken(PASTOR, JANE, "jane@gmail.com"),
+      matchedBy: { email: "jane@gmail.com" },
+    });
     expect(res.status).toBe(409);
     expect(state.tables.org_people).toHaveLength(1);
 
@@ -929,7 +996,7 @@ describe("POST /api/missio/people", () => {
     expect((await post({ name: "No Id" })).status).toBe(400);
     expect((await post({ name: "Bad", email: "new@example.com", created_by: "someone-else" })).status).toBe(400);
     expect((await post({ name: "Bad", email: "new@example.com", campus: "cpt" })).status).toBe(400);
-    expect((await post({ contactId: "not-a-uuid", matchedBy: { email: "a@b.com" } })).status).toBe(400);
+    expect((await post({ contactId: JANE, matchedBy: { email: "jane@gmail.com" } })).status).toBe(400);
     expect(state.writes).toEqual([]);
   });
 });
@@ -939,17 +1006,17 @@ describe("PATCH /api/missio/people/[id]", () => {
     addContact({
       first: "Ada",
       last: "Lovelace",
-      personId: "person-ada",
+      personId: PERSON_ADA,
       campus: "potch",
       status: "active",
       joinedAt: "2020-01-01",
       stage: "welcome",
     });
-    const res = await patch("person-ada", { campus: "jhb", status: "inactive" });
+    const res = await patch(PERSON_ADA, { campus: "jhb", status: "inactive" });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       person: {
-        id: "person-ada",
+        id: PERSON_ADA,
         name: "Ada Lovelace",
         campus: "jhb",
         status: "inactive",
@@ -963,15 +1030,23 @@ describe("PATCH /api/missio/people/[id]", () => {
   });
 
   it("rejects an empty body, an unknown field, and a bad value", async () => {
-    addContact({ first: "Ada", last: "Lovelace", personId: "person-ada" });
-    expect((await patch("person-ada", {})).status).toBe(400);
-    expect((await patch("person-ada", { name: "Changed" })).status).toBe(400);
-    expect((await patch("person-ada", { campus: "cpt" })).status).toBe(400);
-    expect((await patch("person-ada", { joinedAt: "tomorrow" })).status).toBe(400);
-    expect((await patch("person-ada", { campus: "jhb", contact_id: JANE })).status).toBe(400);
-    expect((await patch("person-ada", { status: "inactive", org_id: MISSIO })).status).toBe(400);
+    addContact({ first: "Ada", last: "Lovelace", personId: PERSON_ADA });
+    expect((await patch(PERSON_ADA, {})).status).toBe(400);
+    expect((await patch(PERSON_ADA, { name: "Changed" })).status).toBe(400);
+    expect((await patch(PERSON_ADA, { campus: "cpt" })).status).toBe(400);
+    expect((await patch(PERSON_ADA, { joinedAt: "tomorrow" })).status).toBe(400);
+    expect((await patch(PERSON_ADA, { campus: "jhb", contact_id: JANE })).status).toBe(400);
+    expect((await patch(PERSON_ADA, { status: "inactive", org_id: MISSIO })).status).toBe(400);
     expect(state.writes).toEqual([]);
     expect(state.tables.org_people[0].campus).toBe("potch");
+  });
+
+  it("returns 404 when the id is not a uuid", async () => {
+    addContact({ first: "Ada", last: "Lovelace", personId: PERSON_ADA });
+    const res = await patch("person-ada", { status: "inactive" });
+    expect(res.status).toBe(404);
+    expect(state.writes).toEqual([]);
+    expect(state.tables.org_people[0].status).toBe("active");
   });
 
   it("returns 404 when the person is not visible", async () => {
@@ -984,11 +1059,11 @@ describe("PATCH /api/missio/people/[id]", () => {
     addContact({
       first: "Ada",
       last: "Lovelace",
-      personId: "person-ada",
+      personId: PERSON_ADA,
       joinedAt: "2020-01-01",
       stage: "welcome",
     });
-    const res = await patch("person-ada", { joinedAt: null, currentStage: null });
+    const res = await patch(PERSON_ADA, { joinedAt: null, currentStage: null });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       person: { joinedAt: null, currentStage: null },
