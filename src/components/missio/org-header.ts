@@ -12,14 +12,44 @@ export type OrgHeaderState =
   | { kind: "static"; name: string };
 
 /**
- * `/api/missio/me` lists `org_staff_roles` only. FFSA platform roles
- * (`super_admin`, `staff`, and the rest of `user_roles`) are not in that
- * list, and `org_staff_roles.role` cannot store them. A pastor who is also
- * FFSA staff therefore comes back with one org named "Missio". Any platform
- * role still counts as FFSA access, so the switcher offers both.
+ * Staff-type roles on `user_roles`. Membership-only roles are not staff:
+ * `student`, `community_member`, and `self_service` (`src/lib/auth/membership-roles.ts`).
+ * The other names are the roles seeded in migrations 003, 004, 013, 084, 127,
+ * 131, 137, 157, 248, and 292.
+ */
+export const FFSA_STAFF_ROLES = new Set([
+  "super_admin",
+  "admin",
+  "staff",
+  "events_admin",
+  "program_leader",
+  "team_leader",
+  "finance_admin",
+  "comms_admin",
+  "mission_leader",
+  "prayer_room_admin",
+  "ministry_leader",
+  "vehicle_manager",
+  "booking_manager",
+  "leadership_team",
+  "legal_admin",
+  "finance_office",
+  "school_leader",
+]);
+
+export function isFfsaStaffRole(name: string): boolean {
+  return FFSA_STAFF_ROLES.has(name.trim());
+}
+
+/**
+ * `/api/missio/me` lists `org_staff_roles` only. FFSA staff roles live on
+ * `user_roles` and are not in that list. A pastor who is also FFSA staff
+ * therefore comes back with one org named "Missio". A staff role still
+ * counts as FFSA access, so the switcher offers both. A student, community
+ * member, or self-service user does not.
  *
  * An empty or missing org list is a real link home. A single Missio org
- * with a confirmed empty platform-role list stays a static label.
+ * with a confirmed empty staff-role list stays a static label.
  */
 export function missioOrgHeader(input: {
   orgs: Array<{ id: string; slug: string; name: string }> | null;
@@ -38,7 +68,7 @@ export function missioOrgHeader(input: {
   const ffsa = input.orgs.find((org) => org.slug === "ffsa");
   const platformFfsa =
     input.allowPlatformFfsa !== false &&
-    (input.ffsaRoleNames ?? []).some((name) => name.trim().length > 0);
+    (input.ffsaRoleNames ?? []).some((name) => isFfsaStaffRole(name));
 
   const options: OrgSwitcherOrg[] = input.orgs.map((org) => ({
     id: org.id,

@@ -30,7 +30,7 @@ describe("FFSA platform roles", () => {
     expect(await readFfsaRoleNames(async () => { throw new Error("offline"); })).toBeNull();
   });
 
-  it("caches one read until the cache is cleared", async () => {
+  it("caches one successful read until the cache is cleared", async () => {
     let calls = 0;
     const original = globalThis.fetch;
     globalThis.fetch = (async () => {
@@ -42,6 +42,24 @@ describe("FFSA platform roles", () => {
       await expect(loadFfsaRoleNames()).resolves.toEqual(["staff"]);
       expect(calls).toBe(1);
       clearFfsaRoleCache();
+      await expect(loadFfsaRoleNames()).resolves.toEqual(["staff"]);
+      expect(calls).toBe(2);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("does not cache a failed read, so the next call can succeed", async () => {
+    let calls = 0;
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls === 1) return jsonResponse({ error: "server_error" }, 500);
+      return jsonResponse({ roles: [{ name: "staff", scopeType: null, scopeId: null }] });
+    }) as typeof fetch;
+    try {
+      await expect(loadFfsaRoleNames()).resolves.toBeNull();
+      await expect(loadFfsaRoleNames()).resolves.toEqual(["staff"]);
       await expect(loadFfsaRoleNames()).resolves.toEqual(["staff"]);
       expect(calls).toBe(2);
     } finally {

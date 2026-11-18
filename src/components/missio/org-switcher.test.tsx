@@ -61,11 +61,13 @@ describe("OrgSwitcher", () => {
     expect(menu?.textContent).toContain("Fire & Fragrance SA");
     expect(menu?.textContent).toContain("FFSA Hub");
     expect(menu?.textContent).toContain("Missio Church");
-    expect(menu?.textContent).toContain("Missio");
     expect(menu?.textContent).not.toMatch(/shared|giving stay/i);
+    const missioRow = [...(menu?.querySelectorAll("a") ?? [])].find((link) =>
+      link.textContent?.includes("Missio Church"),
+    );
+    expect(missioRow?.querySelector("[class*=itemBlurb]")).toBeNull();
+    expect(missioRow?.getAttribute("href")).toBe("/missio");
     expect(menu?.querySelector("[class*=kbd]")).toBeNull();
-    const missio = [...document.body.querySelectorAll("a")].find((link) => link.textContent?.includes("Missio Church"));
-    expect(missio?.getAttribute("href")).toBe("/missio");
   });
 
   it("switches the tile and skin when Missio is the current org", () => {

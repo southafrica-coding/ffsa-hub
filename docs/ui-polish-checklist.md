@@ -36,17 +36,17 @@ const overflows = shellOverflow || pageOverflow;
 
 A table or a week grid may scroll inside its own box. The shell pane and the page may not. Fix overflow in the screen you are editing. Do not paper over it with `overflow-x: hidden` on `body` or on `[data-shell-main]`.
 
-Missio has no `[data-shell-main]` and no `<main>`. The scrolling column is a hashed CSS-module class, so there is no stable hook yet. A `data-missio-main` attribute on that column is a suggested follow-up. Until then, compare the document and list every element that is wider than its own box.
+Missio has no `[data-shell-main]` and no `<main>`. Measure `document.documentElement` and the content column `[data-missio-content]` (`src/components/missio/shell.tsx`).
 
 ```js
 const doc = document.documentElement;
+const content = document.querySelector("[data-missio-content]");
 const pageOverflow = doc.scrollWidth > doc.clientWidth;
-const offenders = [...document.querySelectorAll("body *")].filter(
-  (el) => el.scrollWidth > el.clientWidth
-);
+const contentOverflow = !!content && content.scrollWidth > content.clientWidth;
+const overflows = pageOverflow || contentOverflow;
 ```
 
-Read the hits before treating them as a failure. Text cut off with an ellipsis, or overflow that is deliberately hidden, is fine. The content column or the page wrapper showing up in that list is a failure. A region that is supposed to scroll, such as a wide table inside its own box, is not.
+Text cut off with an ellipsis, or overflow that is deliberately hidden, is fine. The content column or the page showing up as wider than its box is a failure. A region that is supposed to scroll, such as a wide table inside its own box, is not.
 
 Showcase surfaces are only:
 
@@ -247,4 +247,4 @@ Do not apply these to a dashboard widget, a people table, or any other dense adm
 - [ ] The screen has one masthead and at most one needs-you band.
 - [ ] Corners are square on FFSA. Regions are rules, not shadows.
 - [ ] Passes 7–10 appear only on the org switcher, the Missio landing, or a public page.
-- [ ] A 390px screenshot is in the PR. At 360, 390, and 430px, `[data-shell-main]` does not have `scrollWidth > clientWidth` where that element exists, and the document is not wider than its client width. On Missio, use the document-and-offenders check until `data-missio-main` exists.
+- [ ] A 390px screenshot is in the PR. At 360, 390, and 430px, `[data-shell-main]` does not have `scrollWidth > clientWidth` where that element exists, and the document is not wider than its client width. On Missio, measure `document.documentElement` and `[data-missio-content]`.

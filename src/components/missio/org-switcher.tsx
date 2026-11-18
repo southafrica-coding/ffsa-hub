@@ -8,7 +8,6 @@ import { useOrgSwitcher, type OrgSwitcherProps } from "./use-org-switcher";
 
 const BLURB: Record<string, string> = {
   ffsa: "FFSA Hub",
-  missio: "Missio",
 };
 
 export function OrgTile({ slug, large = false }: { slug: string; large?: boolean }) {
