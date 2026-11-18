@@ -1,0 +1,250 @@
+/* Person profile and journey (board M2c). Tokens come from missioSkinVars(). */
+.root {
+  min-width: 0;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink, #1c1b17);
+  text-decoration: none;
+}
+
+.back:hover {
+  text-decoration: underline;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 4px 0 20px;
+  min-width: 0;
+}
+
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.headText {
+  min-width: 0;
+}
+
+.root .name {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+
+.card,
+.journey {
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-md, 14px);
+  background: var(--panel, #fbf9f4);
+  min-width: 0;
+}
+
+.card h2,
+.journey h2 {
+  margin: 0 0 10px;
+  font-size: 20px;
+}
+
+.card h3 {
+  margin: 16px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--quiet, #6e685b);
+}
+
+.quiet {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--quiet, #6e685b);
+}
+
+.rows {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-sm, 10px);
+  background: #fff;
+  color: var(--ink, #1c1b17);
+  text-decoration: none;
+}
+
+.row:hover {
+  border-color: var(--accent-text, #8e3d1f);
+}
+
+.rowMain {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  font-size: 14px;
+  color: var(--quiet, #6e685b);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.facts dt {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--quiet, #6e685b);
+}
+
+.facts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.journeyHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+
+.journeyHead h2 {
+  margin: 0;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.root .filter {
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink, #1c1b17);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.root .filterOn {
+  border-color: var(--accent-text, #8e3d1f);
+  background: var(--accent-text, #8e3d1f);
+  color: #fff;
+}
+
+.root .filter:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.timeline {
+  margin: 8px 0 0;
+  padding: 0 0 0 18px;
+  list-style: none;
+  border-left: 2px solid var(--rule, #ddd7c8);
+}
+
+.step {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 16px;
+  padding: 10px 0;
+}
+
+.step::before {
+  content: "";
+  position: absolute;
+  left: -25px;
+  top: 16px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-text, #8e3d1f);
+  border: 2px solid var(--panel, #fbf9f4);
+}
+
+.step[data-type="added"]::before,
+.step[data-type="connect_card"]::before {
+  background: var(--olive, #4e6b4f);
+}
+
+.stepBody {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.stepTitle {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.stepTitle a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.stepDetail {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--quiet, #6e685b);
+  overflow-wrap: anywhere;
+}
+
+.stepDate {
+  flex: none;
+  font-size: 14px;
+  color: var(--quiet, #6e685b);
+}

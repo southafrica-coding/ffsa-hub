@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -167,7 +168,9 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
               {list.rows.map((person) => (
                 <li key={person.id} className={styles.personCard}>
                   <div className={styles.personCardTop}>
-                    <span className={styles.personName}>{person.name}</span>
+                    <Link href={`/missio/people/${encodeURIComponent(person.id)}`} className={`${styles.personName} ${styles.personLink}`}>
+                      {person.name}
+                    </Link>
                     <span className={`${styles.badge} ${badgeClass(person.status)}`} data-status={person.status}>
                       {STATUS_LABEL[person.status]}
                     </span>
@@ -202,7 +205,11 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
             <tbody>
               {list.rows.map((person) => (
                 <tr key={person.id}>
-                  <td className={styles.personName}>{person.name}</td>
+                  <td className={styles.personName}>
+                    <Link href={`/missio/people/${encodeURIComponent(person.id)}`} className={styles.personLink}>
+                      {person.name}
+                    </Link>
+                  </td>
                   <td>
                     <span className={styles.campus}>{CAMPUS_LABEL[person.campus]}</span>
                     {person.campus === "potch" ? <span className={styles.campusMain}>Main</span> : null}

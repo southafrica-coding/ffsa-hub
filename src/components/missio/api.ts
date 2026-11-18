@@ -7,6 +7,7 @@ import type {
   MissioPerson,
   UpdateMissioPersonInput,
 } from "./types-shim";
+import type { PersonProfile } from "@/lib/missio/profile";
 
 /**
  * Every Missio request the UI makes. People, contact match, and the viewer
@@ -252,3 +253,16 @@ export function createMissioClient(fetchImpl: FetchLike = fetch): MissioClient {
 }
 
 export const missioClient = createMissioClient();
+
+/** GET /api/missio/people/:id. The profile and journey for one Missio person. */
+export async function fetchPersonProfile(id: string, fetchImpl: FetchLike = fetch): Promise<PersonProfile> {
+  const res = await fetchImpl(`/api/missio/people/${encodeURIComponent(id)}`, {
+    credentials: "same-origin",
+    headers: { accept: "application/json" },
+  });
+  const body = await parseResponse(res);
+  if (!body.person || !Array.isArray(body.houses) || !Array.isArray(body.journey)) {
+    throw new MissioApiError(500, "Missio returned an unexpected person.", null, "server_error");
+  }
+  return body as unknown as PersonProfile;
+}

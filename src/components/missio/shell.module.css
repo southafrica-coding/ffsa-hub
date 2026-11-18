@@ -1103,3 +1103,15 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* People list: the name opens the profile. */
+.personLink {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong, #cfc8b6);
+  text-underline-offset: 3px;
+}
+
+.personLink:hover {
+  text-decoration-color: currentColor;
+}

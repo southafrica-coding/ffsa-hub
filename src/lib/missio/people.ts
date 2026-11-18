@@ -464,7 +464,7 @@ async function removeOrphanContact(admin: Client, contactId: string) {
   if (removed.error) console.error("[missio] orphan contact cleanup failed", removed.error.message);
 }
 
-async function loadPerson(
+export async function loadPerson(
   supabase: Client,
   orgId: string,
   personId: string

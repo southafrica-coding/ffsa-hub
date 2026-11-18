@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { MISSIO_PEOPLE_ROLES, MISSIO_SLUG, requireOrgRole } from "@/lib/missio/access";
 import { updatePerson } from "@/lib/missio/people";
+import { getPersonProfile } from "@/lib/missio/profile";
 
 // PATCH /api/missio/people/[id]  { campus?, status?, joinedAt?, currentStage? }
 //
@@ -15,6 +16,23 @@ type Ctx = { params: Promise<{ id: string }> };
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status });
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// GET /api/missio/people/[id]
+//
+// Pastors only. The person, the houses they belong to, masked contact
+// details and their journey, derived from rows that already exist.
+export async function GET(_request: Request, context: Ctx) {
+  const auth = await requireOrgRole(MISSIO_SLUG, MISSIO_PEOPLE_ROLES);
+  if ("response" in auth) return auth.response;
+
+  const { id } = await context.params;
+  if (!UUID.test(id)) return json({ error: "Person not found.", code: "not_found" }, 404);
+  const result = await getPersonProfile(auth, id);
+  if (!result.ok) return json({ error: result.error, code: result.code }, result.status);
+  return json(result.profile);
 }
 
 export async function PATCH(request: Request, context: Ctx) {
