@@ -28,6 +28,10 @@ const ALAN_A = "cccccccc-cccc-4ccc-8ccc-ccccccccccc3";
 const ALAN_B = "cccccccc-cccc-4ccc-8ccc-ccccccccccc4";
 const JOSE = "cccccccc-cccc-4ccc-8ccc-ccccccccccc5";
 
+function missioIds(ids: string[] = contacts.map((contact) => contact.id)): Set<string> {
+  return new Set(ids);
+}
+
 const contacts: ContactName[] = [
   { id: ADA, firstName: "Ada", lastName: "Lovelace", preferredName: null },
   { id: GRACE, firstName: "Ann", lastName: "Hopper", preferredName: "Grace" },
@@ -85,46 +89,63 @@ describe("house church import planner", () => {
   });
 
   it("auto-links one exact match, including a preferred name, and classifies the rest", () => {
-    expect(classifyHouseChurchRow({ kind: "person", first: "Ada", last: "Lovelace" }, contacts)).toEqual({
+    const inMissio = missioIds();
+    expect(classifyHouseChurchRow({ kind: "person", first: "Ada", last: "Lovelace" }, contacts, inMissio)).toEqual({
       action: "link",
       contactId: ADA,
     });
-    expect(classifyHouseChurchRow({ kind: "couple_split", first: "Grace", last: "Hopper" }, contacts)).toEqual({
+    expect(classifyHouseChurchRow({ kind: "couple_split", first: "Grace", last: "Hopper" }, contacts, inMissio)).toEqual({
       action: "link",
       contactId: GRACE,
     });
-    expect(classifyHouseChurchRow({ kind: "person", first: "José", last: "O'Brien" }, contacts)).toEqual({
+    expect(classifyHouseChurchRow({ kind: "person", first: "José", last: "O'Brien" }, contacts, inMissio)).toEqual({
       action: "link",
       contactId: JOSE,
     });
-    expect(classifyHouseChurchRow({ kind: "person", first: "Alan", last: "Turing" }, contacts)).toMatchObject({
+    expect(classifyHouseChurchRow({ kind: "person", first: "Alan", last: "Turing" }, contacts, inMissio)).toMatchObject({
       action: "review",
       matchType: "multiple",
     });
     expect(
-      classifyHouseChurchRow({ kind: "person", first: "Alan", last: "Turing" }, contacts).action === "review"
-        ? (classifyHouseChurchRow({ kind: "person", first: "Alan", last: "Turing" }, contacts) as { candidateContactIds: string[] })
-            .candidateContactIds
+      classifyHouseChurchRow({ kind: "person", first: "Alan", last: "Turing" }, contacts, inMissio).action === "review"
+        ? (
+            classifyHouseChurchRow({ kind: "person", first: "Alan", last: "Turing" }, contacts, inMissio) as {
+              candidateContactIds: string[];
+            }
+          ).candidateContactIds
         : []
     ).toEqual([ALAN_A, ALAN_B]);
-    expect(classifyHouseChurchRow({ kind: "person", first: "Nobody", last: "Home" }, contacts)).toEqual({
+    expect(classifyHouseChurchRow({ kind: "person", first: "Nobody", last: "Home" }, contacts, inMissio)).toEqual({
       action: "review",
       matchType: "none",
       candidateContactIds: [],
     });
-    expect(classifyHouseChurchRow({ kind: "family_label", first: "Ada", last: "Lovelace" }, contacts)).toMatchObject({
+    expect(classifyHouseChurchRow({ kind: "family_label", first: "Ada", last: "Lovelace" }, contacts, inMissio)).toMatchObject({
       action: "review",
       matchType: "family_label",
       candidateContactIds: [ADA],
     });
-    expect(classifyHouseChurchRow({ kind: "first_only", first: "Grace", last: "Hopper" }, contacts)).toMatchObject({
+    expect(classifyHouseChurchRow({ kind: "first_only", first: "Grace", last: "Hopper" }, contacts, inMissio)).toMatchObject({
       action: "review",
       matchType: "first_only",
     });
-    expect(classifyHouseChurchRow({ kind: "person", first: "Ada", last: "" }, contacts)).toMatchObject({
+    expect(classifyHouseChurchRow({ kind: "person", first: "Ada", last: "" }, contacts, inMissio)).toMatchObject({
       action: "review",
       matchType: "partial",
       candidateContactIds: [ADA],
+    });
+    expect(
+      classifyHouseChurchRow({ kind: "person", first: "José", last: "O'Brien" }, contacts, missioIds([ADA, GRACE]))
+    ).toEqual({
+      action: "review",
+      matchType: "non_missio_contact",
+      candidateContactIds: [],
+    });
+    expect(
+      classifyHouseChurchRow({ kind: "person", first: "Alan", last: "Turing" }, contacts, missioIds([ALAN_A]))
+    ).toEqual({
+      action: "link",
+      contactId: ALAN_A,
     });
   });
 
@@ -137,10 +158,10 @@ describe("house church import planner", () => {
     expect(planned.ok).toBe(true);
     if (!planned.ok) return;
     expect(planned.plan.summary).toMatchObject({
-      autoLinked: 4,
+      autoLinked: 1,
       alreadyLinked: 0,
       roleConflicts: 0,
-      orgPeopleToCreate: 2,
+      orgPeopleToCreate: 0,
       resolvedLeftUntouched: 0,
     });
     expect(planned.plan.summary.toReviewByReason).toEqual({
@@ -149,23 +170,22 @@ describe("house church import planner", () => {
       family_label: 1,
       first_only: 1,
       partial: 0,
+      non_missio_contact: 3,
     });
-    expect(planned.plan.orgPeopleToCreate.sort()).toEqual([GRACE, JOSE].sort());
+    expect(planned.plan.orgPeopleToCreate).toEqual([]);
     expect(planned.plan.links.map((link) => [link.rawName, link.houseNumber, link.outcome, link.role])).toEqual([
       ["Ada Lovelace", 1, "insert", "leader"],
-      ["Grace Hopper", 1, "insert", "co_leader"],
-      ["Grace Hopper", 2, "insert", "member"],
-      ["Jose Obrien", 1, "insert", "member"],
     ]);
-    expect(planned.plan.reviews.map((review) => review.matchType).sort()).toEqual([
-      "family_label",
-      "first_only",
-      "multiple",
-      "multiple",
+    expect(planned.plan.reviews.filter((review) => review.matchType === "non_missio_contact").map((review) => review.rawName)).toEqual([
+      "Grace Hopper",
+      "Grace Hopper",
+      "Jose Obrien",
     ]);
+    expect(planned.plan.reviews.every((review) => review.candidateContactIds.every((id) => id === ADA))).toBe(true);
     const text = formatImportSummary(planned.plan.summary, planned.plan.conflicts);
-    expect(text).toContain("org_people to create: 2");
-    expect(text).toContain("auto-linked: 4");
+    expect(text).toContain("org_people to create: 0");
+    expect(text).toContain("non_missio_contact: 3");
+    expect(text).toContain("auto-linked: 1");
   });
 
   it("does not write on a dry run, and a second apply writes nothing", async () => {
@@ -184,9 +204,8 @@ describe("house church import planner", () => {
     const applied = await applyHouseChurchImport(first.plan, live.writer, { apply: true });
     expect(applied.wrote).toBeGreaterThan(0);
     expect(live.calls.some((call) => call.startsWith("member:"))).toBe(true);
-    expect(live.calls.some((call) => call.startsWith("org:"))).toBe(true);
+    expect(live.calls.some((call) => call.startsWith("org:"))).toBe(false);
     expect(live.calls.some((call) => call.startsWith("review:"))).toBe(true);
-    expect(live.calls.some((call) => call.startsWith("org:" + ADA))).toBe(false);
 
     for (const link of first.plan.links) {
       if (link.outcome === "insert") {
@@ -224,7 +243,7 @@ describe("house church import planner", () => {
     expect(second.wrote).toBe(0);
     expect(againWriter.calls).toEqual([]);
     expect(second.plan.summary.autoLinked).toBe(0);
-    expect(second.plan.summary.alreadyLinked).toBe(4);
+    expect(second.plan.summary.alreadyLinked).toBe(1);
     expect(second.plan.summary.orgPeopleToCreate).toBe(0);
     expect(second.plan.reviews.every((review) => review.outcome === "unchanged")).toBe(true);
   });
@@ -271,6 +290,7 @@ describe("house church import planner", () => {
     const blocked = planHouseChurchImport(
       future.rows,
       snapshot({
+        orgPeopleContactIds: [ADA],
         members: [
           {
             houseChurchId: HOUSE_1,
@@ -299,6 +319,7 @@ describe("house church import planner", () => {
     const planned = planHouseChurchImport(
       ended.rows,
       snapshot({
+        orgPeopleContactIds: [ADA],
         members: [
           {
             houseChurchId: HOUSE_1,

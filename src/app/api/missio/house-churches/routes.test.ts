@@ -649,7 +649,7 @@ describe("GET /api/missio/house-churches", () => {
   it("counts a future end date and hides a future start", async () => {
     addHouse({ id: HOUSE_1, number: 3, name: "Riverside" });
     addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
-    addContact({ id: GRACE, first: "Grace", last: "Hopper" });
+    addContact({ id: GRACE, first: "Grace", last: "Hopper", inOrg: true, personId: "person-grace" });
     addMember({
       houseId: HOUSE_1,
       contactId: ADA,
@@ -722,10 +722,10 @@ describe("GET /api/missio/house-churches/:id", () => {
 });
 
 describe("membership writes", () => {
-  it("adds a member, creates org_people once, and refuses an active duplicate", async () => {
+  it("adds an active Missio person and does not create org_people", async () => {
     addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
     addHouse({ id: HOUSE_2, number: 4, campus: "jhb" });
-    addContact({ id: ADA, first: "Ada", last: "Lovelace", preferred: "Addie" });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", preferred: "Addie", inOrg: true, personId: "person-ada" });
     addContact({ id: GRACE, first: "Grace", last: "Hopper", inOrg: true, personId: "person-grace", campus: "potch", status: "visitor" });
 
     const created = await post(HOUSE_1, { contactId: ADA, role: "leader" });
@@ -736,17 +736,12 @@ describe("membership writes", () => {
         displayName: "Addie Lovelace",
         firstName: "Ada",
         lastName: "Lovelace",
-        orgPersonId: state.tables.org_people[1]?.id ? expect.any(String) : expect.any(String),
+        orgPersonId: "person-ada",
         role: "leader",
         startedAt: todayIsoDate(),
       },
     });
-    const orgInsert = state.writes.find((write) => write.table === "org_people" && write.op === "insert");
-    expect(orgInsert?.client).toBe("admin");
-    const orgPayload = Array.isArray(orgInsert?.payload) ? orgInsert?.payload[0] : orgInsert?.payload;
-    expect(orgPayload).toMatchObject({ org_id: MISSIO, contact_id: ADA, campus: "potch", status: "active", created_by: PASTOR });
-    expect(orgPayload).not.toHaveProperty("member_status");
-    expect(orgPayload).not.toHaveProperty("is_member");
+    expect(state.writes.some((write) => write.table === "org_people")).toBe(false);
     const memberInsert = state.writes.find((write) => write.table === "house_church_members" && write.op === "insert");
     expect(memberInsert?.client).toBe("user");
     expect(memberInsert?.payload).toMatchObject([{ contact_id: ADA, role: "leader", ended_at: null, created_by: PASTOR }]);
@@ -756,24 +751,43 @@ describe("membership writes", () => {
     expect(duplicate.status).toBe(409);
     expect((await duplicate.json()).code).toBe("already_member");
     expect(state.tables.house_church_members.filter((row) => row.contact_id === ADA && row.ended_at == null)).toHaveLength(1);
-    expect(state.tables.org_people.filter((row) => row.contact_id === ADA)).toHaveLength(1);
 
     const otherHouse = await post(HOUSE_2, { contactId: ADA, role: "member" });
     expect(otherHouse.status).toBe(201);
-    expect(state.tables.org_people.filter((row) => row.contact_id === ADA)).toHaveLength(1);
+    expect(state.tables.org_people).toHaveLength(2);
 
     state.writes = [];
-    const kept = await post(HOUSE_2, { contactId: GRACE, role: "co_leader" });
-    expect(kept.status).toBe(201);
+    const visitor = await post(HOUSE_2, { contactId: GRACE, role: "co_leader" });
+    expect(visitor.status).toBe(400);
+    expect(await visitor.json()).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
     expect(state.tables.org_people.find((row) => row.id === "person-grace")).toMatchObject({ status: "visitor", campus: "potch" });
-    expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
-    expect(state.writes.some((write) => write.table === "org_people" && write.op === "update")).toBe(false);
+    expect(state.writes.some((write) => write.table === "house_church_members" || write.table === "org_people")).toBe(false);
+  });
+
+  it("refuses a contact who is not an active Missio person and inserts nothing", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: OUTSIDE, first: "Outside", last: "Person", inOrg: false });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada", status: "inactive" });
+    const before = state.tables.org_people.map((row) => ({ ...row }));
+
+    const missing = await post(HOUSE_1, { contactId: OUTSIDE, role: "member" });
+    expect(missing.status).toBe(400);
+    expect(await missing.json()).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+
+    const inactive = await post(HOUSE_1, { contactId: ADA, role: "leader" });
+    expect(inactive.status).toBe(400);
+    expect((await inactive.json()).code).toBe("not_missio_person");
+
+    expect(state.tables.house_church_members).toEqual([]);
+    expect(state.tables.org_people).toEqual(before);
+    expect(state.writes.some((write) => write.op === "insert" && write.table !== "audit_logs")).toBe(false);
+    expect(state.ops.some((op) => op.table === "contacts")).toBe(false);
   });
 
   it("rejects a missing contact, a bad role, and a missing house", async () => {
     addHouse({ id: HOUSE_1, number: 3 });
     expect((await post(HOUSE_1, { contactId: OUTSIDE, role: "member" })).status).toBe(400);
-    expect((await (await post(HOUSE_1, { contactId: OUTSIDE, role: "member" })).json()).code).toBe("invalid_input");
+    expect((await (await post(HOUSE_1, { contactId: OUTSIDE, role: "member" })).json()).code).toBe("not_missio_person");
     expect((await post(HOUSE_1, { contactId: ADA, role: "boss" })).status).toBe(400);
     expect((await post(HOUSE_1, { contactId: "nope", role: "member" })).status).toBe(400);
     expect((await post(HOUSE_1, { contactId: ADA, role: "member", extra: true })).status).toBe(400);
@@ -784,7 +798,7 @@ describe("membership writes", () => {
 
   it("changes a role and ends a membership without touching org_people", async () => {
     addHouse({ id: HOUSE_1, number: 3 });
-    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada", status: "visitor" });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada", status: "active" });
     addMember({ id: "member-ada", houseId: HOUSE_1, contactId: ADA, role: "member" });
     const before = { ...state.tables.org_people[0] };
 
@@ -801,7 +815,7 @@ describe("membership writes", () => {
     expect(state.tables.house_church_members[0].ended_at).toBe(todayIsoDate());
     expect(state.writes.some((write) => write.table === "house_church_members" && write.op === "delete")).toBe(false);
     expect(state.writes.some((write) => write.table === "org_people")).toBe(false);
-    expect(state.tables.org_people[0]).toMatchObject({ status: "visitor" });
+    expect(state.tables.org_people[0]).toMatchObject({ status: "active" });
 
     expect((await remove(HOUSE_1, ADA)).status).toBe(404);
     expect((await patch(HOUSE_1, ADA, { role: "member" })).status).toBe(404);
@@ -813,6 +827,12 @@ describe("membership writes", () => {
     expect(state.tables.house_church_members.filter((row) => row.ended_at == null)).toHaveLength(1);
     expect(state.tables.house_church_members).toHaveLength(2);
     expect(state.tables.org_people).toHaveLength(1);
+
+    state.tables.org_people[0].status = "visitor";
+    const visitorRole = await patch(HOUSE_1, ADA, { role: "leader" });
+    expect(visitorRole.status).toBe(400);
+    expect((await visitorRole.json()).code).toBe("not_missio_person");
+    expect(state.tables.house_church_members.find((row) => row.ended_at == null)?.role).toBe("member");
   });
 
   it("returns 429 after 20 writes in a minute", async () => {
@@ -828,15 +848,15 @@ describe("membership writes", () => {
     expect(state.tables.house_church_members).toEqual([]);
   });
 
-  it("returns 500 without a database message when org_people cannot be saved", async () => {
+  it("returns 500 without a database message when the member row cannot be saved", async () => {
     addHouse({ id: HOUSE_1, number: 3 });
-    addContact({ id: ADA, first: "Ada", last: "Lovelace" });
-    state.failInsert = "org_people";
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    state.failInsert = "house_church_members";
     const res = await post(HOUSE_1, { contactId: ADA, role: "member" });
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: "Something went wrong.", code: "server_error" });
     expect(state.tables.house_church_members).toEqual([]);
-    expect(state.tables.org_people).toEqual([]);
+    expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
   });
 });
 
@@ -844,7 +864,16 @@ describe("import review", () => {
   it("defaults to pending and returns at most five named candidates", async () => {
     addHouse({ id: HOUSE_1, number: 3, name: "Riverside" });
     const ids = Array.from({ length: 6 }, (_, index) => `ccccccc${index}-cccc-4ccc-8ccc-ccccccccccc${index}`);
-    ids.forEach((id, index) => addContact({ id, first: "Cand", last: String(index), inOrg: index === 0, personId: index === 0 ? "person-0" : undefined }));
+    ids.forEach((id, index) =>
+      addContact({
+        id,
+        first: "Cand",
+        last: String(index),
+        inOrg: index < 5,
+        personId: index < 5 ? `person-${index}` : undefined,
+        status: index === 3 ? "visitor" : "active",
+      })
+    );
     addReview({
       id: REVIEW,
       rawName: "Someone",
@@ -891,9 +920,12 @@ describe("import review", () => {
       notes: "check spelling",
       resolvedAt: null,
     });
-    expect(body.items[0].candidates).toHaveLength(5);
-    expect(body.items[0].candidates[0].orgPersonId).toBe("person-0");
-    expect(body.items[0].candidates[1].orgPersonId).toBeUndefined();
+    expect(body.items[0].candidates.map((candidate: { orgPersonId: string }) => candidate.orgPersonId)).toEqual([
+      "person-0",
+      "person-1",
+      "person-2",
+      "person-4",
+    ]);
     expect(body.items[1].house).toBeNull();
     expect(state.ops.filter((op) => op.table === "contacts").every((op) => op.client === "admin")).toBe(true);
 
@@ -904,22 +936,32 @@ describe("import review", () => {
     expect((await review("?status=nope")).status).toBe(400);
   });
 
-  it("links a contact, keeps an existing role, and ensures org_people", async () => {
+  it("links an active Missio person and refuses someone who is not", async () => {
     addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
-    addContact({ id: ADA, first: "Ada", last: "Lovelace" });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    addContact({ id: OUTSIDE, first: "Outside", last: "Person", inOrg: false });
     addReview({ id: REVIEW, rawName: "Ada Lovelace", sourceLine: 4, houseNumber: 3, role: "leader" });
+
+    const refused = await resolve(REVIEW, { action: "link", contactId: OUTSIDE });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+    expect(state.tables.missio_import_review[0].status).toBe("pending");
+    expect(state.tables.house_church_members).toEqual([]);
+    expect(state.tables.org_people).toHaveLength(1);
+    expect(state.writes.some((write) => write.table === "house_church_members" || write.table === "org_people")).toBe(false);
 
     const res = await resolve(REVIEW, { action: "link", contactId: ADA });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.item).toMatchObject({ id: REVIEW, status: "matched", resolvedAt: expect.any(String) });
-    expect(body.member).toMatchObject({ contactId: ADA, role: "leader", orgPersonId: expect.any(String) });
+    expect(body.member).toMatchObject({ contactId: ADA, role: "leader", orgPersonId: "person-ada" });
     expect(state.tables.missio_import_review[0]).toMatchObject({
       status: "matched",
       resolved_contact_id: ADA,
       resolved_by: PASTOR,
     });
     expect(state.tables.org_people).toHaveLength(1);
+    expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
     expect(state.tables.house_church_members[0]).toMatchObject({ role: "leader", ended_at: null, created_by: PASTOR });
     const reviewUpdate = state.writes.find((write) => write.table === "missio_import_review" && write.op === "update");
     expect(reviewUpdate?.client).toBe("user");

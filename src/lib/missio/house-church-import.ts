@@ -31,7 +31,14 @@ export const HOUSE_CHURCH_CSV_COLUMNS = [
   "parts_in_row",
 ] as const;
 
-export const IMPORT_MATCH_TYPES = ["none", "multiple", "family_label", "first_only", "partial"] as const;
+export const IMPORT_MATCH_TYPES = [
+  "none",
+  "multiple",
+  "family_label",
+  "first_only",
+  "partial",
+  "non_missio_contact",
+] as const;
 
 export type ImportMatchType = (typeof IMPORT_MATCH_TYPES)[number];
 
@@ -349,26 +356,28 @@ export function parseHouseChurchCsv(text: string): { ok: true; rows: CsvHouseRow
 
 export function classifyHouseChurchRow(
   row: Pick<CsvHouseRow, "kind" | "first" | "last">,
-  contacts: ContactName[]
+  contacts: ContactName[],
+  missioContactIds: ReadonlySet<string>
 ): { action: "link"; contactId: string } | { action: "review"; matchType: ImportMatchType; candidateContactIds: string[] } {
   const kind = row.kind.trim().toLowerCase();
   const first = row.first.trim();
   const last = row.last.trim();
   const bothNames = Boolean(first && last);
   const exact = bothNames ? exactContactIds(contacts, first, last) : [];
+  const suggest = (ids: string[]) => ids.filter((id) => missioContactIds.has(id)).slice(0, 5);
 
   if (kind === "family_label") {
     return {
       action: "review",
       matchType: "family_label",
-      candidateContactIds: (bothNames ? exact : candidatesByGivenName(contacts, first)).slice(0, 5),
+      candidateContactIds: suggest(bothNames ? exact : candidatesByGivenName(contacts, first)),
     };
   }
   if (kind === "first_only") {
     return {
       action: "review",
       matchType: "first_only",
-      candidateContactIds: (bothNames ? exact : candidatesByGivenName(contacts, first)).slice(0, 5),
+      candidateContactIds: suggest(bothNames ? exact : candidatesByGivenName(contacts, first)),
     };
   }
   if (!bothNames || !AUTO_KINDS.has(kind)) {
@@ -377,11 +386,16 @@ export function classifyHouseChurchRow(
       : first
         ? candidatesByGivenName(contacts, first)
         : candidatesByLastName(contacts, last);
-    return { action: "review", matchType: "partial", candidateContactIds: candidates.slice(0, 5) };
+    return { action: "review", matchType: "partial", candidateContactIds: suggest(candidates) };
   }
-  if (exact.length === 1) return { action: "link", contactId: exact[0] };
+
+  const inMissio = exact.filter((id) => missioContactIds.has(id));
+  if (inMissio.length === 1) return { action: "link", contactId: inMissio[0] };
+  if (exact.length === 1) {
+    return { action: "review", matchType: "non_missio_contact", candidateContactIds: [] };
+  }
   if (exact.length === 0) return { action: "review", matchType: "none", candidateContactIds: [] };
-  return { action: "review", matchType: "multiple", candidateContactIds: exact.slice(0, 5) };
+  return { action: "review", matchType: "multiple", candidateContactIds: suggest(exact) };
 }
 
 export function planHouseChurchImport(
@@ -412,7 +426,7 @@ export function planHouseChurchImport(
   for (const row of rows) {
     const house = houses.get(row.houseNumber);
     if (!house) continue;
-    const classified = classifyHouseChurchRow(row, snapshot.contacts);
+    const classified = classifyHouseChurchRow(row, snapshot.contacts, new Set(snapshot.orgPeopleContactIds));
     if (classified.action === "link") {
       const existing = active.get(`${house.id}\0${classified.contactId}`);
       let outcome: PlannedLink["outcome"] = "insert";
@@ -564,7 +578,7 @@ export async function runHouseChurchImport(input: {
 }
 
 function emptyReasons(): Record<ImportMatchType, number> {
-  return { none: 0, multiple: 0, family_label: 0, first_only: 0, partial: 0 };
+  return { none: 0, multiple: 0, family_label: 0, first_only: 0, partial: 0, non_missio_contact: 0 };
 }
 
 function reviewUnchanged(existing: ExistingReview, planned: PlannedReview): boolean {

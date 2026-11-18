@@ -168,7 +168,7 @@ export type MissioImportReviewRow = {
   role: HouseChurchMemberRole;
   /** Free text. No check constraint. */
   kind: string | null;
-  /** Free text. No check constraint. The importer uses none, multiple, family_label, first_only, partial. */
+  /** Free text. No check constraint. The importer uses none, multiple, family_label, first_only, partial, non_missio_contact. */
   match_type: string | null;
   /** NOT NULL. DEFAULT '{}'. */
   candidate_contact_ids: string[];

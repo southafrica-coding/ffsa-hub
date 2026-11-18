@@ -8,9 +8,13 @@
 // Do not point this at production without that approval.
 //
 // Uses NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (already in .env.local).
-// Reads contacts with the service role. Inserts org_people only when the
-// contact has none for Missio. Does not change an existing org_people row,
-// and does not change an active membership whose role differs from the sheet.
+// Reads contacts with the service role. Auto-link prefers contacts that
+// already have a Missio org_people row. A unique full-name match who is not
+// in Missio is staged for review (match_type non_missio_contact) and is not
+// linked. org_people inserts happen only for linked contacts who are missing
+// one, and only when --apply passes the project-ref gate. An existing
+// org_people row is not changed, and an active membership with a different
+// role is left as it is.
 
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";

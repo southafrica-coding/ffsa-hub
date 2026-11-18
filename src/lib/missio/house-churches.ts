@@ -27,13 +27,15 @@ import type {
 // else. That scope is not shipped: pastorHouseAccess still requires pastor.
 //
 // Names come from a service-role read of contacts after the pastor check.
-// Pastors cannot read contacts. orgPersonId comes from org_people when a row
-// exists. Adding someone to a house inserts that row with the service role
-// if it is missing and does not change it if it is already there. Ending a
-// membership never deletes or updates org_people, and org_people.status is
-// not a member flag. A current member is a house_church_members row with
-// started_at <= today and ended_at null or after today (missio_member_status).
-// The open row, which the partial unique index guards, is ended_at IS NULL.
+// Pastors cannot read contacts. These routes do not create org_people.
+// POST members and import-review link accept only a contact who already has
+// an org_people row in Missio with status active. Anyone else is
+// not_missio_person, and nothing is inserted. import-review create still
+// uses the Phase 0 create-person path, which is the approved intake.
+// Candidates are limited to those active Missio people. Ending a membership
+// never deletes or updates org_people. A current house membership is
+// started_at <= today and ended_at null or after today. The open row the
+// partial unique index guards is ended_at IS NULL.
 //
 // Pastors may UPDATE missio_import_review only on status, resolved_contact_id,
 // notes, resolved_by, and resolved_at. Insert and delete stay on the service role.
@@ -251,20 +253,17 @@ async function audit(
 }
 
 /**
- * Insert org_people for Missio when the contact has none. Does nothing when
- * the row is already there — campus, status, and stage stay as they are.
- * status here is the org_people lifecycle (visitor/active/inactive), not a
- * house-member flag.
+ * An active Missio person is an org_people row in this org with status
+ * active. Visitor, inactive, and a contact with no row are refused.
+ * This does not insert or update org_people.
  */
-async function ensureOrgPerson(
+async function requireMissioPerson(
   auth: OrgAccess,
-  admin: Client,
-  contactId: string,
-  campus: MissioCampus
-): Promise<{ ok: true; orgPersonId: string; created: boolean } | Fail> {
+  contactId: string
+): Promise<{ ok: true; orgPersonId: string } | Fail> {
   const existing = await auth.supabase
     .from("org_people")
-    .select("id")
+    .select("id, status")
     .eq("org_id", auth.orgId)
     .eq("contact_id", contactId)
     .maybeSingle();
@@ -272,62 +271,62 @@ async function ensureOrgPerson(
     console.error("[missio] org person lookup failed", existing.error.message);
     return fail(500, "server_error", "Something went wrong.");
   }
-  if (existing.data?.id) return { ok: true, orgPersonId: existing.data.id as string, created: false };
-
-  const inserted = await admin
-    .from("org_people")
-    .insert({
-      org_id: auth.orgId,
-      contact_id: contactId,
-      campus,
-      status: "active",
-      created_by: auth.user.id,
-    })
-    .select("id")
-    .single();
-  if (inserted.error) {
-    if (inserted.error.code === "23505") {
-      const again = await auth.supabase
-        .from("org_people")
-        .select("id")
-        .eq("org_id", auth.orgId)
-        .eq("contact_id", contactId)
-        .maybeSingle();
-      if (again.data?.id) return { ok: true, orgPersonId: again.data.id as string, created: false };
-    }
-    console.error("[missio] org person insert failed", inserted.error.message);
-    return fail(500, "server_error", "Something went wrong.");
+  if (!existing.data?.id || existing.data.status !== "active") {
+    return fail(400, "not_missio_person", "This person is not in Missio.");
   }
-  if (!inserted.data?.id) return fail(500, "server_error", "Something went wrong.");
-  return { ok: true, orgPersonId: inserted.data.id as string, created: true };
+  return { ok: true, orgPersonId: existing.data.id as string };
 }
 
 async function loadRefs(
   auth: OrgAccess,
   admin: Client,
-  contactIds: string[]
+  contactIds: string[],
+  options?: { missioOnly?: boolean }
 ): Promise<Map<string, PersonRef> | Fail> {
   const ids = [...new Set(contactIds)];
   const map = new Map<string, PersonRef>();
   for (let i = 0; i < ids.length; i += 100) {
     const slice = ids.slice(i, i + 100);
-    const [contacts, people] = await Promise.all([
-      admin.from("contacts").select("id, first_name, last_name, preferred_name").in("id", slice),
-      auth.supabase.from("org_people").select("id, contact_id").eq("org_id", auth.orgId).in("contact_id", slice),
-    ]);
-    if (contacts.error || people.error) {
-      console.error("[missio] house names failed", contacts.error?.message ?? people.error?.message ?? "query error");
+    const people = await auth.supabase
+      .from("org_people")
+      .select("id, contact_id, status")
+      .eq("org_id", auth.orgId)
+      .in("contact_id", slice);
+    if (people.error) {
+      console.error("[missio] org person lookup failed", people.error.message);
       return fail(500, "server_error", "Something went wrong.");
     }
     const orgByContact = new Map<string, string>();
-    for (const row of (people.data ?? []) as Array<{ id?: string; contact_id?: string }>) {
-      if (row.contact_id && row.id && !orgByContact.has(row.contact_id)) orgByContact.set(row.contact_id, row.id);
+    for (const row of (people.data ?? []) as Array<{ id?: string; contact_id?: string; status?: string }>) {
+      if (!row.contact_id || !row.id || row.status !== "active" || orgByContact.has(row.contact_id)) continue;
+      orgByContact.set(row.contact_id, row.id);
+    }
+    const nameIds = options?.missioOnly ? slice.filter((id) => orgByContact.has(id)) : slice;
+    if (nameIds.length === 0) continue;
+    const contacts = await admin.from("contacts").select("id, first_name, last_name, preferred_name").in("id", nameIds);
+    if (contacts.error) {
+      console.error("[missio] house names failed", contacts.error.message);
+      return fail(500, "server_error", "Something went wrong.");
     }
     for (const contact of (contacts.data ?? []) as ContactNameRow[]) {
       map.set(contact.id, toPersonRef(contact, orgByContact.get(contact.id)));
     }
   }
   return map;
+}
+
+function suggestedCandidates(ids: string[], refs: Map<string, PersonRef>): PersonRef[] {
+  const seen = new Set<string>();
+  const candidates: PersonRef[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const ref = refs.get(id);
+    if (!ref?.orgPersonId) continue;
+    candidates.push(ref);
+    if (candidates.length === 5) break;
+  }
+  return candidates;
 }
 
 function refFor(map: Map<string, PersonRef>, contactId: string): PersonRef {
@@ -484,11 +483,9 @@ async function insertMember(
   admin: Client,
   house: HouseRow,
   contact: ContactNameRow,
-  role: HouseChurchRole
-): Promise<{ ok: true; member: HouseChurchMemberView; orgPersonCreated: boolean; memberId: string } | Fail> {
-  const ensured = await ensureOrgPerson(auth, admin, contact.id, asCampus(house.campus));
-  if (!ensured.ok) return ensured;
-
+  role: HouseChurchRole,
+  orgPersonId: string
+): Promise<{ ok: true; member: HouseChurchMemberView; memberId: string } | Fail> {
   const inserted = await auth.supabase
     .from("house_church_members")
     .insert({
@@ -520,15 +517,14 @@ async function insertMember(
       houseChurchId: house.id,
       contactId: contact.id,
       role,
-      orgPersonCreated: ensured.created,
+      orgPersonCreated: false,
     },
   });
 
-  const ref = toPersonRef(contact, ensured.orgPersonId);
+  const ref = toPersonRef(contact, orgPersonId);
   return {
     ok: true,
     memberId: row.id,
-    orgPersonCreated: ensured.created,
     member: { ...ref, role, startedAt: (row.started_at ?? todayIsoDate()).slice(0, 10) },
   };
 }
@@ -640,6 +636,8 @@ export async function addMember(
 
   const house = await loadHouse(auth, scope, houseId);
   if (!house.ok) return house;
+  const person = await requireMissioPerson(auth, parsed.data.contactId);
+  if (!person.ok) return person;
   const existing = await memberRowsFor(auth, house.house.id, parsed.data.contactId);
   if (!existing.ok) return existing;
   if (blockingMember(existing.rows)) return fail(409, "already_member", "This person is already in this house.");
@@ -649,7 +647,14 @@ export async function addMember(
   const contact = await loadContact(admin.client, parsed.data.contactId);
   if (!contact.ok) return contact;
 
-  const inserted = await insertMember(auth, admin.client, house.house, contact.contact, parsed.data.role);
+  const inserted = await insertMember(
+    auth,
+    admin.client,
+    house.house,
+    contact.contact,
+    parsed.data.role,
+    person.orgPersonId
+  );
   if (!inserted.ok) return inserted;
   return { ok: true, status: 201, member: inserted.member };
 }
@@ -667,6 +672,8 @@ export async function changeMemberRole(
 
   const house = await loadHouse(auth, scope, houseId);
   if (!house.ok) return house;
+  const person = await requireMissioPerson(auth, contactId);
+  if (!person.ok) return person;
 
   const existing = await memberRowsFor(auth, house.house.id, contactId);
   if (!existing.ok) return existing;
@@ -693,6 +700,7 @@ export async function changeMemberRole(
   if (isFail(names)) return names;
   const view = memberView(row, names);
   if (!view) return fail(500, "server_error", "Something went wrong.");
+  view.orgPersonId = person.orgPersonId;
 
   await audit(admin.client, {
     userId: auth.user.id,
@@ -808,7 +816,7 @@ export async function listImportReview(
   if (candidateIds.length > 0) {
     const admin = adminClient();
     if ("error" in admin) return fail(500, "server_error", admin.error);
-    const loaded = await loadRefs(auth, admin.client, candidateIds);
+    const loaded = await loadRefs(auth, admin.client, candidateIds, { missioOnly: true });
     if (isFail(loaded)) return loaded;
     refs = loaded;
   }
@@ -816,7 +824,7 @@ export async function listImportReview(
   const items: ImportReviewItem[] = [];
   for (const row of visible) {
     const ids = (row.candidate_contact_ids ?? []).slice(0, 5);
-    const candidates = ids.map((id) => refs.get(id)).filter((ref): ref is PersonRef => Boolean(ref));
+    const candidates = suggestedCandidates(ids, refs);
     const item = toReviewItem(row, byNumber.get(Number(row.house_number)) ?? null, candidates);
     if (item) items.push(item);
   }
@@ -845,20 +853,20 @@ async function attachMember(
   contact: ContactNameRow,
   role: HouseChurchRole
 ): Promise<{ ok: true; member: HouseChurchMemberView; orgPersonCreated: boolean } | Fail> {
+  const person = await requireMissioPerson(auth, contact.id);
+  if (!person.ok) return person;
   const existing = await memberRowsFor(auth, house.id, contact.id);
   if (!existing.ok) return existing;
   const held = blockingMember(existing.rows);
   if (held) {
-    const ensured = await ensureOrgPerson(auth, admin, contact.id, asCampus(house.campus));
-    if (!ensured.ok) return ensured;
-    const view = memberView(held, new Map([[contact.id, toPersonRef(contact, ensured.orgPersonId)]]));
+    const view = memberView(held, new Map([[contact.id, toPersonRef(contact, person.orgPersonId)]]));
     if (!view) return fail(500, "server_error", "Something went wrong.");
-    view.orgPersonId = ensured.orgPersonId;
-    return { ok: true, member: view, orgPersonCreated: ensured.created };
+    view.orgPersonId = person.orgPersonId;
+    return { ok: true, member: view, orgPersonCreated: false };
   }
-  const inserted = await insertMember(auth, admin, house, contact, role);
+  const inserted = await insertMember(auth, admin, house, contact, role, person.orgPersonId);
   if (!inserted.ok) return inserted;
-  return { ok: true, member: inserted.member, orgPersonCreated: inserted.orgPersonCreated };
+  return { ok: true, member: inserted.member, orgPersonCreated: false };
 }
 
 async function finishReview(
@@ -917,11 +925,11 @@ async function finishReview(
   const ids = (row.candidate_contact_ids ?? []).slice(0, 5);
   let refs = new Map<string, PersonRef>();
   if (ids.length > 0) {
-    const loaded = await loadRefs(auth, admin, ids);
+    const loaded = await loadRefs(auth, admin, ids, { missioOnly: true });
     if (isFail(loaded)) return loaded;
     refs = loaded;
   }
-  const candidates = ids.map((id) => refs.get(id)).filter((ref): ref is PersonRef => Boolean(ref));
+  const candidates = suggestedCandidates(ids, refs);
   const shaped = toReviewItem(row, house, candidates);
   if (!shaped) return fail(500, "server_error", "Something went wrong.");
   const body: ResolveImportReviewResponse = { item: shaped };
@@ -972,6 +980,8 @@ export async function resolveImportReview(
   if ("error" in admin) return fail(500, "server_error", admin.error);
 
   if (parsed.data.action === "link") {
+    const person = await requireMissioPerson(auth, parsed.data.contactId);
+    if (!person.ok) return person;
     const contact = await loadContact(admin.client, parsed.data.contactId);
     if (!contact.ok) return contact;
     const attached = await attachMember(auth, admin.client, house.house, contact.contact, role);
