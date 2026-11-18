@@ -197,6 +197,9 @@ export type FollowupSource = "contact" | "connect_response";
  * key is c_<contactId> for a labelled Missio contact and r_<connectResponseId> for a card.
  * stage is the effective stage. People with no follow-up row yet are "new" and followupId is null.
  * phone and email follow FOLLOWUP_LIST_INCLUDES_CONTACT_PII in follow-up.ts.
+ * A phone-only card that is waiting on a pastor keeps an r_ key.
+ * needsConfirm is false until Hub Data names the pending columns.
+ * suggestedContact is a display name and nothing else.
  */
 export type FollowupPerson = {
   key: string;
@@ -213,6 +216,8 @@ export type FollowupPerson = {
   stage: FollowupStage;
   assignedLeader: PersonRef | null;
   submittedAt: string | null;
+  needsConfirm: boolean;
+  suggestedContact: { displayName: string } | null;
 };
 
 export type FollowupListResponse = {

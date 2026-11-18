@@ -5,6 +5,14 @@ import { mapMissioDbError } from "@/lib/missio/db-errors";
 import { membershipIsCurrent } from "@/lib/missio/house-church-import";
 import { isUuid, resolveHouseScope, toPersonRef } from "@/lib/missio/house-churches";
 import { createPerson } from "@/lib/missio/people";
+import {
+  CONFIRM_MATCH_RPC,
+  PENDING_MATCH,
+  confirmMatchRpcArgs,
+  pendingSelectColumns,
+  readPendingContactId,
+  suggestedContactLabel,
+} from "@/lib/missio/pending-match";
 import type {
   ConnectVisitType,
   FollowupListResponse,
@@ -43,6 +51,11 @@ type Fail = { ok: false; status: number; error: string; code: MissioErrorCode };
 const VIEW = "missio_not_in_house";
 const VIEW_COLUMNS =
   "source, contact_id, connect_response_id, display_name, phone, phone_e164, wants_house_church, followup_stage, submitted_at";
+
+function viewColumns(): string {
+  const extra = pendingSelectColumns();
+  return extra ? `${VIEW_COLUMNS}, ${extra}` : VIEW_COLUMNS;
+}
 /** Columns authenticated pastors may UPDATE. Service-role writes from these routes stay inside this list. */
 const FOLLOWUP_UPDATE_COLUMNS = new Set(["stage", "assigned_leader_contact_id", "assigned_user_id"]);
 
@@ -237,6 +250,8 @@ function toPerson(args: {
   leader: PersonRef | null;
   submittedAt: string | null;
   wantsHouseChurch: boolean | null;
+  needsConfirm: boolean;
+  suggestedContact: { displayName: string } | null;
 }): FollowupPerson | null {
   const key = keyFor(args.source, args.contactId, args.connectResponseId);
   if (!key) return null;
@@ -257,11 +272,13 @@ function toPerson(args: {
     stage,
     assignedLeader: args.leader,
     submittedAt: args.submittedAt,
+    needsConfirm: args.needsConfirm,
+    suggestedContact: args.suggestedContact,
   };
 }
 
 async function loadViewRow(auth: OrgAccess, key: Exclude<ParsedKey, { ok: false }>): Promise<{ row: ViewRow } | Fail> {
-  let query = auth.supabase.from(VIEW).select(VIEW_COLUMNS);
+  let query = auth.supabase.from(VIEW).select(viewColumns());
   if (key.kind === "c") query = query.eq("source", "contact").eq("contact_id", key.contactId);
   else query = query.eq("source", "connect_response").eq("connect_response_id", key.connectResponseId);
   const { data, error } = await query.limit(1);
@@ -364,10 +381,18 @@ function leaderRef(map: Map<string, PersonRef>, contactId: string | null): Perso
   return map.get(contactId) ?? { contactId, displayName: "", firstName: null, lastName: null };
 }
 
-function personFrom(view: ViewRow, card: CardRow | null, followup: FollowupRow | null, leaders: Map<string, PersonRef>): FollowupPerson | null {
+function personFrom(
+  view: ViewRow,
+  card: CardRow | null,
+  followup: FollowupRow | null,
+  leaders: Map<string, PersonRef>,
+  suggestionNames: Map<string, string>
+): FollowupPerson | null {
   const source: FollowupSource | null =
     view.source === "contact" || view.source === "connect_response" ? view.source : null;
   if (!source) return null;
+  const suggestedId = readPendingContactId(view as unknown as Record<string, unknown>);
+  const suggestedContact = suggestedId ? suggestedContactLabel(suggestionNames.get(suggestedId)) : null;
   return toPerson({
     source,
     contactId: view.contact_id,
@@ -379,16 +404,53 @@ function personFrom(view: ViewRow, card: CardRow | null, followup: FollowupRow |
     leader: leaderRef(leaders, followup?.assigned_leader_contact_id ?? null),
     submittedAt: view.submitted_at ?? card?.submitted_at ?? null,
     wantsHouseChurch: view.wants_house_church,
+    needsConfirm: Boolean(suggestedId),
+    suggestedContact,
   });
+}
+
+/**
+ * Names for pending suggestions. org_people is checked on the session
+ * client before any contact read. A non-Missio suggestion gets no name.
+ */
+async function loadSuggestionNames(auth: OrgAccess, views: ViewRow[]): Promise<{ names: Map<string, string> } | Fail> {
+  const ids = [
+    ...new Set(
+      views
+        .map((view) => readPendingContactId(view as unknown as Record<string, unknown>))
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const names = new Map<string, string>();
+  if (ids.length === 0) return { names };
+  const allowed: string[] = [];
+  for (const id of ids) {
+    const person = await missioOrgPersonId(auth, id);
+    if (isFail(person)) {
+      if (person.code === "not_missio_person") continue;
+      return person;
+    }
+    allowed.push(id);
+  }
+  if (allowed.length === 0) return { names };
+  const refs = await loadPersonRefs(auth, allowed);
+  if (isFail(refs)) return refs;
+  for (const id of allowed) {
+    const label = suggestedContactLabel(refs.map.get(id)?.displayName);
+    if (label) names.set(id, label.displayName);
+  }
+  return { names };
 }
 
 export async function listFollowups(
   auth: OrgAccess,
   query: { stage: FollowupStage | null; leader: string | null }
 ): Promise<{ ok: true; body: FollowupListResponse } | Fail> {
-  const listed = await auth.supabase.from(VIEW).select(VIEW_COLUMNS);
+  const listed = await auth.supabase.from(VIEW).select(viewColumns());
   if (listed.error) return fromDb(listed.error, "follow-up list");
   const views = (listed.data ?? []) as ViewRow[];
+  const suggestions = await loadSuggestionNames(auth, views);
+  if (isFail(suggestions)) return suggestions;
   const followups = await loadFollowups(auth, views);
   if (isFail(followups)) return followups;
   const cardIds = views.map((row) => row.connect_response_id).filter((id): id is string => Boolean(id));
@@ -401,7 +463,15 @@ export async function listFollowups(
   if (isFail(leaders)) return leaders;
 
   let people = views
-    .map((view) => personFrom(view, view.connect_response_id ? cards.map.get(view.connect_response_id) ?? null : null, followupFor(view, followups.rows), leaders.map))
+    .map((view) =>
+      personFrom(
+        view,
+        view.connect_response_id ? cards.map.get(view.connect_response_id) ?? null : null,
+        followupFor(view, followups.rows),
+        leaders.map,
+        suggestions.names
+      )
+    )
     .filter((person): person is FollowupPerson => Boolean(person));
 
   if (query.stage) people = people.filter((person) => person.stage === query.stage);
@@ -610,7 +680,9 @@ async function personForView(auth: OrgAccess, view: ViewRow, followup: FollowupR
   if (isFail(card)) return card;
   const leaders = await loadPersonRefs(auth, followup?.assigned_leader_contact_id ? [followup.assigned_leader_contact_id] : []);
   if (isFail(leaders)) return leaders;
-  const person = personFrom(view, card.card, followup, leaders.map);
+  const suggestions = await loadSuggestionNames(auth, [view]);
+  if (isFail(suggestions)) return suggestions;
+  const person = personFrom(view, card.card, followup, leaders.map, suggestions.names);
   if (!person) return fail(404, "not_found", "Person not found.");
   return { person };
 }
@@ -1064,6 +1136,8 @@ async function personAfterLink(
     leader: leaderRef(leaders.map, followup?.assigned_leader_contact_id ?? null),
     submittedAt: card.submitted_at,
     wantsHouseChurch: card.wants_house_church,
+    needsConfirm: false,
+    suggestedContact: null,
   });
   if (!person) return serverError("follow-up contact person");
   await audit(auth.user.id, "missio.followup_contact", card.id, { contactId, outcome });
@@ -1124,4 +1198,46 @@ export async function linkFollowupContact(
   const followup = await attachFollowupContact(auth, view.row, card, contactId);
   if (isFail(followup)) return followup;
   return personAfterLink(auth, card, contactId, followup.row, "created");
+}
+
+/**
+ * Pastor confirms a phone-only card. r_ keys only.
+ * The suggestion is read from the plugged-in column, then checked on
+ * the session client. The RPC runs as service role only after that.
+ * Until PENDING_MATCH is filled, this does not read the card and does
+ * not call the database function.
+ */
+export async function confirmPendingMatch(
+  auth: OrgAccess,
+  keyRaw: string,
+  body: unknown
+): Promise<{ ok: true; body: { ok: true } } | Fail> {
+  const key = parseFollowupKey(keyRaw);
+  if (!key.ok) return fail(400, "invalid_input", "Check the fields and try again.");
+  if (key.kind !== "r") return fail(400, "invalid_input", "Check the fields and try again.");
+  if (isRecord(body) && Object.keys(body).length > 0) return fail(400, "invalid_input", "Check the fields and try again.");
+
+  const contract = PENDING_MATCH;
+  if (!contract) return serverError("confirm match columns not named");
+
+  const card = await auth.supabase
+    .from("connect_responses")
+    .select(`id, ${contract.suggestedContactColumn}`)
+    .eq("id", key.connectResponseId)
+    .eq("org_id", auth.orgId)
+    .maybeSingle();
+  if (card.error) return fromDb(card.error, "confirm match");
+  const row = (card.data ?? null) as Record<string, unknown> | null;
+  if (!row?.id) return fail(404, "not_found", "Person not found.");
+  const suggested = row[contract.suggestedContactColumn];
+  if (typeof suggested !== "string" || !suggested) return fail(400, "invalid_input", "Check the fields and try again.");
+
+  const person = await missioOrgPersonId(auth, suggested);
+  if (isFail(person)) return person.code === "not_missio_person" ? NOT_MISSIO : person;
+
+  const admin = adminClient();
+  if ("error" in admin) return serverError("confirm match");
+  const confirmed = await admin.client.rpc(CONFIRM_MATCH_RPC, confirmMatchRpcArgs(contract, key.connectResponseId, suggested));
+  if (confirmed.error) return fromDb(confirmed.error, "confirm match");
+  return { ok: true, body: { ok: true } };
 }

@@ -48,6 +48,7 @@ const state = vi.hoisted(() => {
     reads: [] as { client: "user" | "admin"; table: string }[],
     conflictTable: null as string | null,
     duplicateFollowup: false,
+    rpcCalls: [] as { client: "user" | "admin"; fn: string; args: unknown }[],
     dbError: null as { table: string; code: string; message: string; details?: string; hint?: string } | null,
     tables: {} as Record<string, Row[]>,
     hits: new Map<string, number>(),
@@ -69,6 +70,7 @@ const state = vi.hoisted(() => {
         }),
       },
       rpc: async (fn: string, args: { p_org_slug?: string; p_roles?: string[] | null }) => {
+        state.rpcCalls.push({ client, fn, args });
         if (fn === "is_admin") return { data: true, error: null };
         if (fn !== "has_org_role") return { data: null, error: { message: `unknown rpc ${fn}` } };
         const org = state.tables.organisations?.find((row) => row.slug === args?.p_org_slug);
@@ -300,12 +302,14 @@ const { PATCH: patchStage } = await import("./[key]/stage/route");
 const { PATCH: patchLeader } = await import("./[key]/leader/route");
 const { GET: getTimeline, POST: postTimeline } = await import("./[key]/timeline/route");
 const { POST: postContact } = await import("./[key]/contact/route");
+const { POST: postConfirm } = await import("./[key]/confirm-match/route");
 
 function reset() {
   state.userId = PASTOR;
   state.tableError = null;
   state.writes = [];
   state.reads = [];
+  state.rpcCalls = [];
   state.conflictTable = null;
   state.duplicateFollowup = false;
   state.dbError = null;
@@ -518,7 +522,11 @@ describe("missio follow-up", () => {
       stage: "new",
       assignedLeader: null,
       followupId: null,
+      needsConfirm: false,
+      suggestedContact: null,
     });
+    expect(card.key).toBe(`r_${CARD}`);
+    expect(card.suggestedContact).toBeNull();
     expect(card.phone).not.toBe("+27333333333");
 
     const contacted = await listPeople(new Request("https://hub.test/api/missio/follow-up?stage=contacted"));
@@ -529,6 +537,30 @@ describe("missio follow-up", () => {
     expect(keys).not.toContain(`c_${VEE}`);
     const byAda = await listPeople(new Request(`https://hub.test/api/missio/follow-up?leader=${ADA}`));
     expect((await byAda.json()).people.map((person: { key: string }) => person.key)).toEqual([`c_${VEE}`]);
+  });
+
+  it("does not confirm a match until the pending columns are named", async () => {
+    state.rpcCalls = [];
+    state.reads = [];
+    const contactKey = await postConfirm(
+      new Request("https://hub.test/api/missio/follow-up", { method: "POST", body: "" }),
+      ctx(`c_${VEE}`)
+    );
+    expect(contactKey.status).toBe(400);
+    expect(await contactKey.json()).toEqual({ error: "Check the fields and try again.", code: "invalid_input" });
+
+    const pending = await postConfirm(
+      new Request("https://hub.test/api/missio/follow-up", { method: "POST", body: "" }),
+      ctx(`r_${CARD}`)
+    );
+    expect(pending.status).toBe(500);
+    const body = await pending.json();
+    expect(body).toEqual({ error: "Something went wrong.", code: "server_error" });
+    expect(JSON.stringify(body)).not.toContain("link_missio_connect_match");
+    expect(JSON.stringify(body)).not.toContain(CARD);
+    expect(state.rpcCalls.filter((call) => call.fn === "link_missio_connect_match")).toEqual([]);
+    expect(state.reads.filter((read) => read.client === "admin")).toEqual([]);
+    expect(state.writes).toEqual([]);
   });
 
   it("lists only current house leaders and Missio pastors who already have a person row", async () => {

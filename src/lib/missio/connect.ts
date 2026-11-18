@@ -4,6 +4,7 @@ import { normalizeEmail, normalizePhoneE164 } from "@/lib/phone";
 import { clientIp, getRateLimiter, retryAfterSeconds } from "@/lib/rate-limit";
 import { fieldError, invalidInput, mapMissioDbError } from "@/lib/missio/db-errors";
 import { connectRateKeyHash } from "@/lib/missio/match-token";
+import { connectCardLink, type ConnectMatch } from "@/lib/missio/pending-match";
 import { MISSIO_SLUG } from "@/lib/missio/access";
 import type { ConnectVisitType } from "@/lib/missio/types";
 
@@ -13,6 +14,8 @@ import type { ConnectVisitType } from "@/lib/missio/types";
 //
 // A match sets matched_contact_id only for a contact who already has a
 // Missio org_people row. An FFSA-wide contact is left unmatched.
+// A phone-only match will stop setting matched_contact_id once
+// PENDING_MATCH names the pending columns. Until then it still attaches.
 // matched_by stays null. Matching never creates org_people and never fails
 // the submit.
 // The response is always { ok: true } — no ids, no contact fields.
@@ -226,6 +229,8 @@ async function missioContactIds(admin: Client, orgId: string, ids: string[]): Pr
  * Zero Missio rows, or more than one, stops the search. It does not
  * fall through to the next step, and it does not keep an FFSA-wide id.
  * A lookup error is "no match".
+ * The `by` field is how a phone-only match stays unattached once
+ * PENDING_MATCH is filled in. Email and name matches still attach.
  */
 async function matchContact(
   admin: Client,
@@ -233,49 +238,49 @@ async function matchContact(
   phone: string,
   email: string | null,
   name: string
-): Promise<string | null> {
+): Promise<ConnectMatch> {
   const byPhone = await contactIds(admin, "contact_phones", "phone_normalized", phone);
-  if (byPhone === null) return null;
-  if (byPhone.length > 1) return null;
+  if (byPhone === null) return { by: "none" };
+  if (byPhone.length > 1) return { by: "none" };
   if (byPhone.length === 1) {
     const inOrg = await missioContactIds(admin, orgId, byPhone);
-    if (inOrg === null || inOrg.length !== 1) return null;
-    return inOrg[0];
+    if (inOrg === null || inOrg.length !== 1) return { by: "none" };
+    return { by: "phone", contactId: inOrg[0] };
   }
 
   if (email) {
     const byEmail = await contactIds(admin, "contact_emails", "email_normalized", email);
-    if (byEmail === null) return null;
-    if (byEmail.length > 1) return null;
+    if (byEmail === null) return { by: "none" };
+    if (byEmail.length > 1) return { by: "none" };
     if (byEmail.length === 1) {
       const inOrg = await missioContactIds(admin, orgId, byEmail);
-      if (inOrg === null || inOrg.length !== 1) return null;
-      return inOrg[0];
+      if (inOrg === null || inOrg.length !== 1) return { by: "none" };
+      return { by: "email", contactId: inOrg[0] };
     }
   }
 
   const { first, last } = splitName(name);
-  if (!first) return null;
+  if (!first) return { by: "none" };
   if (last) {
     const named = await admin.from("contacts").select("id").eq("first_name", first).eq("last_name", last).limit(2);
     if (named.error) {
       console.error("[missio] connect name match failed", named.error.code ?? "query");
-      return null;
+      return { by: "none" };
     }
     const ids = ((named.data ?? []) as Array<{ id?: string }>)
       .map((row) => row.id)
       .filter((id): id is string => Boolean(id));
-    if (ids.length !== 1) return null;
+    if (ids.length !== 1) return { by: "none" };
     const inOrg = await missioContactIds(admin, orgId, ids);
-    if (inOrg === null || inOrg.length !== 1) return null;
-    return inOrg[0];
+    if (inOrg === null || inOrg.length !== 1) return { by: "none" };
+    return { by: "name", contactId: inOrg[0] };
   }
 
   const [emptyLast, nullLast] = await Promise.all([
     admin.from("contacts").select("id").eq("first_name", first).eq("last_name", "").limit(2),
     admin.from("contacts").select("id").eq("first_name", first).is("last_name", null).limit(2),
   ]);
-  if (emptyLast.error || nullLast.error) return null;
+  if (emptyLast.error || nullLast.error) return { by: "none" };
   const ids = [
     ...new Set(
       [...((emptyLast.data ?? []) as Array<{ id?: string }>), ...((nullLast.data ?? []) as Array<{ id?: string }>)]
@@ -283,10 +288,10 @@ async function matchContact(
         .filter((id): id is string => Boolean(id))
     ),
   ];
-  if (ids.length !== 1) return null;
+  if (ids.length !== 1) return { by: "none" };
   const inOrg = await missioContactIds(admin, orgId, ids);
-  if (inOrg === null || inOrg.length !== 1) return null;
-  return inOrg[0];
+  if (inOrg === null || inOrg.length !== 1) return { by: "none" };
+  return { by: "name", contactId: inOrg[0] };
 }
 
 export async function submitConnectCard(args: { body: unknown; ip: string }): Promise<SubmitResult> {
@@ -334,12 +339,12 @@ export async function submitConnectCard(args: { body: unknown; ip: string }): Pr
   if (recent.error) return dbFailure(recent.error, "connect dedupe");
   if ((recent.data ?? []).length > 0) return { ok: true };
 
-  let matchedContactId: string | null = null;
+  let match: ConnectMatch = { by: "none" };
   try {
-    matchedContactId = await matchContact(admin.client, org.orgId, phone, email, collapse(parsed.data.name));
+    match = await matchContact(admin.client, org.orgId, phone, email, collapse(parsed.data.name));
   } catch (error) {
     console.error("[missio] connect match threw", error instanceof Error ? error.name : "error");
-    matchedContactId = null;
+    match = { by: "none" };
   }
 
   const row = {
@@ -355,8 +360,8 @@ export async function submitConnectCard(args: { body: unknown; ip: string }): Pr
     campus: DEFAULT_CAMPUS,
     source: "qr",
     rate_key_hash: rateKey,
-    matched_contact_id: matchedContactId,
     matched_by: null,
+    ...connectCardLink(match),
   };
   const inserted = await insertConnectCard(admin.client, row);
   if (inserted.error) {
