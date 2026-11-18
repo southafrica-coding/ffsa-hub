@@ -8,7 +8,13 @@
   color: var(--ink, #1c1b17);
 }
 
+/* Resting state is fully opaque. The animation is the only thing that
+   starts at opacity 0. If it never runs (no stylesheet animation, a
+   hydration restart that gets cancelled, prefers-reduced-motion), the
+   page stays readable. */
 .reveal {
+  opacity: 1;
+  transform: none;
   animation: contentIn 0.25s ease both;
 }
 
@@ -18,6 +24,14 @@
     transform: translateY(8px);
   }
   to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
     opacity: 1;
     transform: none;
   }
