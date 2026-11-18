@@ -262,7 +262,22 @@ const roleSchema = z.object({ role: z.enum(ROLES) }).strict();
 const resolveSchema = z.discriminatedUnion("action", [
   // `also` adds one more person to a row that is already resolved, for a
   // sheet name that stands for a couple or a household.
-  z.object({ action: z.literal("link"), contactId: z.string().uuid(), also: z.literal(true).optional() }).strict(),
+  // `rename` corrects the contact's name while linking, for a contact that
+  // was saved under the wrong name.
+  z
+    .object({
+      action: z.literal("link"),
+      contactId: z.string().uuid(),
+      also: z.literal(true).optional(),
+      rename: z
+        .object({
+          firstName: z.string().trim().min(1).max(200),
+          lastName: z.string().trim().max(200).nullable().optional(),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict(),
   z
     .object({
       action: z.literal("create"),
@@ -552,6 +567,48 @@ async function reviewCreateFail(
     changes: { results: matches.length },
   });
   return { ...base, code: "not_missio_person", matches };
+}
+
+/**
+ * Correct a contact's name from the review queue. The contact record is
+ * shared, so the new name shows on the FFSA side and in Missio. The audit
+ * row keeps the old name so the change can be undone.
+ */
+async function renameContact(
+  auth: OrgAccess,
+  contactId: string,
+  rename: { firstName: string; lastName?: string | null }
+): Promise<{ ok: true } | Fail> {
+  const admin = adminClient();
+  if ("error" in admin) return fail(500, "server_error", "Something went wrong.");
+  const before = await admin.client
+    .from("contacts")
+    .select("id, first_name, last_name, preferred_name")
+    .eq("id", contactId)
+    .maybeSingle();
+  if (before.error) {
+    console.error("[missio] contact lookup failed", before.error.message);
+    return fail(500, "server_error", "Something went wrong.");
+  }
+  if (!before.data) return NOT_MISSIO;
+  const old = before.data as ContactNameRow;
+  const next = { first_name: rename.firstName.trim(), last_name: (rename.lastName ?? "").trim(), preferred_name: null };
+  if (old.first_name === next.first_name && (old.last_name ?? "") === next.last_name && !old.preferred_name) {
+    return { ok: true };
+  }
+  const updated = await admin.client.from("contacts").update(next).eq("id", contactId);
+  if (updated.error) return dbWriteError(updated.error, "contact rename");
+  await audit(admin.client, {
+    userId: auth.user.id,
+    action: "missio.import_review_rename_contact",
+    resourceType: "contact",
+    resourceId: contactId,
+    changes: {
+      before: { first_name: old.first_name ?? null, last_name: old.last_name ?? null, preferred_name: old.preferred_name ?? null },
+      after: next,
+    },
+  });
+  return { ok: true };
 }
 
 /**
@@ -1299,6 +1356,10 @@ export async function resolveImportReview(
         const added = await ensureMissioPerson(auth, contactId, asCampus(house.house.campus));
         if (!added.ok) return added;
       }
+      if (parsed.data.rename) {
+        const renamed = await renameContact(auth, contactId, parsed.data.rename);
+        if (!renamed.ok) return renamed;
+      }
     } else {
       const name = [parsed.data.firstName, emptyToUndefined(parsed.data.lastName)].filter(Boolean).join(" ");
       const created = await createPerson(auth, {
@@ -1329,6 +1390,12 @@ export async function resolveImportReview(
       if (!target.ok) return target;
       const added = await ensureMissioPerson(auth, parsed.data.contactId, asCampus(target.house.campus));
       if (!added.ok) return added;
+      person = await requireMissioPerson(auth, parsed.data.contactId);
+      if (!person.ok) return person;
+    }
+    if (parsed.data.rename) {
+      const renamed = await renameContact(auth, parsed.data.contactId, parsed.data.rename);
+      if (!renamed.ok) return renamed;
       person = await requireMissioPerson(auth, parsed.data.contactId);
       if (!person.ok) return person;
     }

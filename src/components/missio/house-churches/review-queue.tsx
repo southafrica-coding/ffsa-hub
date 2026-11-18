@@ -41,6 +41,7 @@ export function ReviewQueue({
 
   const items = queue ?? (state.phase === "ready" ? state.data.items : []);
   const total = items.length;
+  const typedName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
   const item = !finished && index < total ? items[index] : null;
 
   useEffect(() => {
@@ -195,12 +196,38 @@ export function ReviewQueue({
                     <span className={styles.choiceMeta}>{matchMeta(person, person.inMissio)}</span>
                   </span>
                 </button>
+                {typedName && typedName.toLowerCase() !== person.displayName.trim().toLowerCase() ? (
+                  <button
+                    type="button"
+                    className={`${shell.ghost} ${styles.choice} ${styles.renameChoice}`}
+                    disabled={pending}
+                    data-testid="review-link-rename"
+                    onClick={() =>
+                      void resolve(
+                        {
+                          action: "link",
+                          contactId: person.contactId,
+                          rename: { firstName: firstName.trim(), ...(lastName.trim() ? { lastName: lastName.trim() } : {}) },
+                        },
+                        total,
+                        typedName
+                      )
+                    }
+                  >
+                    <span className={styles.choiceText}>
+                      <span className={styles.choiceName}>Link and rename to {typedName}</span>
+                      <span className={styles.choiceMeta}>
+                        Same person, wrong name on file. Changes their name everywhere in the Hub.
+                      </span>
+                    </span>
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
           <p className={styles.quiet}>
-            Not them? Two people can’t share an email or phone in the Hub. Create the new person with their own
-            number or email instead.
+            Someone else entirely? Two people can’t share an email or phone in the Hub. Create the new person with
+            their own number or email instead.
           </p>
         </section>
       ) : null}

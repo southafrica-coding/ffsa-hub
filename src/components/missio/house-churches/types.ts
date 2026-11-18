@@ -101,7 +101,7 @@ export interface ReviewListResponse {
 }
 
 export type ResolveBody =
-  | { action: "link"; contactId: string; also?: true }
+  | { action: "link"; contactId: string; also?: true; rename?: { firstName: string; lastName?: string } }
   | { action: "create"; firstName: string; lastName?: string; email?: string; phone?: string; also?: true }
   | { action: "skip"; notes?: string };
 

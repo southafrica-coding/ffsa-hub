@@ -319,11 +319,13 @@ describe("review queue", () => {
     const link = host.querySelector("[data-testid=review-existing] button") as HTMLButtonElement;
     expect(link.textContent).toContain("Link Matt Gibson");
     expect(link.textContent).toContain("*** *** 0960 · Not in Missio yet");
-    link.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const rename = host.querySelector("[data-testid=review-link-rename]") as HTMLButtonElement;
+    expect(rename.textContent).toContain("Link and rename to Matthew");
+    rename.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await settle();
-    expect(bodies.at(-1)).toEqual({ action: "link", contactId: "c-matt" });
+    expect(bodies.at(-1)).toEqual({ action: "link", contactId: "c-matt", rename: { firstName: "Matthew" } });
     expect(host.querySelector("[data-testid=review-existing]")).toBeNull();
-    expect(host.querySelector("[data-testid=review-added]")?.textContent).toContain("Matt Gibson");
+    expect(host.querySelector("[data-testid=review-added]")?.textContent).toContain("Matthew");
   });
 
   it("shows an empty queue and a no-access state", async () => {

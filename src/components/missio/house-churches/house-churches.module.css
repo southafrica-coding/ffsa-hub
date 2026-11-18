@@ -498,3 +498,7 @@
   margin: 8px 0 0;
   font-size: 14px;
 }
+
+.existing .renameChoice {
+  margin-top: 8px;
+}

@@ -1302,6 +1302,30 @@ describe("import review", () => {
     state.userId = PASTOR;
   });
 
+  it("renames the contact while linking, and keeps the old name in the audit log", async () => {
+    addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
+    addContact({ id: OUTSIDE, first: "Thuto", last: "Wrong", preferred: "T", inOrg: false });
+    addReview({ id: REVIEW, rawName: "Matthew Gibson", sourceLine: 7, houseNumber: 3, role: "member" });
+
+    expect((await resolve(REVIEW, { action: "link", contactId: OUTSIDE, rename: { firstName: " " } })).status).toBe(400);
+    expect(state.tables.contacts[0]).toMatchObject({ first_name: "Thuto", last_name: "Wrong" });
+
+    const res = await resolve(REVIEW, {
+      action: "link",
+      contactId: OUTSIDE,
+      rename: { firstName: "Matthew", lastName: "Gibson" },
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).member).toMatchObject({ contactId: OUTSIDE, displayName: "Matthew Gibson" });
+    expect(state.tables.contacts[0]).toMatchObject({ first_name: "Matthew", last_name: "Gibson", preferred_name: null });
+    const log = state.tables.audit_logs.find((row) => row.action === "missio.import_review_rename_contact");
+    expect(log).toMatchObject({
+      resource_id: OUTSIDE,
+      changes: { before: { first_name: "Thuto", last_name: "Wrong", preferred_name: "T" } },
+    });
+    expect(state.tables.missio_import_review[0]).toMatchObject({ status: "matched", resolved_contact_id: OUTSIDE });
+  });
+
   it("adds a second person to a resolved row with also, and only with also", async () => {
     addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
     addContact({ id: ADA, first: "Ada", last: "Botha", inOrg: true, personId: "person-ada" });
