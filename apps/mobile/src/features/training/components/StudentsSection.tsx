@@ -27,12 +27,14 @@ export const STATUS_TONE: Record<StudentStatus, "default" | "attention" | "posit
 
 // Students / My students (48c): a two-line list, filters instead of
 // columns, every status in words. Tap opens the student's record.
-export function StudentsSection({ onlyMine }: { onlyMine: boolean }) {
+export function StudentsSection({ onlyMine, initialFilter = "all" }: { onlyMine: boolean; initialFilter?: StudentFilter }) {
   const { session } = useSession();
   const userId = session?.user?.id ?? null;
   const load = useCallback(() => getStudents(apiFetch), []);
   const { state, retry } = useCachedLoad<StudentList>({ userId, cacheName: "training.students", load, errorMessage: loadErrorMessage });
-  const [filter, setFilter] = useState<StudentFilter>("all");
+  // Opened from a Today line ("2 students haven't had a check-in"): start on
+  // that filter. The parent remounts this section (key) when it changes.
+  const [filter, setFilter] = useState<StudentFilter>(initialFilter);
 
   if (state.status === "loading") return <Skeleton label={s.loading} />;
   if (state.status === "error") return <ErrorState title={s.errorTitle} message={state.message} onRetry={retry} />;

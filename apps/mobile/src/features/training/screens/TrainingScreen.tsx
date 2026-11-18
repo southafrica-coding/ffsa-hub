@@ -9,7 +9,8 @@ import { touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { StudentsSection } from "../components/StudentsSection";
-import { dayLabel, sectionsFor, trainingRole, type SectionId } from "../logic";
+import { TodaySection } from "../components/TodaySection";
+import { dayLabel, sectionsFor, trainingRole, type SectionId, type StudentFilter } from "../logic";
 import { strings } from "../strings";
 
 const ICONS: Record<SectionId, LucideIcon> = {
@@ -23,14 +24,15 @@ const ICONS: Record<SectionId, LucideIcon> = {
 };
 
 // The Training tab (redesign 48i): a switcher of this person's sections
-// at the top, then the section. Students / My students (T3) list real
-// students; Today (T4), grades and applicants (T6) still say what they will
-// hold, with the web Training module one tap away.
+// at the top, then the section. Today (T4) and Students / My students (T3)
+// are live; grades and applicants (T6) still say what they will hold, with
+// the web Training module one tap away.
 export function TrainingScreen({ now = new Date() }: { now?: Date }) {
   const { status, me } = useMe();
   const sections = sectionsFor(me);
   const role = trainingRole(me);
   const [picked, setPicked] = useState<SectionId>("today");
+  const [studentFilter, setStudentFilter] = useState<StudentFilter>("all");
   const current: SectionId = sections.includes(picked) ? picked : (sections[0] ?? "today");
 
   if (!me && status === "loading") {
@@ -53,10 +55,24 @@ export function TrainingScreen({ now = new Date() }: { now?: Date }) {
 
   return (
     <Screen scroll={false} edges={["top"]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0, gap: 0 }}>
-      <SectionSwitcher sections={sections} current={current} onPick={setPicked} />
+      <SectionSwitcher
+        sections={sections}
+        current={current}
+        onPick={(s) => {
+          setStudentFilter("all");
+          setPicked(s);
+        }}
+      />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}>
         <Masthead context={`${dayLabel(now)} · ${strings.scope[role].toUpperCase()}`} title={title} />
-        <SectionBody section={current} />
+        <SectionBody
+          section={current}
+          studentFilter={studentFilter}
+          onOpenStudents={(filter) => {
+            setStudentFilter(filter);
+            setPicked(sections.includes("myStudents") ? "myStudents" : "students");
+          }}
+        />
       </ScrollView>
     </Screen>
   );
@@ -117,12 +133,22 @@ function SectionSwitcher({
   );
 }
 
-function SectionBody({ section }: { section: SectionId }) {
+function SectionBody({
+  section,
+  studentFilter,
+  onOpenStudents,
+}: {
+  section: SectionId;
+  studentFilter: StudentFilter;
+  onOpenStudents: (filter: StudentFilter) => void;
+}) {
   const { colors } = useTheme();
-  if (section === "students" || section === "myStudents") return <StudentsSection onlyMine={section === "myStudents"} />;
+  if (section === "today") return <TodaySection onOpenStudents={onOpenStudents} />;
+  if (section === "students" || section === "myStudents") {
+    return <StudentsSection key={studentFilter} onlyMine={section === "myStudents"} initialFilter={studentFilter} />;
+  }
   const copy = strings.empty[section];
-  // Today is built from signals in the Hub (T4); there is nothing on the
-  // website to send people to. Every other section exists on the web today.
-  const web = section === "today" ? {} : { actionLabel: strings.openWeb, onAction: () => void openWebPage("/schools", colors) };
+  // Every section still waiting for its slice exists on the website today.
+  const web = { actionLabel: strings.openWeb, onAction: () => void openWebPage("/schools", colors) };
   return <StateMessage testID={`training-empty-${section}`} icon={ICONS[section]} title={copy.title} body={copy.body} {...web} />;
 }

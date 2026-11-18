@@ -47,6 +47,16 @@ export const strings = {
     grades: { title: "Grades will be listed here", body: "One course at a time, and only the courses you teach open for editing." },
   } satisfies Record<SectionId, { title: string; body: string }>,
   openWeb: "Open Training on the website",
+  today: {
+    loading: "Loading your week",
+    errorTitle: "Couldn't load your week",
+    bandTitle: "NEEDS YOU",
+    open: "Open",
+    listTitle: (open: number) => (open === 1 ? "To do · 1" : `To do · ${open}`),
+    tickLabel: (title: string) => `Done: ${title}`,
+    clearTitle: "All clear this week",
+    clearBody: "Nothing needs you right now. Care flags, check-ins, decisions, grades and fees will show here when they do.",
+  },
   common: {
     forbidden: "You don't have access to this student.",
     notFound: "That student isn't one you can see any more.",

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import type { ReactElement } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -16,6 +16,14 @@ jest.mock("@/features/shell", () => ({
   openWebPage: jest.fn(async () => {}),
 }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
+jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn(), back: jest.fn(), navigate: jest.fn() }) }));
+jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
+jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "signedIn", session: { user: { id: "kim" } } }) }));
+jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("../today", () => ({
+  ...jest.requireActual("../today"),
+  getToday: jest.fn(async () => ({ weekOf: "2026-11-23", isoWeek: "2026-W48", items: [], band: null, open: 0 })),
+}));
 
 const shell = jest.requireMock("@/features/shell") as { openWebPage: jest.Mock };
 
@@ -50,7 +58,7 @@ describe("TrainingScreen", () => {
     expect(screen.getByTestId("training-section-today").props.accessibilityState).toMatchObject({ selected: true });
     expect(screen.getByText("MON 23 NOV · YOUR SCHOOL")).toBeTruthy();
     expect(screen.getByText("Your week, Kim")).toBeTruthy();
-    expect(screen.getByTestId("training-empty-today")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("training-today-clear")).toBeTruthy());
   });
 
   it("switching section changes the masthead and offers the website", async () => {

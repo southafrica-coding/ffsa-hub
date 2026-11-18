@@ -4,6 +4,7 @@ import { getOutbox } from "@/features/finance/outbox/live";
 import { OutboxProvider } from "@/features/finance/outbox/provider";
 import { PushProvider } from "@/features/push";
 import { MeProvider, TabBar } from "@/features/shell";
+import { TrainingBadge } from "@/features/training/TrainingBadge";
 import { useTheme } from "@/theme/use-theme";
 
 // Signed-in area: the bottom tab bar (Home · Training · Finance · Prayer ·
@@ -24,6 +25,7 @@ export default function AppLayout() {
   return (
     <MeProvider>
       <PushProvider>
+      <TrainingBadge />
       <OutboxProvider outbox={getOutbox()}>
         <Tabs
           tabBar={(props) => <TabBar {...props} />}
