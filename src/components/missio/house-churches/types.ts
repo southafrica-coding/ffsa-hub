@@ -3,7 +3,7 @@
  *
  * Shapes follow Hub Backend draft #616 (`cursor/missio-house-churches-backend-d64c`),
  * especially `ImportReviewItem`: `sourceLine` is a number, `kind` and `matchType`
- * are `string | null`, and `notes` is the parser annotation. This file is not
+ * are `string | null`, and `note` is the parser annotation. This file is not
  * a copy of `src/lib/missio/types.ts`.
  */
 
@@ -79,7 +79,7 @@ export interface ReviewItem {
   role: HouseRole | null;
   /** Up to five possible people. May be empty. */
   candidates: PersonRef[];
-  /** Parser annotation, for example "see house 4". Not the raw sheet text. */
+  /** Parser annotation from the JSON field `note`, for example "see house 4". */
   notes: string | null;
   createdAt: string;
   resolvedAt: string | null;
@@ -116,6 +116,5 @@ export type HouseErrorCode =
   | "membership_not_current"
   | "member_left_missio"
   | "ended_at_in_future"
-  | "exists_use_search"
   | "rate_limited"
   | "server_error";

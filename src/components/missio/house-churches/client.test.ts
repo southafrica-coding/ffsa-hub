@@ -164,9 +164,12 @@ describe("house church fetchers", () => {
     await expect(client.listHouses()).rejects.toBeInstanceOf(MissioApiError);
   });
 
-  it("parses a #616 review item, including a numeric line and a null kind", async () => {
+  it("reads the parser annotation from note", async () => {
+    const wire = { ...reviewItem } as Record<string, unknown>;
+    delete wire.notes;
     const shaped = {
-      ...reviewItem,
+      ...wire,
+      note: "see house 4",
       kind: null,
       matchType: null,
       extraFromBackend: true,
@@ -183,6 +186,7 @@ describe("house church fetchers", () => {
       role: "leader",
       notes: "see house 4",
     });
+    expect(queue.items[0]).not.toHaveProperty("note");
     expect(queue.items[0]).not.toHaveProperty("extraFromBackend");
   });
 
@@ -197,7 +201,7 @@ describe("house church fetchers", () => {
       { status: 409, code: "membership_not_current", copy: "They’re no longer in this house." },
       { status: 409, code: "member_left_missio", copy: "They’ve left Missio, so they can’t be changed here." },
       { status: 409, code: "ended_at_in_future", copy: "That end date is still in the future." },
-      { status: 409, code: "exists_use_search", copy: "This person already exists. Open Missio People, then Add person." },
+      { status: 409, code: "exists_use_search", copy: "That didn’t work. Try again." },
       { status: 429, code: "rate_limited", copy: "Too many attempts, try again in 12 seconds" },
       { status: 500, code: "server_error", copy: "Something went wrong on our side. Try again." },
       { status: 409, code: "brand_new_code", copy: "That didn’t work. Try again." },
@@ -219,16 +223,41 @@ describe("house church fetchers", () => {
       }
     }
 
+    const dbText = "insert or update violates foreign key constraint fk_house_church_members";
     const { fetchImpl } = mockFetch(() =>
-      json({ error: serverText, code: "invalid_input", fieldErrors: { contactId: ["Pick someone from Missio."] } }, 400)
+      json(
+        {
+          error: dbText,
+          code: "invalid_input",
+          fieldErrors: {
+            contactId: dbText,
+            startedAt: "null value in column started_at violates not-null constraint",
+            mystery: "duplicate key value violates unique constraint",
+          },
+        },
+        400
+      )
     );
     const client = createHouseChurchesClient(fetchImpl);
     try {
       await client.listHouses();
     } catch (caught) {
       const error = caught as MissioApiError;
-      expect(houseErrorCopy(error)).toBe("Pick someone from Missio.");
+      expect(houseErrorCopy(error)).toBe("Pick someone from Missio. Check the start date. Check this field.");
       expect(houseErrorCopy(error)).not.toContain("foreign key");
+      expect(houseErrorCopy(error)).not.toContain("not-null");
+      expect(houseErrorCopy(error)).not.toContain("duplicate key");
+      expect(error.message).not.toContain("foreign key");
+    }
+
+    const roleFetch = mockFetch(() => json({ error: serverText, code: "not_missio_person" }, 400));
+    const roleClient = createHouseChurchesClient(roleFetch.fetchImpl);
+    try {
+      await roleClient.listHouses();
+    } catch (caught) {
+      const error = caught as MissioApiError;
+      expect(houseErrorCopy(error, "role")).toBe("This person isn’t part of Missio, so their role can’t be changed here.");
+      expect(houseErrorCopy(error)).toBe("This person isn’t in Missio yet. Add them in Missio People first.");
     }
   });
 });

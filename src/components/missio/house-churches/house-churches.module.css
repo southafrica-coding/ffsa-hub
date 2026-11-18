@@ -267,8 +267,8 @@
   flex: none;
 }
 
-.doneTitle {
-  margin: 24px 0 0;
+.root .doneTitle {
+  margin: 40px 0 0;
   font-size: 19px;
   font-weight: 560;
   line-height: 1.25;

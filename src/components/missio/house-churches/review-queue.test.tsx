@@ -225,7 +225,7 @@ describe("review queue", () => {
         client={client([family, partial], async (_id, body) => {
           bodies.push(body);
           if (body.action === "create") {
-            throw new MissioApiError(409, "exists", null, "exists_use_search");
+            throw new MissioApiError(409, "exists", null, "not_missio_person");
           }
           return { item: { ...family, status: "skipped", resolvedAt: "2026-11-02T00:00:00.000Z" } };
         })}
@@ -246,7 +246,8 @@ describe("review queue", () => {
     await settle();
     (host.querySelector("[data-testid=review-create]") as HTMLFormElement).requestSubmit();
     await settle();
-    expect(host.textContent).toContain("Open Missio People, then Add person.");
+    expect(host.textContent).toContain("This person isn’t in Missio yet. Add them in Missio People first.");
+    expect(document.activeElement).toBe(host.querySelector("#review-action-error"));
     expect(host.textContent).not.toContain("Search for them and link them");
     expect(host.querySelector("[data-testid=review-progress]")?.textContent?.trim()).toBe("2 of 2");
     expect(host.querySelector("[data-testid=review-done]")).toBeNull();
@@ -270,6 +271,48 @@ describe("review queue", () => {
     );
     await settle();
     expect(forbidden.querySelector("[data-testid=missio-no-access]")?.getAttribute("data-status")).toBe("403");
+  });
+
+  it("keeps the notice when the last name was already sorted", async () => {
+    const serverText = "This row is already resolved.";
+    const host = mount(
+      <ReviewQueue
+        people={people}
+        client={client([family], async () => {
+          throw new MissioApiError(409, serverText, null, "already_resolved");
+        })}
+      />
+    );
+    await settle();
+    (host.querySelector("[data-testid=review-skip]") as HTMLFormElement).requestSubmit();
+    await settle();
+    await settle();
+    expect(host.textContent).toContain("No names left to review.");
+    expect(host.textContent).toContain("Someone else already sorted this one.");
+    expect(host.textContent).not.toContain("All 0");
+    expect(host.textContent).not.toContain(serverText);
+    expect(document.activeElement).toBe(host.querySelector("#review-action-error"));
+  });
+
+  it("shows fixed field copy and never the database text inside fieldErrors", async () => {
+    const dbText = "violates foreign key constraint fk_house_church_members";
+    const fetchImpl: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          error: dbText,
+          message: dbText,
+          code: "invalid_input",
+          fieldErrors: { contactId: dbText, mystery: "duplicate key value violates unique constraint" },
+        }),
+        { status: 400, headers: { "content-type": "application/json" } }
+      );
+    const host = mount(<ReviewQueue client={createHouseChurchesClient(fetchImpl)} people={people} />);
+    await settle();
+    expect(host.textContent).toContain("Pick someone from Missio.");
+    expect(host.textContent).toContain("Check this field.");
+    expect(document.body.textContent).not.toContain("foreign key");
+    expect(document.body.textContent).not.toContain("duplicate key");
+    expect(document.body.textContent).not.toContain(dbText);
   });
 
   it("maps every pinned code to fixed copy and never shows the server message", async () => {

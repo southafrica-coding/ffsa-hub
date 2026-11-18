@@ -33,6 +33,7 @@ export function ReviewQueue({
   const [phone, setPhone] = useState("");
   const [skipNote, setSkipNote] = useState("");
   const focusTarget = useRef<"item" | "done" | null>(null);
+  const noticeRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     if (state.phase === "ready") setQueue(state.data.items);
@@ -49,6 +50,10 @@ export function ReviewQueue({
     const id = target === "done" ? "review-done-heading" : "review-item-heading";
     document.getElementById(id)?.focus();
   });
+
+  useEffect(() => {
+    if (notice) noticeRef.current?.focus();
+  }, [notice, item?.id, finished]);
 
   function resetFields() {
     setFirstName("");
@@ -75,12 +80,10 @@ export function ReviewQueue({
     if (remaining.length === 0) {
       setFinished(true);
       setIndex(0);
-      focusTarget.current = "done";
       return;
     }
     setFinished(false);
     setIndex(Math.min(fromIndex, remaining.length - 1));
-    focusTarget.current = "item";
   }
 
   async function resolve(body: ResolveBody, count: number) {
@@ -93,7 +96,7 @@ export function ReviewQueue({
     } catch (caught) {
       if (caught instanceof MissioApiError && caught.code === "already_resolved") {
         setNotice(houseErrorCopy(caught));
-        await refreshQueue(item.id, index).catch(() => advance(count));
+        await refreshQueue(item.id, index).catch(() => undefined);
         return;
       }
       setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught) : "That didn’t work. Try again.");
@@ -140,9 +143,14 @@ export function ReviewQueue({
           No imported names are waiting.
         </div>
       ) : null}
+      {notice ? (
+        <p ref={noticeRef} id="review-action-error" className={shell.alert} role="alert" tabIndex={-1}>
+          {notice}
+        </p>
+      ) : null}
       {state.phase === "ready" && finished ? (
         <h2 id="review-done-heading" tabIndex={-1} className={styles.doneTitle} data-testid="review-done">
-          {total === 1 ? "That name is resolved." : total === 2 ? "Both names are resolved." : `All ${total} names are resolved.`}
+          {doneHeading(total)}
         </h2>
       ) : null}
       {item ? (
@@ -150,7 +158,6 @@ export function ReviewQueue({
           key={item.id}
           item={item}
           pending={pending}
-          notice={notice}
           people={people}
           firstName={firstName}
           lastName={lastName}
@@ -193,10 +200,16 @@ export function ReviewQueue({
   );
 }
 
+function doneHeading(count: number): string {
+  if (count <= 0) return "No names left to review.";
+  if (count === 1) return "That name is resolved.";
+  if (count === 2) return "Both names are resolved.";
+  return `All ${count} names are resolved.`;
+}
+
 function ReviewCard({
   item,
   pending,
-  notice,
   people,
   firstName,
   lastName,
@@ -214,7 +227,6 @@ function ReviewCard({
 }: {
   item: ReviewItem;
   pending: boolean;
-  notice: string | null;
   people: Pick<MissioClient, "listPeople">;
   firstName: string;
   lastName: string;
@@ -252,11 +264,6 @@ function ReviewCard({
           ))}
         </ul>
       </section>
-      {notice ? (
-        <p className={shell.alert} role="alert">
-          {notice}
-        </p>
-      ) : null}
 
       {item.candidates.length > 0 ? (
         <section className={styles.section}>

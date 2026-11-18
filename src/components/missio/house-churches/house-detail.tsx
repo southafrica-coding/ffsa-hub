@@ -87,7 +87,8 @@ export function HouseDetailView({
       });
       focusElement(`house-edit-${member.contactId}`);
     } catch (caught) {
-      const copy = caught instanceof MissioApiError ? houseErrorCopy(caught) : "That didn’t work. Try again.";
+      const copy =
+        caught instanceof MissioApiError ? houseErrorCopy(caught, "role") : "That didn’t work. Try again.";
       setNotice(copy);
       if (needsQuietRefresh(caught)) await refreshHouse().catch(() => undefined);
     } finally {

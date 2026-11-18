@@ -37,14 +37,16 @@ const fieldErrorLines = new WeakMap<MissioApiError, string[]>();
 export const GENERIC_HOUSE_ERROR = "That didn’t work. Try again.";
 
 /** Fixed copy for a house-church error. Never reads the server's message string. */
-export function houseErrorCopy(error: MissioApiError): string {
+export function houseErrorCopy(error: MissioApiError, surface?: "role"): string {
   const seconds = capRetryAfterSeconds(error.retryAfterSeconds);
   const fields = fieldErrorLines.get(error) ?? [];
   switch (error.code) {
     case "invalid_input":
       return fields.length > 0 ? fields.join(" ") : "Check the details and try again.";
     case "not_missio_person":
-      return "This person isn’t in Missio yet. Add them in Missio People first.";
+      return surface === "role"
+        ? "This person isn’t part of Missio, so their role can’t be changed here."
+        : "This person isn’t in Missio yet. Add them in Missio People first.";
     case "not_found":
       return "That couldn’t be found.";
     case "already_member":
@@ -57,8 +59,6 @@ export function houseErrorCopy(error: MissioApiError): string {
       return "They’ve left Missio, so they can’t be changed here.";
     case "ended_at_in_future":
       return "That end date is still in the future.";
-    case "exists_use_search":
-      return "This person already exists. Open Missio People, then Add person.";
     case "rate_limited":
       return `Too many attempts, try again in ${seconds} seconds`;
     case "server_error":
@@ -97,14 +97,35 @@ function codeFor(body: Record<string, unknown>, status: number): string {
   return "server_error";
 }
 
+const FIELD_COPY: Record<string, string> = {
+  contactId: "Pick someone from Missio.",
+  role: "Choose a role.",
+  startedAt: "Check the start date.",
+  firstName: "Enter a first name.",
+  lastName: "Check the last name.",
+  email: "Check the email address.",
+  phone: "Check the phone number.",
+  notes: "Check the note.",
+  action: "Choose what to do with this name.",
+};
+
+const UNKNOWN_FIELD = "Check this field.";
+
+function fieldCopy(key: string): string {
+  if (FIELD_COPY[key]) return FIELD_COPY[key];
+  const leaf = key.split(".").filter(Boolean).pop() ?? "";
+  return FIELD_COPY[leaf] ?? UNKNOWN_FIELD;
+}
+
+/** Fixed copy for each field key. The server's strings are never used. */
 function readFieldErrors(value: unknown): string[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   const lines: string[] = [];
-  for (const item of Object.values(value as Record<string, unknown>)) {
-    const parts = Array.isArray(item) ? item : [item];
-    for (const part of parts) {
-      if (typeof part === "string" && part.trim()) lines.push(part.trim());
-    }
+  for (const key of Object.keys(value as Record<string, unknown>)) {
+    const trimmed = key.trim();
+    if (!trimmed) continue;
+    const line = fieldCopy(trimmed);
+    if (!lines.includes(line)) lines.push(line);
   }
   return lines;
 }
@@ -267,7 +288,7 @@ function reviewItem(value: unknown): ReviewItem {
     house: reviewHouse(row.house),
     role: optionalRole(row.role),
     candidates: people(row.candidates),
-    notes: nullableText(row.notes),
+    notes: nullableText(row.note),
     createdAt: typeof row.createdAt === "string" ? row.createdAt : "",
     resolvedAt: nullableText(row.resolvedAt),
   };
