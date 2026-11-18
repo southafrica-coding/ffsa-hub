@@ -88,7 +88,7 @@ export type OrgPeopleDirectoryRow = {
 /**
  * House churches, membership, and the import-review queue.
  *
- * Shapes follow migration 331 (PR 612, head 53acd9532d5edc87f4a5707163b9687f77899034).
+ * Shapes follow migration 331 (PR 612, head c587e497a356c920bef862866735db3a81c7ee6a).
  * That migration is not on main and is not applied here. Do not add these
  * tables to src/types/database.ts by hand.
  *
@@ -113,9 +113,9 @@ export type OrgPeopleDirectoryRow = {
  * missio_member_not_in_org, including for the service role. Ending a current
  * row sets ended_at to the UTC database date,
  * which is never after current_date. An already-ended row is
- * membership_not_current. Ending someone who has left org_people raises
- * 23503 missio_member_not_in_org until the follow-up, and DELETE maps that
- * to member_left_missio. org_people is not written
+ * membership_not_current. Ending a membership or changing its role does
+ * not re-check org_people. member_left_missio remains a defensive mapping
+ * if 23503 missio_member_not_in_org still arrives. org_people is not written
  * by the database. There is no member-status column on org_people.
  * Authenticated inserts pin created_by to auth.uid(). An authenticated
  * review resolve may only point resolved_contact_id at a candidate or at

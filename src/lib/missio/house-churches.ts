@@ -819,9 +819,9 @@ export async function endMember(
   contactId: string
 ): Promise<{ ok: true } | Fail> {
   if (!isUuid(contactId)) return fail(404, "not_found", "Member not found.");
-  // Pastor access is already required by the route. The membership is
-  // closed with the UTC date. Someone who has left Missio is rejected by
-  // the trigger (23503 missio_member_not_in_org) until that follow-up lands.
+  // Pastor access is already required by the route. ended_at is the UTC
+  // database date. At c587e497 the guard does not re-check org_people when
+  // a membership ends, so someone who has left Missio can still be closed.
   const house = await loadHouse(auth, scope, houseId);
   if (!house.ok) return house;
 

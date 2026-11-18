@@ -111,7 +111,7 @@ describe("mapMissioDbError", () => {
 });
 
 describe("mapMembershipEndError", () => {
-  it("maps missio_member_not_in_org to member_left_missio without database text", () => {
+  it("keeps member_left_missio as a defensive fallback and hides database text", () => {
     const mapped = mapMembershipEndError({
       code: "23503",
       message: "missio_member_not_in_org",
