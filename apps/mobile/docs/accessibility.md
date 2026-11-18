@@ -41,61 +41,55 @@ Status: **Pass** (already right, checked) · **Fixed** (changed in this branch) 
 `src/theme/__tests__/contrast.test.ts` checks every text/background and UI-part/background pair the
 app paints, in light and dark. Ratios (rounded down):
 
+Updated for the iPhone redesign tokens (R1 foundation, 18 Nov 2026, `docs/redesign-kit.md`).
+
 | Pair | Light | Dark | Needs |
 |---|---|---|---|
-| text on bg | 19.79 | 17.66 | 4.5 |
-| text on surface (bone panels, sheets) | 17.66 | 16.16 | 4.5 |
+| text on bg | 19.80 | 17.66 | 4.5 |
+| text on surface (list groups, banners; light surface is now `#FBFAF7`) | 18.97 | 16.17 | 4.5 |
 | text on surfaceStrong (pressed fills) | 15.55 | 13.00 | 4.5 |
-| textSecondary on bg / surface | 10.02 / 8.94 | 11.22 / 10.26 | 4.5 |
-| textSecondary on surfaceStrong | 7.87 | 8.25 | 4.5 |
-| **textQuiet (placeholders) on bg** | **2.95 (held for Jack; 4.72 proposed)** | 5.08 | 4.5 |
-| danger on bg / surface | 6.57 / 5.86 | 6.67 / 6.11 | 4.5 |
-| positiveText on bg / surface | 6.90 / 6.15 | 9.93 / 9.08 | 4.5 |
-| attention on bg / surface | 5.37 / 4.79 | 8.81 / 8.07 | 4.5 |
-| ink on the yellow band | 11.41 | 11.41 | 4.5 |
-| onInverse on inverse (primary button, section bar, badge) | 19.79 | 17.66 | 4.5 |
-| textTertiary on bg (large text / disabled only) | 4.41 | 6.69 | 3 |
-| **ruleStrong on bg (field, chip, radio outlines; switch track off)** | **1.76 (held for Jack; 3.55 proposed)** | 3.51 | 3 |
-| **ruleStrong on surface** | **1.57 (held for Jack; 3.16 proposed)** | 3.21 | 3 |
-| danger / positive / attentionBorder rules on bg | 6.57 / 4.91 / 3.24 | 6.67 / 7.78 / 6.10 | 3 |
-| textSecondary icons (inactive tabs, chevrons) on bg | 10.02 | 11.22 | 3 |
+| textSecondary on bg / surface | 7.80 / 7.47 | 11.22 / 10.27 | 4.5 |
+| textSecondary on surfaceStrong | 6.13 | 8.26 | 4.5 |
+| textTertiary on bg / surface (now body-size safe) | 5.64 / 5.40 | 11.22 / 10.27 | 4.5 |
+| textQuiet (placeholders) on bg | 5.64 | 5.09 | 4.5 |
+| danger on bg / surface | 4.83 / 4.63 | 6.68 / 6.11 | 4.5 |
+| positiveText on bg / surface | 4.91 / 4.71 | 9.93 / 9.09 | 4.5 |
+| attention on bg / surface | 5.38 / 5.15 | 8.82 / 8.07 | 4.5 |
+| ink on the yellow band | 11.42 | 11.42 | 4.5 |
+| onPrimary on primary (ink/white light, black/yellow dark) | 19.80 | 11.42 | 4.5 |
+| onInverse on inverse (ink chips, badges, section bars) | 19.80 | 17.66 | 4.5 |
+| onPositive on positive (green verdict) / onDanger on danger (danger fill) | 4.91 / 4.83 | 7.79 / 6.68 | 4.5 |
+| ruleStrong on bg (field, chip, radio outlines; switch track off) | 3.46 | 3.51 | 3 |
+| ruleStrong on surface | 3.31 | 3.21 | 3 |
+| focus ring on a field (blue light, yellow dark) | 9.59 | 10.45 | 3 |
+| danger / positive / attentionBorder rules on bg | 4.83 / 4.91 / 3.24 | 6.68 / 7.79 / 6.10 | 3 |
+| textSecondary icons (inactive tabs) on bg | 7.80 | 11.22 | 3 |
+| bone (`#C5C2AE`) on ink: scanner captions only | 11.03 | 11.03 | 4.5 |
 
 Exempt by WCAG and listed in the test so the exemption is explicit: hairline `rule` separators
-(decoration), the yellow masthead and tab ticks on a white page (decoration; the selected tab is
-also bold text and has the selected state), and `textTertiary` on disabled rows.
+(decoration), the yellow title and tab ticks and the selected segment's yellow underline
+(decoration; the state is also bold text and the selected role).
 
-### Token change (light scheme only): HELD FOR JACK, not applied
+### Light-scheme outline and placeholder: resolved by the redesign
 
-> **Held for Jack:** these two light-mode colour changes are a brand decision, so they are **not
-> applied** in this PR. `src/theme/tokens.ts` still uses the web palette values, and
-> `contrast.test.ts` checks the three light pairs as known gaps (below the bar) and that the
-> proposed values would pass. Apply them only once Jack approves.
-
-Two light values fail. The proposal is to change them **in the app's light scheme only**. The shared `palette`
-(which mirrors the web) and the dark scheme would be untouched.
-
-| Token (light) | Current (kept) | Proposed | Why |
-|---|---|---|---|
-| `ruleStrong` | `#C7C3B5` (1.76:1 on white) | `#8C887B` (3.55:1 white, 3.16:1 bone) | Text-field, chip and radio outlines and the off switch track were nearly invisible. WCAG 1.4.11 asks 3:1 for the parts that show where a control is. Dark mode already made the same change in batch 2. |
-| `textQuiet` | `#9A9689` (2.95:1 on white) | `#77736A` (4.72:1) | Placeholder text ("e.g. R001", "0.00") was too faint to read. WCAG 1.4.3. |
-
-Effect if approved: field and chip outlines are a mid grey instead of a pale beige, and
-placeholders are darker. In light, `textQuiet` would be a touch darker than `textTertiary` (4.41:1);
-tertiary is only used for disabled rows, which WCAG exempts. Until Jack decides, the app keeps the web look and accepts these failures.
+The two light-mode failures held for Jack on 3 Nov (`ruleStrong` #C7C3B5 at 1.76:1, `textQuiet`
+#9A9689 at 2.95:1) are closed by the redesign's decided values (design-spec §2): `ruleStrong`
+`#8E8A7C` (3.46:1 on white) and `textQuiet` `#6B675D` (5.64:1). `contrast.test.ts` no longer
+carries any known gaps.
 
 ## Component kit and shell (fixed once, every screen benefits)
 
 | Component | Check | Status | Notes |
 |---|---|---|---|
 | `Text` | Headers | Pass | display and title variants get the header role. |
-| `Text` | Dynamic Type | Pass | `allowFontScaling` on all text; display 1.4x, title 1.6x, label 2x caps, body uncapped. Labels never under 11. |
+| `Text` | Dynamic Type | Pass | `allowFontScaling` on all text; only display sizes are capped (pageTitle/display 1.4x, hero 1.3x, kpi 1.6x, title 1.6x, monoLabel 2x); body, captions, labels and row titles are uncapped. Nothing under 11. |
 | `Button` | Role, name, state | Pass | button role, label, disabled + busy state. |
-| `Button` | Touch target | Pass | minHeight/minWidth 48 + hitSlop 4. |
+| `Button` | Touch target | Pass | minHeight 50 (44 for size="small" and text buttons) + hitSlop 4. |
 | `Button` | Decorative icons | Fixed | Icon and loading spinner were read out as extra elements; now hidden (the busy state says it). |
 | `TextField` | Name | Fixed | The visible label was a separate stop before the input, so VoiceOver read the label twice. The visual label is now hidden; the input carries it (`accessibilityLabel` + `accessibilityLabelledBy`). |
 | `TextField` | Errors | Pass | The error is the input's hint and an alert live region (announced as it appears). |
 | `TextField` | Show/hide password | Fixed | Already labelled; eye icon now hidden, hint added. 48 x 48. |
-| `TextField` | Outline and placeholder contrast | Fixed | Light token change above. |
+| `TextField` | Outline and placeholder contrast | Fixed | Redesign token values above. |
 | `Banner` | Role | Pass | danger = alert (assertive), others summary (polite); read as one unit. |
 | `Banner` | With an action (e.g. Try again) | Fixed | The whole band became non-accessible so the button stayed reachable, which also dropped the alert role and live region: the error was neither findable as an alert nor announced. The message is now its own alert/live-region element beside the button. |
 | `Banner` | Announced on iOS | Fixed | VoiceOver ignores live regions, so danger banners were silent on iPhone. They now `announce()` title + message on iOS when they appear or change (string content). Features that announced their own errors were changed so nothing is spoken twice. |
