@@ -65,3 +65,23 @@ const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "
 export function dayLabel(now: Date): string {
   return `${DAYS[now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()]}`;
 }
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-11-23" or an ISO timestamp -> "23 Nov" (date part as written, no time-zone shift). */
+export function shortDate(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!m) return value;
+  return `${Number(m[3])} ${MONTH_NAMES[Number(m[2]) - 1] ?? ""}`.trim();
+}
+
+export type StudentFilter = "all" | "needs_care" | "no_checkin";
+
+/** Filter the list; walkers ("My students") see only the people they walk with. */
+export function filterStudents<T extends { status: string; walkingWithMe: boolean }>(
+  students: readonly T[],
+  filter: StudentFilter,
+  onlyMine: boolean,
+): T[] {
+  return students.filter((s) => (!onlyMine || s.walkingWithMe) && (filter === "all" || s.status === filter));
+}

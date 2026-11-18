@@ -21,6 +21,10 @@ export const PUSH_CATEGORIES = {
     label: "Your bookings",
     description: "When a booking you asked for is approved or declined.",
   },
+  training_care: {
+    label: "Students who need care",
+    description: "When a student you lead or walk with is flagged as needing care.",
+  },
 } as const;
 
 export type PushCategory = keyof typeof PUSH_CATEGORIES;
@@ -28,6 +32,7 @@ export type PushCategory = keyof typeof PUSH_CATEGORIES;
 export const PUSH_KINDS = {
   booking_request: "booking_requests",
   booking_decision: "booking_updates",
+  training_needs_care: "training_care",
 } as const satisfies Record<string, PushCategory>;
 
 export type PushKind = keyof typeof PUSH_KINDS;
@@ -40,6 +45,10 @@ const PUSH_TEXT: Record<PushKind, { title: string; body: string }> = {
   booking_decision: {
     title: "Booking update",
     body: "There's a decision on your booking request. Open FFSA Hub to see it.",
+  },
+  training_needs_care: {
+    title: "A student needs care",
+    body: "A check-in was flagged. Open FFSA Hub to see it.",
   },
 };
 

@@ -8,6 +8,7 @@ import { displayName } from "@/lib/api";
 import { touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
+import { StudentsSection } from "../components/StudentsSection";
 import { dayLabel, sectionsFor, trainingRole, type SectionId } from "../logic";
 import { strings } from "../strings";
 
@@ -22,10 +23,9 @@ const ICONS: Record<SectionId, LucideIcon> = {
 };
 
 // The Training tab (redesign 48i): a switcher of this person's sections
-// at the top, then the section. T2 is the frame only; each section's
-// content arrives with its own slice (Today T4, students and check-ins T3,
-// grades and applicants T6). Until then every section says what it will
-// hold, and the web Training module is one tap away.
+// at the top, then the section. Students / My students (T3) list real
+// students; Today (T4), grades and applicants (T6) still say what they will
+// hold, with the web Training module one tap away.
 export function TrainingScreen({ now = new Date() }: { now?: Date }) {
   const { status, me } = useMe();
   const sections = sectionsFor(me);
@@ -119,6 +119,7 @@ function SectionSwitcher({
 
 function SectionBody({ section }: { section: SectionId }) {
   const { colors } = useTheme();
+  if (section === "students" || section === "myStudents") return <StudentsSection onlyMine={section === "myStudents"} />;
   const copy = strings.empty[section];
   // Today is built from signals in the Hub (T4); there is nothing on the
   // website to send people to. Every other section exists on the web today.

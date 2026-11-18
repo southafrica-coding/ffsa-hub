@@ -1,4 +1,4 @@
--- Disposable RLS check for migration 334. Not a migration.
+-- Disposable RLS check for migrations 334 and 336. Not a migration.
 -- Stubs the tables and helpers 334 calls, applies 334 twice, then
 -- reads and writes as: a student, another student, the staff member
 -- walking with her (from the old assigned_staff_id), a second walker,
@@ -108,6 +108,8 @@ INSERT INTO public.enrollments (id, program_id, user_id, assigned_staff_id, staf
 
 \ir ../migrations/334_training_foundations.sql
 \ir ../migrations/334_training_foundations.sql
+\ir ../migrations/336_save_student_checkin.sql
+\ir ../migrations/336_save_student_checkin.sql
 
 -- Backfill ran once, even though 334 ran twice.
 DO $$ BEGIN
@@ -345,6 +347,58 @@ DO $$ BEGIN
   IF (SELECT count(*) FROM public.student_checkin_private) <> 1 THEN
     RAISE EXCEPTION 'author lost his own staff-only note';
   END IF;
+END $$;
+
+
+-- ── 336: save_student_checkin ────────────────────────────────
+-- Paul (program staff) checks in with Sipho through the function: one
+-- row plus its private note; saving again the same week updates it; an
+-- empty staff note removes the private row; care is "new" only once.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000004', false);
+DO $$ DECLARE r record; n int; BEGIN
+  SELECT * INTO r FROM public.save_student_checkin(
+    'e1000000-0000-0000-0000-000000000002', '2026-11-30', 'met', 'good',
+    '  Good to see you  ', 'Quiet this week', true);
+  IF NOT r.newly_needs_care THEN RAISE EXCEPTION '336: first flag should be new'; END IF;
+  SELECT count(*) INTO n FROM public.student_checkin_private WHERE checkin_id = r.checkin_id;
+  IF n <> 1 THEN RAISE EXCEPTION '336: private note not saved'; END IF;
+  IF (SELECT note_for_student FROM public.student_checkins WHERE id = r.checkin_id) <> 'Good to see you' THEN
+    RAISE EXCEPTION '336: note for student not trimmed';
+  END IF;
+
+  SELECT * INTO r FROM public.save_student_checkin(
+    'e1000000-0000-0000-0000-000000000002', '2026-11-30', 'no_reach', 'great', '', '   ', true);
+  IF r.newly_needs_care THEN RAISE EXCEPTION '336: a flag already raised was reported as new'; END IF;
+  SELECT count(*) INTO n FROM public.student_checkins
+   WHERE enrollment_id = 'e1000000-0000-0000-0000-000000000002' AND week_of = '2026-11-30';
+  IF n <> 1 THEN RAISE EXCEPTION '336: second save made a second row'; END IF;
+  IF (SELECT mood FROM public.student_checkins WHERE id = r.checkin_id) IS NOT NULL THEN
+    RAISE EXCEPTION '336: couldn''t reach kept a mood';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.student_checkin_private WHERE checkin_id = r.checkin_id) THEN
+    RAISE EXCEPTION '336: empty staff note did not remove the private row';
+  END IF;
+END $$;
+
+-- Xavier (another school) cannot save through the function either.
+SELECT set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000006', false);
+DO $$ DECLARE blocked boolean := false; BEGIN
+  BEGIN
+    PERFORM * FROM public.save_student_checkin(
+      'e1000000-0000-0000-0000-000000000002', '2026-11-30', 'met', 'good', null, 'x', false);
+  EXCEPTION WHEN insufficient_privilege THEN blocked := true; END;
+  IF NOT blocked THEN RAISE EXCEPTION '336: another school''s leader saved a check-in'; END IF;
+END $$;
+
+-- Grace (the student) cannot check in on herself through it.
+SELECT set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', false);
+DO $$ DECLARE blocked boolean := false; BEGIN
+  BEGIN
+    PERFORM * FROM public.save_student_checkin(
+      'e1000000-0000-0000-0000-000000000001', '2026-11-30', 'met', 'great', null, null, false);
+  EXCEPTION WHEN insufficient_privilege THEN blocked := true; END;
+  IF NOT blocked THEN RAISE EXCEPTION '336: student saved a check-in on herself'; END IF;
 END $$;
 
 RESET ROLE;

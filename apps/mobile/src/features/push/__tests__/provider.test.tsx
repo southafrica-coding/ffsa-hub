@@ -163,7 +163,7 @@ describe("PushProvider registration", () => {
     mockPhone.permission = "granted";
     await mount();
     await statusIs("on");
-    expect(mockPhone.channels).toEqual(["booking_requests", "booking_updates"]);
+    expect(mockPhone.channels).toEqual(["booking_requests", "booking_updates", "training_care"]);
     expect((posts()[0].body as { platform: string }).platform).toBe("android");
   });
 
