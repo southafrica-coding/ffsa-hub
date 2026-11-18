@@ -27,7 +27,7 @@ const wrapper = ({ children }: { children: ReactNode }) => <MeProvider>{children
 const flat = (style: unknown) => StyleSheet.flatten(style as never) ?? {};
 
 const ALL_ROUTES = ["index", "training", "finance", "prayer", "tickets", "me", "bookings", "schools", "history", "okrs", "ministries", "staff-decisions"];
-type Nested = { index: number; routes: { name: string }[] };
+type Nested = { index: number; routes: readonly { name: string }[] };
 
 function barProps(focused: string, nested?: Nested, descriptors: Record<string, unknown> = {}) {
   const routes = ALL_ROUTES.map((name) => ({ key: `${name}-key`, name, ...(name === focused && nested ? { state: nested } : {}) }));
@@ -127,7 +127,7 @@ describe.each(["light", "dark"] as const)("tab bar (%s)", (scheme) => {
     ["Edit profile", "me", { index: 1, routes: [{ name: "index" }, { name: "edit" }] }],
   ] as const)("hides on %s", async (_what, tab, nested) => {
     mockFetch.mockImplementation(apiRoutes({ "/api/me": everyone }));
-    await render(<TabBar {...barProps(tab, nested as Nested).props} />, { wrapper });
+    await render(<TabBar {...barProps(tab, nested).props} />, { wrapper });
     expect(screen.queryAllByRole("tab")).toHaveLength(0);
   });
 

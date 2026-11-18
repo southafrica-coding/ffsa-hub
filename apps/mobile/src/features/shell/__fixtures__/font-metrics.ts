@@ -1,3 +1,4 @@
+/// <reference types="node" />
 // Test helper: measures text with the real glyph advances from a bundled TTF,
 // so "does this label fit?" is computed, not guessed. Reads only the tables it
 // needs (head, hhea, hmtx, cmap format 4). No kerning: Roboto's kerning only
