@@ -5,7 +5,9 @@ import { missioRateLimit } from "@/lib/missio/limit";
 // PATCH  /api/missio/house-churches/:id/members/:contactId  { role }
 // DELETE /api/missio/house-churches/:id/members/:contactId
 //
-// Delete sets ended_at. It does not remove the row or touch org_people.
+// Pastor check, then the Missio org_people check, then the membership.
+// A start date after today never began, so that row is hard-deleted.
+// Any other open row is closed with ended_at = today. org_people is not touched.
 
 export const dynamic = "force-dynamic";
 

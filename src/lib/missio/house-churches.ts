@@ -754,6 +754,10 @@ export async function endMember(
   contactId: string
 ): Promise<{ ok: true } | Fail> {
   if (!isUuid(contactId)) return fail(404, "not_found", "Member not found.");
+  // Pastor access is already required by the route. The Missio-person
+  // check is next, before the membership is read for update or delete.
+  const person = await requireMissioPerson(auth, contactId);
+  if (!person.ok) return person;
   const house = await loadHouse(auth, scope, houseId);
   if (!house.ok) return house;
 
@@ -764,17 +768,18 @@ export async function endMember(
 
   const started = (target.started_at ?? todayIsoDate()).slice(0, 10);
   if (started > todayIsoDate()) {
-    // It never began. ended_at = started_at would be after today and 331
-    // raises 23514. DELETE is granted, and the guard trigger does not run
-    // on DELETE, including for the service role.
-    const removed = await auth.supabase
+    // It never began. Setting ended_at to that future date raises 23514
+    // missio_ended_at_in_future. Migration 331 allows DELETE, and
+    // guard_house_church_member runs only on INSERT and UPDATE, including
+    // for the service role.
+    const admin = adminClient();
+    if ("error" in admin) return fail(500, "server_error", admin.error);
+    const removed = await admin.client
       .from("house_church_members")
       .delete()
       .eq("id", target.id)
       .eq("house_church_id", house.house.id);
     if (removed.error) return membershipWriteError(removed.error);
-    const admin = adminClient();
-    if ("error" in admin) return fail(500, "server_error", admin.error);
     await audit(admin.client, {
       userId: auth.user.id,
       action: "missio.house_member_end",
