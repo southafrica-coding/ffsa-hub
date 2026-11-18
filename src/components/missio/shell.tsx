@@ -35,27 +35,33 @@ export function MissioFrame({
 
   useEffect(() => {
     let active = true;
-    client.getMe().then(
-      async (me) => {
-        if (!active) return;
-        if (!canAccessMissio(me)) {
-          setGate({ kind: "no-access", status: 403 });
-          return;
-        }
-        const ffsaRoleNames = needsPlatformRoleLookup(me.orgs)
-          ? await loadFfsaRoles().catch(() => null)
-          : [];
-        if (!active) return;
-        setGate({ kind: "ready", me, ffsaRoleNames: ffsaRoleNames ? [...ffsaRoleNames] : null });
-      },
-      (error: unknown) => {
-        if (!active) return;
-        const code = error instanceof MissioApiError ? error.code : null;
+    const meResult = client.getMe().then(
+      (me) => ({ ok: true as const, me }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    const rolesResult = loadFfsaRoles().catch(() => null);
+
+    Promise.all([meResult, rolesResult]).then(([meOutcome, ffsaRoleNames]) => {
+      if (!active) return;
+      if (!meOutcome.ok) {
+        const code = meOutcome.error instanceof MissioApiError ? meOutcome.error.code : null;
         if (code === "unauthenticated") setGate({ kind: "no-access", status: 401 });
         else if (code === "forbidden") setGate({ kind: "no-access", status: 403 });
         else setGate({ kind: "error" });
+        return;
       }
-    );
+      if (!canAccessMissio(meOutcome.me)) {
+        setGate({ kind: "no-access", status: 403 });
+        return;
+      }
+      const roles = needsPlatformRoleLookup(meOutcome.me.orgs)
+        ? ffsaRoleNames
+          ? [...ffsaRoleNames]
+          : null
+        : [];
+      setGate({ kind: "ready", me: meOutcome.me, ffsaRoleNames: roles });
+    });
+
     return () => {
       active = false;
     };

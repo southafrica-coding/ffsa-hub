@@ -40,6 +40,8 @@ const ffsaAdmin: MissioMe = {
   currentOrg: null,
 };
 
+const noRoles = async () => [] as const;
+
 function client(getMe: MissioClient["getMe"]): MissioClient {
   return {
     getMe,
@@ -81,7 +83,7 @@ describe("Missio access state", () => {
 
   it("applies the Missio skin for a pastor", async () => {
     const { host, root } = render(
-      <MissioFrame client={client(async () => pastor)}>
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
         <p>People live here</p>
       </MissioFrame>
     );
@@ -102,7 +104,7 @@ describe("Missio access state", () => {
 
   it("shows no access for an FFSA admin with no Missio role", async () => {
     const { host, root } = render(
-      <MissioFrame client={client(async () => ffsaAdmin)}>
+      <MissioFrame client={client(async () => ffsaAdmin)} loadFfsaRoles={noRoles}>
         <p>People live here</p>
       </MissioFrame>
     );
@@ -120,6 +122,7 @@ describe("Missio access state", () => {
         client={client(async () => {
           throw new MissioApiError(403, "No Missio pastor role", null, "forbidden");
         })}
+        loadFfsaRoles={noRoles}
       >
         <p>People live here</p>
       </MissioFrame>
@@ -134,7 +137,7 @@ describe("Missio access state", () => {
 
   it("opens the phone menu and closes it from Escape, the overlay, and a route change", async () => {
     const { host, root } = render(
-      <MissioFrame client={client(async () => pastor)}>
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
         <p>People live here</p>
       </MissioFrame>
     );
@@ -188,7 +191,7 @@ describe("Missio access state", () => {
     nav.pathname = "/missio/people";
     act(() => {
       root.render(
-        <MissioFrame client={client(async () => pastor)}>
+        <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
           <p>People live here</p>
         </MissioFrame>
       );
@@ -199,7 +202,7 @@ describe("Missio access state", () => {
 
   it("Escape closes the org switcher first, then the phone menu", async () => {
     const { host, root } = render(
-      <MissioFrame client={client(async () => pastor)}>
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
         <p>People live here</p>
       </MissioFrame>
     );
@@ -392,6 +395,7 @@ describe("org switcher for a real FFSA and Missio user", () => {
         client={client(async () => {
           throw new Error("membership lookup failed");
         })}
+        loadFfsaRoles={noRoles}
       >
         <p>People live here</p>
       </MissioFrame>
@@ -404,6 +408,95 @@ describe("org switcher for a real FFSA and Missio user", () => {
     expect(host.querySelector("[data-org-switcher]")).toBeNull();
     expect(host.textContent).toMatch(/didn.t load/);
     expect(host.textContent).not.toContain("People live here");
+  });
+
+  it("gives a student who is also a pastor no FFSA option", async () => {
+    const host = mount(
+      <MissioFrame client={client(async () => prodPastor)} loadFfsaRoles={async () => ["student"]}>
+        <p>People live here</p>
+      </MissioFrame>
+    );
+    await settle();
+
+    const aside = host.querySelector("aside") as HTMLElement;
+    expect(aside.querySelector("[data-org-switcher]")).toBeNull();
+    expect(aside.querySelector("[data-org-header=static]")?.textContent).toContain("Missio");
+    expect(host.textContent).not.toContain("FFSA Hub");
+    expect(host.textContent).not.toContain("Back to FFSA Hub");
+  });
+
+  it("reads membership and staff roles in parallel", async () => {
+    let meStarted = false;
+    let rolesStarted = false;
+    let resolveMe: (me: MissioMe) => void = () => {};
+    let resolveRoles: (roles: readonly string[]) => void = () => {};
+    const host = mount(
+      <MissioFrame
+        client={client(
+          () =>
+            new Promise((resolve) => {
+              meStarted = true;
+              resolveMe = resolve;
+            }),
+        )}
+        loadFfsaRoles={
+          () =>
+            new Promise((resolve) => {
+              rolesStarted = true;
+              resolveRoles = resolve;
+            })
+        }
+      >
+        <p>People live here</p>
+      </MissioFrame>
+    );
+    await settle();
+    expect(meStarted).toBe(true);
+    expect(rolesStarted).toBe(true);
+    expect(host.querySelector("[data-access]")?.getAttribute("data-access")).toBe("loading");
+
+    await act(async () => {
+      resolveMe(prodPastor);
+      resolveRoles(["staff"]);
+    });
+    await settle();
+    expect(host.querySelector("aside [data-org-switcher]")).toBeTruthy();
+    expect(host.textContent).toContain("People live here");
+  });
+
+  it("shows the switcher after a failed staff-role read succeeds on Try again", async () => {
+    let reads = 0;
+    const host = mount(
+      <MissioFrame
+        client={client(async () => {
+          reads += 1;
+          if (reads === 1) throw new Error("membership lookup failed");
+          return prodPastor;
+        })}
+        loadFfsaRoles={async () => (reads === 1 ? null : ["staff", "super_admin"])}
+      >
+        <p>People live here</p>
+      </MissioFrame>
+    );
+    await settle();
+    expect(host.querySelector("[data-org-header=back]")?.textContent).toBe("Back to FFSA Hub");
+    expect(host.querySelector("[data-org-switcher]")).toBeNull();
+
+    const retry = [...host.querySelectorAll("button")].find((button) => button.textContent === "Try again");
+    act(() => {
+      retry?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    const trigger = host.querySelector("aside [data-org-switcher] button") as HTMLButtonElement;
+    expect(trigger).toBeTruthy();
+    act(() => {
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const menu = document.body.querySelector("[role=listbox]");
+    expect(menu?.textContent).toContain("FFSA Hub");
+    expect(menu?.querySelector("a[href='/dashboard']")).toBeTruthy();
+    expect(host.querySelector("[data-org-header=back]")).toBeNull();
   });
 
   it("links back to the hub when platform roles fail and the org list is only Missio", async () => {

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { BACK_TO_FFSA_HUB, FFSA_ORG_NAME, missioOrgHeader, needsPlatformRoleLookup } from "./org-header";
+import {
+  BACK_TO_FFSA_HUB,
+  FFSA_ORG_NAME,
+  FFSA_STAFF_ROLES,
+  isFfsaStaffRole,
+  missioOrgHeader,
+  needsPlatformRoleLookup,
+} from "./org-header";
 
 /** Shape GET /api/missio/me returns for a pastor with no FFSA org_staff_roles row. */
 const prodMissioOnly = [
@@ -25,6 +32,27 @@ describe("missio org header", () => {
       const header = missioOrgHeader({ orgs: prodMissioOnly, ffsaRoleNames: [role] });
       expect(header.kind).toBe("switcher");
     }
+  });
+
+  it("treats leaders and other seeded staff roles as FFSA access", () => {
+    for (const role of ["admin", "program_leader", "school_leader", "finance_office"]) {
+      expect(isFfsaStaffRole(role)).toBe(true);
+      expect(missioOrgHeader({ orgs: prodMissioOnly, ffsaRoleNames: [role] }).kind).toBe("switcher");
+    }
+    expect(FFSA_STAFF_ROLES.has("student")).toBe(false);
+  });
+
+  it("gives a student, community member, or self-service user no FFSA option", () => {
+    for (const role of ["student", "community_member", "self_service"]) {
+      expect(isFfsaStaffRole(role)).toBe(false);
+      const header = missioOrgHeader({ orgs: prodMissioOnly, ffsaRoleNames: [role] });
+      expect(header).toEqual({ kind: "static", name: "Missio" });
+    }
+    const mixed = missioOrgHeader({
+      orgs: prodMissioOnly,
+      ffsaRoleNames: ["student", "staff"],
+    });
+    expect(mixed.kind).toBe("switcher");
   });
 
   it("leaves a Missio-only pastor on a static label", () => {

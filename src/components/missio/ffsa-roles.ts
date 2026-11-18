@@ -24,13 +24,24 @@ export async function readFfsaRoleNames(
   }
 }
 
-let cached: Promise<string[] | null> | null = null;
+let cached: string[] | null = null;
+let inflight: Promise<string[] | null> | null = null;
 
 export function clearFfsaRoleCache() {
   cached = null;
+  inflight = null;
 }
 
+/** A failed read is not stored. The next call, including Try again, fetches again. */
 export function loadFfsaRoleNames(): Promise<string[] | null> {
-  if (!cached) cached = readFfsaRoleNames();
-  return cached;
+  if (cached) return Promise.resolve(cached);
+  if (inflight) return inflight;
+  const pending = readFfsaRoleNames().then((names) => {
+    if (inflight !== pending) return names;
+    inflight = null;
+    if (names != null) cached = names;
+    return names;
+  });
+  inflight = pending;
+  return pending;
 }
