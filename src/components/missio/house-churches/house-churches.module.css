@@ -446,3 +446,18 @@
 .confirmCopy {
   margin: 16px 0 0;
 }
+
+/* Review queue: a name with a quiet second line (masked contact, Missio or not). */
+.choiceText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.choiceText .choiceMeta {
+  overflow-wrap: anywhere;
+}
+
+.searchHelp {
+  margin: 0 0 4px;
+}

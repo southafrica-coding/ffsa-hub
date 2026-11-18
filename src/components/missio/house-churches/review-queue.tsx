@@ -1,25 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { MissioApiError, missioClient, type MissioClient } from "../api";
+import { useEffect, useId, useRef, useState } from "react";
+import { MissioApiError } from "../api";
 import content from "../content.module.css";
 import shell from "../shell.module.css";
-import type { MissioPerson } from "../types-shim";
 import { houseChurchesClient, houseErrorCopy, type HouseChurchesClient } from "./client";
 import { houseTitle, reviewHeading, reviewReasons, ROLE_LABEL } from "./format";
 import { useMissioLoad } from "./load";
-import { PeoplePicker } from "./people-picker";
 import { AllHousesLink } from "./present";
 import { accessStatus, HouseStatus } from "./status";
-import type { ResolveBody, ReviewItem } from "./types";
+import type { PersonRef, ResolveBody, ReviewContactMatch, ReviewItem } from "./types";
 import styles from "./house-churches.module.css";
 
 export function ReviewQueue({
   client = houseChurchesClient,
-  people = missioClient,
 }: {
   client?: HouseChurchesClient;
-  people?: Pick<MissioClient, "listPeople">;
 }) {
   const { state, retry } = useMissioLoad(() => client.listReview(), [client]);
   const [queue, setQueue] = useState<ReviewItem[] | null>(null);
@@ -99,7 +95,7 @@ export function ReviewQueue({
         await refreshQueue(item.id, index).catch(() => undefined);
         return;
       }
-      setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught) : "That didn’t work. Try again.");
+      setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught, "review") : "That didn’t work. Try again.");
     } finally {
       setPending(false);
     }
@@ -126,7 +122,8 @@ export function ReviewQueue({
       </div>
       {finished ? null : (
         <p className={`${shell.lede} ${content.lede}`}>
-          Match each imported name to a person, create them, or skip. Linking or creating adds them to the house.
+          Match each imported name to a person, create them, or skip. Linking or creating adds them to the house and
+          to Missio.
         </p>
       )}
 
@@ -158,7 +155,7 @@ export function ReviewQueue({
           key={item.id}
           item={item}
           pending={pending}
-          people={people}
+          client={client}
           firstName={firstName}
           lastName={lastName}
           email={email}
@@ -210,7 +207,7 @@ function doneHeading(count: number): string {
 function ReviewCard({
   item,
   pending,
-  people,
+  client,
   firstName,
   lastName,
   email,
@@ -227,7 +224,7 @@ function ReviewCard({
 }: {
   item: ReviewItem;
   pending: boolean;
-  people: Pick<MissioClient, "listPeople">;
+  client: Pick<HouseChurchesClient, "searchReviewContacts">;
   firstName: string;
   lastName: string;
   email: string;
@@ -277,7 +274,10 @@ function ReviewCard({
                   disabled={pending}
                   onClick={() => onLink(candidate.contactId)}
                 >
-                  <span className={styles.choiceName}>Use {candidate.displayName}</span>
+                  <span className={styles.choiceText}>
+                    <span className={styles.choiceName}>Use {candidate.displayName}</span>
+                    <span className={styles.choiceMeta}>{matchMeta(candidate, candidate.orgPersonId != null)}</span>
+                  </span>
                 </button>
               </li>
             ))}
@@ -286,14 +286,11 @@ function ReviewCard({
       ) : null}
 
       <section className={styles.section}>
-        <h2>Search people</h2>
-        <PeoplePicker
-          people={people}
-          pending={pending}
-          label="Name"
-          placeholder="Name"
-          onPick={(person: MissioPerson) => onLink(person.contactId)}
-        />
+        <h2>Search everyone</h2>
+        <p className={`${shell.help} ${styles.searchHelp}`}>
+          Looks through every contact in the Hub, not only Missio. Linking someone adds them to Missio.
+        </p>
+        <ContactSearch client={client} pending={pending} onPick={onLink} />
       </section>
 
       <section className={styles.section}>
@@ -367,5 +364,100 @@ function ReviewCard({
         </form>
       </section>
     </article>
+  );
+}
+
+/** The quiet line under a name: who they are, and whether linking adds them to Missio. */
+function matchMeta(person: PersonRef, inMissio: boolean): string {
+  const where = inMissio ? "Already in Missio" : "Not in Missio yet";
+  return person.hint ? `${person.hint} · ${where}` : where;
+}
+
+function ContactSearch({
+  client,
+  pending,
+  onPick,
+}: {
+  client: Pick<HouseChurchesClient, "searchReviewContacts">;
+  pending: boolean;
+  onPick: (contactId: string) => void;
+}) {
+  const fieldId = useId();
+  const [draft, setDraft] = useState("");
+  const [rows, setRows] = useState<ReviewContactMatch[] | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
+
+  async function search(query: string) {
+    const q = query.trim();
+    if (q.length < 2) {
+      setRows(null);
+      setNotice("Enter at least two letters of a name.");
+      return;
+    }
+    setSearching(true);
+    setNotice(null);
+    try {
+      const page = await client.searchReviewContacts(q);
+      setRows(page.matches);
+      if (page.matches.length === 0) setNotice("No one in the Hub matches that name.");
+    } catch (caught) {
+      setRows(null);
+      setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught) : "People didn’t load.");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  return (
+    <form
+      className={styles.form}
+      data-testid="people-picker"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void search(draft);
+      }}
+    >
+      <label className={shell.field} htmlFor={fieldId}>
+        Name
+        <input
+          id={fieldId}
+          name="q"
+          placeholder="First or last name"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          autoComplete="off"
+        />
+      </label>
+      <div className={styles.formActions}>
+        <button type="submit" className={`${shell.ghost} ${styles.searchButton}`} disabled={searching || pending}>
+          Search
+        </button>
+      </div>
+      {notice ? (
+        <p className={shell.help} role="status">
+          {notice}
+        </p>
+      ) : null}
+      {rows && rows.length > 0 ? (
+        <ul className={styles.choices} data-testid="people-results">
+          {rows.map((person) => (
+            <li key={person.contactId}>
+              <button
+                type="button"
+                className={`${shell.ghost} ${styles.choice}`}
+                disabled={pending}
+                onClick={() => onPick(person.contactId)}
+              >
+                <span className={styles.choiceText}>
+                  <span className={styles.choiceName}>{person.displayName}</span>
+                  <span className={styles.choiceMeta}>{matchMeta(person, person.inMissio)}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </form>
   );
 }

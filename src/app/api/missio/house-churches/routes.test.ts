@@ -10,7 +10,8 @@ type Row = Record<string, unknown>;
 type Filter =
   | { type: "eq"; col: string; val: unknown }
   | { type: "in"; col: string; vals: unknown[] }
-  | { type: "is"; col: string; val: unknown };
+  | { type: "is"; col: string; val: unknown }
+  | { type: "or"; expr: string };
 
 type Op = {
   action: "select" | "insert" | "update" | "delete";
@@ -142,6 +143,10 @@ const state = vi.hoisted(() => {
         op.filters.push({ type: "is", col, val });
         return b;
       },
+      or(expr: string) {
+        op.filters.push({ type: "or", expr });
+        return b;
+      },
       order(col: string, opts?: { ascending?: boolean }) {
         op.orders.push({ col, ascending: opts?.ascending !== false });
         return b;
@@ -176,6 +181,16 @@ const state = vi.hoisted(() => {
     for (const filter of op.filters) {
       if (filter.type === "eq" && row[filter.col] !== filter.val) return false;
       if (filter.type === "in" && !(filter.vals ?? []).includes(row[filter.col])) return false;
+      if (filter.type === "or") {
+        // Only `col.ilike.%term%` clauses, which is all the routes send.
+        const hit = filter.expr.split(",").some((clause) => {
+          const [col, operator, pattern] = clause.split(".");
+          if (operator !== "ilike") throw new Error(`fake db: unsupported or clause ${clause}`);
+          const needle = pattern.replace(/%/g, "").toLowerCase();
+          return String(row[col] ?? "").toLowerCase().includes(needle);
+        });
+        if (!hit) return false;
+      }
       if (filter.type === "is") {
         if (filter.val === null) {
           if (row[filter.col] != null) return false;
@@ -374,6 +389,7 @@ const { POST: postMember } = await import("./[id]/members/route");
 const { PATCH: patchMember, DELETE: deleteMember } = await import("./[id]/members/[contactId]/route");
 const { GET: listReview } = await import("./import-review/route");
 const { POST: resolveReview } = await import("./import-review/[itemId]/resolve/route");
+const { GET: searchContacts } = await import("./import-review/contacts/route");
 
 function reset() {
   state.userId = PASTOR;
@@ -1189,11 +1205,13 @@ describe("import review", () => {
     expect(listed).not.toContain("Grace Hopper");
     expect(listed).not.toContain("notes");
     expect(body.items[1]).toMatchObject({ kind: "family_label", note: null });
-    expect(body.items[0].candidates.map((candidate: { orgPersonId: string; lastName: string }) => [candidate.orgPersonId, candidate.lastName])).toEqual([
+    // Five at most. A candidate with no Missio row yet is named too, with no orgPersonId.
+    expect(body.items[0].candidates.map((candidate: { orgPersonId?: string; lastName: string }) => [candidate.orgPersonId, candidate.lastName])).toEqual([
       ["person-0", "0"],
       ["person-1", "1"],
       ["person-2", "2"],
       ["person-3", "3"],
+      [undefined, "4"],
     ]);
     expect(body.items[1].house).toBeNull();
     expect(state.ops.filter((op) => op.table === "contacts").every((op) => op.client === "admin")).toBe(true);
@@ -1205,13 +1223,13 @@ describe("import review", () => {
     expect((await review("?status=nope")).status).toBe(400);
   });
 
-  it("links an active Missio person and refuses someone who is not", async () => {
+  it("links an active Missio person, and refuses a contact that does not exist", async () => {
     addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
     addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
     addContact({ id: OUTSIDE, first: "Outside", last: "Person", inOrg: false });
     addReview({ id: REVIEW, rawName: "Ada Lovelace", sourceLine: 4, houseNumber: 3, role: "leader" });
 
-    const refused = await resolve(REVIEW, { action: "link", contactId: OUTSIDE });
+    const refused = await resolve(REVIEW, { action: "link", contactId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" });
     expect(refused.status).toBe(400);
     expect(await refused.json()).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
     expect(state.tables.missio_import_review[0].status).toBe("pending");
@@ -1255,7 +1273,36 @@ describe("import review", () => {
     expect(state.tables.house_church_members[0].role).toBe("member");
   });
 
-  it("does not claim a candidate who is not in Missio, and links one who is", async () => {
+  it("searches every contact by name for a pastor, with masked hints and nothing more", async () => {
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    addContact({ id: OUTSIDE, first: "Adaline", last: "Mokoena", email: "adaline@example.org", inOrg: false });
+    addContact({ first: "Grace", last: "Hopper", inOrg: false });
+    const search = (q: string) =>
+      searchContacts(new Request(`http://localhost/api/missio/house-churches/import-review/contacts?q=${encodeURIComponent(q)}`));
+
+    const res = await search("ada");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.matches.map((m: { contactId: string; inMissio: boolean }) => [m.contactId, m.inMissio])).toEqual([
+      [ADA, true],
+      [OUTSIDE, false],
+    ]);
+    const outside = body.matches[1];
+    expect(Object.keys(outside).sort()).toEqual(["contactId", "displayName", "firstName", "hint", "inMissio", "lastName"]);
+    expect(outside.hint).not.toContain("adaline@example.org");
+    expect(JSON.stringify(body)).not.toContain("adaline@example.org");
+    expect(state.tables.audit_logs.at(-1)).toMatchObject({ action: "missio.import_review_contact_search" });
+
+    expect((await (await search("ada mokoena")).json()).matches).toHaveLength(1);
+    expect((await search("a")).status).toBe(400);
+    expect((await search("%%")).status).toBe(400);
+
+    state.userId = LEADER;
+    expect((await search("ada")).status).toBe(403);
+    state.userId = PASTOR;
+  });
+
+  it("adds a contact who is not in Missio yet, then links them", async () => {
     addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
     addContact({ id: OUTSIDE, first: "Outside", last: "Person", inOrg: false });
     addReview({
@@ -1266,16 +1313,31 @@ describe("import review", () => {
       role: "member",
       candidate_contact_ids: [OUTSIDE],
     });
-    const writesBefore = state.writes.length;
-    const refused = await resolve(REVIEW, { action: "link", contactId: OUTSIDE });
-    expect(refused.status).toBe(400);
-    expect(await refused.json()).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
-    expect(state.tables.missio_import_review[0].status).toBe("pending");
-    expect(state.tables.missio_import_review[0].resolved_contact_id).toBeNull();
-    expect(state.writes.length).toBe(writesBefore);
-    expect(state.tables.house_church_members).toEqual([]);
-    expect(state.tables.org_people).toEqual([]);
+    const added = await resolve(REVIEW, { action: "link", contactId: OUTSIDE });
+    expect(added.status).toBe(200);
+    const addedBody = await added.json();
+    expect(addedBody.item.status).toBe("matched");
+    expect(addedBody.member).toMatchObject({ contactId: OUTSIDE, role: "member" });
+    expect(state.tables.missio_import_review[0]).toMatchObject({ status: "matched", resolved_contact_id: OUTSIDE });
+    // The Missio row is written by the service role, before the claim, on the house campus.
+    const orgInsert = state.writes.findIndex((write) => write.table === "org_people" && write.op === "insert");
+    const claim = state.writes.findIndex((write) => write.table === "missio_import_review" && write.op === "update");
+    expect(orgInsert).toBeGreaterThanOrEqual(0);
+    expect(orgInsert).toBeLessThan(claim);
+    expect(state.writes[orgInsert].client).toBe("admin");
+    expect(state.tables.org_people).toHaveLength(1);
+    expect(state.tables.org_people[0]).toMatchObject({ contact_id: OUTSIDE, campus: "potch", status: "active", created_by: PASTOR });
+    expect(state.tables.house_church_members).toHaveLength(1);
+    expect(
+      state.writes.some(
+        (write) => write.table === "audit_logs" && JSON.stringify(write.payload).includes("missio.import_review_add_person")
+      )
+    ).toBe(true);
 
+    state.tables.missio_import_review[0].status = "pending";
+    state.tables.missio_import_review[0].resolved_contact_id = null;
+    state.tables.house_church_members.splice(0, 1);
+    state.writes.length = 0;
     addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
     state.tables.missio_import_review[0].candidate_contact_ids = [ADA];
     const linked = await resolve(REVIEW, { action: "link", contactId: ADA });

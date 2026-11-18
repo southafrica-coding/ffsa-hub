@@ -60,6 +60,7 @@ const house: HouseDetail = {
 
 function client(overrides: Partial<HouseChurchesClient> = {}): HouseChurchesClient {
   return {
+    searchReviewContacts: async () => ({ matches: [] }),
     listHouses: async () => ({ houses: [], canWrite: true }),
     getHouse: async () => ({ house, canWrite: true }),
     addMember: async () => ({ member }),

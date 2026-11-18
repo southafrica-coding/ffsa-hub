@@ -45,6 +45,7 @@ const numbered: HouseSummary = {
 
 function client(overrides: Partial<HouseChurchesClient> = {}): HouseChurchesClient {
   return {
+    searchReviewContacts: async () => ({ matches: [] }),
     listHouses: async () => ({ houses: [numbered, oak], canWrite: true }),
     getHouse: async () => {
       throw new Error("unused");

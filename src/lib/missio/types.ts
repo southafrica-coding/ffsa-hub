@@ -121,6 +121,18 @@ export type PersonRef = {
   firstName: string | null;
   lastName: string | null;
   orgPersonId?: string;
+  /** Masked email and phone, to tell apart contacts who share a name. Review queue only. */
+  hint?: string;
+};
+
+/** A contact found by name from the import review queue. */
+export type ReviewContactMatch = PersonRef & {
+  /** True when the contact already has a Missio people row. */
+  inMissio: boolean;
+};
+
+export type ReviewContactSearchResponse = {
+  matches: ReviewContactMatch[];
 };
 
 export type HouseChurchMemberView = Omit<PersonRef, "displayName"> & {

@@ -11,6 +11,7 @@ import type {
   PersonRef,
   ResolveBody,
   ResolveResponse,
+  ReviewContactSearchResponse,
   ReviewHouseRef,
   ReviewItem,
   ReviewListResponse,
@@ -30,6 +31,8 @@ export const houseChurchesApi = {
   review: "/api/missio/house-churches/import-review",
   resolve: (itemId: string) =>
     `/api/missio/house-churches/import-review/${encodeURIComponent(itemId)}/resolve`,
+  reviewContacts: (q: string) =>
+    `/api/missio/house-churches/import-review/contacts?q=${encodeURIComponent(q)}`,
 } as const;
 
 const fieldErrorLines = new WeakMap<MissioApiError, string[]>();
@@ -37,16 +40,18 @@ const fieldErrorLines = new WeakMap<MissioApiError, string[]>();
 export const GENERIC_HOUSE_ERROR = "That didn’t work. Try again.";
 
 /** Fixed copy for a house-church error. Never reads the server's message string. */
-export function houseErrorCopy(error: MissioApiError, surface?: "role"): string {
+export function houseErrorCopy(error: MissioApiError, surface?: "role" | "review"): string {
   const seconds = capRetryAfterSeconds(error.retryAfterSeconds);
   const fields = fieldErrorLines.get(error) ?? [];
   switch (error.code) {
     case "invalid_input":
       return fields.length > 0 ? fields.join(" ") : "Check the details and try again.";
     case "not_missio_person":
-      return surface === "role"
-        ? "This person isn’t part of Missio, so their role can’t be changed here."
-        : "This person isn’t in Missio yet. Add them in Missio People first.";
+      if (surface === "role") return "This person isn’t part of Missio, so their role can’t be changed here.";
+      if (surface === "review") {
+        return "That didn’t match a new person. If they are already in the Hub, find them under Search everyone and link them.";
+      }
+      return "This person isn’t in Missio yet. Add them in Missio People first.";
     case "not_found":
       return "That couldn’t be found.";
     case "already_member":
@@ -80,6 +85,8 @@ export interface HouseChurchesClient {
   removeMember(houseId: string, contactId: string): Promise<{ ok: true }>;
   listReview(): Promise<ReviewListResponse>;
   resolveReview(itemId: string, body: ResolveBody): Promise<ResolveResponse>;
+  /** Name search across every contact. Pastors only, review queue only. */
+  searchReviewContacts(q: string): Promise<ReviewContactSearchResponse>;
 }
 
 type FetchLike = typeof fetch;
@@ -192,6 +199,7 @@ function personRef(value: unknown): PersonRef {
     lastName: optionalString(row.lastName),
   };
   if (typeof row.orgPersonId === "string" && row.orgPersonId) person.orgPersonId = row.orgPersonId;
+  if (typeof row.hint === "string" && row.hint) person.hint = row.hint;
   return person;
 }
 
@@ -315,6 +323,16 @@ function reviewResponse(body: Record<string, unknown>): ReviewListResponse {
   return { items: body.items.map(reviewItem) };
 }
 
+function contactSearchResponse(body: Record<string, unknown>): ReviewContactSearchResponse {
+  if (!Array.isArray(body.matches)) throw new MissioApiError(500, UNEXPECTED, null, "server_error");
+  return {
+    matches: body.matches.map((value) => ({
+      ...personRef(value),
+      inMissio: asRecord(value)?.inMissio === true,
+    })),
+  };
+}
+
 function resolveResponse(body: Record<string, unknown>): ResolveResponse {
   const response: ResolveResponse = { item: reviewItem(body.item) };
   if (body.member != null) {
@@ -379,6 +397,9 @@ export function createHouseChurchesClient(fetchImpl: FetchLike = fetch): HouseCh
           body: JSON.stringify(body),
         })
       );
+    },
+    async searchReviewContacts(q) {
+      return contactSearchResponse(await request(houseChurchesApi.reviewContacts(q)));
     },
   };
 }

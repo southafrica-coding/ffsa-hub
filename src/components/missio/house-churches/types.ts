@@ -18,6 +18,17 @@ export interface PersonRef {
   firstName: string | null;
   lastName: string | null;
   orgPersonId?: string;
+  /** Masked email and phone. Only on review-queue matches from outside Missio. */
+  hint?: string;
+}
+
+/** One row of the review queue's search across every contact. */
+export interface ReviewContactMatch extends PersonRef {
+  inMissio: boolean;
+}
+
+export interface ReviewContactSearchResponse {
+  matches: ReviewContactMatch[];
 }
 
 export interface HouseSummary {

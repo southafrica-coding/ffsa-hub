@@ -13,6 +13,7 @@ import {
 } from "@/lib/missio/db-errors";
 import { endDateFor, isAfterDatabaseToday, todayIsoDate } from "@/lib/missio/dates";
 import { membershipBlocksInsert, membershipIsCurrent, membershipIsOpen } from "@/lib/missio/house-church-import";
+import { maskEmail, maskPhone } from "@/lib/missio/mask";
 import { createPerson } from "@/lib/missio/people";
 import type {
   HouseChurchDetail,
@@ -27,6 +28,8 @@ import type {
   MissioCampus,
   PersonRef,
   ResolveImportReviewResponse,
+  ReviewContactMatch,
+  ReviewContactSearchResponse,
 } from "@/lib/missio/types";
 
 // Pastors only, matching migration 331: has_org_role('missio', ARRAY['pastor']).
@@ -406,6 +409,139 @@ async function loadRefs(auth: OrgAccess, contactIds: string[]): Promise<Map<stri
   return map;
 }
 
+function contactHint(email: string | null | undefined, phone: string | null | undefined): string | undefined {
+  const parts = [maskEmail(email), maskPhone(phone)].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
+
+type ContactHintRow = ContactNameRow & { email?: string | null; phone?: string | null };
+
+/**
+ * Names for import-review candidates. The sheet is the source of Missio
+ * people (Jack, 18 Nov 2026), so a candidate may be a contact with no Missio
+ * row yet. Missio people come from the directory as before. Everyone else is
+ * read with the service role, after the pastor check, as a name plus a masked
+ * email and phone. Nothing else about the contact leaves the server.
+ */
+async function loadReviewRefs(auth: OrgAccess, contactIds: string[]): Promise<Map<string, PersonRef> | Fail> {
+  const refs = await loadRefs(auth, contactIds);
+  if (isFail(refs)) return refs;
+  const missing = [...new Set(contactIds)].filter((id) => !refs.has(id));
+  if (missing.length === 0) return refs;
+  const admin = adminClient();
+  if ("error" in admin) return fail(500, "server_error", "Something went wrong.");
+  for (let i = 0; i < missing.length; i += 100) {
+    const slice = missing.slice(i, i + 100);
+    const contacts = await admin.client
+      .from("contacts")
+      .select("id, first_name, last_name, preferred_name, email, phone")
+      .in("id", slice);
+    if (contacts.error) {
+      console.error("[missio] review candidate lookup failed", contacts.error.message);
+      return fail(500, "server_error", "Something went wrong.");
+    }
+    for (const row of (contacts.data ?? []) as ContactHintRow[]) {
+      if (!row.id) continue;
+      const ref = toPersonRef(row);
+      const hint = contactHint(row.email, row.phone);
+      if (hint) ref.hint = hint;
+      refs.set(row.id, ref);
+    }
+  }
+  return refs;
+}
+
+const SEARCH_LIMIT = 8;
+
+/**
+ * Name search across every contact, for the import review queue only.
+ * Pastor check first, then a service-role read. Returns at most eight
+ * matches: name, masked email and phone, and whether they are already in
+ * Missio. One audit row per search.
+ */
+export async function searchReviewContacts(
+  auth: OrgAccess,
+  q: string
+): Promise<{ ok: true; body: ReviewContactSearchResponse } | Fail> {
+  const tokens = q
+    .trim()
+    .split(/\s+/)
+    .map((token) => token.replace(/[,()%_\\*]/g, ""))
+    .filter((token) => token.length >= 2)
+    .slice(0, 4);
+  if (tokens.length === 0) {
+    return fail(400, "invalid_input", "Enter at least two letters of a name.", { q: "Enter at least two letters of a name." });
+  }
+  const admin = adminClient();
+  if ("error" in admin) return fail(500, "server_error", "Something went wrong.");
+
+  let request = admin.client.from("contacts").select("id, first_name, last_name, preferred_name, email, phone");
+  for (const token of tokens) {
+    const term = `%${token}%`;
+    request = request.or(`first_name.ilike.${term},last_name.ilike.${term},preferred_name.ilike.${term}`);
+  }
+  const found = await request.order("last_name", { ascending: true }).order("first_name", { ascending: true }).limit(SEARCH_LIMIT);
+  if (found.error) {
+    console.error("[missio] review contact search failed", found.error.message);
+    return fail(500, "server_error", "Something went wrong.");
+  }
+  const rows = ((found.data ?? []) as ContactHintRow[]).filter((row) => Boolean(row.id));
+  const inMissio = rows.length > 0 ? await loadRefs(auth, rows.map((row) => row.id)) : new Map<string, PersonRef>();
+  if (isFail(inMissio)) return inMissio;
+
+  const matches: ReviewContactMatch[] = rows.map((row) => {
+    const member = inMissio.get(row.id);
+    const ref = toPersonRef(row, member?.orgPersonId);
+    const hint = contactHint(row.email, row.phone);
+    if (hint) ref.hint = hint;
+    return { ...ref, inMissio: Boolean(member?.orgPersonId) };
+  });
+
+  await audit(admin.client, {
+    userId: auth.user.id,
+    action: "missio.import_review_contact_search",
+    resourceType: "missio_import_review",
+    resourceId: auth.orgId,
+    changes: { tokens: tokens.length, results: matches.length },
+  });
+  return { ok: true, body: { matches } };
+}
+
+/**
+ * Give a contact a Missio people row so an import-review row can link to
+ * them. The contact must exist. Migration 329's trigger mirrors the Missio
+ * label. An existing row is left as it is.
+ */
+async function ensureMissioPerson(auth: OrgAccess, contactId: string, campus: MissioCampus): Promise<{ ok: true } | Fail> {
+  const admin = adminClient();
+  if ("error" in admin) return fail(500, "server_error", "Something went wrong.");
+  const contact = await admin.client.from("contacts").select("id").eq("id", contactId).maybeSingle();
+  if (contact.error) {
+    console.error("[missio] contact lookup failed", contact.error.message);
+    return fail(500, "server_error", "Something went wrong.");
+  }
+  if (!contact.data) return NOT_MISSIO;
+  const inserted = await admin.client.from("org_people").insert({
+    org_id: auth.orgId,
+    contact_id: contactId,
+    campus,
+    status: "active",
+    created_by: auth.user.id,
+  });
+  if (inserted.error && inserted.error.code !== "23505") {
+    console.error("[missio] org_people insert failed", inserted.error.message);
+    return fail(500, "server_error", "Something went wrong.");
+  }
+  await audit(admin.client, {
+    userId: auth.user.id,
+    action: "missio.import_review_add_person",
+    resourceType: "contact",
+    resourceId: contactId,
+    changes: { campus, source: "import_review_link" },
+  });
+  return { ok: true };
+}
+
 function suggestedCandidates(ids: string[], refs: Map<string, PersonRef>): PersonRef[] {
   const seen = new Set<string>();
   const candidates: PersonRef[] = [];
@@ -413,7 +549,7 @@ function suggestedCandidates(ids: string[], refs: Map<string, PersonRef>): Perso
     if (seen.has(id)) continue;
     seen.add(id);
     const ref = refs.get(id);
-    if (!ref?.orgPersonId) continue;
+    if (!ref) continue;
     candidates.push(ref);
     if (candidates.length === 5) break;
   }
@@ -947,7 +1083,7 @@ export async function listImportReview(
   const candidateIds = visible.flatMap((row) => (row.candidate_contact_ids ?? []).slice(0, 5));
   let refs = new Map<string, PersonRef>();
   if (candidateIds.length > 0) {
-    const loaded = await loadRefs(auth, candidateIds);
+    const loaded = await loadReviewRefs(auth, candidateIds);
     if (isFail(loaded)) return loaded;
     refs = loaded;
   }
@@ -1071,7 +1207,7 @@ async function shapeClaimedReview(
     },
   });
   const ids = (row.candidate_contact_ids ?? []).slice(0, 5);
-  const refs = ids.length > 0 ? await loadRefs(auth, ids) : new Map<string, PersonRef>();
+  const refs = ids.length > 0 ? await loadReviewRefs(auth, ids) : new Map<string, PersonRef>();
   if (isFail(refs)) return refs;
   const shaped = toReviewItem(row, house, suggestedCandidates(ids, refs));
   if (!shaped) return fail(500, "server_error", "Something went wrong.");
@@ -1096,13 +1232,19 @@ export async function resolveImportReview(
   if (!role) return fail(500, "server_error", "Something went wrong.");
 
   if (parsed.data.action === "link") {
-    const person = await requireMissioPerson(auth, parsed.data.contactId);
+    let person = await requireMissioPerson(auth, parsed.data.contactId);
     if (!person.ok && person.status !== 400) return person;
     if (!person.ok) {
-      // A later branch, once approved, could create org_people for a
-      // candidate who carries the Missio label. It is not enabled, and it
-      // must not claim the row.
-      return NOT_MISSIO;
+      // The sheet is the source of Missio people, so linking a contact who
+      // is not in Missio yet adds them first. This runs before the claim:
+      // the 331 guard only lets a review row resolve to a staged candidate
+      // or an org_people contact. A contact that does not exist is refused.
+      const target = await loadHouseByNumber(auth, scope, Number(loaded.row.house_number));
+      if (!target.ok) return target;
+      const added = await ensureMissioPerson(auth, parsed.data.contactId, asCampus(target.house.campus));
+      if (!added.ok) return added;
+      person = await requireMissioPerson(auth, parsed.data.contactId);
+      if (!person.ok) return person;
     }
     const claimed = await claimReview(auth, itemId, { status: "matched", contactId: parsed.data.contactId });
     if (!claimed.ok) return claimed;

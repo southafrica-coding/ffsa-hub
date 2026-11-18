@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
 import { act, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MissioApiError, type MissioClient } from "../api";
+import { MissioApiError } from "../api";
 import { createHouseChurchesClient, type HouseChurchesClient } from "./client";
 import { ReviewQueue } from "./review-queue";
 import type { ResolveBody, ReviewItem } from "./types";
@@ -71,6 +71,7 @@ function client(items: ReviewItem[], resolveReview?: HouseChurchesClient["resolv
       throw new Error("unused");
     },
     listReview: async () => ({ items }),
+    searchReviewContacts,
     resolveReview:
       resolveReview ??
       (async (itemId) => ({
@@ -79,25 +80,28 @@ function client(items: ReviewItem[], resolveReview?: HouseChurchesClient["resolv
   };
 }
 
-const people: Pick<MissioClient, "listPeople"> = {
-  listPeople: async (query) => ({
-    rows:
-      query?.q?.toLowerCase().includes("elise")
-        ? [
-            {
-              id: "person-elise",
-              contactId: "c-elise",
-              name: "Elise Navarro",
-              campus: "jhb",
-              status: "visitor",
-              joinedAt: null,
-              currentStage: null,
-            },
-          ]
-        : [],
-    total: 1,
-  }),
-};
+const searchReviewContacts: HouseChurchesClient["searchReviewContacts"] = async (q) => ({
+  matches: q.toLowerCase().includes("elise")
+    ? [
+        {
+          contactId: "c-elise",
+          displayName: "Elise Navarro",
+          firstName: "Elise",
+          lastName: "Navarro",
+          hint: "e***@example.org · *** *** 4410",
+          inMissio: false,
+        },
+        {
+          contactId: "c-elise-2",
+          displayName: "Elise Brandt",
+          firstName: "Elise",
+          lastName: "Brandt",
+          orgPersonId: "person-elise-2",
+          inMissio: true,
+        },
+      ]
+    : [],
+});
 
 describe("review queue", () => {
   const roots: Array<ReturnType<typeof render>["root"]> = [];
@@ -113,7 +117,7 @@ describe("review queue", () => {
   }
 
   it("shows the original line, the house, and a plain reason", async () => {
-    const host = mount(<ReviewQueue client={client([family, partial])} people={people} />);
+    const host = mount(<ReviewQueue client={client([family, partial])} />);
     await settle();
     expect(host.querySelector("[data-testid=review-progress]")?.textContent?.trim()).toBe("1 of 2");
     expect(host.textContent).toContain("Line 12 · The Adler family");
@@ -130,7 +134,6 @@ describe("review queue", () => {
     const bodies: ResolveBody[] = [];
     const host = mount(
       <ReviewQueue
-        people={people}
         client={client([family, partial], async (_id, body) => {
           bodies.push(body);
           return { item: { ...family, status: "matched", resolvedAt: "2026-11-02T00:00:00.000Z" } };
@@ -160,7 +163,6 @@ describe("review queue", () => {
     const bodies: ResolveBody[] = [];
     const host = mount(
       <ReviewQueue
-        people={people}
         client={client([partial], async (_id, body) => {
           bodies.push(body);
           return { item: { ...partial, status: "new", resolvedAt: "2026-11-02T00:00:00.000Z" } };
@@ -186,11 +188,10 @@ describe("review queue", () => {
     expect(host.querySelector("[data-testid=review-done]")?.textContent).toContain("That name is resolved.");
   });
 
-  it("searches the people list and links that contact", async () => {
+  it("searches every contact, shows a masked hint, and links the pick", async () => {
     const bodies: ResolveBody[] = [];
     const host = mount(
       <ReviewQueue
-        people={people}
         client={client([partial], async (_id, body) => {
           bodies.push(body);
           return { item: { ...partial, status: "matched", resolvedAt: "2026-11-02T00:00:00.000Z" } };
@@ -203,7 +204,7 @@ describe("review queue", () => {
     const label = picker.querySelector("label");
     expect(label?.getAttribute("for")).toBe(search.id);
     expect(label?.textContent).toBe("Name");
-    expect(search.getAttribute("placeholder")).toBe("Name");
+    expect(search.getAttribute("placeholder")).toBe("First or last name");
     const searchButton = host.querySelector("[data-testid=people-picker] button[type=submit]") as HTMLButtonElement;
     expect(searchButton.textContent?.trim()).toBe("Search");
     setValue(search, "Elise");
@@ -212,6 +213,10 @@ describe("review queue", () => {
     await settle();
     const pick = [...host.querySelectorAll("[data-testid=people-results] button")][0] as HTMLButtonElement;
     expect(pick.textContent).toContain("Elise Navarro");
+    expect(pick.textContent).toContain("e***@example.org · *** *** 4410 · Not in Missio yet");
+    const second = [...host.querySelectorAll("[data-testid=people-results] button")][1] as HTMLButtonElement;
+    expect(second.textContent).toContain("Already in Missio");
+    expect(host.textContent).toContain("Looks through every contact in the Hub, not only Missio.");
     pick.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await settle();
     expect(bodies[0]).toEqual({ action: "link", contactId: "c-elise" });
@@ -221,7 +226,6 @@ describe("review queue", () => {
     const bodies: ResolveBody[] = [];
     const host = mount(
       <ReviewQueue
-        people={people}
         client={client([family, partial], async (_id, body) => {
           bodies.push(body);
           if (body.action === "create") {
@@ -246,21 +250,21 @@ describe("review queue", () => {
     await settle();
     (host.querySelector("[data-testid=review-create]") as HTMLFormElement).requestSubmit();
     await settle();
-    expect(host.textContent).toContain("This person isn’t in Missio yet. Add them in Missio People first.");
+    expect(host.textContent).toContain(
+      "That didn’t match a new person. If they are already in the Hub, find them under Search everyone and link them."
+    );
     expect(document.activeElement).toBe(host.querySelector("#review-action-error"));
-    expect(host.textContent).not.toContain("Search for them and link them");
     expect(host.querySelector("[data-testid=review-progress]")?.textContent?.trim()).toBe("2 of 2");
     expect(host.querySelector("[data-testid=review-done]")).toBeNull();
   });
 
   it("shows an empty queue and a no-access state", async () => {
-    const empty = mount(<ReviewQueue client={client([])} people={people} />);
+    const empty = mount(<ReviewQueue client={client([])} />);
     await settle();
     expect(empty.querySelector("[data-testid=review-empty]")?.textContent).toContain("No imported names are waiting.");
 
     const forbidden = mount(
       <ReviewQueue
-        people={people}
         client={{
           ...client([]),
           listReview: async () => {
@@ -277,7 +281,6 @@ describe("review queue", () => {
     const serverText = "This row is already resolved.";
     const host = mount(
       <ReviewQueue
-        people={people}
         client={client([family], async () => {
           throw new MissioApiError(409, serverText, null, "already_resolved");
         })}
@@ -306,7 +309,7 @@ describe("review queue", () => {
         }),
         { status: 400, headers: { "content-type": "application/json" } }
       );
-    const host = mount(<ReviewQueue client={createHouseChurchesClient(fetchImpl)} people={people} />);
+    const host = mount(<ReviewQueue client={createHouseChurchesClient(fetchImpl)} />);
     await settle();
     expect(host.textContent).toContain("Pick someone from Missio.");
     expect(host.textContent).toContain("Check this field.");
@@ -341,7 +344,7 @@ describe("review queue", () => {
             ...(item.code === "rate_limited" ? { "retry-after": "12" } : {}),
           },
         });
-      const host = mount(<ReviewQueue client={createHouseChurchesClient(fetchImpl)} people={people} />);
+      const host = mount(<ReviewQueue client={createHouseChurchesClient(fetchImpl)} />);
       await settle();
       if (item.card) {
         expect(host.querySelector("[data-testid=missio-no-access]")?.getAttribute("data-status")).toBe(item.card);
