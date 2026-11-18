@@ -250,6 +250,19 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION pg_temp.fail(who text, stmt text)
+RETURNS text
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_temp.become(who);
+  EXECUTE stmt;
+  EXECUTE 'RESET ROLE';
+  RETURN 'ok';
+EXCEPTION WHEN OTHERS THEN
+  RETURN SQLSTATE || ' ' || SQLERRM;
+END;
+$$;
+
 CREATE FUNCTION pg_temp.exec(who text, stmt text)
 RETURNS text
 LANGUAGE plpgsql AS $$
@@ -347,7 +360,7 @@ SELECT pg_temp.expect('pastor cannot park a house on the ffsa org',
   $$),
   'err 42501');
 SELECT pg_temp.expect('pastor cannot add a contact who is not in org_people',
-  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+  pg_temp.fail('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.house_church_members (house_church_id, contact_id, role)
     VALUES (
       '00000000-0000-4000-8000-000000000001',
@@ -355,7 +368,18 @@ SELECT pg_temp.expect('pastor cannot add a contact who is not in org_people',
       'member'
     )
   $$),
-  'err 42501');
+  '23503 missio_member_not_in_org');
+SELECT pg_temp.expect('service role cannot add a contact who is not in org_people',
+  pg_temp.fail('service', $$
+    INSERT INTO public.house_church_members (house_church_id, contact_id, role, created_by)
+    VALUES (
+      '00000000-0000-4000-8000-000000000001',
+      'c5555555-5555-5555-5555-555555555555',
+      'member',
+      'a4444444-4444-4444-4444-444444444444'
+    )
+  $$),
+  '23503 missio_member_not_in_org');
 SELECT pg_temp.expect('is_missio_member stays false for that contact',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT public.is_missio_member('c5555555-5555-5555-5555-555555555555')::text
@@ -691,8 +715,20 @@ SELECT pg_temp.expect('future start stays out of member status',
     public.is_missio_member('c3333333-3333-3333-3333-333333333333')::text
   $$),
   '0/false');
+SELECT pg_temp.expect('service role can hard-delete a future-start membership',
+  pg_temp.exec('service', $$
+    DELETE FROM public.house_church_members
+    WHERE house_church_id = '00000000-0000-4000-8000-000000000003'
+      AND contact_id = 'c3333333-3333-3333-3333-333333333333'
+      AND started_at > current_date
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('the future-start row is gone',
+  (SELECT count(*)::text FROM public.house_church_members
+    WHERE contact_id = 'c3333333-3333-3333-3333-333333333333'),
+  '0');
 SELECT pg_temp.expect('a future end date is rejected',
-  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+  pg_temp.fail('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.house_church_members (
       house_church_id, contact_id, role, ended_at
     ) VALUES (
@@ -702,7 +738,20 @@ SELECT pg_temp.expect('a future end date is rejected',
       current_date + 7
     )
   $$),
-  'err 23514');
+  '23514 missio_ended_at_in_future');
+SELECT pg_temp.expect('service role cannot store a future end date',
+  pg_temp.fail('service', $$
+    INSERT INTO public.house_church_members (
+      house_church_id, contact_id, role, ended_at, created_by
+    ) VALUES (
+      '00000000-0000-4000-8000-000000000006',
+      'c4444444-4444-4444-4444-444444444444',
+      'member',
+      current_date + 3,
+      'a4444444-4444-4444-4444-444444444444'
+    )
+  $$),
+  '23514 missio_ended_at_in_future');
 SELECT pg_temp.expect('the rejected future end left no membership',
   (SELECT count(*)::text FROM public.house_church_members
     WHERE contact_id = 'c4444444-4444-4444-4444-444444444444'),
@@ -732,6 +781,41 @@ SELECT pg_temp.expect('ending that row today drops them',
        AND ended_at IS NULL
   $$),
   'rows=1');
+SELECT pg_temp.expect('service role keeps created_by and can end a membership today',
+  pg_temp.exec('service', $$
+    INSERT INTO public.house_church_members (
+      house_church_id, contact_id, role, created_by
+    ) VALUES (
+      '00000000-0000-4000-8000-000000000006',
+      'c4444444-4444-4444-4444-444444444444',
+      'leader',
+      'a4444444-4444-4444-4444-444444444444'
+    )
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('service role created_by was kept',
+  (SELECT created_by::text FROM public.house_church_members
+    WHERE house_church_id = '00000000-0000-4000-8000-000000000006'
+      AND ended_at IS NULL),
+  'a4444444-4444-4444-4444-444444444444');
+SELECT pg_temp.expect('service role sets ended_at to today',
+  pg_temp.exec('service', $$
+    UPDATE public.house_church_members
+       SET ended_at = current_date
+     WHERE house_church_id = '00000000-0000-4000-8000-000000000006'
+       AND ended_at IS NULL
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('a same-day end drops the service-role row from member status',
+  (SELECT (
+      SELECT count(*) FROM public.missio_member_status
+      WHERE contact_id = 'c4444444-4444-4444-4444-444444444444'
+    )::text || '/' || (
+      SELECT ended_at::text || '/' || created_by::text
+      FROM public.house_church_members
+      WHERE house_church_id = '00000000-0000-4000-8000-000000000006'
+    )),
+  '0/' || current_date::text || '/a4444444-4444-4444-4444-444444444444');
 SELECT pg_temp.expect('ended row is gone from member status',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT (
@@ -791,13 +875,31 @@ SELECT pg_temp.expect('pastor can read the staged rows',
   $$),
   '2/Ada Fixture,Ben Fixture');
 SELECT pg_temp.expect('pastor cannot resolve to a contact outside candidates and org_people',
-  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+  pg_temp.fail('a1111111-1111-1111-1111-111111111111', $$
     UPDATE public.missio_import_review
        SET status = 'matched',
            resolved_contact_id = 'c5555555-5555-5555-5555-555555555555'
      WHERE raw_name = 'Ada Fixture'
   $$),
-  'err 42501');
+  '23503 missio_resolve_not_allowed');
+SELECT pg_temp.expect('service role cannot resolve to a contact outside candidates and org_people',
+  pg_temp.fail('service', $$
+    UPDATE public.missio_import_review
+       SET resolved_contact_id = 'c5555555-5555-5555-5555-555555555555',
+           resolved_by = 'a4444444-4444-4444-4444-444444444444'
+     WHERE raw_name = 'Ada Fixture'
+  $$),
+  '23503 missio_resolve_not_allowed');
+SELECT pg_temp.expect('service role insert of a disallowed resolve is rejected',
+  pg_temp.fail('service', $$
+    INSERT INTO public.missio_import_review
+      (org_id, source_line, raw_name, house_number, role, resolved_contact_id, resolved_by)
+    SELECT id, 12, 'Bad Resolve', 4, 'member',
+           'c5555555-5555-5555-5555-555555555555',
+           'a4444444-4444-4444-4444-444444444444'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  '23503 missio_resolve_not_allowed');
 SELECT pg_temp.expect('that rejected resolve did not stick',
   (SELECT status || '/' || (resolved_contact_id IS NULL)::text
      FROM public.missio_import_review
