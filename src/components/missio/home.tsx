@@ -25,7 +25,6 @@ export function MissioHome() {
     <div className={`${content.page} ${content.reveal}`}>
       <p className={`${styles.eyebrow} ${content.eyebrow}`}>{date}</p>
       <h1 className={content.title}>{greeting}</h1>
-      <p className={`${styles.lede} ${content.lede}`}>The church workspace.</p>
       <Link href="/missio/people" className={`${styles.card} ${content.card} ${content.solo}`}>
         <div className={`${styles.cardTitle} ${content.cardTitle}`}>People</div>
         <p className={`${styles.cardBody} ${content.cardBody}`}>Names and where someone is in the life of the church.</p>
