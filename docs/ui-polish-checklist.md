@@ -1,6 +1,6 @@
 # UI polish checklist
 
-Ten passes, in the order [koppkev](https://www.details.so/mcp) uses to unslop a vibecoded page. Passes 1–6 are checkable rules for an FFSA Hub surface. Passes 7–10 are allowed only on showcase surfaces.
+Based on @koppkev's 10-pass "Unslopping" UI polish video. Passes 1–6 are checkable rules for an FFSA Hub surface. Passes 7–10 are allowed only on showcase surfaces.
 
 This file is grounded in what the repo already uses. The FFSA skin is the tokens in `src/app/globals.css`, the Tailwind theme in `tailwind.config.ts`, the Roboto faces loaded in `src/app/layout.tsx`, and the primitives in `src/components/ffsa/index.tsx`. The Missio skin is Archivo and Fraunces from `src/components/missio/fonts.ts`, with its own spacing, radii, and pills in `src/components/missio/shell.module.css`. Do not invent a third scale, and do not mix the two skins on one screen.
 
