@@ -70,6 +70,11 @@ export function visibleServiceDates(dates: readonly string[], today: string): st
   return [...past.slice(-need), ...next];
 }
 
+/** Labels for Sundays that are still open. A date before `today` is left out. */
+export function upcomingServiceLabels(dates: readonly string[], today: string): string[] {
+  return dates.filter((date) => isIsoDate(date) && isIsoDate(today) && date >= today).map((date) => formatServiceLabel(date, "long"));
+}
+
 export function formatServiceLabel(iso: string, style: "long" | "short" = "long"): string {
   if (!isIsoDate(iso)) return iso;
   const [year, month, day] = iso.split("-").map(Number);

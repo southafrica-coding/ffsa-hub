@@ -5,6 +5,7 @@ import {
   isTokenExpired,
   johannesburgToday,
   tokenExpiresAt,
+  upcomingServiceLabels,
 } from "@/lib/missio/availability/dates";
 import {
   aggregateAvailabilityGrid,
@@ -450,7 +451,7 @@ async function assertOnRoster(supabase: Client, orgId: string, contactId: string
   return null;
 }
 
-const LINK_SECRET_ERROR = "Volunteer links need MISSIO_AVAILABILITY_TOKEN_SECRET on the server.";
+const LINK_SECRET_ERROR = "Volunteer links aren't available right now.";
 
 function linkSecret(): { ok: true; secret: string } | Fail {
   try {
@@ -486,64 +487,103 @@ function urlForStoredToken(
   contactId: string,
   stored: StoredToken,
   origin: string
-): Ok<{ url: string }> | Fail {
+): Ok<{ url: string }> | { mismatch: true } {
   const issued = issuedAvailabilityToken({
     secret,
     requestId: request.id,
     contactId,
     nonce: stored.nonce,
   });
-  if (issued.token_hash !== stored.token_hash) {
-    log("stored availability token hash does not match the derived link");
-    return fail(500, "server_error", "The link didn't get written.");
-  }
+  if (issued.token_hash !== stored.token_hash) return { mismatch: true };
   return { ok: true, body: { url: personalAvailabilityUrl(origin, issued.raw) } };
 }
 
-async function saveToken(
+function tokenWriteError(error: { code?: string; message?: string } | null): Fail | null {
+  if (!error) return null;
+  log(error.message ?? "token");
+  if (error.code === "23503" || /missio_contact_not_in_org/.test(error.message ?? "")) {
+    return fail(400, "invalid_input", "That person is not on a Missio team.");
+  }
+  return fail(500, "server_error", "The link didn't get written.");
+}
+
+function tokenRow(request: VolunteerRequest, contactId: string, secret: string) {
+  const issued = issuedAvailabilityToken({ secret, requestId: request.id, contactId });
+  return {
+    request_id: request.id,
+    contact_id: contactId,
+    nonce: issued.nonce,
+    token_hash: issued.token_hash,
+    expires_at: tokenExpiresAt(request.serviceDates),
+  };
+}
+
+/** First writer wins. A second insert does not replace the nonce. */
+async function insertTokenIfAbsent(
+  admin: Client,
+  request: VolunteerRequest,
+  contactId: string,
+  secret: string
+): Promise<Fail | null> {
+  const { error } = await admin.from("availability_tokens").insert(tokenRow(request, contactId, secret), {
+    onConflict: "request_id,contact_id",
+    ignoreDuplicates: true,
+  });
+  return tokenWriteError(error);
+}
+
+/** Replaces the nonce. Used for an explicit reset and for a secret that no longer matches. */
+async function rotateToken(
   admin: Client,
   request: VolunteerRequest,
   contactId: string,
   secret: string,
   origin: string
-): Promise<Ok<{ url: string }> | Fail> {
-  const issued = issuedAvailabilityToken({ secret, requestId: request.id, contactId });
-  const { error } = await admin.from("availability_tokens").upsert(
-    {
-      request_id: request.id,
-      contact_id: contactId,
-      nonce: issued.nonce,
-      token_hash: issued.token_hash,
-      expires_at: tokenExpiresAt(request.serviceDates),
-    },
-    { onConflict: "request_id,contact_id" }
-  );
-  if (error) {
-    log(error.message ?? "token");
-    if (error.code === "23503" || /missio_contact_not_in_org/.test(error.message ?? "")) {
-      return fail(400, "invalid_input", "That person is not on a Missio team.");
-    }
-    return fail(500, "server_error", "The link didn't get written.");
-  }
-  return { ok: true, body: { url: personalAvailabilityUrl(origin, issued.raw) } };
+): Promise<Ok<{ url: string; replaced: true }> | Fail> {
+  const row = tokenRow(request, contactId, secret);
+  const { error } = await admin.from("availability_tokens").upsert(row, {
+    onConflict: "request_id,contact_id",
+  });
+  const failed = tokenWriteError(error);
+  if (failed) return failed;
+  return { ok: true, body: { url: personalAvailabilityUrl(origin, issuedRaw(secret, request.id, contactId, row.nonce)), replaced: true } };
 }
 
-/** Reuses a live link. Creates one only when this person has none that still works. */
-async function ensureLiveLink(
+function issuedRaw(secret: string, requestId: string, contactId: string, nonce: string) {
+  return issuedAvailabilityToken({ secret, requestId, contactId, nonce }).raw;
+}
+
+/**
+ * Reuses a live link. Creates one only when this person has none that still works.
+ * A hash that no longer matches the server secret is replaced with a new link.
+ */
+export async function ensureLiveLink(
   admin: Client,
   request: VolunteerRequest,
   contactId: string,
   origin: string,
   now: Date
-): Promise<Ok<{ url: string }> | Fail> {
+): Promise<Ok<{ url: string; replaced: boolean }> | Fail> {
   const secret = linkSecret();
   if (!("secret" in secret)) return secret;
   const stored = await readStoredToken(admin, request.id, contactId);
   if (stored && "status" in stored) return stored;
   if (stored && !isTokenExpired(stored.expires_at, now)) {
-    return urlForStoredToken(secret.secret, request, contactId, stored, origin);
+    const reused = urlForStoredToken(secret.secret, request, contactId, stored, origin);
+    if ("ok" in reused) return { ok: true, body: { url: reused.body.url, replaced: false } };
+    log("stored availability token hash does not match the derived link; writing a new nonce");
+    return rotateToken(admin, request, contactId, secret.secret, origin);
   }
-  return saveToken(admin, request, contactId, secret.secret, origin);
+  if (stored) return rotateToken(admin, request, contactId, secret.secret, origin);
+  const inserted = await insertTokenIfAbsent(admin, request, contactId, secret.secret);
+  if (inserted) return inserted;
+  const current = await readStoredToken(admin, request.id, contactId);
+  if (current && "status" in current) return current;
+  if (!current) return fail(500, "server_error", "The link didn't get written.");
+  const reused = urlForStoredToken(secret.secret, request, contactId, current, origin);
+  if ("ok" in reused) return { ok: true, body: { url: reused.body.url, replaced: false } };
+  log("stored availability token hash does not match the derived link; writing a new nonce");
+  return rotateToken(admin, request, contactId, secret.secret, origin);
 }
 
 async function rotateLink(
@@ -551,10 +591,10 @@ async function rotateLink(
   request: VolunteerRequest,
   contactId: string,
   origin: string
-): Promise<Ok<{ url: string }> | Fail> {
+): Promise<Ok<{ url: string; replaced: true }> | Fail> {
   const secret = linkSecret();
   if (!("secret" in secret)) return secret;
-  return saveToken(admin, request, contactId, secret.secret, origin);
+  return rotateToken(admin, request, contactId, secret.secret, origin);
 }
 
 export async function issuePersonalLink(
@@ -564,7 +604,7 @@ export async function issuePersonalLink(
   contactId: string,
   origin: string,
   now = new Date()
-): Promise<Ok<{ url: string }> | Fail> {
+): Promise<Ok<{ url: string; replaced: boolean }> | Fail> {
   const request = await loadOwnedRequest(supabase, orgId, requestId);
   if ("status" in request) return request;
   const roster = await assertOnRoster(supabase, orgId, contactId);
@@ -578,7 +618,7 @@ export async function resetPersonalLink(
   requestId: string,
   contactId: string,
   origin: string
-): Promise<Ok<{ url: string }> | Fail> {
+): Promise<Ok<{ url: string; replaced: true }> | Fail> {
   const request = await loadOwnedRequest(supabase, orgId, requestId);
   if ("status" in request) return request;
   const roster = await assertOnRoster(supabase, orgId, contactId);
@@ -608,12 +648,14 @@ export async function prepareNudge(
     contactId: String(row.contact_id),
     serviceDate: asDate(row.service_date),
   }));
+  const today = johannesburgToday();
   const pending = unansweredContacts({
     contactIds: rosterIds(rows),
     dates: request.serviceDates,
     responses,
-    today: johannesburgToday(),
+    today,
   });
+  const labels = upcomingServiceLabels(request.serviceDates, today);
   const namesResult = await directoryByContact(supabase, orgId, pending);
   if ("error" in namesResult) return namesResult.error;
 
@@ -627,7 +669,6 @@ export async function prepareNudge(
       url: written.body.url,
     });
   }
-  const labels = request.serviceDates.map((date) => formatServiceLabel(date, "long"));
   const bundled = bundleNudges(people, labels);
   return { ok: true, body: bundled };
 }

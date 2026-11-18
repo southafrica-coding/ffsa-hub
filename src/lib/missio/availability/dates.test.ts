@@ -3,6 +3,7 @@ import {
   canEditAvailability,
   formatServiceLabel,
   isTokenExpired,
+  upcomingServiceLabels,
   johannesburgToday,
   sundaysBetween,
   tokenExpiresAt,
@@ -78,5 +79,12 @@ describe("token expiry and Sundays", () => {
   it("formats a Sunday without a comma", () => {
     expect(formatServiceLabel("2026-11-22", "long")).toBe("Sunday 22 Nov");
     expect(formatServiceLabel("2026-11-22", "short")).toBe("22 Nov");
+  });
+
+  it("leaves a Sunday that has passed out of the nudge labels", () => {
+    expect(upcomingServiceLabels(["2026-11-15", "2026-11-22", "2026-11-29"], "2026-11-18")).toEqual([
+      "Sunday 22 Nov",
+      "Sunday 29 Nov",
+    ]);
   });
 });

@@ -1,3 +1,4 @@
+import "server-only";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 /** HMAC-SHA256 base64url, no padding. The only shape a personal link may carry. */
@@ -8,16 +9,25 @@ export const AVAILABILITY_TOKEN_HASH_PATTERN = /^[0-9a-f]{64}$/;
 
 export const AVAILABILITY_TOKEN_SECRET_ENV = "MISSIO_AVAILABILITY_TOKEN_SECRET";
 
+/** The sample value in `.env.example`. A running server must not keep it. */
+export const AVAILABILITY_TOKEN_SECRET_PLACEHOLDER = "replace-with-a-long-random-string";
+
+export const AVAILABILITY_TOKEN_SECRET_MIN_LENGTH = 32;
+
 export class AvailabilityTokenSecretError extends Error {
   constructor() {
-    super(`${AVAILABILITY_TOKEN_SECRET_ENV} is not set`);
+    super(
+      `${AVAILABILITY_TOKEN_SECRET_ENV} is missing, shorter than ${AVAILABILITY_TOKEN_SECRET_MIN_LENGTH} characters, or still the example placeholder`
+    );
     this.name = "AvailabilityTokenSecretError";
   }
 }
 
 export function requireAvailabilityTokenSecret(): string {
-  const secret = process.env[AVAILABILITY_TOKEN_SECRET_ENV]?.trim();
-  if (!secret) throw new AvailabilityTokenSecretError();
+  const secret = process.env[AVAILABILITY_TOKEN_SECRET_ENV]?.trim() ?? "";
+  if (secret.length < AVAILABILITY_TOKEN_SECRET_MIN_LENGTH || secret === AVAILABILITY_TOKEN_SECRET_PLACEHOLDER) {
+    throw new AvailabilityTokenSecretError();
+  }
   return secret;
 }
 

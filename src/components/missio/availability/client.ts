@@ -16,7 +16,7 @@ export type VolunteersClient = {
   removeMember(teamId: string, contactId: string): Promise<void>;
   addLeader(teamId: string, contactId: string): Promise<void>;
   removeLeader(teamId: string, contactId: string): Promise<void>;
-  copyLink(requestId: string, contactId: string): Promise<{ url: string }>;
+  copyLink(requestId: string, contactId: string): Promise<{ url: string; replaced?: boolean }>;
   resetLink(requestId: string, contactId: string): Promise<{ url: string }>;
   nudge(requestId: string): Promise<NudgeDraft>;
   searchPeople(q: string): Promise<PeopleHit[]>;
@@ -78,7 +78,7 @@ export const volunteersClient: VolunteersClient = {
     return (await send(`/api/missio/volunteers/requests/${requestId}/link`, {
       method: "POST",
       body: JSON.stringify({ contactId }),
-    })) as { url: string };
+    })) as { url: string; replaced?: boolean };
   },
   async resetLink(requestId, contactId) {
     return (await send(`/api/missio/volunteers/requests/${requestId}/link/reset`, {

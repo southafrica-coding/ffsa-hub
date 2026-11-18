@@ -41,7 +41,7 @@ export function VolunteersBoard({
   const [picker, setPicker] = useState<{ teamId: string; kind: "members" | "leaders" } | null>(null);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<PeopleHit[]>([]);
-  const [links, setLinks] = useState<Record<string, { url: string; copied: boolean }>>({});
+  const [links, setLinks] = useState<Record<string, { url: string; copied: boolean; replaced: boolean }>>({});
   const [nudge, setNudge] = useState<NudgeDraft | null>(null);
   const [copiedNudge, setCopiedNudge] = useState<"whatsapp" | "email" | null>(null);
 
@@ -331,7 +331,7 @@ export function VolunteersBoard({
                       const copied = await copyText(issued.url);
                       setLinks((current) => ({
                         ...current,
-                        [person.contactId]: { url: issued.url, copied },
+                        [person.contactId]: { url: issued.url, copied, replaced: issued.replaced === true },
                       }));
                     });
                   }}
@@ -350,14 +350,18 @@ export function VolunteersBoard({
                       const copied = await copyText(issued.url);
                       setLinks((current) => ({
                         ...current,
-                        [person.contactId]: { url: issued.url, copied },
+                        [person.contactId]: { url: issued.url, copied, replaced: true },
                       }));
                     });
                   }}
                 >
-                  Reset link (old link stops working)
+                  <span className={styles.resetFull}>Reset link (old link stops working)</span>
+                  <span className={styles.resetShort}>Reset link</span>
                 </button>
               </div>
+              {links[person.contactId]?.replaced ? (
+                <p className={styles.meta}>The old link stopped working. This is a new one.</p>
+              ) : null}
               {links[person.contactId] ? (
                 <input className={styles.linkBox} readOnly value={links[person.contactId].url} aria-label={`Link for ${person.name}`} />
               ) : null}

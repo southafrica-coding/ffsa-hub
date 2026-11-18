@@ -1,7 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
 import {
   AVAILABILITY_TOKEN_HASH_PATTERN,
   AVAILABILITY_TOKEN_PATTERN,
+  AVAILABILITY_TOKEN_SECRET_MIN_LENGTH,
+  AVAILABILITY_TOKEN_SECRET_PLACEHOLDER,
   AvailabilityTokenSecretError,
   deriveAvailabilityToken,
   hashAvailabilityToken,
@@ -44,10 +50,25 @@ describe("derived availability tokens", () => {
     expect(verifyAvailabilityToken(rotated.raw, first.token_hash)).toBe(false);
   });
 
-  it("fails closed when the secret env var is missing", () => {
+  it("fails closed when the secret is missing, short, or the example placeholder", () => {
     const previous = process.env.MISSIO_AVAILABILITY_TOKEN_SECRET;
+    const placeholder = readFileSync(path.resolve(__dirname, "../../../../.env.example"), "utf8")
+      .match(/^MISSIO_AVAILABILITY_TOKEN_SECRET=(.*)$/m)?.[1]
+      ?.trim();
+    expect(placeholder).toBe(AVAILABILITY_TOKEN_SECRET_PLACEHOLDER);
+
     delete process.env.MISSIO_AVAILABILITY_TOKEN_SECRET;
     expect(() => requireAvailabilityTokenSecret()).toThrow(AvailabilityTokenSecretError);
+
+    process.env.MISSIO_AVAILABILITY_TOKEN_SECRET = "x".repeat(AVAILABILITY_TOKEN_SECRET_MIN_LENGTH - 1);
+    expect(() => requireAvailabilityTokenSecret()).toThrow(AvailabilityTokenSecretError);
+
+    process.env.MISSIO_AVAILABILITY_TOKEN_SECRET = AVAILABILITY_TOKEN_SECRET_PLACEHOLDER;
+    expect(() => requireAvailabilityTokenSecret()).toThrow(AvailabilityTokenSecretError);
+
+    process.env.MISSIO_AVAILABILITY_TOKEN_SECRET = "x".repeat(AVAILABILITY_TOKEN_SECRET_MIN_LENGTH);
+    expect(requireAvailabilityTokenSecret()).toBe("x".repeat(AVAILABILITY_TOKEN_SECRET_MIN_LENGTH));
+
     if (previous == null) delete process.env.MISSIO_AVAILABILITY_TOKEN_SECRET;
     else process.env.MISSIO_AVAILABILITY_TOKEN_SECRET = previous;
   });

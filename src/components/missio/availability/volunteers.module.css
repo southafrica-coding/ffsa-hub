@@ -295,6 +295,20 @@
   color: var(--bad, #a3261b);
 }
 
+.resetShort {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .resetFull {
+    display: none;
+  }
+
+  .resetShort {
+    display: inline;
+  }
+}
+
 @media (max-width: 767px) {
   .actions,
   .row {
