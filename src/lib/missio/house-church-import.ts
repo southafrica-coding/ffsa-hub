@@ -11,6 +11,7 @@
  * An active membership with a different role is reported and left as it is.
  */
 
+import { todayIsoDate } from "@/lib/missio/dates";
 import type { HouseChurchRole } from "@/lib/missio/types";
 
 export type { HouseChurchRole };
@@ -86,14 +87,14 @@ export function membershipIsOpen(row: { endedAt?: string | null }): boolean {
 }
 
 /**
- * Current membership, matching missio_member_status at #612 head 571555e9:
+ * Current membership, matching missio_member_status at #612 head 53acd953:
  * ended_at IS NULL and started_at <= today. The view also requires an
  * org_people row; callers apply that separately. A future ended_at cannot
  * be stored (23514 missio_ended_at_in_future).
  */
 export function membershipIsCurrent(
   row: { startedAt?: string | null; endedAt?: string | null },
-  today = new Date().toISOString().slice(0, 10)
+  today = todayIsoDate()
 ): boolean {
   const started = (row.startedAt ?? "0001-01-01").slice(0, 10);
   if (!started || started > today) return false;

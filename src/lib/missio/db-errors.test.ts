@@ -12,6 +12,7 @@ describe("mapMissioDbError", () => {
   it.each([
     ["missio_member_not_in_org"],
     ["missio_contact_not_in_org"],
+    ["missio_user_not_in_org"],
     ["missio_resolve_not_allowed"],
   ])("maps 23503 %s to not_missio_person without database text", (name) => {
     const mapped = mapMissioDbError({
@@ -27,6 +28,25 @@ describe("mapMissioDbError", () => {
     });
     expect(bodyOf({ code: "23503", message: name, details: SECRET, hint: "see Ada Lovelace" })).not.toContain(SECRET);
     expect(bodyOf({ code: "23503", message: name, details: SECRET, hint: "see Ada Lovelace" })).not.toContain(name);
+  });
+
+  it("maps 23514 missio_started_at_in_future to 400 invalid_input without database text", () => {
+    const mapped = mapMissioDbError({
+      code: "23514",
+      message: "missio_started_at_in_future",
+      details: SECRET,
+      hint: "started_at > current_date",
+    });
+    expect(mapped).toEqual({
+      status: 400,
+      code: "invalid_input",
+      error: "Check the fields and try again.",
+      fieldErrors: { startedAt: "Check this field and try again." },
+    });
+    const body = JSON.stringify(mapped);
+    expect(body).not.toContain("missio_started_at_in_future");
+    expect(body).not.toContain(SECRET);
+    expect(body).not.toContain("current_date");
   });
 
   it("maps 23514 missio_ended_at_in_future to 409 ended_at_in_future", () => {
@@ -101,6 +121,10 @@ describe("HOUSE_CHURCH_ERROR_CODES", () => {
     ]);
     const sample: HouseChurchErrorCode = "membership_not_current";
     expect(HOUSE_CHURCH_ERROR_CODES).toContain(sample);
+    expect(mapMissioDbError({ code: "23514", message: "missio_started_at_in_future" }).code).toBe("invalid_input");
+    expect(mapMissioDbError({ code: "23503", message: "missio_user_not_in_org" }).code).toBe("not_missio_person");
+    expect(HOUSE_CHURCH_ERROR_CODES).toContain("invalid_input");
+    expect(HOUSE_CHURCH_ERROR_CODES).toContain("not_missio_person");
   });
 });
 

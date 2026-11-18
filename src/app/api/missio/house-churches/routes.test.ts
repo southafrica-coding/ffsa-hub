@@ -913,18 +913,74 @@ describe("membership writes", () => {
     expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
   });
 
-  it("hard-deletes a membership that has not started", async () => {
+  it("rejects a future start on POST and PATCH and does not write", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    const orgBefore = JSON.stringify(state.tables.org_people);
+    const created = await post(HOUSE_1, { contactId: ADA, role: "member", startedAt: "2099-01-01" });
+    expect(created.status).toBe(400);
+    expect(await created.json()).toEqual({
+      error: "Check the fields and try again.",
+      code: "invalid_input",
+      fieldErrors: { startedAt: "Check this field and try again." },
+    });
+    expect(state.tables.house_church_members).toEqual([]);
+    expect(state.writes.some((write) => write.table === "house_church_members" || write.table === "org_people")).toBe(false);
+
+    addMember({ id: "member-ada", houseId: HOUSE_1, contactId: ADA, role: "member", startedAt: "2026-01-01" });
+    state.writes = [];
+    const patched = await patch(HOUSE_1, ADA, { role: "leader", startedAt: "2099-01-01" });
+    expect(patched.status).toBe(400);
+    expect(await patched.json()).toEqual({
+      error: "Check the fields and try again.",
+      code: "invalid_input",
+      fieldErrors: { startedAt: "Check this field and try again." },
+    });
+    expect(state.tables.house_church_members[0].role).toBe("member");
+    expect(state.tables.house_church_members[0].started_at).toBe("2026-01-01");
+    expect(state.writes.some((write) => write.table === "house_church_members")).toBe(false);
+    expect(JSON.stringify(state.tables.org_people)).toBe(orgBefore);
+  });
+
+  it("maps a future start from the database to 400 invalid_input and hides the text", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    state.constraintError = {
+      table: "house_church_members",
+      code: "23514",
+      message: "missio_started_at_in_future",
+      details: "sheet line with Grace Hopper",
+      hint: "started_at > current_date",
+    };
+    const res = await post(HOUSE_1, { contactId: ADA, role: "member" });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body).toEqual({
+      error: "Check the fields and try again.",
+      code: "invalid_input",
+      fieldErrors: { startedAt: "Check this field and try again." },
+    });
+    const text = JSON.stringify(body);
+    expect(text).not.toContain("missio_started_at_in_future");
+    expect(text).not.toContain("Grace Hopper");
+    expect(text).not.toContain("current_date");
+    expect(state.tables.house_church_members).toEqual([]);
+  });
+
+  it("refuses to end a membership that starts after today and writes nothing", async () => {
     addHouse({ id: HOUSE_1, number: 3 });
     addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
     addMember({ id: "member-future", houseId: HOUSE_1, contactId: ADA, role: "member", startedAt: "2099-01-01" });
     const orgBefore = JSON.stringify(state.tables.org_people);
+    const before = JSON.stringify(state.tables.house_church_members);
     const res = await remove(HOUSE_1, ADA);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
-    expect(state.tables.house_church_members).toEqual([]);
-    const deleted = state.writes.find((write) => write.table === "house_church_members" && write.op === "delete");
-    expect(deleted?.client).toBe("admin");
-    expect(state.writes.some((write) => write.table === "house_church_members" && write.op === "update")).toBe(false);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: "This membership is not current.",
+      code: "membership_not_current",
+    });
+    expect(JSON.stringify(state.tables.house_church_members)).toBe(before);
+    expect(state.writes.some((write) => write.table === "house_church_members")).toBe(false);
     expect(JSON.stringify(state.tables.org_people)).toBe(orgBefore);
   });
 
@@ -974,7 +1030,7 @@ describe("membership writes", () => {
     expect(state.tables.house_church_members[0].ended_at).toBeNull();
   });
 
-  it.each(["missio_member_not_in_org", "missio_contact_not_in_org"])(
+  it.each(["missio_member_not_in_org", "missio_contact_not_in_org", "missio_user_not_in_org"])(
     "maps 23503 %s to not_missio_person and hides database text",
     async (message) => {
       addHouse({ id: HOUSE_1, number: 3 });

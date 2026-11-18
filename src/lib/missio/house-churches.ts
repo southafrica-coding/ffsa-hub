@@ -9,6 +9,7 @@ import {
   mapMissioDbError,
   type HouseChurchErrorCode,
 } from "@/lib/missio/db-errors";
+import { isAfterDatabaseToday, todayIsoDate } from "@/lib/missio/dates";
 import { membershipBlocksInsert, membershipIsCurrent, membershipIsOpen } from "@/lib/missio/house-church-import";
 import { createPerson } from "@/lib/missio/people";
 import type {
@@ -38,10 +39,12 @@ import type {
 // an org_people row in Missio. Status is not filtered: migration 331 allows
 // a visitor. Anyone with no row is not_missio_person, and nothing is inserted.
 // import-review create still uses the Phase 0 create-person path.
-// Candidate suggestions are limited to people who have that row. Ending a
-// membership sets ended_at to today and never changes org_people. A current
-// membership is an open row (ended_at IS NULL) whose started_at is on or
-// before today. ended_at after today is rejected by the database.
+// Candidate suggestions are limited to people who have that row. DELETE only
+// sets ended_at to the UTC database date and never changes org_people.
+// A start after that date is invalid_input on POST and PATCH. A row that
+// already starts in the future is membership_not_current and is not written.
+// A current membership is an open row (ended_at IS NULL) whose started_at is
+// on or before that date. ended_at after today is rejected by the database.
 //
 // Pastors may UPDATE missio_import_review only on status, resolved_contact_id,
 // notes, resolved_by, and resolved_at. Insert and delete stay on the service role.
@@ -141,8 +144,14 @@ function zodFail(error: z.ZodError): Fail {
   const fieldErrors: Record<string, string> = {};
   for (const issue of error.issues) {
     const path = issue.path.map(String).join(".");
-    if (!path || fieldErrors[path]) continue;
-    Object.assign(fieldErrors, fieldError(path));
+    if (path) {
+      if (!fieldErrors[path]) Object.assign(fieldErrors, fieldError(path));
+      continue;
+    }
+    const keys = "keys" in issue && Array.isArray(issue.keys) ? issue.keys : [];
+    for (const key of keys) {
+      if (typeof key === "string" && key && !fieldErrors[key]) Object.assign(fieldErrors, fieldError(key));
+    }
   }
   const mapped = invalidInput(fieldErrors);
   return fail(mapped.status, mapped.code, mapped.error, mapped.fieldErrors);
@@ -168,10 +177,7 @@ export function isUuid(value: string): boolean {
   return UUID.test(value);
 }
 
-/** Calendar date in UTC. toISOString is UTC, so this is not the SAST civil date near midnight. */
-export function todayIsoDate(now = new Date()): string {
-  return now.toISOString().slice(0, 10);
-}
+export { todayIsoDate } from "@/lib/missio/dates";
 
 export function toPersonRef(contact: ContactNameRow, orgPersonId?: string | null): PersonRef {
   const firstName = blankToNull(contact.first_name);
@@ -226,10 +232,13 @@ export function parseReviewStatus(value: string | null): ImportReviewStatus | "a
   return null;
 }
 
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
 const addMemberSchema = z
   .object({
     contactId: z.string().uuid(),
     role: z.enum(ROLES),
+    startedAt: isoDate.nullable().optional(),
   })
   .strict();
 
@@ -351,7 +360,7 @@ function dbWriteError(error: { code?: string; message?: string; details?: string
   }
   const mapped = mapMissioDbError(error);
   console.error(`[missio] ${label} failed`, error.code ?? "write failed");
-  return fail(mapped.status, mapped.code, mapped.error);
+  return fail(mapped.status, mapped.code, mapped.error, mapped.fieldErrors);
 }
 
 async function loadRefs(auth: OrgAccess, contactIds: string[]): Promise<Map<string, PersonRef> | Fail> {
@@ -562,13 +571,23 @@ async function memberRowsFor(
   return { ok: true, rows: (data ?? []) as MemberRow[] };
 }
 
+/** null or omitted means today. A date after the UTC database date is invalid_input. */
+function startDateForWrite(value: string | null | undefined): { ok: true; startedAt: string } | Fail {
+  if (value == null || value === "") return { ok: true, startedAt: todayIsoDate() };
+  if (isAfterDatabaseToday(value)) {
+    return fail(400, "invalid_input", "Check the fields and try again.", fieldError("startedAt"));
+  }
+  return { ok: true, startedAt: value.slice(0, 10) };
+}
+
 async function insertMember(
   auth: OrgAccess,
   admin: Client,
   house: HouseRow,
   contact: ContactNameRow,
   role: HouseChurchRole,
-  orgPersonId: string
+  orgPersonId: string,
+  startedAt: string
 ): Promise<{ ok: true; member: HouseChurchMemberView; memberId: string } | Fail> {
   const inserted = await auth.supabase
     .from("house_church_members")
@@ -576,7 +595,7 @@ async function insertMember(
       house_church_id: house.id,
       contact_id: contact.id,
       role,
-      started_at: todayIsoDate(),
+      started_at: startedAt,
       ended_at: null,
       // Pastor routes set created_by to the signed-in user. Migration 331
       // keeps that value for a service-role write (auth.uid() is null) and
@@ -716,6 +735,8 @@ export async function addMember(
 ): Promise<{ ok: true; status: 201; member: HouseChurchMemberView } | Fail> {
   const parsed = addMemberSchema.safeParse(body);
   if (!parsed.success) return zodFail(parsed.error);
+  const started = startDateForWrite(parsed.data.startedAt);
+  if (!started.ok) return started;
 
   const person = await requireMissioPerson(auth, parsed.data.contactId);
   if (!person.ok) return person;
@@ -733,7 +754,8 @@ export async function addMember(
     house.house,
     person.contact,
     parsed.data.role,
-    person.orgPersonId
+    person.orgPersonId,
+    started.startedAt
   );
   if (!inserted.ok) return inserted;
   return { ok: true, status: 201, member: inserted.member };
@@ -808,27 +830,10 @@ export async function endMember(
   const target = blockingMember(existing.rows);
   if (!target) return closedMembership(existing.rows);
 
-  const started = (target.started_at ?? todayIsoDate()).slice(0, 10);
-  if (started > todayIsoDate()) {
-    // It never began. Setting ended_at to that future date raises 23514
-    // missio_ended_at_in_future. At 571555e9 migration 331 allows DELETE,
-    // and guard_house_church_member does not run on DELETE.
-    const admin = adminClient();
-    if ("error" in admin) return fail(500, "server_error", admin.error);
-    const removed = await admin.client
-      .from("house_church_members")
-      .delete()
-      .eq("id", target.id)
-      .eq("house_church_id", house.house.id);
-    if (removed.error) return dbWriteError(removed.error, "membership write");
-    await audit(admin.client, {
-      userId: auth.user.id,
-      action: "missio.house_member_end",
-      resourceType: "house_church_member",
-      resourceId: target.id,
-      changes: { houseChurchId: house.house.id, contactId, deleted: true },
-    });
-    return { ok: true };
+  const startedOn = (target.started_at ?? todayIsoDate()).slice(0, 10);
+  if (isAfterDatabaseToday(startedOn)) {
+    // ended_at = today would be before started_at. Do not write.
+    return fail(409, "membership_not_current", "This membership is not current.");
   }
 
   const updated = await auth.supabase
@@ -958,7 +963,7 @@ async function attachKnownMember(
     view.orgPersonId = person.orgPersonId;
     return { ok: true, member: view };
   }
-  const inserted = await insertMember(auth, admin, house, person.contact, role, person.orgPersonId);
+  const inserted = await insertMember(auth, admin, house, person.contact, role, person.orgPersonId, todayIsoDate());
   if (!inserted.ok) return inserted;
   return { ok: true, member: inserted.member };
 }

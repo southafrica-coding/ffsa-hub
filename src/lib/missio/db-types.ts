@@ -88,14 +88,16 @@ export type OrgPeopleDirectoryRow = {
 /**
  * House churches, membership, and the import-review queue.
  *
- * Shapes follow migration 331 (PR 612, head 571555e97ca1f218887f42030f990b6c5b3702b9).
+ * Shapes follow migration 331 (PR 612, head 53acd9532d5edc87f4a5707163b9687f77899034).
  * That migration is not on main and is not applied here. Do not add these
  * tables to src/types/database.ts by hand.
  *
  * RLS on house_churches, house_church_members, and missio_import_review is
  * has_org_role('missio', ARRAY['pastor']) plus the missio org id. is_admin(),
- * has_role(), and has_any_role() are not consulted. Pastors may insert,
- * update, and delete houses and memberships. On missio_import_review they
+ * has_role(), and has_any_role() are not consulted. Pastors may select,
+ * insert, and update houses. They may select and insert members, and update
+ * only role and ended_at. They cannot delete a house or a membership.
+ * On missio_import_review they
  * may SELECT and UPDATE only status, resolved_contact_id, notes,
  * resolved_by, and resolved_at. There is no note column. INSERT and DELETE
  * on that table are service-role only. updated_at is maintained by handle_updated_at().
@@ -105,11 +107,14 @@ export type OrgPeopleDirectoryRow = {
  * which is what missio_member_status and is_missio_member count, is an
  * open row with started_at <= today and an org_people row in that org.
  * ended_at after today raises 23514 missio_ended_at_in_future from
- * guard_house_church_member. A contact who is not in org_people for the
- * house org raises 23503 missio_member_not_in_org, including for the
- * service role. Ending a row sets ended_at to today. A row whose start is
- * already in the future is removed with DELETE. The guard does not run on
- * DELETE. org_people is not written
+ * guard_house_church_member. started_at after today raises 23514
+ * missio_started_at_in_future for every role, including the service role.
+ * A contact who is not in org_people for the house org raises 23503
+ * missio_member_not_in_org, including for the service role. Ending a current
+ * row sets ended_at to the UTC database date,
+ * which is never after current_date. A row whose start is already in the
+ * future is left in place: DELETE returns membership_not_current and does
+ * not write. org_people is not written
  * by the database. There is no member-status column on org_people.
  * Authenticated inserts pin created_by to auth.uid(). An authenticated
  * review resolve may only point resolved_contact_id at a candidate or at

@@ -36,6 +36,7 @@ export type MappedDbError = {
   status: 400 | 409 | 500;
   code: HouseChurchErrorCode;
   error: string;
+  fieldErrors?: Record<string, string>;
 };
 
 const NOT_MISSIO: MappedDbError = {
@@ -56,11 +57,24 @@ const SERVER: MappedDbError = {
   error: "Something went wrong.",
 };
 
-const NOT_IN_ORG = ["missio_member_not_in_org", "missio_contact_not_in_org", "missio_resolve_not_allowed"];
+const NOT_IN_ORG = [
+  "missio_member_not_in_org",
+  "missio_contact_not_in_org",
+  "missio_user_not_in_org",
+  "missio_resolve_not_allowed",
+];
+
+const FUTURE_START: MappedDbError = {
+  status: 400,
+  code: "invalid_input",
+  error: "Check the fields and try again.",
+  fieldErrors: { startedAt: "Check this field and try again." },
+};
 
 export function mapMissioDbError(error: DbErrorLike): MappedDbError {
   const message = error.message ?? "";
   if (error.code === "23503" && NOT_IN_ORG.some((name) => message.includes(name))) return NOT_MISSIO;
+  if (error.code === "23514" && message.includes("missio_started_at_in_future")) return FUTURE_START;
   if (error.code === "23514" && message.includes("missio_ended_at_in_future")) return ENDED_IN_FUTURE;
   return SERVER;
 }
