@@ -39,6 +39,7 @@ import {
   type PlannedLink,
   type PlannedReview,
 } from "../src/lib/missio/house-church-import";
+import { todayIsoDate } from "../src/lib/missio/dates";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -58,10 +59,6 @@ function loadLocalEnv() {
   } catch {
     // The process environment is enough when .env.local is not on disk.
   }
-}
-
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,6 +152,8 @@ function writerFor(db: Db, orgId: string): ImportWriter {
         house_church_id: link.houseId,
         contact_id: link.contactId,
         role: link.role,
+        // UTC database date, never a future start. null would also be valid:
+        // the column defaults to current_date.
         started_at: todayIsoDate(),
         ended_at: null,
         // Migration 331 pins created_by to auth.uid() when that is set.

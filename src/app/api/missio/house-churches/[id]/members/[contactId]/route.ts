@@ -7,8 +7,9 @@ import { missioRateLimit } from "@/lib/missio/limit";
 // DELETE /api/missio/house-churches/:id/members/:contactId
 //
 // Pastor check, then the Missio org_people check, then the membership.
-// A start date after today never began, so that row is hard-deleted.
-// Any other open row is closed with ended_at = today. org_people is not touched.
+// DELETE only sets ended_at to the UTC database date. A row that has
+// already ended, or whose start is after that date, returns
+// membership_not_current and is not written. org_people is not touched.
 
 export const dynamic = "force-dynamic";
 

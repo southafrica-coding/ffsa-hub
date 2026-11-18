@@ -11,6 +11,7 @@
  * An active membership with a different role is reported and left as it is.
  */
 
+import { todayIsoDate } from "@/lib/missio/dates";
 import type { HouseChurchRole } from "@/lib/missio/types";
 
 export type { HouseChurchRole };
@@ -93,7 +94,7 @@ export function membershipIsOpen(row: { endedAt?: string | null }): boolean {
  */
 export function membershipIsCurrent(
   row: { startedAt?: string | null; endedAt?: string | null },
-  today = new Date().toISOString().slice(0, 10)
+  today = todayIsoDate()
 ): boolean {
   const started = (row.startedAt ?? "0001-01-01").slice(0, 10);
   if (!started || started > today) return false;
