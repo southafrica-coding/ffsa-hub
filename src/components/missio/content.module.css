@@ -1,0 +1,115 @@
+/* Page content only. The shell, sidebar, top bar, and their breakpoints
+   stay in shell.module.css so the mobile shell can change on its own. */
+
+.page {
+  font-family: var(--font-roboto), Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink, #1c1b17);
+}
+
+.reveal {
+  animation: contentIn 0.25s ease both;
+}
+
+@keyframes contentIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.page .eyebrow {
+  font-family: var(--font-roboto-mono), "Roboto Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.page .title {
+  font-family: var(--font-roboto-condensed), "Roboto Condensed", sans-serif;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  margin: 8px 0 0;
+  max-width: 100%;
+}
+
+.page .lede {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+  max-width: 40rem;
+}
+
+.page .grid {
+  margin-top: 24px;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.page .grid + .grid {
+  margin-top: 16px;
+}
+
+.page .cardTitle {
+  font-family: var(--font-roboto-condensed), "Roboto Condensed", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: -0.01em;
+}
+
+.page .cardBody {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-top: 8px;
+}
+
+.page .tag {
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+}
+
+.card {
+  transition: border-color 0.15s ease;
+}
+
+.page .card:hover {
+  border-color: var(--ink, #1c1b17);
+}
+
+.page .toolbar {
+  gap: 8px;
+  margin: 16px 0 12px;
+}
+
+.page .table th,
+.page .table td {
+  padding: 12px 16px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.page .table th {
+  font-family: var(--font-roboto), Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.5;
+  text-transform: none;
+}
+
+.page .table td {
+  font-size: 14px;
+  line-height: 1.5;
+}

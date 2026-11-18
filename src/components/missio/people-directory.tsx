@@ -13,6 +13,7 @@ import { MissioApiError, missioClient, missioErrorCopy, type MissioClient } from
 import { AddPersonDialog } from "./add-person";
 import { MissioDialog } from "./missio-dialog";
 import type { MissioCampus, MissioPerson, MissioStatus } from "./types-shim";
+import content from "./content.module.css";
 import styles from "./shell.module.css";
 
 type ListState =
@@ -69,13 +70,13 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
   const to = Math.min(offset + DEFAULT_PEOPLE_LIMIT, total);
 
   return (
-    <div>
+    <div className={content.page}>
       <div className={styles.headRow}>
         <div>
-          <p className={styles.eyebrow}>Missio people</p>
-          <h1>People</h1>
-          <p className={styles.lede}>
-            Potch is the main church. Johannesburg is listed as Missio JHB. Inactive is the end of the record — people aren’t deleted.
+          <p className={`${styles.eyebrow} ${content.eyebrow}`}>Missio people</p>
+          <h1 className={content.title}>People</h1>
+          <p className={`${styles.lede} ${content.lede}`}>
+            Potch is the main church. Johannesburg is Missio JHB. Mark someone inactive to close the record.
           </p>
         </div>
         <button type="button" className={styles.primary} onClick={() => setAdding(true)}>
@@ -84,7 +85,7 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
       </div>
 
       <form
-        className={styles.toolbar}
+        className={`${styles.toolbar} ${content.toolbar}`}
         data-testid="people-search"
         onSubmit={(event) => {
           event.preventDefault();
@@ -163,7 +164,7 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
           </div>
         ) : null}
         {list.phase === "ready" && list.rows.length > 0 ? (
-          <table className={styles.table} data-testid="people-table">
+          <table className={`${styles.table} ${content.table}`} data-testid="people-table">
             <thead>
               <tr>
                 <th>Name</th>
