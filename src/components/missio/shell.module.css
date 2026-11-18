@@ -788,6 +788,7 @@
   width: min(280px, calc(100% - 48px)) !important;
   max-width: min(280px, calc(100% - 48px)) !important;
   padding: 0 !important;
+  padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
   gap: 0 !important;
   border: 0 !important;
   background: var(--side, #1d2520) !important;

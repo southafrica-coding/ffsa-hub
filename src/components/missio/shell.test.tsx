@@ -153,11 +153,15 @@ describe("Missio access state", () => {
     expect(document.body.getAttribute("data-scroll-locked")).toBe("1");
     expect(document.activeElement === dialog || dialog.contains(document.activeElement)).toBe(true);
 
-    act(() => {
+    await act(async () => {
       document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(document.body.querySelector("[role='dialog']")).toBeNull();
     expect(openMenu.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(openMenu);
 
     act(() => {
       openMenu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -166,10 +170,14 @@ describe("Missio access state", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     const overlay = document.body.querySelector("[data-slot='sheet-overlay']") as HTMLElement;
-    act(() => {
+    await act(async () => {
       overlay.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 1 }));
     });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(document.body.querySelector("[role='dialog']")).toBeNull();
+    expect(document.activeElement).toBe(openMenu);
 
     act(() => {
       openMenu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -200,5 +208,6 @@ describe("Missio mobile layout rules", () => {
     expect(mobile).toMatch(/\.crumb\s*\{[^}]*text-overflow:\s*ellipsis/);
     expect(css).toMatch(/\.menuButton,\s*\.topOrg\s*\{[^}]*display:\s*none/);
     expect(css).toMatch(/\.sideDrawer\s*\{[^}]*padding:\s*10px 8px 8px/);
+    expect(css).toMatch(/padding-bottom:\s*max\(8px,\s*env\(safe-area-inset-bottom\)\)/);
   });
 });

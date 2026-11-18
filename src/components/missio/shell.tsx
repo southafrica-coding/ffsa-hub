@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { orgHref, shouldShowOrgSwitcher, canAccessMissio, missioSkinVars } from "./access";
 import { MissioApiError, missioClient, type MissioClient } from "./api";
 import { OrgSwitcher, OrgTile } from "./org-switcher";
@@ -112,22 +112,22 @@ function MissioReady({ me, children }: { me: MissioMe; children: React.ReactNode
   }, []);
 
   return (
-    <div data-missio-shell="" data-skin="missio" data-access="ready" className={styles.shell} style={skinStyle}>
-      <div className={styles.sideSlot}>
-        <MissioSidebar me={me} />
+    <Sheet open={navOpen} onOpenChange={setNavOpen}>
+      <div data-missio-shell="" data-skin="missio" data-access="ready" className={styles.shell} style={skinStyle}>
+        <div className={styles.sideSlot}>
+          <MissioSidebar me={me} />
+        </div>
+        <div className={styles.main}>
+          <MissioTop me={me} navOpen={navOpen} />
+          <div className={styles.content}>{children}</div>
+        </div>
       </div>
-      <Sheet open={navOpen} onOpenChange={setNavOpen}>
-        <SheetContent side="left" id="missio-nav" className={styles.drawer} style={skinStyle}>
-          <SheetTitle className={styles.visuallyHidden}>Missio navigation</SheetTitle>
-          <SheetDescription className={styles.visuallyHidden}>Sections in this church</SheetDescription>
-          <MissioSidebar me={me} inDrawer onNavigate={() => setNavOpen(false)} />
-        </SheetContent>
-      </Sheet>
-      <div className={styles.main}>
-        <MissioTop me={me} navOpen={navOpen} onOpenNav={() => setNavOpen(true)} />
-        <div className={styles.content}>{children}</div>
-      </div>
-    </div>
+      <SheetContent side="left" id="missio-nav" className={styles.drawer} style={skinStyle}>
+        <SheetTitle className={styles.visuallyHidden}>Missio navigation</SheetTitle>
+        <SheetDescription className={styles.visuallyHidden}>Sections in this church</SheetDescription>
+        <MissioSidebar me={me} inDrawer onNavigate={() => setNavOpen(false)} />
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -193,30 +193,23 @@ function MissioSidebar({
   );
 }
 
-function MissioTop({
-  me,
-  navOpen,
-  onOpenNav,
-}: {
-  me: MissioMe;
-  navOpen: boolean;
-  onOpenNav: () => void;
-}) {
+function MissioTop({ me, navOpen }: { me: MissioMe; navOpen: boolean }) {
   const pathname = usePathname();
   const section = pathname.startsWith("/missio/people") ? "People" : "Home";
   const orgName = me.orgs.find((org) => org.slug === "missio")?.name ?? "Missio";
   return (
     <div className={styles.top}>
-      <button
-        type="button"
-        className={styles.menuButton}
-        aria-label="Open menu"
-        aria-expanded={navOpen}
-        aria-controls={navOpen ? "missio-nav" : undefined}
-        onClick={onOpenNav}
-      >
-        <MenuIcon />
-      </button>
+      <SheetTrigger asChild>
+        <button
+          type="button"
+          className={styles.menuButton}
+          aria-label="Open menu"
+          aria-expanded={navOpen}
+          aria-controls={navOpen ? "missio-nav" : undefined}
+        >
+          <MenuIcon />
+        </button>
+      </SheetTrigger>
       {shouldShowOrgSwitcher(me.orgs.length) ? (
         <div className={styles.topOrg}>
           <OrgSwitcher orgs={orgOptions(me)} currentOrg="missio" compact />
