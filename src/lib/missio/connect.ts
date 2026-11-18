@@ -125,7 +125,8 @@ const emptyToUndefined = (value: unknown) => {
 
 const bodySchema = z.object({
   name: z.string().trim().min(2).max(80),
-  phone: z.string().trim().min(1).max(40),
+  // Same function the phone_e164 trigger copies (normalizePhoneE164, default ZA).
+  phone: z.string().trim().min(1).max(40).refine((value) => normalizePhoneE164(value) != null),
   email: z.preprocess(emptyToUndefined, z.string().trim().max(320).optional()),
   visitType: z.enum(VISIT),
   wantsHouseChurch: z.boolean(),
@@ -370,9 +371,11 @@ function isUniqueViolation(error: { code?: string } | null | undefined): boolean
 }
 
 /**
- * A matched insert can raise 23505 when two cards attach at once.
- * Retry that insert once. If it conflicts again, store the card with
- * no match so the submission is kept. The conflict is never returned.
+ * attach_missio_connect_response takes an advisory lock, so two cards
+ * for the same contact or phone attach to one open follow-up.
+ * 23505 is only the fallback if that lock is not there yet: retry the
+ * matched insert once, then store the card unmatched. The conflict
+ * is never returned.
  */
 async function insertConnectCard(admin: Client, row: Record<string, unknown>) {
   let payload = row;

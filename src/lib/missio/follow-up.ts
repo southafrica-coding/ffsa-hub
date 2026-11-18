@@ -47,9 +47,9 @@ const VIEW_COLUMNS =
 const FOLLOWUP_UPDATE_COLUMNS = new Set(["stage", "assigned_leader_contact_id", "assigned_user_id"]);
 
 const FOLLOWUP_COLUMNS =
-  "id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, effective_stage, created_at, updated_at";
+  "id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, assigned_user_id, effective_stage, created_at, updated_at";
 const FOLLOWUP_WRITE_COLUMNS =
-  "id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, created_at, updated_at";
+  "id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, assigned_user_id, created_at, updated_at";
 const CARD_COLUMNS =
   "id, org_id, name, phone, email, visit_type, wants_house_church, wants_prayer, submitted_at, matched_contact_id, matched_by, campus";
 const HISTORY_COLUMNS = "id, followup_id, from_stage, to_stage, changed_by, changed_at, notes, kind";
@@ -89,6 +89,7 @@ type FollowupRow = {
   connect_response_id: string | null;
   stage: string;
   assigned_leader_contact_id: string | null;
+  assigned_user_id?: string | null;
   effective_stage?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -458,11 +459,67 @@ async function orgContactOrNull(auth: OrgAccess, contactId: string | null): Prom
   return person;
 }
 
+/**
+ * Session client, before any write of assigned_user_id.
+ * Null is allowed. A user with no Missio org_staff_roles row is
+ * not_missio_person, the same answer the guard's 23503 maps to.
+ * This does not read names.
+ */
+async function requireMissioStaffUser(auth: OrgAccess, userId: unknown): Promise<{ ok: true } | Fail> {
+  if (userId == null) return { ok: true };
+  if (typeof userId !== "string" || !isUuid(userId)) return NOT_MISSIO;
+  const { data, error } = await auth.supabase
+    .from("org_staff_roles")
+    .select("user_id")
+    .eq("org_id", auth.orgId)
+    .eq("user_id", userId)
+    .limit(1);
+  if (error) return fromDb(error, "follow-up staff");
+  if (!((data ?? []) as Array<{ user_id?: string }>).some((row) => row.user_id)) return NOT_MISSIO;
+  return { ok: true };
+}
+
+/**
+ * The optional hub user stored beside a leader contact.
+ * A contact with no login stays null. A login is kept only when
+ * requireMissioStaffUser passes. Several staff users are not guessed.
+ */
+async function staffUserForContact(auth: OrgAccess, contactId: string | null): Promise<{ userId: string | null } | Fail> {
+  if (!contactId) return { userId: null };
+  const visible = await auth.supabase.from("users").select("id").eq("contact_id", contactId);
+  if (visible.error) return fromDb(visible.error, "follow-up leader");
+  let userIds = ((visible.data ?? []) as Array<{ id?: string }>)
+    .map((row) => row.id)
+    .filter((id): id is string => Boolean(id));
+  if (userIds.length === 0) {
+    const admin = adminClient();
+    if (!("error" in admin)) {
+      const hidden = await admin.client.from("users").select("id").eq("contact_id", contactId);
+      if (hidden.error) return fromDb(hidden.error, "follow-up leader");
+      userIds = ((hidden.data ?? []) as Array<{ id?: string }>)
+        .map((row) => row.id)
+        .filter((id): id is string => Boolean(id));
+    }
+  }
+  const staffIds: string[] = [];
+  for (const userId of userIds) {
+    const staff = await requireMissioStaffUser(auth, userId);
+    if (isFail(staff)) {
+      if (staff.code === "not_missio_person") continue;
+      return staff;
+    }
+    staffIds.push(userId);
+  }
+  if (staffIds.length !== 1) return { userId: null };
+  return { userId: staffIds[0] };
+}
+
 async function insertFollowup(
   auth: OrgAccess,
   view: ViewRow,
   stage: FollowupStage,
-  leaderContactId?: string | null
+  leaderContactId?: string | null,
+  staffUserId?: string | null
 ): Promise<{ row: FollowupRow } | Fail> {
   const contact = await orgContactOrNull(auth, view.contact_id);
   if (isFail(contact)) return contact;
@@ -476,6 +533,9 @@ async function insertFollowup(
     stage,
   };
   if (leader) payload.assigned_leader_contact_id = leader.id;
+  if (staffUserId) payload.assigned_user_id = staffUserId;
+  const staff = await requireMissioStaffUser(auth, payload.assigned_user_id);
+  if (isFail(staff)) return staff;
   const inserted = await auth.supabase.from("missio_followups").insert(payload).select(FOLLOWUP_WRITE_COLUMNS).maybeSingle();
   // Another pastor inserted the same person. Do not adopt or overwrite their row.
   if (inserted.error) return fromDb(inserted.error, "follow-up insert");
@@ -497,6 +557,8 @@ async function claimFollowup(
   for (const [key, value] of Object.entries(patch)) {
     if (FOLLOWUP_UPDATE_COLUMNS.has(key)) set[key] = value;
   }
+  const staff = await requireMissioStaffUser(auth, set.assigned_user_id);
+  if (isFail(staff)) return staff;
   let query = auth.supabase
     .from("missio_followups")
     .update(set)
@@ -707,6 +769,8 @@ export async function setFollowupLeader(
     const allowed = await requireAssignableLeader(auth, leaderId);
     if (isFail(allowed)) return allowed;
   }
+  const staffUser = await staffUserForContact(auth, leaderId);
+  if (isFail(staffUser)) return staffUser;
 
   const view = await loadViewRow(auth, key);
   if (isFail(view)) return view;
@@ -714,11 +778,14 @@ export async function setFollowupLeader(
   if (isFail(existing)) return existing;
   let row = existing.row;
   if (!row) {
-    const created = await insertFollowup(auth, view.row, "new", leaderId);
+    const created = await insertFollowup(auth, view.row, "new", leaderId, staffUser.userId);
     if (isFail(created)) return created;
     row = created.row;
   } else {
-    const claimed = await claimFollowup(auth, row, { assigned_leader_contact_id: leaderId });
+    const claimed = await claimFollowup(auth, row, {
+      assigned_leader_contact_id: leaderId,
+      assigned_user_id: staffUser.userId,
+    });
     if (isFail(claimed)) return claimed;
     row = claimed.row;
   }

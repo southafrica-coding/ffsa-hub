@@ -648,6 +648,72 @@ describe("missio follow-up", () => {
     expect((await cleared.json()).person.assignedLeader).toBeNull();
   });
 
+  it("sets assigned_user_id only after a Missio staff check, and maps a staff guard failure", async () => {
+    const plain = await patchLeader(
+      new Request("https://hub.test/api/missio/follow-up", {
+        method: "PATCH",
+        body: JSON.stringify({ leaderContactId: ADA }),
+      }),
+      ctx(`c_${VEE}`)
+    );
+    expect(plain.status).toBe(200);
+    const plainWrite = state.writes.find((write) => write.table === "missio_followups" && write.op === "update");
+    expect(plainWrite?.payload).toMatchObject({ assigned_leader_contact_id: ADA, assigned_user_id: null });
+
+    state.tables.users.push({ id: "ffffffff-ffff-4fff-8fff-ffffffffffff", display_name: "Ada Login", contact_id: ADA });
+    state.writes = [];
+    const unstaffed = await patchLeader(
+      new Request("https://hub.test/api/missio/follow-up", {
+        method: "PATCH",
+        body: JSON.stringify({ leaderContactId: ADA }),
+      }),
+      ctx(`c_${VEE}`)
+    );
+    expect(unstaffed.status).toBe(200);
+    const unstaffedWrite = state.writes.find((write) => write.table === "missio_followups" && write.op === "update");
+    expect(unstaffedWrite?.payload).toMatchObject({ assigned_leader_contact_id: ADA, assigned_user_id: null });
+
+    state.writes = [];
+    const pastor = await patchLeader(
+      new Request("https://hub.test/api/missio/follow-up", {
+        method: "PATCH",
+        body: JSON.stringify({ leaderContactId: GRACE }),
+      }),
+      ctx(`c_${VEE}`)
+    );
+    expect(pastor.status).toBe(200);
+    const pastorWrite = state.writes.find((write) => write.table === "missio_followups" && write.op === "update");
+    expect(pastorWrite?.payload).toEqual({
+      assigned_leader_contact_id: GRACE,
+      assigned_user_id: PASTOR,
+    });
+
+    const secret = "missio_user_not_in_org secret_table Ada Lovelace";
+    state.dbError = {
+      table: "missio_followups",
+      code: "23503",
+      message: secret,
+      details: secret,
+      hint: secret,
+    };
+    state.writes = [];
+    const raced = await patchLeader(
+      new Request("https://hub.test/api/missio/follow-up", {
+        method: "PATCH",
+        body: JSON.stringify({ leaderContactId: GRACE }),
+      }),
+      ctx(`c_${VEE}`)
+    );
+    expect(raced.status).toBe(400);
+    const body = await raced.json();
+    expect(body).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+    const text = JSON.stringify(body);
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain("23503");
+    expect(text).not.toContain("missio_user_not_in_org");
+    expect(state.writes.filter((write) => write.table === "missio_followups")).toHaveLength(0);
+  });
+
   it("synthesises the card submission and returns notes newest first", async () => {
     const res = await getTimeline(new Request("https://hub.test/api/missio/follow-up"), ctx(`c_${VEE}`));
     expect(res.status).toBe(200);

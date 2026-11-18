@@ -5,6 +5,9 @@ import { pastorFollowupAccess, setFollowupLeader } from "@/lib/missio/follow-up"
 // PATCH /api/missio/follow-up/:key/leader  { leaderContactId: uuid | null }
 //
 // leaderContactId must be on the leaders list. null clears the assignee.
+// assigned_user_id is set only when that contact's hub user has a Missio
+// org_staff_roles row. The check is on the session client before the write.
+// A 23503 missio_user_not_in_org from the guard is 400 not_missio_person.
 
 export const dynamic = "force-dynamic";
 

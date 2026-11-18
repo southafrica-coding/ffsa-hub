@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { connectRateKeyHash } from "@/lib/missio/match-token";
+import { normalizePhoneE164 } from "@/lib/phone";
 
 type Row = Record<string, unknown>;
 type Filter =
@@ -95,7 +96,7 @@ const state = vi.hoisted(() => {
           if (op.action === "insert") {
             if (table === "connect_responses" && state.uniqueFailures > 0) {
               state.uniqueFailures -= 1;
-              state.writes.push({ client: "admin", table, op: "insert", payload: op.payload });
+              state.writes.push({ table, op: "insert", payload: op.payload });
               return {
                 data: null,
                 error: {
@@ -110,9 +111,7 @@ const state = vi.hoisted(() => {
             const inserted = payloads.map((payload) => {
               const row: Row = { id: payload.id ?? `${table}-${++state.seq}`, submitted_at: new Date().toISOString(), ...payload };
               if (table === "connect_responses" && row.phone_e164 == null && typeof row.phone === "string") {
-                const digits = row.phone.replace(/\D/g, "");
-                if (digits.startsWith("0") && digits.length === 10) row.phone_e164 = `+27${digits.slice(1)}`;
-                else if (row.phone.startsWith("+")) row.phone_e164 = row.phone;
+                row.phone_e164 = normalizePhoneE164(row.phone);
               }
               state.tables[table].push(row);
               return row;
@@ -476,6 +475,24 @@ describe("POST /api/missio/connect", () => {
     const inserts = state.writes.filter((write) => write.table === "connect_responses" && write.op === "insert");
     expect(inserts).toHaveLength(3);
     expect((inserts[2].payload as Row[])[0].matched_contact_id).toBeNull();
+  });
+
+  it("accepts a phone only when phone.ts can parse it, and stores that E.164", async () => {
+    const dirty = await POST(card({ ...valid, phone: "270821234567" }, "203.0.113.70"));
+    expect(dirty.status).toBe(201);
+    expect(state.tables.connect_responses).toHaveLength(1);
+    expect(state.tables.connect_responses[0].phone).toBe("270821234567");
+    expect(state.tables.connect_responses[0].phone_e164).toBe(normalizePhoneE164("270821234567"));
+    const written = state.writes.find((write) => write.table === "connect_responses" && write.op === "insert");
+    const payload = Array.isArray(written?.payload) ? written?.payload[0] : written?.payload;
+    expect(payload).not.toHaveProperty("phone_e164");
+
+    const rejected = await POST(card({ ...valid, phone: "+9991234567" }, "203.0.113.71"));
+    expect(rejected.status).toBe(400);
+    const body = await rejected.json();
+    expect(body.fieldErrors.phone).toBe("Check this field and try again.");
+    expect(JSON.stringify(body)).not.toContain("+9991234567");
+    expect(state.tables.connect_responses).toHaveLength(1);
   });
 
   it("does not store the raw IP when the HMAC key is missing", async () => {
