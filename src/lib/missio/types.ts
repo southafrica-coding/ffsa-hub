@@ -157,7 +157,7 @@ export type ImportReviewStatus = "pending" | "matched" | "new" | "skipped";
 /**
  * A review row a pastor can act on. sourceLine is the sheet line number.
  * rawName is that one person's name. kind is the importer's classifier.
- * note is the parser annotation stored in missio_import_review.notes
+ * note is the parser annotation. The table column is notes, not note
  * (for example "see house 4"). The rest of the sheet line is not returned.
  */
 export type ImportReviewItem = {

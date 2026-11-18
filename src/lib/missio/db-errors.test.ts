@@ -71,16 +71,16 @@ describe("mapMissioDbError", () => {
     expect(
       mapMissioDbError({ code: "23503", message: SECRET, details: "foreign key", hint: "contacts" }).code
     ).toBe("server_error");
-    expect(mapMissioDbError({ code: "23514", message: "ended_at_check", details: SECRET }).code).toBe("server_error");
-    const started = mapMissioDbError({
+    const unmapped = mapMissioDbError({
       code: "23514",
-      message: "missio_started_at_in_future",
+      message: "ended_at_check",
       details: SECRET,
       hint: "started_at > current_date",
     });
-    expect(started).toEqual({ status: 500, code: "server_error", error: "Something went wrong." });
-    expect(JSON.stringify(started)).not.toContain("missio_started_at_in_future");
-    expect(JSON.stringify(started)).not.toContain(SECRET);
+    expect(unmapped).toEqual({ status: 500, code: "server_error", error: "Something went wrong." });
+    expect(JSON.stringify(unmapped)).not.toContain("ended_at_check");
+    expect(JSON.stringify(unmapped)).not.toContain(SECRET);
+    expect(JSON.stringify(unmapped)).not.toContain("current_date");
   });
 });
 

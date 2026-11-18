@@ -811,10 +811,8 @@ export async function endMember(
   const started = (target.started_at ?? todayIsoDate()).slice(0, 10);
   if (started > todayIsoDate()) {
     // It never began. Setting ended_at to that future date raises 23514
-    // missio_ended_at_in_future. Authenticated DELETE was revoked in
-    // 53acd953; the service role still can, and guard_house_church_member
-    // does not run on DELETE. A new insert with started_at after today
-    // raises 23514 missio_started_at_in_future and is a server_error.
+    // missio_ended_at_in_future. At 571555e9 migration 331 allows DELETE,
+    // and guard_house_church_member does not run on DELETE.
     const admin = adminClient();
     if ("error" in admin) return fail(500, "server_error", admin.error);
     const removed = await admin.client
