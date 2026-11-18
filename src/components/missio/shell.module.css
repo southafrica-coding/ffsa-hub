@@ -41,6 +41,25 @@
   color: inherit;
 }
 
+/* FFSA's global button and label rules are mono, uppercase and wide-tracked.
+   Missio uses Archivo in sentence case. */
+.shell button,
+.shell [role="button"] {
+  font-family: var(--body) !important;
+  font-weight: 600 !important;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.shell label {
+  font-family: var(--body) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--sub) !important;
+}
+
 .side {
   width: 244px;
   flex: none;

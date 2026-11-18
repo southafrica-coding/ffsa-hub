@@ -161,3 +161,278 @@
   font-size: 15px;
   line-height: 1.5;
 }
+
+/* ── Home ─────────────────────────────────────────────── */
+
+.homeGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.homeGrid > * {
+  min-width: 0;
+}
+
+@media (min-width: 1000px) {
+  .homeGrid {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: 24px;
+  }
+
+  .homeGrid .wide {
+    grid-row: span 2;
+  }
+}
+
+.page .card {
+  border-radius: var(--radius-md, 14px);
+  box-shadow: var(--shadow-1, 0 1px 2px rgba(28, 27, 23, 0.05));
+}
+
+.homeGrid .card {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.homeGrid .rowCard {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.page .cardHeading {
+  font-size: 22px;
+  line-height: 28px;
+  margin: 0;
+}
+
+.page .cardLink {
+  color: var(--link, #2f5d50);
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  margin: -12px 0;
+}
+
+.page .cardLink:hover,
+.page .cardLink:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--link, #2f5d50);
+}
+
+.go {
+  color: var(--quiet, #6e685b);
+  font-size: 18px;
+  flex: none;
+}
+
+.stats {
+  display: flex;
+  gap: 40px;
+  margin: 0;
+}
+
+.stats dd {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 560;
+  font-size: 40px;
+  line-height: 44px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.stats dt {
+  color: var(--sub, #5b574d);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.statsSmall {
+  gap: 24px;
+}
+
+.statsSmall dd {
+  font-size: 22px;
+  line-height: 26px;
+}
+
+.big {
+  font-family: var(--display);
+  font-weight: 560;
+  font-size: 56px;
+  line-height: 56px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 72px;
+}
+
+.bars span {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 3px;
+  background: var(--rule-strong, #cfc8b6);
+}
+
+.bars .barReady {
+  background: var(--olive, #4e6b4f);
+}
+
+.caption {
+  color: var(--sub, #5b574d);
+  font-size: 13px;
+  line-height: 18px;
+  margin: -6px 0 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips:empty {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chipOlive {
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
+}
+
+.chipGold {
+  background: var(--gold-soft, #f4ead2);
+  color: var(--gold-text, #7a5a17);
+}
+
+.page .notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--gold-soft, #f4ead2);
+  color: var(--ink, #1c1b17);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.page .action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--accent, #b4532e);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: auto;
+}
+
+.page .action:hover,
+.page .action:focus-visible {
+  background: var(--accent-text, #8e3d1f);
+  color: #ffffff;
+}
+
+.page .action:focus-visible,
+.page .notice:focus-visible,
+.page .cardLink:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.cardError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--bad, #a3261b);
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton span {
+  height: 14px;
+  border-radius: 6px;
+  background: var(--subtle, #eeeadf);
+}
+
+.skeleton span:nth-child(1) {
+  width: 40%;
+  height: 36px;
+}
+
+.skeleton span:nth-child(2) {
+  width: 100%;
+  height: 56px;
+}
+
+.skeleton span:nth-child(3) {
+  width: 60%;
+}
+
+@media (max-width: 767px) {
+  .homeGrid .card {
+    padding: 16px;
+  }
+
+  .stats {
+    gap: 28px;
+  }
+
+  .stats dd {
+    font-size: 32px;
+    line-height: 36px;
+  }
+
+  .statsSmall dd {
+    font-size: 20px;
+    line-height: 24px;
+  }
+
+  .page .action {
+    align-self: stretch;
+  }
+}
