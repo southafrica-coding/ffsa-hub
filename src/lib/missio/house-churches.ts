@@ -144,8 +144,14 @@ function zodFail(error: z.ZodError): Fail {
   const fieldErrors: Record<string, string> = {};
   for (const issue of error.issues) {
     const path = issue.path.map(String).join(".");
-    if (!path || fieldErrors[path]) continue;
-    Object.assign(fieldErrors, fieldError(path));
+    if (path) {
+      if (!fieldErrors[path]) Object.assign(fieldErrors, fieldError(path));
+      continue;
+    }
+    const keys = "keys" in issue && Array.isArray(issue.keys) ? issue.keys : [];
+    for (const key of keys) {
+      if (typeof key === "string" && key && !fieldErrors[key]) Object.assign(fieldErrors, fieldError(key));
+    }
   }
   const mapped = invalidInput(fieldErrors);
   return fail(mapped.status, mapped.code, mapped.error, mapped.fieldErrors);
@@ -236,12 +242,7 @@ const addMemberSchema = z
   })
   .strict();
 
-const roleSchema = z
-  .object({
-    role: z.enum(ROLES),
-    startedAt: isoDate.nullable().optional(),
-  })
-  .strict();
+const roleSchema = z.object({ role: z.enum(ROLES) }).strict();
 
 const resolveSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("link"), contactId: z.string().uuid() }).strict(),
@@ -359,7 +360,7 @@ function dbWriteError(error: { code?: string; message?: string; details?: string
   }
   const mapped = mapMissioDbError(error);
   console.error(`[missio] ${label} failed`, error.code ?? "write failed");
-  return fail(mapped.status, mapped.code, mapped.error);
+  return fail(mapped.status, mapped.code, mapped.error, mapped.fieldErrors);
 }
 
 async function loadRefs(auth: OrgAccess, contactIds: string[]): Promise<Map<string, PersonRef> | Fail> {
@@ -770,8 +771,6 @@ export async function changeMemberRole(
   if (!isUuid(contactId)) return fail(404, "not_found", "Member not found.");
   const parsed = roleSchema.safeParse(body);
   if (!parsed.success) return zodFail(parsed.error);
-  const started = parsed.data.startedAt == null ? null : startDateForWrite(parsed.data.startedAt);
-  if (started && !started.ok) return started;
 
   const house = await loadHouse(auth, scope, houseId);
   if (!house.ok) return house;
@@ -785,10 +784,7 @@ export async function changeMemberRole(
 
   const updated = await auth.supabase
     .from("house_church_members")
-    .update({
-      role: parsed.data.role,
-      ...(started ? { started_at: started.startedAt } : {}),
-    })
+    .update({ role: parsed.data.role })
     .eq("id", target.id)
     .eq("house_church_id", house.house.id)
     .select(MEMBER_COLUMNS)

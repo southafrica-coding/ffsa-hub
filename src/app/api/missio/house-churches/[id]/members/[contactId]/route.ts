@@ -4,6 +4,8 @@ import { changeMemberRole, endMember, isUuid, pastorHouseAccess, publicError } f
 import { missioRateLimit } from "@/lib/missio/limit";
 
 // PATCH  /api/missio/house-churches/:id/members/:contactId  { role }
+// Pastor UPDATE is limited to role and ended_at. This route changes role.
+// ended_at is set by DELETE.
 // DELETE /api/missio/house-churches/:id/members/:contactId
 //
 // Pastor check, then the Missio org_people check, then the membership.

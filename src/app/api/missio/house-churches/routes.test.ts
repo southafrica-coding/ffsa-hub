@@ -942,6 +942,31 @@ describe("membership writes", () => {
     expect(JSON.stringify(state.tables.org_people)).toBe(orgBefore);
   });
 
+  it("maps a future start from the database to 400 invalid_input and hides the text", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    state.constraintError = {
+      table: "house_church_members",
+      code: "23514",
+      message: "missio_started_at_in_future",
+      details: "sheet line with Grace Hopper",
+      hint: "started_at > current_date",
+    };
+    const res = await post(HOUSE_1, { contactId: ADA, role: "member" });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body).toEqual({
+      error: "Check the fields and try again.",
+      code: "invalid_input",
+      fieldErrors: { startedAt: "Check this field and try again." },
+    });
+    const text = JSON.stringify(body);
+    expect(text).not.toContain("missio_started_at_in_future");
+    expect(text).not.toContain("Grace Hopper");
+    expect(text).not.toContain("current_date");
+    expect(state.tables.house_church_members).toEqual([]);
+  });
+
   it("refuses to end a membership that starts after today and writes nothing", async () => {
     addHouse({ id: HOUSE_1, number: 3 });
     addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
@@ -1005,7 +1030,7 @@ describe("membership writes", () => {
     expect(state.tables.house_church_members[0].ended_at).toBeNull();
   });
 
-  it.each(["missio_member_not_in_org", "missio_contact_not_in_org"])(
+  it.each(["missio_member_not_in_org", "missio_contact_not_in_org", "missio_user_not_in_org"])(
     "maps 23503 %s to not_missio_person and hides database text",
     async (message) => {
       addHouse({ id: HOUSE_1, number: 3 });
