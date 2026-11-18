@@ -95,9 +95,10 @@ describe("TabBar", () => {
     const tabs = screen.getAllByRole("tab");
     expect(tabs.map((t) => t.props.accessibilityLabel)).toEqual(["Home", "Finance", "Prayer", "Tickets", "Me"]);
     expect(screen.getByRole("tab", { name: "Prayer" }).props.accessibilityHint).toBe("Tab 3 of 5");
-    // Large Dynamic Type: the label shrinks to fit its fifth of the bar rather than truncating.
+    // Large Dynamic Type: the label grows to 13pt and stops there, on one line
+    // (labels-fit tests in tab-bar.test.tsx prove 13pt fits a 360pt phone).
     const label = screen.getByText("Tickets");
-    expect(label.props.adjustsFontSizeToFit).toBe(true);
+    expect(label.props.maxFontSizeMultiplier).toBeCloseTo(13 / 11);
     expect(label.props.numberOfLines).toBe(1);
     expect(screen.getByRole("tab", { name: "Home" }).props.accessibilityState).toMatchObject({ selected: true });
     expect(screen.getByRole("tab", { name: "Me" }).props.accessibilityState).toMatchObject({ selected: false });
