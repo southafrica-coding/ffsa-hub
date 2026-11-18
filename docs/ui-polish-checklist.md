@@ -1,8 +1,10 @@
 # UI polish checklist
 
-Ten passes, in the order [koppkev](https://github.com/koppkev) uses to unslop a vibecoded page. Passes 1–6 are checkable rules for every FFSA Hub surface. Passes 7–10 are allowed only on showcase surfaces.
+Ten passes, in the order [koppkev](https://www.details.so/mcp) uses to unslop a vibecoded page. Passes 1–6 are checkable rules for an FFSA Hub surface. Passes 7–10 are allowed only on showcase surfaces.
 
-This file is grounded in what the repo already uses: the tokens in `src/app/globals.css`, the Tailwind theme in `tailwind.config.ts`, the Roboto faces loaded in `src/app/layout.tsx`, and the primitives in `src/components/ffsa/index.tsx`. Do not invent a second scale.
+This file is grounded in what the repo already uses. The FFSA skin is the tokens in `src/app/globals.css`, the Tailwind theme in `tailwind.config.ts`, the Roboto faces loaded in `src/app/layout.tsx`, and the primitives in `src/components/ffsa/index.tsx`. The Missio skin is Archivo and Fraunces from `src/components/missio/fonts.ts`, with its own spacing, radii, and pills in `src/components/missio/shell.module.css`. Do not invent a third scale, and do not mix the two skins on one screen.
+
+A pull request that does not change UI is not blocked by this checklist. Reviewers **block** a UI pull request that overflows or feels cramped at 360, 390, or 430px, or that ships without a 390px screenshot of each screen it changes.
 
 ## Where each pass is allowed
 
@@ -12,7 +14,7 @@ This file is grounded in what the repo already uses: the tokens in `src/app/glob
 | 2 Spacing on the scale | Yes | Yes |
 | 3 Confident, specific copy | Yes | Yes |
 | 4 Grid and alignment | Yes | Yes |
-| 5 One typeface family | Yes | Yes |
+| 5 One type system per skin | Yes | Yes |
 | 6 The type scale | Yes | Yes |
 | 7 Imagery that leads | No | Yes |
 | 8 Rich menus | No | Yes |
@@ -23,13 +25,18 @@ This file is grounded in what the repo already uses: the tokens in `src/app/glob
 
 Every UI pull request includes a **390px-wide screenshot** of each screen it changes.
 
-At **360, 390, and 430** CSS pixels the page does not scroll horizontally. Measure the document, not a region that is supposed to scroll on its own:
+At **360, 390, and 430** CSS pixels the screen does not scroll horizontally and the content is not cramped against the edges. The FFSA admin and portal scroll inside `[data-shell-main]` (`src/app/(admin)/layout.tsx` and `src/app/(portal)/layout.tsx`), so the document element can look fine while that pane overflows. Measure both. Overflow exists when `scrollWidth > clientWidth` on the shell pane, or when the document is wider than the viewport.
 
 ```js
-document.documentElement.scrollWidth <= window.innerWidth
+const shell = document.querySelector("[data-shell-main]");
+const shellOverflow = !!shell && shell.scrollWidth > shell.clientWidth;
+const pageOverflow = document.documentElement.scrollWidth > window.innerWidth;
+const overflows = shellOverflow || pageOverflow;
 ```
 
-A table or a week grid may scroll inside its own box. The page itself may not. Fix overflow in the screen you are editing. Do not paper over it with `overflow-x: hidden` on `body`.
+A table or a week grid may scroll inside its own box. The shell pane and the page may not. Fix overflow in the screen you are editing. Do not paper over it with `overflow-x: hidden` on `body` or on `[data-shell-main]`.
+
+Missio does not use `[data-shell-main]`. On `/missio`, apply the same comparison to the scrolling content column (the shell’s main pane) and to `document.documentElement`.
 
 Showcase surfaces are only:
 
@@ -41,7 +48,9 @@ Dense admin tables and widgets are not showcase surfaces. That includes the dash
 
 ## Colour, frame, corners
 
-The frame is the current one: black icon rail, bone module panel, white content. Colour comes from the variables on `:root` in `globals.css`.
+The org switcher re-skins the Hub per organisation. Each skin uses exactly one type system, consistently. Do not put Roboto on a Missio screen, or Archivo on an FFSA screen.
+
+**FFSA** is the black icon rail, bone module panel, and white content. Colour comes from the variables on `:root` in `globals.css`.
 
 | Token | Value | Use |
 | --- | --- | --- |
@@ -58,12 +67,12 @@ The frame is the current one: black icon rail, bone module panel, white content.
 | `--text-tertiary` | `#7C786C` | Meta |
 | `--text-quiet` | `#9A9689` | Placeholders |
 
-Missio keeps its own skin variables (`--side`, `--page`, `--panel`, `--accent` `#B4532E`) from `missioSkinVars()`. Those recolour the same frame. They do not add a second type family or a second spacing scale.
-
-- `--radius` is `0`. Every Tailwind radius token resolves to `0`. No pills, no circles, no `border-radius: 999px`.
-- Shadows are off in the Tailwind theme. Separate regions with a 1px rule, not elevation. The one exception already in the system is the org-switcher menu and shadcn popovers, which may lift. Do not add a new shadow on a table or a dashboard card.
+- FFSA `--radius` is `0`. Every Tailwind radius token resolves to `0`. No pills, no circles, no `border-radius: 999px` on an FFSA screen.
+- Shadows are off in the Tailwind theme. Separate FFSA regions with a 1px rule, not elevation. The org-switcher menu and shadcn popovers may lift. Do not add a new shadow on a table or a dashboard card.
 - At most one `.needs-you` band per screen. The masthead’s yellow tick (`.masthead-context::before`, 16×3) may sit with that band. A second yellow area is a failure.
 - The FFX logo is only for FFX schools. Everywhere else use the FF wordmark or mark in `brand/`.
+
+**Missio** keeps the skin in `missioSkinVars()` and `shell.module.css`: Archivo for text, Fraunces for titles, its own padding, corner radii, pills, and 6px gaps. Stay inside that system. Do not restyle a Missio screen onto the FFSA radius-0 / Roboto rules, and do not import a third family.
 
 ## 1. Declutter
 
@@ -72,7 +81,7 @@ A screen fails this pass if any of these are true:
 - Two mastheads, or a second large heading under the masthead that repeats the title.
 - Two needs-you bands, or a yellow band whose sentence is not backed by a count the page already loaded.
 - A progress bar with no real ratio.
-- The same fact twice (the org name in the crumb and again in a pill, a sidebar “not open” row and a card that says “Coming soon”).
+- The same fact twice (the org name in the crumb and again in a pill, a nav row and a card that repeat the same “coming next” message).
 - An icon that only restates the heading next to it.
 - Filler blocks: empty cards, lorem, “click here”, “welcome to your dashboard”, a rainbow of icon colours that is not a legend.
 - A card, badge, and sentence that all say the same status.
@@ -100,15 +109,16 @@ Named spacing, use these instead of inventing page padding:
 | KPI cell | the `.kpi` class |
 | Widget row | `px-6 py-3` (24 / 12) |
 | Dashboard grid gap | `gap-5` (20px) |
-| Missio content | `32px 32px 40px` |
-| Missio card grid | `gap: 16px`, `margin-top: 24px` |
+
+FFSA new work uses the scale above. Missio uses the spacing, radii, and 6px gaps already in `shell.module.css`. Do not “correct” a Missio screen onto the FFSA 4px scale, and do not bring a 6px Missio gap into an FFSA screen.
 
 ## 3. Copy
 
 - Sentence case for sentences, empty states, names, and button labels that are words (“Add person”, “Try again”, “Mark all read”).
 - Mastheads, section bars, mono labels, and chips are uppercase because their CSS says so (`.masthead-title`, `.section-bar-title`, `.mono-label`, `.chip`). Write the source string in sentence case anyway (“Upcoming events”, “Needs attention”). The class does the capitals.
 - Specific. Name the set and, when you have it, the number. “2 staff members are waiting on approval.” “No published events from today on.” “Potch is the main church. Johannesburg meets as Missio JHB.”
-- No filler. Banned on sight: “Coming soon”, “click here”, “simply”, “just”, “welcome to”, “oops”, “you’re all caught up”, “something went wrong” when you know what failed, exclamation marks, and a subtitle that repeats the title.
+- No filler. Banned on sight: “click here”, “simply”, “just”, “welcome to”, “oops”, “you’re all caught up”, “something went wrong” when you know what failed, exclamation marks, and a subtitle that repeats the title.
+- A **SOON** tag in the nav is allowed, sparingly, to mark a section that is coming next. A placeholder card or a placeholder page whose content is “Coming soon” is not allowed.
 - Real numbers, tabular. `td`, `th`, and `.numeral` already set `font-variant-numeric: tabular-nums`. Don’t spell a count as “a few”.
 - Voice is plain. “4 staff members are waiting on approval”, not a metaphor.
 
@@ -119,9 +129,13 @@ Named spacing, use these instead of inventing page padding:
 - A card grid has no leftover hole. Three items are one row of three, or a single column. Don’t leave a 3-column grid with two cards on the next row unless a fourth item exists.
 - Admin regions are separated with `border-ink`, `border-rule`, or `border-rule-strong`. Not a shadow, not a tinted card floating on white.
 - The dashboard grid is `lg:grid-cols-2`. A full-width widget spans both columns. Don’t nest a second grid with a different column width in the same band.
-- Square corners. If a CSS module sets `border-radius` above 0, that is a failure, including on the Missio shell.
+- Square corners on FFSA. If an FFSA CSS module sets `border-radius` above 0, that is a failure. Missio’s own radii and pills stay in `shell.module.css`.
 
-## 5. One typeface family
+## 5. One type system per org skin
+
+The org switcher re-skins the Hub. FFSA and Missio each have exactly one type system, and a screen uses the system of the org it belongs to.
+
+### FFSA
 
 Loaded in `src/app/layout.tsx` and exposed as:
 
@@ -140,9 +154,20 @@ Mono is allowed only for:
 - tooltips (`[data-slot="tooltip-content"]`)
 - a short metadata column (a date, a count label), not the name beside it
 
-Mono is not allowed for names, sentences, empty states, form fields, or Missio prose. Inputs are Roboto at 14.5px (the global input rule).
+Mono is not allowed for names, sentences, empty states, or form fields. Inputs are Roboto at 14.5px (the global input rule).
 
-Do not add Archivo, Fraunces, Inter, or a new `next/font` family on Hub admin or Missio. Bebas Neue, Anton, and Space Mono stay loaded for unmigrated public event storefronts only. Missio sets `--font-missio-body` and `--font-missio-display` to Roboto and Roboto Condensed so the portaled dialog uses the same family.
+Do not add Archivo, Fraunces, or Inter on an FFSA screen. Bebas Neue, Anton, and Space Mono stay loaded for unmigrated public event storefronts only.
+
+### Missio
+
+Loaded in `src/components/missio/fonts.ts`:
+
+| Role | Variable | Family | Where |
+| --- | --- | --- | --- |
+| Body | `--font-missio-body` | Archivo | Sentences, names, table cells, the shell |
+| Display | `--font-missio-display` | Fraunces | Titles, including the portaled dialog |
+
+Missio does not use Roboto, Roboto Condensed, or Roboto Mono for its own UI. The dialog’s scoped button rule keeps Archivo so the global FFSA button face does not leak in. Do not add a third family.
 
 ## 6. Type scale
 
@@ -165,7 +190,7 @@ Use a step from this table. Don’t pick a size between them.
 
 Not on the scale, so don’t add them: 11, 11.5, 12.5, 18, 19, 22 (except the KPI clamp floor), 38. `13.5px` exists only as the dialog-description token in `globals.css`. Don’t copy it into a new component.
 
-Headings in the admin frame are uppercase because `globals.css` sets `h1–h6` and `.masthead-title` that way. Showcase display type may stay sentence case, still in Roboto Condensed, at 40px or 48px.
+Headings in the FFSA frame are uppercase because `globals.css` sets `h1–h6` and `.masthead-title` that way. FFSA showcase display type may stay sentence case, still in Roboto Condensed, at 40px or 48px. Missio titles stay Fraunces and sentence case.
 
 ## 7–10. Showcase only
 
@@ -183,9 +208,9 @@ Do not apply these to a dashboard widget, a people table, or any other dense adm
 
 - [ ] Every new padding, margin, and gap is on the spacing scale, or is one of the named classes.
 - [ ] Every new font size is a row in the type scale.
-- [ ] The face is Roboto, Roboto Condensed, or Roboto Mono, and mono is only where section 5 allows it.
-- [ ] Copy is sentence case, specific, and free of the filler list. Numbers are real.
+- [ ] The screen uses one type system: Roboto on FFSA, Archivo and Fraunces on Missio.
+- [ ] Copy is sentence case, specific, and free of the filler list. A SOON nav tag is the only “coming next” signal. Numbers are real.
 - [ ] The screen has one masthead and at most one needs-you band.
 - [ ] Corners are square. Regions are rules, not shadows.
 - [ ] Passes 7–10 appear only on the org switcher, the Missio landing, or a public page.
-- [ ] A 390px screenshot is in the PR, and the page does not overflow horizontally at 360, 390, or 430px.
+- [ ] A 390px screenshot is in the PR. At 360, 390, and 430px, `[data-shell-main]` does not have `scrollWidth > clientWidth`, and the document is not wider than the viewport.
