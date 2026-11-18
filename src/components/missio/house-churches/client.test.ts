@@ -195,6 +195,7 @@ describe("house church fetchers", () => {
       { status: 409, code: "already_member", copy: "They’re already in this house." },
       { status: 409, code: "already_resolved", copy: "Someone else already sorted this one." },
       { status: 409, code: "membership_not_current", copy: "They’re no longer in this house." },
+      { status: 409, code: "member_left_missio", copy: "They’ve left Missio, so they can’t be changed here." },
       { status: 409, code: "ended_at_in_future", copy: "That end date is still in the future." },
       { status: 409, code: "exists_use_search", copy: "This person already exists. Open Missio People, then Add person." },
       { status: 429, code: "rate_limited", copy: "Too many attempts, try again in 12 seconds" },

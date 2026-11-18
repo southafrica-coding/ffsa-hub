@@ -272,6 +272,7 @@ describe("review queue", () => {
       { status: 409, code: "already_member", copy: "They’re already in this house." },
       { status: 409, code: "already_resolved", copy: "Someone else already sorted this one." },
       { status: 409, code: "membership_not_current", copy: "They’re no longer in this house." },
+      { status: 409, code: "member_left_missio", copy: "They’ve left Missio, so they can’t be changed here." },
       { status: 409, code: "ended_at_in_future", copy: "That end date is still in the future." },
       { status: 401, code: "unauthenticated", copy: "Sign in required", card: "401" },
       { status: 403, code: "forbidden", copy: "Pastors only", card: "403" },

@@ -53,6 +53,8 @@ export function houseErrorCopy(error: MissioApiError): string {
       return "Someone else already sorted this one.";
     case "membership_not_current":
       return "They’re no longer in this house.";
+    case "member_left_missio":
+      return "They’ve left Missio, so they can’t be changed here.";
     case "ended_at_in_future":
       return "That end date is still in the future.";
     case "exists_use_search":
