@@ -129,6 +129,9 @@ export default async function UsersPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const usersWithSignIn = (users ?? []).map((u: any) => ({
     ...u,
+    // PostgREST returns [] for a user with no roles; default anyway so a
+    // missing/null embed can never crash the table's role helpers.
+    user_roles: Array.isArray(u.user_roles) ? u.user_roles : [],
     last_sign_in_at: authSignIns.get(u.id) ?? u.last_sign_in_at ?? null,
     needs_setup: accountFlags.get(u.id)?.needsSetup ?? false,
     email_suppressed: accountFlags.get(u.id)?.emailSuppressed ?? false,
