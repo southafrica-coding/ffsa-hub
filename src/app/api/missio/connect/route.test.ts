@@ -238,7 +238,9 @@ describe("POST /api/missio/connect", () => {
       notes: "Came with a friend",
       campus: "potch",
       source: "qr",
-      matched_contact_id: JANE,
+      matched_contact_id: null,
+      match_status: "pending_confirm",
+      suggested_contact_id: JANE,
       matched_by: null,
     });
     expect(rows[0].matched_at).toBeUndefined();
@@ -350,7 +352,9 @@ describe("POST /api/missio/connect", () => {
 
     const byPhone = await POST(card({ ...valid, name: "Ann Other" }, "203.0.113.20"));
     expect(byPhone.status).toBe(201);
-    expect(state.tables.connect_responses[0].matched_contact_id).toBe(JANE);
+    expect(state.tables.connect_responses[0].matched_contact_id).toBeNull();
+    expect(state.tables.connect_responses[0].match_status).toBe("pending_confirm");
+    expect(state.tables.connect_responses[0].suggested_contact_id).toBe(JANE);
 
     state.tables.connect_responses = [];
     const byEmail = await POST(
@@ -395,6 +399,8 @@ describe("POST /api/missio/connect", () => {
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ ok: true });
     expect(state.tables.connect_responses[0].matched_contact_id).toBeNull();
+    expect(state.tables.connect_responses[0].match_status).toBeUndefined();
+    expect(state.tables.connect_responses[0].suggested_contact_id).toBeUndefined();
     expect(state.writes.filter((write) => write.table === "org_people")).toHaveLength(0);
     expect(state.tables.org_people.map((row) => row.contact_id)).toEqual([ANN]);
   });
@@ -446,7 +452,6 @@ describe("POST /api/missio/connect", () => {
 
   it("retries a matched insert once, then stores the card unmatched", async () => {
     state.tables.contacts.push({ id: JANE, first_name: "Jane", last_name: "Doe" });
-    state.tables.contact_phones.push({ contact_id: JANE, phone_normalized: "+27821234567" });
     state.tables.org_people.push({ id: "org-jane", org_id: MISSIO, contact_id: JANE });
 
     state.uniqueFailures = 1;

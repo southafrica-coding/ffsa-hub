@@ -198,8 +198,9 @@ export type FollowupSource = "contact" | "connect_response";
  * stage is the effective stage. People with no follow-up row yet are "new" and followupId is null.
  * phone and email follow FOLLOWUP_LIST_INCLUDES_CONTACT_PII in follow-up.ts.
  * A phone-only card that is waiting on a pastor keeps an r_ key.
- * needsConfirm is false until Hub Data names the pending columns.
- * suggestedContact is a display name and nothing else.
+ * needsConfirm is true when connect_responses.match_status is pending_confirm.
+ * suggestedContact is the contact id and a display name. No phone and no email.
+ * The list view does not include match_status, so the card row supplies it.
  */
 export type FollowupPerson = {
   key: string;
@@ -217,7 +218,7 @@ export type FollowupPerson = {
   assignedLeader: PersonRef | null;
   submittedAt: string | null;
   needsConfirm: boolean;
-  suggestedContact: { displayName: string } | null;
+  suggestedContact: { contactId: string; displayName: string } | null;
 };
 
 export type FollowupListResponse = {

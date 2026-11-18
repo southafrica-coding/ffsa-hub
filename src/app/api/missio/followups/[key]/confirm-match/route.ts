@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { missioRateLimit } from "@/lib/missio/limit";
 import { confirmPendingMatch, pastorFollowupAccess } from "@/lib/missio/follow-up";
 
-// POST /api/missio/follow-up/:key/confirm-match
+// POST /api/missio/followups/:key/confirm-match
 //
-// r_ keys only. Empty body. Confirms a phone-only card through
-// link_missio_connect_match after the pastor guard. The column and
-// argument names are not filled in yet, so this does not call the RPC
-// until PENDING_MATCH is set. The response body is not final.
+// r_ keys in match_status pending_confirm. Empty body.
+// Sets matched_contact_id as the service role so the trigger
+// link_missio_connect_match() runs. That function takes no arguments
+// and reads auth.uid() for changed_by, so the pastor id is not passed.
+// There is no schema support for rejecting a suggestion.
 
 export const dynamic = "force-dynamic";
 

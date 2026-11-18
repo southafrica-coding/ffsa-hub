@@ -14,8 +14,9 @@ import type { ConnectVisitType } from "@/lib/missio/types";
 //
 // A match sets matched_contact_id only for a contact who already has a
 // Missio org_people row. An FFSA-wide contact is left unmatched.
-// A phone-only match will stop setting matched_contact_id once
-// PENDING_MATCH names the pending columns. Until then it still attaches.
+// A phone-only match writes match_status pending_confirm and
+// suggested_contact_id, and leaves matched_contact_id null.
+// Email and name matches still set matched_contact_id.
 // matched_by stays null. Matching never creates org_people and never fails
 // the submit.
 // The response is always { ok: true } — no ids, no contact fields.
@@ -229,8 +230,7 @@ async function missioContactIds(admin: Client, orgId: string, ids: string[]): Pr
  * Zero Missio rows, or more than one, stops the search. It does not
  * fall through to the next step, and it does not keep an FFSA-wide id.
  * A lookup error is "no match".
- * The `by` field is how a phone-only match stays unattached once
- * PENDING_MATCH is filled in. Email and name matches still attach.
+ * Phone matches are pending_confirm. Email and name matches attach.
  */
 async function matchContact(
   admin: Client,

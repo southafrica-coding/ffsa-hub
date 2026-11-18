@@ -302,7 +302,7 @@ const { PATCH: patchStage } = await import("./[key]/stage/route");
 const { PATCH: patchLeader } = await import("./[key]/leader/route");
 const { GET: getTimeline, POST: postTimeline } = await import("./[key]/timeline/route");
 const { POST: postContact } = await import("./[key]/contact/route");
-const { POST: postConfirm } = await import("./[key]/confirm-match/route");
+const { POST: postConfirm } = await import("../followups/[key]/confirm-match/route");
 
 function reset() {
   state.userId = PASTOR;
@@ -527,6 +527,18 @@ describe("missio follow-up", () => {
     });
     expect(card.key).toBe(`r_${CARD}`);
     expect(card.suggestedContact).toBeNull();
+
+    const pending = state.tables.connect_responses.find((row) => row.id === CARD);
+    if (pending) {
+      pending.match_status = "pending_confirm";
+      pending.suggested_contact_id = GRACE;
+    }
+    const listed = await listPeople(new Request("https://hub.test/api/missio/follow-up"));
+    const pendingCard = (await listed.json()).people.find((person: { key: string }) => person.key === `r_${CARD}`);
+    expect(pendingCard.needsConfirm).toBe(true);
+    expect(pendingCard.suggestedContact).toEqual({ contactId: GRACE, displayName: "Grace Pastor" });
+    expect(Object.keys(pendingCard.suggestedContact)).toEqual(["contactId", "displayName"]);
+    expect(JSON.stringify(pendingCard.suggestedContact)).not.toContain("@");
     expect(card.phone).not.toBe("+27333333333");
 
     const contacted = await listPeople(new Request("https://hub.test/api/missio/follow-up?stage=contacted"));
@@ -539,28 +551,63 @@ describe("missio follow-up", () => {
     expect((await byAda.json()).people.map((person: { key: string }) => person.key)).toEqual([`c_${VEE}`]);
   });
 
-  it("does not confirm a match until the pending columns are named", async () => {
-    state.rpcCalls = [];
-    state.reads = [];
+  it("confirms a pending card by setting matched_contact_id, and refuses anything else", async () => {
     const contactKey = await postConfirm(
-      new Request("https://hub.test/api/missio/follow-up", { method: "POST", body: "" }),
+      new Request("https://hub.test/api/missio/followups", { method: "POST", body: "" }),
       ctx(`c_${VEE}`)
     );
     expect(contactKey.status).toBe(400);
     expect(await contactKey.json()).toEqual({ error: "Check the fields and try again.", code: "invalid_input" });
 
-    const pending = await postConfirm(
-      new Request("https://hub.test/api/missio/follow-up", { method: "POST", body: "" }),
+    state.writes = [];
+    state.reads = [];
+    const settled = await postConfirm(
+      new Request("https://hub.test/api/missio/followups", { method: "POST", body: "" }),
       ctx(`r_${CARD}`)
     );
-    expect(pending.status).toBe(500);
-    const body = await pending.json();
-    expect(body).toEqual({ error: "Something went wrong.", code: "server_error" });
-    expect(JSON.stringify(body)).not.toContain("link_missio_connect_match");
-    expect(JSON.stringify(body)).not.toContain(CARD);
+    expect(settled.status).toBe(409);
+    expect(await settled.json()).toEqual({ error: "This row is already resolved.", code: "already_resolved" });
+    expect(state.writes.filter((write) => write.table === "connect_responses")).toEqual([]);
+
+    const card = state.tables.connect_responses.find((row) => row.id === CARD);
+    if (card) {
+      card.match_status = "pending_confirm";
+      card.suggested_contact_id = OUTSIDE;
+    }
+    state.writes = [];
+    state.reads = [];
+    const outside = await postConfirm(
+      new Request("https://hub.test/api/missio/followups", { method: "POST", body: "" }),
+      ctx(`r_${CARD}`)
+    );
+    expect(outside.status).toBe(400);
+    const outsideBody = await outside.json();
+    expect(outsideBody).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+    expect(JSON.stringify(outsideBody)).not.toContain("Olivia");
+    expect(state.reads.filter((read) => read.table === "contacts" || read.client === "admin")).toEqual([]);
+    expect(state.writes.filter((write) => write.table === "connect_responses")).toEqual([]);
+
+    if (card) card.suggested_contact_id = GRACE;
+    state.writes = [];
+    const confirmed = await postConfirm(
+      new Request("https://hub.test/api/missio/followups", { method: "POST", body: "" }),
+      ctx(`r_${CARD}`)
+    );
+    expect(confirmed.status).toBe(200);
+    expect(await confirmed.json()).toEqual({ ok: true });
+    const update = state.writes.find((write) => write.table === "connect_responses" && write.op === "update");
+    expect(update).toMatchObject({
+      client: "admin",
+      payload: { matched_contact_id: GRACE },
+    });
+    expect(update?.filters).toEqual(
+      expect.arrayContaining([
+        { type: "eq", col: "match_status", val: "pending_confirm" },
+        { type: "eq", col: "suggested_contact_id", val: GRACE },
+      ])
+    );
     expect(state.rpcCalls.filter((call) => call.fn === "link_missio_connect_match")).toEqual([]);
-    expect(state.reads.filter((read) => read.client === "admin")).toEqual([]);
-    expect(state.writes).toEqual([]);
+    expect(Object.keys((update?.payload ?? {}) as object)).toEqual(["matched_contact_id"]);
   });
 
   it("lists only current house leaders and Missio pastors who already have a person row", async () => {
@@ -762,6 +809,25 @@ describe("missio follow-up", () => {
       by: null,
       at: "2026-11-02T10:00:00.000Z",
     });
+
+    state.tables.missio_followup_stage_history.push({
+      id: "hist-card",
+      followup_id: FOLLOW,
+      from_stage: null,
+      to_stage: null,
+      changed_by: PASTOR,
+      changed_at: "2026-11-02T10:05:00.000Z",
+      notes: null,
+      kind: "connect_card",
+      connect_response_id: CARD_VEE,
+    });
+    const withCard = await getTimeline(new Request("https://hub.test/api/missio/follow-up"), ctx(`c_${VEE}`));
+    const cardEntries = (await withCard.json()).entries as Array<{ id: string; kind: string; at: string }>;
+    const submitted = cardEntries.filter((entry) => entry.kind === "submitted");
+    expect(submitted).toEqual([
+      { id: `submitted_${CARD_VEE}`, kind: "submitted", at: "2026-11-02T10:05:00.000Z", fromStage: null, toStage: null, body: null, by: { displayName: "Pastor Piet" } },
+    ]);
+    expect(cardEntries.some((entry) => entry.kind === "connect_card")).toBe(false);
 
     const posted = await postTimeline(
       new Request("https://hub.test/api/missio/follow-up", {

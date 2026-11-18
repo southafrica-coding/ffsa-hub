@@ -218,8 +218,8 @@ export type MissioMemberStatusRow = {
 /**
  * Connect card and follow-up funnel.
  *
- * Shapes follow migration 332 (PR 614, head 28d61f9c03e6363a1e6c1316614e4acb45ee5481),
- * stacked on 331 at 53acd953. That migration is not applied here. Do not add
+ * Shapes follow migration 332 (PR 614, head 252a067d4a0a0fd923c2ef4cb106ca5d307dda19),
+ * stacked on 331 at c587e497. That migration is not applied here. Do not add
  * these tables to src/types/database.ts by hand.
  *
  * RLS is has_org_role('missio', ARRAY['pastor']) plus the missio org id.
@@ -227,10 +227,14 @@ export type MissioMemberStatusRow = {
  * does not pass. Public QR rows are service-role inserts (source qr). Pastors
  * may insert only source manual. There is no anon policy.
  *
- * AFTER INSERT, attach_missio_connect_response takes an advisory lock
- * and attaches the card to one open follow-up, or creates that row.
- * The app does not insert the follow-up itself. Joining a house does not
- * create one either. record_missio_followup_stage() writes kind stage_change
+ * AFTER INSERT, attach_missio_connect_response takes an advisory lock.
+ * An explicit matched_contact_id attaches or creates the follow-up and
+ * writes kind connect_card. A phone that already points at a contact is
+ * pending_confirm (suggested_contact_id) and writes no follow-up. No match
+ * creates a new follow-up. The app does not insert the follow-up itself.
+ * link_missio_connect_match() is an AFTER UPDATE OF matched_contact_id
+ * trigger with no arguments. Joining a house does not create a follow-up.
+ * record_missio_followup_stage() writes kind stage_change
  * (including on insert). The attach trigger writes kind connect_card.
  * Pastors insert kind note only. A service-role note sets changed_by to
  * the pastor. The pin trigger overwrites it when auth.uid() is set.
@@ -284,6 +288,10 @@ export type ConnectResponseRow = {
   /** DEFAULT 'potch'. CHECK (campus IN ('potch', 'jhb')). */
   campus: OrgCampus;
   matched_contact_id: string | null;
+  /** unmatched | pending_confirm | confirmed. Default unmatched. */
+  match_status: "unmatched" | "pending_confirm" | "confirmed";
+  /** Set only while match_status is pending_confirm. Not the link. */
+  suggested_contact_id: string | null;
   matched_by: string | null;
   matched_at: string | null;
   source: ConnectSource;
