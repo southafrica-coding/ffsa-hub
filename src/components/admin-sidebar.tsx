@@ -19,7 +19,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { LogOut, Menu, KeyRound, RefreshCw, Briefcase, User, Settings } from "lucide-react";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { OrgSwitcherMount } from "@/components/missio/org-switcher-mount";
 import {
   ADMIN_MODULES,
@@ -225,7 +225,7 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
     : getVisiblePortalTabs().map((t) => ({ ...t, icon: t.icon }));
 
   return (
-    <>
+    <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
       <Rail area={area} setArea={setArea} initials={initials || "·"} />
       <div className="hidden md:flex">
         <ModulePanel
@@ -244,40 +244,40 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
           <Image src="/brand/ff-wordmark-white.png" alt="Fire & Fragrance" width={120} height={14}
                  style={{ objectFit: "contain" }} priority />
         </span>
-        <button onClick={() => setMobileOpen(true)} aria-label="Open menu" className="flex h-11 w-11 items-center justify-center text-white">
-          <Menu className="h-5 w-5" />
-        </button>
+        <SheetTrigger asChild>
+          <button type="button" aria-label="Open menu" className="flex h-11 w-11 items-center justify-center text-white">
+            <Menu className="h-5 w-5" />
+          </button>
+        </SheetTrigger>
       </div>
 
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" data-shell-panel className="w-[280px] border-r border-ink bg-bone p-0">
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <div className="flex h-full flex-col">
-            {/* pr-14 keeps System clear of the sheet's close button. */}
-            <div className="flex gap-1 bg-ink p-2 pr-14">
-              {AREAS.map((a) => (
-                <button key={a.id} onClick={() => setArea(a.id)}
-                  className={cn(
-                    "flex-1 py-2.5 font-mono text-[9px] font-bold uppercase tracking-[0.14em]",
-                    a.id === area ? "bg-yellow text-ink" : "text-[#8E8A7C]"
-                  )}>
-                  {a.label}
-                </button>
-              ))}
-            </div>
-            <ModulePanel
-              area={area}
-              modules={modules}
-              pathname={pathname}
-              onNavClick={() => setMobileOpen(false)}
-              menuLoadFailed={menuLoadFailed}
-              onRefresh={() => router.refresh()}
-              inDrawer
-              initials={initials}
-            />
+      <SheetContent side="left" data-shell-panel aria-describedby={undefined} className="w-[280px] border-r border-ink bg-bone p-0">
+        <SheetTitle className="sr-only">Navigation</SheetTitle>
+        <div className="flex h-full flex-col">
+          {/* pr-14 keeps System clear of the sheet's close button. */}
+          <div className="flex gap-1 bg-ink p-2 pr-14">
+            {AREAS.map((a) => (
+              <button key={a.id} onClick={() => setArea(a.id)}
+                className={cn(
+                  "flex-1 py-2.5 font-mono text-[9px] font-bold uppercase tracking-[0.14em]",
+                  a.id === area ? "bg-yellow text-ink" : "text-[#8E8A7C]"
+                )}>
+                {a.label}
+              </button>
+            ))}
           </div>
-        </SheetContent>
-      </Sheet>
-    </>
+          <ModulePanel
+            area={area}
+            modules={modules}
+            pathname={pathname}
+            onNavClick={() => setMobileOpen(false)}
+            menuLoadFailed={menuLoadFailed}
+            onRefresh={() => router.refresh()}
+            inDrawer
+            initials={initials}
+          />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
