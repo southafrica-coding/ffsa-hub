@@ -270,12 +270,24 @@ BEGIN
       USING ERRCODE = '23503';
   END IF;
 
-  IF auth.uid() IS NOT NULL THEN
-    NEW.resolved_by := auth.uid();
-  END IF;
+  -- Sending a row back to pending must not keep the previous
+  -- resolver. releaseReview does this, and the pin below would
+  -- otherwise write auth.uid() and now() straight back.
+  IF NEW.status = 'pending' THEN
+    NEW.resolved_by := NULL;
+    NEW.resolved_at := NULL;
+  ELSE
+    IF auth.uid() IS NOT NULL THEN
+      NEW.resolved_by := auth.uid();
+    END IF;
 
-  IF v_at_changed OR v_contact_set THEN
-    NEW.resolved_at := now();
+    IF NEW.status IN ('matched', 'new', 'skipped')
+       AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM NEW.status)
+    THEN
+      NEW.resolved_at := now();
+    ELSIF v_at_changed OR v_contact_set THEN
+      NEW.resolved_at := now();
+    END IF;
   END IF;
 
   RETURN NEW;
@@ -285,7 +297,7 @@ $$;
 REVOKE ALL ON FUNCTION public.guard_missio_import_review_resolve() FROM PUBLIC, anon, authenticated;
 
 COMMENT ON FUNCTION public.guard_missio_import_review_resolve() IS
-  'BEFORE INSERT OR UPDATE, every role. 23503 missio_resolve_not_allowed when a newly set resolved_contact_id is neither in candidate_contact_ids nor in org_people for the row org. When auth.uid() is set, resolved_by is overwritten with it; a null auth.uid() keeps the supplied value. resolved_at becomes now() when it changes or when a contact is resolved.';
+  'BEFORE INSERT OR UPDATE, every role. 23503 missio_resolve_not_allowed when a newly set resolved_contact_id is neither in candidate_contact_ids nor in org_people for the row org. status pending clears resolved_by and resolved_at for every role, including service role. A transition to matched, new, or skipped sets resolved_at to now(). When auth.uid() is set, resolved_by is overwritten with it on those statuses; a null auth.uid() keeps the supplied value.';
 
 DROP TRIGGER IF EXISTS trg_missio_import_review_guard_resolve ON public.missio_import_review;
 CREATE TRIGGER trg_missio_import_review_guard_resolve

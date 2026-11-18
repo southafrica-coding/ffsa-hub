@@ -980,6 +980,60 @@ SELECT pg_temp.expect('resolve stuck, and updated_at moved',
     WHERE raw_name = 'Ada Fixture'
   $$),
   'matched/c2222222-2222-2222-2222-222222222222/Same person/true/true/true');
+SELECT pg_temp.expect('pastor can send a resolved row back to pending',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.missio_import_review
+       SET status = 'pending',
+           resolved_by = 'a1111111-1111-1111-1111-111111111111',
+           resolved_at = now()
+     WHERE raw_name = 'Ada Fixture'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('pending clears resolved_by and resolved_at',
+  (SELECT status || '/' || (resolved_by IS NULL)::text || '/' || (resolved_at IS NULL)::text
+     FROM public.missio_import_review
+    WHERE raw_name = 'Ada Fixture'),
+  'pending/true/true');
+SELECT pg_temp.expect('pastor transition to new pins the resolver',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.missio_import_review
+       SET status = 'new',
+           resolved_by = 'a4444444-4444-4444-4444-444444444444'
+     WHERE raw_name = 'Ada Fixture'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('new status kept the pin and stamped resolved_at',
+  (SELECT status || '/' || resolved_by::text || '/' || (resolved_at IS NOT NULL)::text
+     FROM public.missio_import_review
+    WHERE raw_name = 'Ada Fixture'),
+  'new/a1111111-1111-1111-1111-111111111111/true');
+SELECT pg_temp.expect('service role skipped keeps the supplied resolver',
+  pg_temp.exec('service', $$
+    UPDATE public.missio_import_review
+       SET status = 'skipped',
+           resolved_by = 'a4444444-4444-4444-4444-444444444444'
+     WHERE raw_name = 'Ada Fixture'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('skipped kept resolved_by and stamped resolved_at',
+  (SELECT status || '/' || resolved_by::text || '/' || (resolved_at::date = current_date)::text
+     FROM public.missio_import_review
+    WHERE raw_name = 'Ada Fixture'),
+  'skipped/a4444444-4444-4444-4444-444444444444/true');
+SELECT pg_temp.expect('service role pending clears the resolver too',
+  pg_temp.exec('service', $$
+    UPDATE public.missio_import_review
+       SET status = 'pending',
+           resolved_by = 'a4444444-4444-4444-4444-444444444444',
+           resolved_at = now()
+     WHERE raw_name = 'Ada Fixture'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('service role pending left both resolver fields null',
+  (SELECT status || '/' || (resolved_by IS NULL)::text || '/' || (resolved_at IS NULL)::text
+     FROM public.missio_import_review
+    WHERE raw_name = 'Ada Fixture'),
+  'pending/true/true');
 SELECT pg_temp.expect('pastor cannot rewrite the sheet name',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     UPDATE public.missio_import_review
