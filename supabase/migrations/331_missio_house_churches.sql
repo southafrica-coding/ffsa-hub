@@ -135,6 +135,11 @@ AS $$
 DECLARE
   v_org uuid;
 BEGIN
+  IF NEW.started_at > current_date THEN
+    RAISE EXCEPTION 'missio_started_at_in_future'
+      USING ERRCODE = '23514';
+  END IF;
+
   IF NEW.ended_at IS NOT NULL AND NEW.ended_at > current_date THEN
     RAISE EXCEPTION 'missio_ended_at_in_future'
       USING ERRCODE = '23514';
@@ -165,7 +170,7 @@ $$;
 REVOKE ALL ON FUNCTION public.guard_house_church_member() FROM PUBLIC, anon, authenticated;
 
 COMMENT ON FUNCTION public.guard_house_church_member() IS
-  'BEFORE INSERT OR UPDATE, every role. 23503 missio_member_not_in_org when the contact is not in org_people for the house org. 23514 missio_ended_at_in_future when ended_at is after today. Pins created_by to auth.uid() when that is set; a null auth.uid() (service role) keeps the supplied value. Does not run on DELETE.';
+  'BEFORE INSERT OR UPDATE, every role. 23503 missio_member_not_in_org when the contact is not in org_people for the house org. 23514 missio_started_at_in_future when started_at is after today. 23514 missio_ended_at_in_future when ended_at is after today. Pins created_by to auth.uid() when that is set; a null auth.uid() (service role) keeps the supplied value. Does not run on DELETE.';
 
 DROP TRIGGER IF EXISTS trg_house_church_member_end_not_future ON public.house_church_members;
 DROP TRIGGER IF EXISTS trg_house_church_member_pin_created_by ON public.house_church_members;
@@ -174,7 +179,7 @@ DROP FUNCTION IF EXISTS public.pin_house_church_member_created_by();
 
 DROP TRIGGER IF EXISTS trg_house_church_member_guard ON public.house_church_members;
 CREATE TRIGGER trg_house_church_member_guard
-  BEFORE INSERT OR UPDATE OF contact_id, house_church_id, ended_at, created_by
+  BEFORE INSERT OR UPDATE OF contact_id, house_church_id, started_at, ended_at, created_by
   ON public.house_church_members
   FOR EACH ROW EXECUTE FUNCTION public.guard_house_church_member();
 
@@ -373,8 +378,9 @@ REVOKE ALL ON TABLE public.house_church_members FROM PUBLIC, anon, authenticated
 REVOKE ALL ON TABLE public.missio_import_review FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.missio_member_status FROM PUBLIC, anon, authenticated;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.house_churches TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.house_church_members TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.house_churches TO authenticated;
+GRANT SELECT, INSERT ON TABLE public.house_church_members TO authenticated;
+GRANT UPDATE (role, ended_at) ON TABLE public.house_church_members TO authenticated;
 GRANT SELECT ON TABLE public.missio_import_review TO authenticated;
 GRANT UPDATE (
   status,
@@ -426,14 +432,6 @@ CREATE POLICY "Pastors can update house churches"
   );
 
 DROP POLICY IF EXISTS "Pastors can delete house churches" ON public.house_churches;
-CREATE POLICY "Pastors can delete house churches"
-  ON public.house_churches
-  FOR DELETE
-  TO authenticated
-  USING (
-    (SELECT public.has_org_role('missio', ARRAY['pastor']))
-    AND org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
-  );
 
 -- house_church_members: pastors, via the house church's org.
 DROP POLICY IF EXISTS "Pastors can read house church members" ON public.house_church_members;
@@ -503,19 +501,6 @@ CREATE POLICY "Pastors can update house church members"
   );
 
 DROP POLICY IF EXISTS "Pastors can delete house church members" ON public.house_church_members;
-CREATE POLICY "Pastors can delete house church members"
-  ON public.house_church_members
-  FOR DELETE
-  TO authenticated
-  USING (
-    (SELECT public.has_org_role('missio', ARRAY['pastor']))
-    AND EXISTS (
-      SELECT 1
-      FROM public.house_churches hc
-      WHERE hc.id = house_church_id
-        AND hc.org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
-    )
-  );
 
 -- missio_import_review: pastors can read and resolve. No insert
 -- policy and no delete policy. Column grants block the rest.

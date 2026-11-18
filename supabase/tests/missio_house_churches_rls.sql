@@ -346,8 +346,15 @@ SELECT pg_temp.expect('pastor can insert a house',
     SELECT id, 21 FROM public.organisations WHERE slug = 'missio'
   $$),
   'rows=1');
-SELECT pg_temp.expect('pastor can delete the house they added',
+SELECT pg_temp.expect('pastor cannot delete a house',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    DELETE FROM public.house_churches
+    WHERE number = 21
+      AND org_id = (SELECT id FROM public.organisations WHERE slug = 'missio')
+  $$),
+  'err 42501');
+SELECT pg_temp.expect('service role can delete the extra house',
+  pg_temp.exec('service', $$
     DELETE FROM public.house_churches
     WHERE number = 21
       AND org_id = (SELECT id FROM public.organisations WHERE slug = 'missio')
@@ -421,8 +428,15 @@ SELECT pg_temp.expect('the spoofed created_by was overwritten',
       AND contact_id = 'c3333333-3333-3333-3333-333333333333'
       AND ended_at IS NULL),
   'a1111111-1111-1111-1111-111111111111');
-SELECT pg_temp.expect('pastor can remove the created_by probe',
+SELECT pg_temp.expect('pastor cannot delete a membership',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    DELETE FROM public.house_church_members
+    WHERE house_church_id = '00000000-0000-4000-8000-000000000005'
+      AND contact_id = 'c3333333-3333-3333-3333-333333333333'
+  $$),
+  'err 42501');
+SELECT pg_temp.expect('service role can delete that membership',
+  pg_temp.exec('service', $$
     DELETE FROM public.house_church_members
     WHERE house_church_id = '00000000-0000-4000-8000-000000000005'
       AND contact_id = 'c3333333-3333-3333-3333-333333333333'
@@ -438,12 +452,29 @@ SELECT pg_temp.expect('sheet role leader2 is not a role',
     )
   $$),
   'err 23514');
-SELECT pg_temp.expect('pastor can delete a member',
+SELECT pg_temp.expect('pastor soft-ends a membership instead of deleting it',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
-    DELETE FROM public.house_church_members
-    WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+    UPDATE public.house_church_members
+       SET ended_at = current_date
+     WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+       AND ended_at IS NULL
   $$),
   'rows=1');
+SELECT pg_temp.expect('pastor cannot change the contact on a membership',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.house_church_members
+       SET contact_id = 'c3333333-3333-3333-3333-333333333333'
+     WHERE contact_id = 'c2222222-2222-2222-2222-222222222222'
+  $$),
+  'err 42501');
+SELECT pg_temp.expect('pastor cannot backdate started_at',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.house_church_members
+       SET started_at = current_date - 7
+     WHERE contact_id = 'c2222222-2222-2222-2222-222222222222'
+       AND ended_at IS NULL
+  $$),
+  'err 42501');
 
 -- ── Hard wall ─────────────────────────────────────────────
 SELECT pg_temp.expect('HARD WALL admin is_admin() true and not a pastor',
@@ -495,7 +526,7 @@ SELECT pg_temp.expect('HARD WALL admin cannot delete a house',
     DELETE FROM public.house_churches
     WHERE id = '00000000-0000-4000-8000-000000000001'
   $$),
-  'rows=0');
+  'err 42501');
 SELECT pg_temp.expect('HARD WALL super_admin is_admin() true',
   pg_temp.scalar('a5555555-5555-5555-5555-555555555555',
     $$SELECT public.is_admin()::text$$),
@@ -695,8 +726,8 @@ SELECT pg_temp.expect('HARD WALL admin is_missio_member stays false',
     SELECT public.is_missio_member('c2222222-2222-2222-2222-222222222222')::text
   $$),
   'false');
-SELECT pg_temp.expect('a future start is not a current membership',
-  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+SELECT pg_temp.expect('pastor cannot store a future start date',
+  pg_temp.fail('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.house_church_members (house_church_id, contact_id, role, started_at)
     VALUES (
       '00000000-0000-4000-8000-000000000003',
@@ -705,25 +736,20 @@ SELECT pg_temp.expect('a future start is not a current membership',
       current_date + 1
     )
   $$),
-  'rows=1');
-SELECT pg_temp.expect('future start stays out of member status',
-  pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
-    SELECT (
-      SELECT count(*) FROM public.missio_member_status
-      WHERE contact_id = 'c3333333-3333-3333-3333-333333333333'
-    )::text || '/' ||
-    public.is_missio_member('c3333333-3333-3333-3333-333333333333')::text
+  '23514 missio_started_at_in_future');
+SELECT pg_temp.expect('service role cannot store a future start date',
+  pg_temp.fail('service', $$
+    INSERT INTO public.house_church_members (house_church_id, contact_id, role, started_at, created_by)
+    VALUES (
+      '00000000-0000-4000-8000-000000000003',
+      'c3333333-3333-3333-3333-333333333333',
+      'member',
+      current_date + 1,
+      'a4444444-4444-4444-4444-444444444444'
+    )
   $$),
-  '0/false');
-SELECT pg_temp.expect('service role can hard-delete a future-start membership',
-  pg_temp.exec('service', $$
-    DELETE FROM public.house_church_members
-    WHERE house_church_id = '00000000-0000-4000-8000-000000000003'
-      AND contact_id = 'c3333333-3333-3333-3333-333333333333'
-      AND started_at > current_date
-  $$),
-  'rows=1');
-SELECT pg_temp.expect('the future-start row is gone',
+  '23514 missio_started_at_in_future');
+SELECT pg_temp.expect('a rejected future start left no membership',
   (SELECT count(*)::text FROM public.house_church_members
     WHERE contact_id = 'c3333333-3333-3333-3333-333333333333'),
   '0');
@@ -1047,7 +1073,7 @@ SELECT pg_temp.expect('every house policy calls has_org_role for the missio past
         coalesce(pg_get_expr(pol.polqual, pol.polrelid), '')
           || coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), '')
       ) LIKE '%has_org_role%'),
-  '10');
+  '8');
 SELECT pg_temp.expect('import review has no insert or delete policy',
   (SELECT count(*)::text
      FROM pg_policy pol
