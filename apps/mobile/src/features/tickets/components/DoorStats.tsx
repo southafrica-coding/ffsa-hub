@@ -19,7 +19,7 @@ export function DoorStats({ stats, failed, offline }: { stats: Stats | null; fai
       style={{ flexDirection: "row", alignItems: "flex-end", gap: 12, paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: colors.text }}
     >
       <View style={{ gap: 2 }}>
-        <Text variant="label" tone="secondary">
+        <Text variant="monoLabel" tone="secondary">
           {strings.checkIn.statsLabel}
         </Text>
         <Text variant="numeral">{stats ? String(stats.checkedIn) : "–"}</Text>

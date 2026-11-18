@@ -149,7 +149,7 @@ function Body({
               accessibilityLabel={strings.a11y.bandStation(s.label, on.length ? on.map((p) => p.full_name).join(", ") : strings.practice.nobody)}
               style={{ flexDirection: "row", gap: 12, paddingVertical: 8, borderBottomWidth: hairline, borderBottomColor: colors.rule }}
             >
-              <Text variant="label" tone="secondary" style={{ minWidth: 104, maxWidth: "45%", flexShrink: 1 }}>
+              <Text variant="monoLabel" tone="secondary" style={{ minWidth: 104, maxWidth: "45%", flexShrink: 1 }}>
                 {s.label}
               </Text>
               <Text style={{ flex: 1 }}>{on.length ? on.map((p) => p.full_name).join(", ") : strings.practice.nobody}</Text>
@@ -188,7 +188,7 @@ function Body({
                   borderColor: mine ? colors.text : colors.rule,
                 }}
               >
-                <Text variant="label" tone="secondary">
+                <Text variant="monoLabel" tone="secondary">
                   {s.label}
                 </Text>
                 <Text variant={mine ? "bodyStrong" : "body"} tone={mine ? "default" : "secondary"}>
@@ -229,7 +229,7 @@ function Body({
                 borderColor: colors.text,
               })}
             >
-              <Text variant="label" tone={on ? "onInverse" : "default"}>
+              <Text variant="monoLabel" tone={on ? "onInverse" : "default"}>
                 {s.label}
               </Text>
               <Text tone={on ? "onInverse" : "positive"}>
@@ -267,7 +267,7 @@ function Body({
                     opacity: disabled ? 0.45 : 1,
                   }}
                 >
-                  <Text variant="label" tone={on ? "onInverse" : "default"}>
+                  <Text variant="monoLabel" tone={on ? "onInverse" : "default"}>
                     {strings.practice.minutes(m)}
                   </Text>
                 </Pressable>

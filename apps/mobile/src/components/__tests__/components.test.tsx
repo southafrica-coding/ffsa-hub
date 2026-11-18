@@ -18,7 +18,7 @@ describe("Text", () => {
   });
 
   it("caps label size growth but never shrinks below 11", async () => {
-    await render(<Text variant="label">Roles</Text>);
+    await render(<Text variant="monoLabel">Roles</Text>);
     const el = screen.getByText("Roles");
     expect(flat(el.props.style).fontSize).toBeGreaterThanOrEqual(11);
     expect(el.props.maxFontSizeMultiplier).toBe(2);
@@ -26,11 +26,11 @@ describe("Text", () => {
 });
 
 describe("Button", () => {
-  it("is an accessible 48dp button that fires onPress", async () => {
+  it("is an accessible 50pt button that fires onPress", async () => {
     const onPress = jest.fn();
     await render(<Button label="Sign in" onPress={onPress} />);
     const btn = screen.getByRole("button", { name: "Sign in" });
-    expect(flat(btn.props.style).minHeight).toBe(48);
+    expect(flat(btn.props.style).minHeight).toBe(50);
     await fireEvent.press(btn);
     expect(onPress).toHaveBeenCalledTimes(1);
   });
@@ -134,10 +134,10 @@ describe("Divider and Masthead", () => {
     });
   });
 
-  it("shows the yellow tick, context line and title", async () => {
+  it("Masthead (deprecated) now draws the LargeTitle: yellow tick, eyebrow and title", async () => {
     await render(<Masthead context="FFSA Hub · Home" title="Hello, Jo" />);
     // The tick is decoration: drawn, but hidden from screen readers.
-    const tick = screen.getByTestId("masthead-tick", { includeHiddenElements: true });
+    const tick = screen.getByTestId("large-title-tick", { includeHiddenElements: true });
     expect(flat(tick.props.style).backgroundColor).toBe(palette.yellow);
     expect(tick.props.accessibilityElementsHidden).toBe(true);
     expect(screen.getByRole("header", { name: "Hello, Jo" })).toBeTruthy();

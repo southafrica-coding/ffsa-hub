@@ -1,15 +1,19 @@
 import tailwindConfig, { themeColors } from "../../../tailwind.config";
 import { navigationTheme } from "../navigation";
+import { fontAssets } from "../fonts";
 import {
   bannerStyle,
   buttonStyle,
+  chipStyle,
   maxFontScale,
+  needsYouBandStyle,
   refreshControlColors,
   switchColors,
   textStyle,
+  textVariants,
   type TextVariant,
 } from "../styles";
-import { colors, fontFamily, fontSize, MIN_LABEL_SIZE, palette, radius, touch } from "../tokens";
+import { colors, fontFamily, fontSize, MIN_LABEL_SIZE, palette, radius, space, touch } from "../tokens";
 
 // WCAG 2.x relative luminance / contrast ratio.
 function luminance(hex: string) {
@@ -25,26 +29,25 @@ function contrast(a: string, b: string) {
 }
 
 describe("palette", () => {
-  it("matches the web's brand values", () => {
+  it("holds the redesign values (design-spec §2)", () => {
     expect(palette).toMatchObject({
       ink: "#0A0A0A",
-      bone: "#F4F2EA",
-      bone2: "#F1EFE7",
-      bone3: "#E7E4D9",
-      rule: "#DEDACE",
-      ruleStrong: "#C7C3B5",
+      paper: "#F4F2EA",
+      subtle: "#FBFAF7",
+      rule: "#E7E4D9",
+      ruleStrong: "#8E8A7C",
+      textSecondary: "#55524A",
+      textTertiary: "#6B675D",
       yellow: "#FFB801",
-      yellowDim: "#FFF4D9",
       green: "#3E7F2B",
-      greenText: "#2F6620",
       amber: "#8A6400",
-      amberBorder: "#B98600",
-      destructive: "#B02929",
+      destructive: "#D92D20",
       blue: "#000DE5",
+      bone: "#C5C2AE",
     });
   });
 
-  it("uses the proposed dark theme base", () => {
+  it("uses the dark theme base", () => {
     expect(colors.dark).toMatchObject({
       bg: "#0A0A0A",
       surface: "#161614",
@@ -59,6 +62,11 @@ describe("palette", () => {
       expect(colors[scheme].accent).toBe(palette.yellow);
       expect(colors[scheme].onAccent).toBe(palette.ink);
     }
+  });
+
+  it("bone is no longer a light surface", () => {
+    expect(colors.light.surface).not.toBe(palette.paper);
+    expect(Object.values(colors.light)).not.toContain(palette.paper);
   });
 });
 
@@ -112,9 +120,11 @@ describe("dark scheme: every semantic text colour on every background it sits on
     expect(contrast(c.ruleStrong, c.bg)).toBeGreaterThanOrEqual(3);
     expect(contrast(c.ruleStrong, c.surface)).toBeGreaterThanOrEqual(3);
   });
-  it("keeps the text hierarchy: text > secondary > tertiary > quiet", () => {
-    const order = [c.text, c.textSecondary, c.textTertiary, c.textQuiet].map((x) => contrast(x, c.bg));
-    expect([...order].sort((a, b) => b - a)).toEqual(order);
+  it("keeps the text hierarchy: text > secondary >= tertiary > quiet", () => {
+    const [t, s2, t3, q] = [c.text, c.textSecondary, c.textTertiary, c.textQuiet].map((x) => contrast(x, c.bg));
+    expect(t).toBeGreaterThan(s2);
+    expect(s2).toBeGreaterThanOrEqual(t3);
+    expect(t3).toBeGreaterThan(q);
   });
 });
 
@@ -126,17 +136,18 @@ describe("native controls that take colours as props", () => {
     expect(contrast(r.colors[0], r.progressBackgroundColor)).toBeGreaterThanOrEqual(3);
   });
 
-  it("light switches keep the white thumb (unchanged look)", () => {
+  it("light switches: ink when on, white thumb", () => {
     for (const value of [true, false]) {
       expect(switchColors(colors.light, "light", value)).toEqual({
-        trackColor: { false: colors.light.ruleStrong, true: colors.light.text },
+        trackColor: { false: colors.light.ruleStrong, true: palette.ink },
         ios_backgroundColor: colors.light.ruleStrong,
         thumbColor: colors.light.bg,
       });
     }
   });
 
-  it("dark switch thumbs stand out from the page and the track", () => {
+  it("dark switches are yellow when on, and the thumbs stand out from the page and the track", () => {
+    expect(switchColors(colors.dark, "dark", true).trackColor.true).toBe(palette.yellow);
     const c = colors.dark;
     const off = switchColors(c, "dark", false);
     const on = switchColors(c, "dark", true);
@@ -160,26 +171,36 @@ describe("navigation theme", () => {
   });
 });
 
-describe("contrast for large text / UI (3:1)", () => {
-  // The web's tertiary grey is 4.41:1 on white: fine for large text and
-  // decoration, not for body copy. Kept as the web has it; flagged for design.
-  it.each(["light", "dark"] as const)("%s: tertiary text on bg", (scheme) => {
-    expect(contrast(colors[scheme].textTertiary, colors[scheme].bg)).toBeGreaterThanOrEqual(3);
+describe("tertiary text is body-size safe now (redesign)", () => {
+  // Was the web's #7C786C (4.41:1, large text only). #6B675D passes AA.
+  it.each(["light", "dark"] as const)("%s: tertiary text on bg >= 4.5:1", (scheme) => {
+    expect(contrast(colors[scheme].textTertiary, colors[scheme].bg)).toBeGreaterThanOrEqual(4.5);
   });
 });
 
 describe("shape, size and type tokens", () => {
-  it("has one default radius, small, and nothing large", () => {
-    expect(radius.default).toBe(radius.sm);
-    expect(radius.sm).toBe(2);
-    expect(radius.md).toBe(4);
+  it("6pt controls, 8pt cards, nothing larger", () => {
+    expect(radius).toEqual({ none: 0, control: 6, card: 8 });
   });
 
-  it("keeps touch targets at 48 and labels at 11+", () => {
+  it("keeps touch targets at 48 (44 floor) and every size at 11+", () => {
     expect(touch.minTarget).toBe(48);
+    expect(touch.floor).toBe(44);
     expect(MIN_LABEL_SIZE).toBeGreaterThanOrEqual(11);
     for (const size of Object.values(fontSize)) expect(size).toBeGreaterThanOrEqual(11);
     expect(fontSize.body).toBe(16);
+  });
+
+  it("uses the spacing scale 4 · 8 · 12 · 16 · 24 · 32 · 48 and a 16–20 gutter", () => {
+    expect([space.xs, space.sm, space.md, space.lg, space.xl, space.xxl, space.xxxl]).toEqual([4, 8, 12, 16, 24, 32, 48]);
+    expect(space.gutter).toBeGreaterThanOrEqual(16);
+    expect(space.gutter).toBeLessThanOrEqual(20);
+  });
+
+  it("loads Roboto 400–900, Condensed 400 and Mono 500/700, and no Roboto Condensed 900", () => {
+    expect(Object.keys(fontAssets).sort()).toEqual(Object.values(fontFamily).sort());
+    expect(Object.keys(fontAssets)).not.toContain("RobotoCondensed_900Black");
+    expect(fontFamily.display).toBe("Roboto_900Black");
   });
 });
 
@@ -200,7 +221,7 @@ describe("tailwind theme mirrors the tokens", () => {
     const theme = tailwindConfig.theme!;
     expect(theme.colors).toBe(themeColors);
     expect(themeColors).not.toHaveProperty("blue");
-    expect(theme.borderRadius).toEqual({ none: "0px", sm: "2px", md: "4px", DEFAULT: "2px" });
+    expect(theme.borderRadius).toEqual({ none: "0px", control: "6px", card: "8px", DEFAULT: "6px" });
   });
 
   it("maps font families to the loaded font names", () => {
@@ -212,64 +233,127 @@ describe("tailwind theme mirrors the tokens", () => {
 });
 
 describe("component style mapping", () => {
-  const variants: TextVariant[] = ["display", "title", "numeral", "body", "bodyStrong", "caption", "label"];
+  const variants = Object.keys(textVariants) as TextVariant[];
 
-  it.each(variants)("text variant %s never goes below 11 and uses a tokened font", (v) => {
+  it.each(variants)("text variant %s never goes below 11 and uses a loaded font", (v) => {
     const s = textStyle(v, "default", colors.light);
     expect(s.fontSize).toBeGreaterThanOrEqual(11);
     expect(Object.values(fontFamily)).toContain(s.fontFamily);
   });
 
-  it("display and labels are uppercase; display is condensed 900; numerals are tabular", () => {
-    expect(textStyle("display", "default", colors.light)).toMatchObject({
-      fontFamily: fontFamily.display,
-      textTransform: "uppercase",
+  it("matches the spec's type scale (design-spec §3)", () => {
+    const spec: Partial<Record<TextVariant, [string, number, number]>> = {
+      eyebrow: [fontFamily.bodyBold, 12, 16],
+      label: [fontFamily.bodySemibold, 13, 18],
+      monoLabel: [fontFamily.monoBold, 11, 16],
+      caption: [fontFamily.body, 13, 18],
+      body: [fontFamily.body, 16, 24],
+      sectionTitle: [fontFamily.bodySemibold, 15, 22],
+      rowTitle: [fontFamily.bodySemibold, 16, 24],
+      pageTitle: [fontFamily.display, 28, 34],
+      hero: [fontFamily.display, 34, 36],
+      kpi: [fontFamily.bodyMedium, 24, 32],
+      note: [fontFamily.condensed, 14, 20],
+    };
+    for (const [v, [family, size, line]] of Object.entries(spec) as [TextVariant, [string, number, number]][]) {
+      expect([v, textVariants[v].fontFamily, textVariants[v].fontSize, textVariants[v].lineHeight]).toEqual([v, family, size, line]);
+    }
+  });
+
+  it("caps only the title, hero, eyebrow and mono codes; titles are Roboto 900 at -0.01em", () => {
+    const capsVariants = variants.filter((v) => textVariants[v].textTransform === "uppercase").sort();
+    expect(capsVariants).toEqual(["display", "eyebrow", "hero", "monoLabel", "pageTitle", "title"]);
+    expect(textStyle("pageTitle", "default", colors.light)).toMatchObject({
+      fontFamily: "Roboto_900Black",
+      letterSpacing: -0.28,
     });
-    expect(textStyle("label", "default", colors.light)).toMatchObject({
-      fontFamily: fontFamily.monoBold,
-      textTransform: "uppercase",
-      fontSize: 11,
-    });
+    expect(textStyle("kpi", "default", colors.light).fontVariant).toEqual(["tabular-nums"]);
     expect(textStyle("numeral", "default", colors.light).fontVariant).toEqual(["tabular-nums"]);
   });
 
-  it("body text follows the OS font size fully", () => {
-    expect(maxFontScale.body).toBeUndefined();
+  it("legacy names still render: display = pageTitle, bodyStrong = Roboto 500", () => {
+    expect(textVariants.display).toEqual(textVariants.pageTitle);
+    expect(textVariants.bodyStrong.fontFamily).toBe(fontFamily.bodyMedium);
   });
 
-  it("maps tones to scheme colours", () => {
+  it("body text follows the OS font size fully; only display sizes are capped", () => {
+    for (const v of ["body", "caption", "label", "rowTitle", "sectionTitle", "note", "eyebrow"] as const) {
+      expect(maxFontScale[v]).toBeUndefined();
+    }
+    for (const v of ["pageTitle", "hero", "kpi"] as const) expect(maxFontScale[v]).toBeGreaterThan(1);
+  });
+
+  it("maps tones to scheme colours; eyebrow, label and note default to secondary", () => {
     expect(textStyle("body", "default", colors.dark).color).toBe(colors.dark.text);
     expect(textStyle("body", "danger", colors.light).color).toBe(palette.destructive);
     expect(textStyle("body", "onAccent", colors.dark).color).toBe(palette.ink);
+    expect(textStyle("label", "default", colors.light).color).toBe(colors.light.textSecondary);
+    expect(textStyle("eyebrow", "onAccent", colors.light).color).toBe(palette.ink);
+    expect(textStyle("caption", "bone", colors.dark).color).toBe(palette.bone);
   });
 
-  it("buttons are 48dp, use the default radius and never a shadow", () => {
-    for (const v of ["primary", "secondary", "ghost", "destructive"] as const) {
+  it("buttons are 50pt (44 small), 6pt radius, never a shadow", () => {
+    for (const v of ["primary", "secondary", "danger", "dangerFill"] as const) {
       const { container } = buttonStyle(v, colors.light, { pressed: false, disabled: false });
-      expect(container.minHeight).toBe(48);
-      expect(container.borderRadius).toBe(radius.default);
+      expect(container.minHeight).toBe(50);
+      expect(container.borderRadius).toBe(radius.control);
       expect(container).not.toHaveProperty("shadowOpacity");
       expect(container).not.toHaveProperty("elevation");
+      expect(buttonStyle(v, colors.light, { pressed: false, disabled: false }, "small").container.minHeight).toBe(44);
     }
-    expect(buttonStyle("primary", colors.light, { pressed: false, disabled: false }).container.backgroundColor).toBe(
-      palette.ink,
-    );
-    expect(buttonStyle("primary", colors.light, { pressed: false, disabled: true }).container.opacity).toBeLessThan(1);
+    for (const v of ["text", "ghost"] as const) {
+      expect(buttonStyle(v, colors.light, { pressed: false, disabled: false }).container.minHeight).toBe(44);
+    }
   });
 
-  it("the needs-you band is yellow with black text and a black border", () => {
+  it("primary is ink/white in light and yellow/black in dark", () => {
+    const light = buttonStyle("primary", colors.light, { pressed: false, disabled: false });
+    const dark = buttonStyle("primary", colors.dark, { pressed: false, disabled: false });
+    expect([light.container.backgroundColor, light.textColor]).toEqual([palette.ink, palette.white]);
+    expect([dark.container.backgroundColor, dark.textColor]).toEqual([palette.yellow, palette.ink]);
+  });
+
+  it("text buttons are underlined; legacy destructive = danger; disabled is a readable quiet block", () => {
+    expect(buttonStyle("text", colors.light, { pressed: false, disabled: false }).text.textDecorationLine).toBe("underline");
+    expect(buttonStyle("destructive", colors.light, { pressed: false, disabled: false })).toEqual(
+      buttonStyle("danger", colors.light, { pressed: false, disabled: false }),
+    );
+    const off = buttonStyle("primary", colors.light, { pressed: false, disabled: true });
+    expect(off.container.backgroundColor).toBe(colors.light.surface);
+    expect(off.textColor).toBe(colors.light.textTertiary);
+  });
+
+  it("the needs-you band is a yellow fill with black text, 8pt radius and no border", () => {
     for (const scheme of ["light", "dark"] as const) {
+      const band = needsYouBandStyle(colors[scheme]);
+      expect(band).toMatchObject({ backgroundColor: palette.yellow, borderRadius: 8 });
+      expect(band).not.toHaveProperty("borderWidth");
       const s = bannerStyle("needsYou", colors[scheme]);
-      expect(s.container.backgroundColor).toBe(palette.yellow);
-      expect(s.container.borderColor).toBe(palette.ink);
+      expect(s.container.borderWidth).toBe(0);
       expect(s.text).toBe("onAccent");
     }
   });
 
-  it("only the needs-you band uses yellow", () => {
-    for (const tone of ["info", "positive", "danger"] as const) {
+  it("banners have a full 1px border and 8pt radius; errors use the danger border; only the band uses yellow", () => {
+    for (const tone of ["info", "offline", "queued", "positive", "error", "danger"] as const) {
       const s = bannerStyle(tone, colors.light);
+      expect(s.container).toMatchObject({ borderWidth: 1, borderRadius: 8 });
       expect(JSON.stringify(s.container)).not.toContain(palette.yellow);
+    }
+    expect(bannerStyle("error", colors.light).container.borderColor).toBe(palette.destructive);
+  });
+
+  it("chips are 24pt with a 6pt radius and a currentColor border", () => {
+    for (const scheme of ["light", "dark"] as const) {
+      const c = colors[scheme];
+      for (const v of ["positive", "attention", "danger"] as const) {
+        const s = chipStyle(v, c);
+        expect(s.container.minHeight).toBe(24);
+        expect(s.container.borderRadius).toBe(6);
+        expect(s.container.borderColor).toBe(s.color);
+      }
+      expect(chipStyle("ink", c).container.backgroundColor).toBe(c.inverse);
+      expect(chipStyle("dashed", c).container.borderStyle).toBe("dashed");
     }
   });
 });

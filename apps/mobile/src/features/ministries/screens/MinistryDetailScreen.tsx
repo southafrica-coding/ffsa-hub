@@ -157,7 +157,7 @@ function Team({
         groups.map((g) => (
           <View key={g.key} style={{ marginTop: g.label ? 12 : 0 }}>
             {g.label ? (
-              <Text variant="label" tone="secondary" accessibilityRole="header" accessibilityLabel={s.groupA11y(g.label, g.rows.length)} style={{ paddingVertical: 6 }}>
+              <Text variant="monoLabel" tone="secondary" accessibilityRole="header" accessibilityLabel={s.groupA11y(g.label, g.rows.length)} style={{ paddingVertical: 6 }}>
                 {`${g.label} (${g.rows.length})`}
               </Text>
             ) : null}

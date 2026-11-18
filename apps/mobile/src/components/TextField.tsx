@@ -1,4 +1,4 @@
-import { Eye, EyeOff } from "lucide-react-native";
+import { CircleAlert, Eye, EyeOff } from "lucide-react-native";
 import { forwardRef, useState, type ComponentRef } from "react";
 import { Pressable, TextInput, View, type TextInputProps } from "react-native";
 
@@ -15,22 +15,25 @@ export type TextFieldProps = Omit<TextInputProps, "secureTextEntry"> & {
   secure?: boolean;
 };
 
-/** Labelled input with inline error. Hairline border; ink border on focus. */
+/**
+ * Label above (13/600), 48pt field, 1px strong-rule outline, 6pt radius.
+ * Focus: 2px blue (light) / yellow (dark). Error: 2px danger + icon + message.
+ */
 export const TextField = forwardRef<ComponentRef<typeof TextInput>, TextFieldProps>(function TextField(
-  { label, error, hint, secure = false, onFocus, onBlur, editable = true, ...rest },
+  { label, error, hint, secure = false, onFocus, onBlur, editable = true, multiline, ...rest },
   ref,
 ) {
   const { colors } = useTheme();
   const [focused, setFocused] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const borderColor = error ? colors.danger : focused ? colors.text : colors.ruleStrong;
+  const borderColor = error ? colors.danger : focused ? colors.focus : editable ? colors.ruleStrong : colors.rule;
+  const minHeight = multiline ? 88 : touch.minTarget;
 
   return (
     <View style={{ gap: 6 }}>
       {/* The input carries this label itself, so screen readers don't stop here twice. */}
       <Text
         variant="label"
-        tone="secondary"
         nativeID={`${label}-label`}
         accessibilityElementsHidden
         importantForAccessibility="no"
@@ -38,14 +41,15 @@ export const TextField = forwardRef<ComponentRef<typeof TextInput>, TextFieldPro
         {label}
       </Text>
       <View
+        testID="text-field-box"
         style={{
           flexDirection: "row",
-          alignItems: "center",
-          minHeight: touch.minTarget,
+          alignItems: multiline ? "flex-start" : "center",
+          minHeight,
           borderWidth: focused || error ? 2 : hairline,
           borderColor,
-          borderRadius: radius.default,
-          backgroundColor: editable ? colors.bg : colors.surface,
+          borderRadius: radius.control,
+          backgroundColor: editable ? colors.raised : colors.surface,
         }}
       >
         <TextInput
@@ -56,8 +60,10 @@ export const TextField = forwardRef<ComponentRef<typeof TextInput>, TextFieldPro
           accessibilityState={{ disabled: !editable }}
           placeholderTextColor={colors.textQuiet}
           selectionColor={colors.text}
+          cursorColor={colors.text}
           allowFontScaling
           editable={editable}
+          multiline={multiline}
           secureTextEntry={secure && !revealed}
           onFocus={(e) => {
             setFocused(true);
@@ -70,11 +76,13 @@ export const TextField = forwardRef<ComponentRef<typeof TextInput>, TextFieldPro
           {...rest}
           style={{
             flex: 1,
-            minHeight: touch.minTarget - 2,
+            minHeight: minHeight - 2,
             paddingHorizontal: 12,
+            paddingTop: multiline ? 12 : undefined,
+            textAlignVertical: multiline ? "top" : "center",
             fontFamily: fontFamily.body,
             fontSize: fontSize.body,
-            color: colors.text,
+            color: editable ? colors.text : colors.textSecondary,
           }}
         />
         {secure ? (
@@ -83,7 +91,8 @@ export const TextField = forwardRef<ComponentRef<typeof TextInput>, TextFieldPro
             accessibilityLabel={revealed ? "Hide password" : "Show password"}
             accessibilityHint={revealed ? "Hides the password again." : "Shows the password as plain text."}
             onPress={() => setRevealed((r) => !r)}
-            style={{ width: touch.minTarget, height: touch.minTarget, alignItems: "center", justifyContent: "center" }}
+            hitSlop={2}
+            style={{ width: touch.minTarget, height: touch.minTarget - 2, alignItems: "center", justifyContent: "center" }}
           >
             <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
               {revealed ? <EyeOff size={20} color={colors.textSecondary} /> : <Eye size={20} color={colors.textSecondary} />}
@@ -92,9 +101,20 @@ export const TextField = forwardRef<ComponentRef<typeof TextInput>, TextFieldPro
         ) : null}
       </View>
       {error ? (
-        <Text variant="caption" tone="danger" accessibilityLiveRegion="polite" accessibilityRole="alert">
-          {error}
-        </Text>
+        <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start" }}>
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ paddingTop: 2 }}>
+            <CircleAlert size={14} color={colors.danger} />
+          </View>
+          <Text
+            variant="caption"
+            tone="danger"
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
+            style={{ flex: 1, fontFamily: fontFamily.bodyMedium }}
+          >
+            {error}
+          </Text>
+        </View>
       ) : hint ? (
         <Text variant="caption" tone="secondary">
           {hint}

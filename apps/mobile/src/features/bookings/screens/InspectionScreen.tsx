@@ -234,7 +234,7 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
           <TextField label={t.usage} value={f.usagePurpose} onChangeText={(v) => set({ usagePurpose: v })} />
           <YesNo label={t.saLicence} hint={t.saLicenceHint} value={f.saLicenseConfirmed} onChange={(v) => set({ saLicenseConfirmed: v })} />
           <Panel testID="damage-panels">
-            <Text variant="label" accessibilityRole="header">
+            <Text variant="monoLabel" accessibilityRole="header">
               {t.damage}
             </Text>
             <Text variant="caption" tone="secondary">
@@ -250,7 +250,7 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
             ))}
           </Panel>
           <Panel>
-            <Text variant="label" accessibilityRole="header">
+            <Text variant="monoLabel" accessibilityRole="header">
               {t.inventory}
             </Text>
             {INVENTORY_ITEMS.map((i) => (
@@ -262,7 +262,7 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
         <>
           <DateTimeField mode="date" label={t.checkinDate} value={f.checkinDate} onChange={(v) => set({ checkinDate: v })} />
           <Panel>
-            <Text variant="label" accessibilityRole="header">
+            <Text variant="monoLabel" accessibilityRole="header">
               {t.condition}
             </Text>
             <CheckRow label={t.washed} checked={f.washed} onChange={(v) => set({ washed: v })} testID="washed" />

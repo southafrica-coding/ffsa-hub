@@ -384,7 +384,7 @@ export function InsuranceScreen() {
                     <View style={{ flexDirection: "row", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                       <Text variant="bodyStrong">{name}</Text>
                       {isCurrent ? (
-                        <Text variant="label" style={{ borderWidth: hairline, borderColor: colors.text, paddingHorizontal: 6 }}>
+                        <Text variant="monoLabel" style={{ borderWidth: hairline, borderColor: colors.text, paddingHorizontal: 6 }}>
                           {s.currentBadge}
                         </Text>
                       ) : null}

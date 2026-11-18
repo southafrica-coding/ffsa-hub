@@ -22,7 +22,7 @@ function DateBlock({ day }: { day: string }) {
       <Text variant="title" style={{ fontVariant: ["tabular-nums"] }}>
         {b.day}
       </Text>
-      <Text variant="label" tone="secondary">
+      <Text variant="monoLabel" tone="secondary">
         {b.mon}
       </Text>
     </View>
@@ -37,7 +37,7 @@ export function StatusTag({ status }: { status: string }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
       <Icon size={14} color={colors.textSecondary} accessibilityElementsHidden importantForAccessibility="no" />
-      <Text variant="label" tone="secondary">
+      <Text variant="monoLabel" tone="secondary">
         {label}
       </Text>
     </View>

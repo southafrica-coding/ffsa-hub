@@ -21,11 +21,11 @@ export function SectionBar({ title, meta }: { title: string; meta?: string }) {
         marginTop: 8,
       }}
     >
-      <Text variant="label" tone="onInverse">
+      <Text variant="monoLabel" tone="onInverse">
         {title}
       </Text>
       {meta ? (
-        <Text variant="label" tone="onInverse">
+        <Text variant="monoLabel" tone="onInverse">
           {meta}
         </Text>
       ) : null}
@@ -39,7 +39,7 @@ export function SavedCue({ text, hint }: { text: string; hint?: string }) {
   return (
     <View testID="saved-cue" accessible accessibilityLabel={hint ? `${text}. ${hint}` : text} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
       <View style={{ width: 8, height: 8, backgroundColor: colors.text }} />
-      <Text variant="label" tone="secondary">
+      <Text variant="monoLabel" tone="secondary">
         {text}
       </Text>
     </View>

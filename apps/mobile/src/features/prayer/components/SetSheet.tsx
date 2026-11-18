@@ -156,7 +156,7 @@ export function SetSheet({
               <Text variant="title" style={{ fontVariant: ["tabular-nums"] }}>
                 {timeRange(set.start_time, set.end_time)}
               </Text>
-              <Text variant="label" tone="secondary">
+              <Text variant="monoLabel" tone="secondary">
                 {dayLabel(set.set_date)} · {durationLabel(set.start_time, set.end_time)}
               </Text>
             </View>
@@ -278,7 +278,7 @@ function Lineup({
       >
         <View accessible accessibilityLabel={spoken} style={{ flexDirection: "row", gap: 12, alignItems: "flex-start" }}>
           <Text
-            variant={lead ? "bodyStrong" : "label"}
+            variant={lead ? "bodyStrong" : "monoLabel"}
             tone={lead ? "default" : "secondary"}
             // A floor, not a fixed width: at large text sizes the seat name
             // may take more room instead of breaking mid-word.

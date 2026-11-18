@@ -112,11 +112,11 @@ function CardButton({
         justifyContent: "center",
         borderWidth: hairline * 2,
         borderColor: fg,
-        borderRadius: radius.default,
+        borderRadius: radius.control,
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      <Text variant="label" tone={tone} style={{ fontSize: 13 }}>
+      <Text variant="monoLabel" tone={tone} style={{ fontSize: 13 }}>
         {label}
       </Text>
     </Pressable>

@@ -126,7 +126,7 @@ export default function NotificationPrefsScreen() {
                     </Text>
                   ) : null}
                   {/* State in words too, never colour alone. */}
-                  <Text variant="label" tone="secondary">
+                  <Text variant="monoLabel" tone="secondary">
                     {on ? s.on : s.off}
                   </Text>
                 </View>

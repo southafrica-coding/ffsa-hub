@@ -27,7 +27,7 @@ export function SectionBar({ label, right }: { label: string; right?: ReactNode 
         gap: 8,
       }}
     >
-      <Text variant="label" tone="onInverse" accessibilityRole="header">
+      <Text variant="monoLabel" tone="onInverse" accessibilityRole="header">
         {label}
       </Text>
       {right}
@@ -65,7 +65,7 @@ export function BarAction({
         borderColor: pressed ? colors.onInverse : "transparent",
       })}
     >
-      <Text variant="label" tone="onInverse" style={{ textDecorationLine: "underline" }}>
+      <Text variant="monoLabel" tone="onInverse" style={{ textDecorationLine: "underline" }}>
         {label}
       </Text>
     </Pressable>

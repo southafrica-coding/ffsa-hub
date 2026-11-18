@@ -89,14 +89,14 @@ export function NotificationRow({
         {when || web ? (
           <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
             {when ? (
-              <Text variant="label" tone="secondary">
+              <Text variant="monoLabel" tone="secondary">
                 {when}
               </Text>
             ) : null}
             {web ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <ExternalLink size={12} color={colors.textSecondary} />
-                <Text variant="label" tone="secondary">
+                <Text variant="monoLabel" tone="secondary">
                   {shellStrings.opensInBrowser}
                 </Text>
               </View>

@@ -68,7 +68,7 @@ export function DateTimeField({ mode, label, value, onChange, clearable = false,
   return (
     <View style={{ gap: 6 }}>
       {/* The button below says the label and the value, so this isn't read twice. */}
-      <Text variant="label" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
+      <Text variant="monoLabel" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
         {label}
       </Text>
       <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
@@ -87,7 +87,7 @@ export function DateTimeField({ mode, label, value, onChange, clearable = false,
             paddingHorizontal: 12,
             borderWidth: hairline,
             borderColor: colors.ruleStrong,
-            borderRadius: radius.default,
+            borderRadius: radius.control,
             backgroundColor: pressed ? colors.surface : colors.bg,
           })}
         >

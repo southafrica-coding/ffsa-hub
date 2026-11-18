@@ -125,7 +125,7 @@ export function GuestSearch({ door, online, busy, onCheckIn }: Props) {
                     importantForAccessibility="no-hide-descendants"
                   >
                     <Check size={16} color={colors.textSecondary} accessibilityElementsHidden importantForAccessibility="no" />
-                    <Text variant="label" tone="secondary">
+                    <Text variant="monoLabel" tone="secondary">
                       {inAt ? strings.checkIn.guestIn(inAt) : strings.status.checked_in}
                     </Text>
                   </View>

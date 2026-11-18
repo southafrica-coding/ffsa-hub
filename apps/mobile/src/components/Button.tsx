@@ -1,23 +1,29 @@
 import type { ReactNode } from "react";
-import { ActivityIndicator, Pressable, View, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
+import { ActivityIndicator, Pressable, Text as RNText, View, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 
-import { buttonStyle, type ButtonVariant } from "@/theme/styles";
+import { useReduceMotion } from "@/lib/a11y";
+import { buttonStyle, type ButtonSize, type ButtonVariant } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
-
-import { Text } from "./Text";
 
 export type ButtonProps = Omit<PressableProps, "children" | "style"> & {
   label: string;
   variant?: ButtonVariant;
+  /** "small" = 44pt (inline actions, sheets); default 50pt. */
+  size?: ButtonSize;
   loading?: boolean;
   icon?: ReactNode;
   style?: StyleProp<ViewStyle>;
 };
 
-/** 48dp minimum target, square-ish corners, no shadow. */
+/**
+ * 6pt radius, no shadow, sentence-case label. Primary is ink/white in light
+ * and yellow/black in dark. Press feedback: fill change plus a .98 scale
+ * (no scale under Reduce Motion).
+ */
 export function Button({
   label,
   variant = "primary",
+  size = "default",
   loading = false,
   disabled = false,
   icon,
@@ -26,6 +32,7 @@ export function Button({
   ...rest
 }: ButtonProps) {
   const { colors } = useTheme();
+  const reduceMotion = useReduceMotion();
   const isDisabled = Boolean(disabled) || loading;
   return (
     <Pressable
@@ -35,10 +42,14 @@ export function Button({
       disabled={isDisabled}
       hitSlop={4}
       {...rest}
-      style={({ pressed }) => [buttonStyle(variant, colors, { pressed, disabled: isDisabled }).container, style]}
+      style={({ pressed }) => [
+        buttonStyle(variant, colors, { pressed, disabled: isDisabled }, size).container,
+        pressed && !reduceMotion ? { transform: [{ scale: 0.98 }] } : null,
+        style,
+      ]}
     >
       {({ pressed }) => {
-        const s = buttonStyle(variant, colors, { pressed, disabled: isDisabled });
+        const s = buttonStyle(variant, colors, { pressed, disabled: isDisabled }, size);
         return (
           <>
             {/* The spinner and icon are decoration: the label and busy state say it all. */}
@@ -47,9 +58,9 @@ export function Button({
                 {loading ? <ActivityIndicator color={s.textColor} /> : icon}
               </View>
             ) : null}
-            <Text variant="label" tone={s.tone} style={{ fontSize: 13 }}>
+            <RNText allowFontScaling style={[s.text, { flexShrink: 1 }]}>
               {label}
-            </Text>
+            </RNText>
           </>
         );
       }}

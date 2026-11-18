@@ -117,7 +117,7 @@ function CvBody({ userId }: { userId: string }) {
             ) : (
               groupEntries(data.entries).map((g) => (
                 <View key={g.category} style={{ paddingTop: 12 }}>
-                  <Text variant="label" tone="secondary" accessibilityRole="header">
+                  <Text variant="monoLabel" tone="secondary" accessibilityRole="header">
                     {s.categories[g.category] ?? g.category}
                   </Text>
                   {g.entries.map((e) => {

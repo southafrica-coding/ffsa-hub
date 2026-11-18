@@ -51,7 +51,7 @@ export function Kpi({
       testID={testID}
       style={{ gap: 4, flexGrow: 1, flexBasis: 140, paddingVertical: 8 }}
     >
-      <Text variant="label" tone="secondary">
+      <Text variant="monoLabel" tone="secondary">
         {label}
       </Text>
       <Text variant="numeral" tone={tone} style={{ fontVariant: ["tabular-nums"] }}>
@@ -122,7 +122,7 @@ export function CycleSwitcher({
   if (cycles.length <= 1) {
     return (
       <View accessible accessibilityLabel={`${strings.cycle.label}: ${name}. ${dates}`} style={{ gap: 2 }}>
-        <Text variant="label" tone="secondary">
+        <Text variant="monoLabel" tone="secondary">
           {strings.cycle.label}
         </Text>
         <Text variant="bodyStrong">{name}</Text>
@@ -154,7 +154,7 @@ export function CycleSwitcher({
         })}
       >
         <View style={{ flex: 1, gap: 2 }}>
-          <Text variant="label" tone="secondary">
+          <Text variant="monoLabel" tone="secondary">
             {strings.cycle.label}
           </Text>
           <Text variant="bodyStrong">{name}</Text>

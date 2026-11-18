@@ -72,7 +72,7 @@ function SwitchRow({
             {description}
           </Text>
         ) : null}
-        <Text variant="label" tone="secondary">
+        <Text variant="monoLabel" tone="secondary">
           {value ? s.categories.on : s.categories.off}
         </Text>
       </View>
@@ -140,7 +140,7 @@ function CategorySwitches() {
   if (load.state === "hidden") return null;
   return (
     <View style={{ gap: 8 }}>
-      <Text variant="label" tone="secondary" accessibilityRole="header">
+      <Text variant="monoLabel" tone="secondary" accessibilityRole="header">
         {s.categories.title}
       </Text>
       {load.state === "loading" ? <SkeletonRows count={2} label={s.categories.loading} /> : null}
@@ -218,7 +218,7 @@ export function PushSettings() {
             accessibilityLabel={`${s.status.label}: ${statusText(status)}`}
             style={{ paddingVertical: 8, gap: 2 }}
           >
-            <Text variant="label" tone="secondary">
+            <Text variant="monoLabel" tone="secondary">
               {s.status.label}
             </Text>
             <Text testID="push-status">{statusText(status)}</Text>

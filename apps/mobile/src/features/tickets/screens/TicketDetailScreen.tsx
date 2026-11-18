@@ -19,7 +19,7 @@ import { strings } from "../strings";
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <View accessible accessibilityLabel={`${label}: ${value}`} style={{ gap: 2 }}>
-      <Text variant="label" tone="secondary">
+      <Text variant="monoLabel" tone="secondary">
         {label}
       </Text>
       <Text>{value}</Text>
@@ -111,7 +111,7 @@ export function TicketDetailScreen({ ticketId }: { ticketId: string }) {
           {strings.ticket.voidNote}
         </Banner>
       ) : (
-        <Text variant="label" tone="secondary" style={{ textAlign: "center" }}>
+        <Text variant="monoLabel" tone="secondary" style={{ textAlign: "center" }}>
           {strings.ticket.showAtDoor}
         </Text>
       )}

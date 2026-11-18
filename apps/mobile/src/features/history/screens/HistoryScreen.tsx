@@ -87,7 +87,7 @@ function RecordRow({ record: r, onPress }: { record: HistoryRecord; onPress: () 
         </View>
         {r.date ? (
           <View style={{ gap: 2 }}>
-            <Text variant="label" tone="secondary">
+            <Text variant="monoLabel" tone="secondary">
               {r.dateLabel}
             </Text>
             <Text variant="caption" style={{ fontVariant: ["tabular-nums"] }}>

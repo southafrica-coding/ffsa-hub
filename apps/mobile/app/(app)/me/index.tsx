@@ -63,13 +63,13 @@ export default function MeScreen() {
       {me ? (
         <View style={{ gap: 12 }} testID="profile-card">
           <View accessible accessibilityLabel={s.a11y.field(s.email, me.user.email ?? "—")} style={{ gap: 2 }}>
-            <Text variant="label" tone="secondary">
+            <Text variant="monoLabel" tone="secondary">
               {s.email}
             </Text>
             <Text selectable>{me.user.email ?? "—"}</Text>
           </View>
           <View accessible accessibilityLabel={s.a11y.field(s.roles, roles.length ? roles.join(", ") : s.noRoles)} style={{ gap: 2 }}>
-            <Text variant="label" tone="secondary">
+            <Text variant="monoLabel" tone="secondary">
               {s.roles}
             </Text>
             <Text>{roles.length ? roles.join(" · ") : s.noRoles}</Text>
@@ -144,7 +144,7 @@ export default function MeScreen() {
           accessibilityLabel={`${s.version.label}: ${version ?? s.version.unknown}`}
           style={{ paddingVertical: 12, paddingHorizontal: 4, gap: 2 }}
         >
-          <Text variant="label" tone="secondary">
+          <Text variant="monoLabel" tone="secondary">
             {s.version.label}
           </Text>
           <Text>{version ? s.version.value(version) : s.version.unknown}</Text>

@@ -355,7 +355,7 @@ function ExpenseFormView({
 
       {/* Budget line */}
       <View style={{ gap: 6 }}>
-        <Text variant="label" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
+        <Text variant="monoLabel" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
           {s.category}
         </Text>
         <Pressable

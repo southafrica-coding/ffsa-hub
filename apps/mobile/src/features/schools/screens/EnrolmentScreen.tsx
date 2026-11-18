@@ -103,7 +103,7 @@ function Body({ data, onAttendance, onTranscript }: { data: EnrolmentData; onAtt
     <>
       <View style={{ gap: 8 }}>
         <View accessible accessibilityLabel={`${s.status}: ${status.label}`} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text variant="label" tone="secondary">
+          <Text variant="monoLabel" tone="secondary">
             {s.status}
           </Text>
           <StatusTag label={status.label} tone={status.tone} testID="enrolment-status" />
@@ -126,7 +126,7 @@ function Body({ data, onAttendance, onTranscript }: { data: EnrolmentData; onAtt
           <Figure label={s.gpa} value={summary.gpa.toFixed(2)} big />
         ) : (
           <View accessible style={{ flexBasis: "100%", gap: 4 }}>
-            <Text variant="label" tone="secondary">
+            <Text variant="monoLabel" tone="secondary">
               {s.gpa}
             </Text>
             <Text tone="secondary">{s.notGraded}</Text>

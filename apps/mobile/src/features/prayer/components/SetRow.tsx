@@ -74,7 +74,7 @@ export function SetRow({
         <Text variant="bodyStrong" style={{ fontVariant: ["tabular-nums"] }}>
           {timeRange(set.start_time, set.end_time)}
         </Text>
-        <Text variant="label" tone="secondary">
+        <Text variant="monoLabel" tone="secondary">
           {durationLabel(set.start_time, set.end_time)}
         </Text>
         <View style={{ flex: 1 }} />

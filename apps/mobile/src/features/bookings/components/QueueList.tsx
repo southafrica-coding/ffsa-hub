@@ -60,7 +60,7 @@ export function QueueList({
   return (
     <View testID="bookings-queue" style={{ gap: 8 }}>
       <StoreProblemNotice problem={problem} onDismiss={() => outbox.dismissProblem()} />
-      {showTitle && items.length > 0 ? <Text variant="label" accessibilityRole="header">{q.title}</Text> : null}
+      {showTitle && items.length > 0 ? <Text variant="monoLabel" accessibilityRole="header">{q.title}</Text> : null}
       <OutboxSummary items={items} testID="bookings-queue-summary" />
       {online ? null : (
         <Text variant="caption" tone="secondary">

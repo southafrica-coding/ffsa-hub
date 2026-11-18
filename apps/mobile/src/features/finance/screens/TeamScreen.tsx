@@ -137,7 +137,7 @@ function MoneyView({
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
         <Tag>{strings.status[view.team.status] ?? view.team.status}</Tag>
         {!view.canEdit ? <Tag>{strings.team.viewOnly}</Tag> : null}
-        <Text variant="label" tone="secondary">
+        <Text variant="monoLabel" tone="secondary">
           {dateRange(view.team.start_date, view.team.end_date)}
         </Text>
       </View>
@@ -163,7 +163,7 @@ function MoneyView({
         }
         style={{ gap: 4 }}
       >
-        <Text variant="label" tone="secondary">
+        <Text variant="monoLabel" tone="secondary">
           {total.over ? strings.team.over : `${strings.team.remaining} to spend`}
         </Text>
         <Text variant="numeral" tone={total.over ? "danger" : "default"}>
@@ -285,7 +285,7 @@ function ExpenseRow({
     <Row onPress={onPress} accessibilityLabel={label} accessibilityHint="Opens the expense and its receipts" testID={`expense-row-${e.id}`}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text variant="label" tone="secondary">
+          <Text variant="monoLabel" tone="secondary">
             {e.expense_date}
           </Text>
           <Text variant="bodyStrong" numberOfLines={2}>
@@ -349,7 +349,7 @@ function MemberView({
           <View style={{ gap: 16, paddingBottom: 8 }}>
             <Masthead context={[o.program_name, o.location ?? strings.home.locationTbc, o.country].filter(Boolean).join(" · ")} title={o.team_name} />
             {stale}
-            <Text variant="label" tone="secondary">
+            <Text variant="monoLabel" tone="secondary">
               {`${dateRange(o.start_date, o.end_date)} · ${o.roster.length} ${o.roster.length === 1 ? "person" : "people"}${role ? ` · you're a ${role.toLowerCase()}` : ""}`}
             </Text>
             <SectionBar title={strings.team.whoIsGoing} meta={`${o.roster.length}`} />
@@ -364,7 +364,7 @@ function MemberView({
           <Row accessibilityLabel={`${item.name ?? "Unnamed"}, ${strings.roles[item.role] ?? item.role}`}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
               <Text style={{ flex: 1 }}>{item.name ?? "Unnamed"}</Text>
-              <Text variant="label" tone="secondary">
+              <Text variant="monoLabel" tone="secondary">
                 {strings.roles[item.role] ?? item.role}
               </Text>
             </View>

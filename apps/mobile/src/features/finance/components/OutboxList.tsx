@@ -52,7 +52,7 @@ export function OutboxList({ items, outbox }: { items: OutboxItem[]; outbox: Out
       {items.length > 0 ? (
         <View style={{ borderWidth: hairline, borderColor: colors.attentionBorder }} testID="outbox-list">
           <View style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.surface, gap: 2 }}>
-            <Text variant="label">{strings.outbox.savedNotSent}</Text>
+            <Text variant="monoLabel">{strings.outbox.savedNotSent}</Text>
             <OutboxSummary items={items} />
           </View>
           {items.map((i) => (

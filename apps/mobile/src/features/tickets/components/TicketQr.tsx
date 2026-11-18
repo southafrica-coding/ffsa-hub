@@ -28,7 +28,7 @@ export function TicketQr({ code, dimmed = false }: { code: string; dimmed?: bool
         <QRCode value={code} size={size} color={palette.ink} backgroundColor={palette.white} ecl="M" quietZone={8} />
       </View>
       <View style={{ alignItems: "center", gap: 2 }} accessible={false} importantForAccessibility="no-hide-descendants">
-        <Text variant="label" tone="secondary">
+        <Text variant="monoLabel" tone="secondary">
           {strings.ticket.codeLabel}
         </Text>
         <Text

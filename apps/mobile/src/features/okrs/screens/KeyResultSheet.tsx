@@ -106,7 +106,7 @@ export function KeyResultSheet({
     <Sheet visible title={kr.label || k.sheetTitle} onClose={onClose}>
       <View style={{ gap: 16, paddingBottom: 8 }}>
         <View style={{ gap: 8 }}>
-          <Text variant="label" tone="secondary">
+          <Text variant="monoLabel" tone="secondary">
             {objectiveTitle}
           </Text>
           <Text>{kr.description}</Text>
@@ -141,7 +141,7 @@ export function KeyResultSheet({
 
         {canEdit ? (
           <View testID="checkin-form" style={{ gap: 12, padding: 12, backgroundColor: colors.surface }}>
-            <Text variant="label" accessibilityRole="header">
+            <Text variant="monoLabel" accessibilityRole="header">
               {k.newCheckin}
             </Text>
             <Chips label={k.statusLabel} options={STATUS_OPTIONS} value={status} onChange={setStatus} disabled={busy} />
@@ -180,7 +180,7 @@ export function KeyResultSheet({
         )}
 
         <View style={{ gap: 6 }}>
-          <Text variant="label" tone="secondary" accessibilityRole="header">
+          <Text variant="monoLabel" tone="secondary" accessibilityRole="header">
             {k.notes}
           </Text>
           <Text tone={kr.notes ? "default" : "secondary"}>{kr.notes || k.noNotes}</Text>
@@ -188,7 +188,7 @@ export function KeyResultSheet({
         </View>
 
         <View style={{ gap: 8 }}>
-          <Text variant="label" tone="secondary" accessibilityRole="header">
+          <Text variant="monoLabel" tone="secondary" accessibilityRole="header">
             {k.history}
           </Text>
           {history.status === "loading" ? (

@@ -32,11 +32,11 @@ export function SectionBar({ title, meta }: { title: string; meta?: string }) {
         gap: 8,
       }}
     >
-      <Text variant="label" tone="onInverse">
+      <Text variant="monoLabel" tone="onInverse">
         {title}
       </Text>
       {meta ? (
-        <Text variant="label" tone="onInverse">
+        <Text variant="monoLabel" tone="onInverse">
           {meta}
         </Text>
       ) : null}
@@ -102,7 +102,7 @@ export function BudgetBar({ figures, currency, compact = false }: { figures: Bud
 function Figure({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "danger" }) {
   return (
     <View style={{ gap: 2 }}>
-      <Text variant="label" tone="secondary">
+      <Text variant="monoLabel" tone="secondary">
         {label}
       </Text>
       <Text variant="bodyStrong" tone={tone} style={{ fontVariant: ["tabular-nums"] }}>
@@ -119,7 +119,7 @@ export function Tag({ children, tone = "default" }: { children: string; tone?: "
   const border = { default: colors.ruleStrong, attention: colors.attentionBorder, positive: colors.positive, danger: colors.danger }[tone];
   return (
     <View style={{ borderWidth: hairline, borderColor: border, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start" }}>
-      <Text variant="label" tone={tone === "default" ? "secondary" : tone}>
+      <Text variant="monoLabel" tone={tone === "default" ? "secondary" : tone}>
         {children}
       </Text>
     </View>
@@ -190,7 +190,7 @@ export function Chips<T extends string>({
   return (
     <View style={{ gap: 6 }}>
       {/* Read on its own (iOS doesn't speak a radiogroup's label), then each radio. */}
-      <Text variant="label" tone="secondary" accessibilityRole="header">
+      <Text variant="monoLabel" tone="secondary" accessibilityRole="header">
         {label}
       </Text>
       <View accessibilityRole="radiogroup" accessibilityLabel={label} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>

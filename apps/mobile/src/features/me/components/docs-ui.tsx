@@ -142,7 +142,7 @@ export function OptionField({
   const list = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
   return (
     <View style={{ gap: 6 }}>
-      <Text variant="label" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
+      <Text variant="monoLabel" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
         {label}
       </Text>
       <Pressable
@@ -160,7 +160,7 @@ export function OptionField({
           paddingHorizontal: 12,
           borderWidth: error ? 2 : hairline,
           borderColor: error ? colors.danger : colors.ruleStrong,
-          borderRadius: radius.default,
+          borderRadius: radius.control,
           backgroundColor: pressed ? colors.surface : colors.bg,
         })}
       >
@@ -261,7 +261,7 @@ export function ToggleRow({
 export function ReadField({ label, value }: { label: string; value: string }) {
   return (
     <View accessible accessibilityLabel={`${label}: ${value}`} style={{ gap: 2 }}>
-      <Text variant="label" tone="secondary">
+      <Text variant="monoLabel" tone="secondary">
         {label}
       </Text>
       <Text>{value}</Text>
@@ -378,7 +378,7 @@ export function FileBlock({
           <FileText size={22} color={colors.text} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text variant="label" tone="secondary">
+          <Text variant="monoLabel" tone="secondary">
             {label}
           </Text>
           <Text variant="bodyStrong">{status}</Text>

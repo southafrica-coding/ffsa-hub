@@ -165,7 +165,7 @@ export function DoorScreen({ eventId, eventTitle, door: injected, queueOwner, in
 
       <Divider />
       <View style={{ gap: 8 }}>
-        <Text variant="label" tone="secondary" accessibilityRole="header">
+        <Text variant="monoLabel" tone="secondary" accessibilityRole="header">
           {strings.checkIn.typeCode}
         </Text>
         <TextField
@@ -183,7 +183,7 @@ export function DoorScreen({ eventId, eventTitle, door: injected, queueOwner, in
 
       <Divider />
       <View style={{ gap: 8 }}>
-        <Text variant="label" tone="secondary" accessibilityRole="header">
+        <Text variant="monoLabel" tone="secondary" accessibilityRole="header">
           {strings.checkIn.search}
         </Text>
         <GuestSearch door={door} online={online} busy={d.busy} onCheckIn={d.checkInCode} />

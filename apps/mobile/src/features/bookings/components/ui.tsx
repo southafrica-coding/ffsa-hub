@@ -28,7 +28,7 @@ export function StatusLine({ status }: { status: AnyStatus }) {
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Icon size={16} color={color} />
       </View>
-      <Text variant="label" tone={info.tone === "secondary" ? "secondary" : info.tone}>
+      <Text variant="monoLabel" tone={info.tone === "secondary" ? "secondary" : info.tone}>
         {info.label}
       </Text>
     </View>
@@ -70,7 +70,7 @@ export function Field({ label, value }: { label: string; value: string | null | 
   if (!value) return null;
   return (
     <View accessible accessibilityLabel={`${label}: ${value}`} style={{ gap: 2, paddingVertical: 8 }}>
-      <Text variant="label" tone="secondary">
+      <Text variant="monoLabel" tone="secondary">
         {label}
       </Text>
       <Text>{value}</Text>

@@ -53,7 +53,7 @@ export function RecordSheet({
 
           {record.details.length > 0 ? (
             <View>
-              <Text variant="label" tone="secondary" accessibilityRole="header" style={{ marginBottom: 4 }}>
+              <Text variant="monoLabel" tone="secondary" accessibilityRole="header" style={{ marginBottom: 4 }}>
                 {s.more}
               </Text>
               {record.details.map((d, i) => (

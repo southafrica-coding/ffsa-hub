@@ -19,7 +19,7 @@ export default function ReceiptViewerScreen({ uri: rawUri, title }: { uri?: stri
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["top", "bottom"]}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingLeft: 20, paddingRight: 8, gap: 8 }}>
-        <Text variant="label" tone="secondary" numberOfLines={2} style={{ flex: 1 }} accessibilityRole="header">
+        <Text variant="monoLabel" tone="secondary" numberOfLines={2} style={{ flex: 1 }} accessibilityRole="header">
           {title || strings.viewer.title}
         </Text>
         <Button label={strings.common.close} variant="ghost" onPress={() => router.back()} />

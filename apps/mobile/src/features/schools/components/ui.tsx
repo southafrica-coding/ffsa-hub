@@ -61,7 +61,7 @@ export function DateBlock({ day, mon }: { day: string; mon: string }) {
       <Text variant="bodyStrong" style={{ fontVariant: ["tabular-nums"] }}>
         {day}
       </Text>
-      <Text variant="label" tone="secondary">
+      <Text variant="monoLabel" tone="secondary">
         {mon}
       </Text>
     </View>
@@ -72,7 +72,7 @@ export function DateBlock({ day, mon }: { day: string; mon: string }) {
 export function Figure({ label, value, foot, big = false }: { label: string; value: string; foot?: string; big?: boolean }) {
   return (
     <View accessible accessibilityLabel={[label, value, foot].filter(Boolean).join(", ")} style={{ gap: 4, flexGrow: 1, flexBasis: big ? "100%" : 120 }}>
-      <Text variant="label" tone="secondary">
+      <Text variant="monoLabel" tone="secondary">
         {label}
       </Text>
       <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>

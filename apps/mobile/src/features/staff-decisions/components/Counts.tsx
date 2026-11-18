@@ -26,7 +26,7 @@ export function Counts({ total, yes, no, undecided }: { total: number; yes: numb
     >
       {cells.map(([label, value]) => (
         <View key={label} style={{ gap: 2, minWidth: 64 }}>
-          <Text variant="label" tone="secondary">
+          <Text variant="monoLabel" tone="secondary">
             {label}
           </Text>
           <Text variant="bodyStrong" style={{ fontVariant: ["tabular-nums"] }}>

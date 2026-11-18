@@ -1,6 +1,6 @@
 import { Text as RNText, type TextProps as RNTextProps } from "react-native";
 
-import { maxFontScale, textStyle, type TextTone, type TextVariant } from "@/theme/styles";
+import { HEADING_VARIANTS, maxFontScale, textStyle, type TextTone, type TextVariant } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 export type TextProps = RNTextProps & {
@@ -9,15 +9,15 @@ export type TextProps = RNTextProps & {
 };
 
 /**
- * All app text. Scales with the OS font-size setting (capped for the huge
- * display sizes). Headings get the "header" role for screen readers.
+ * All app text. Scales with the OS font-size setting (capped only for the big
+ * display sizes). Page titles get the "header" role for screen readers.
+ * `eyebrow`, `label` and `note` are secondary text unless a tone is given.
  */
 export function Text({ variant = "body", tone = "default", style, ...rest }: TextProps) {
   const { colors } = useTheme();
-  const isHeading = variant === "display" || variant === "title";
   return (
     <RNText
-      accessibilityRole={isHeading ? "header" : undefined}
+      accessibilityRole={HEADING_VARIANTS.has(variant) ? "header" : undefined}
       allowFontScaling
       maxFontSizeMultiplier={maxFontScale[variant]}
       {...rest}

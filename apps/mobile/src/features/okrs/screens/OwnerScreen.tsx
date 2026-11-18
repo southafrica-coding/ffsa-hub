@@ -136,7 +136,7 @@ function ObjectiveBlock({ objective: o, canEdit, onOpen }: { objective: Objectiv
         <View style={{ backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 10, gap: 6 }}>
           {o.description ? <Text tone="secondary">{o.description}</Text> : null}
           {o.timeline ? (
-            <Text variant="label" tone="secondary">
+            <Text variant="monoLabel" tone="secondary">
               {o.timeline}
             </Text>
           ) : null}
@@ -171,7 +171,7 @@ function KeyResultRow({ kr, canEdit, onPress }: { kr: KeyResult; canEdit: boolea
     <Row onPress={onPress} accessibilityLabel={a11y} accessibilityHint={s.krHint(canEdit)} testID={`kr-${kr.id}`}>
       <Text>
         {kr.label ? (
-          <Text variant="label" tone="secondary">
+          <Text variant="monoLabel" tone="secondary">
             {`${kr.label}  `}
           </Text>
         ) : null}

@@ -118,7 +118,7 @@ function Choice({
         </Text>
       </View>
       {checked ? (
-        <Text variant="label" tone="secondary">
+        <Text variant="monoLabel" tone="secondary">
           {s.selectedHint}
         </Text>
       ) : null}

@@ -119,8 +119,8 @@ describe("notification switches use the themed colours", () => {
     const on = await screen.findByRole("switch", { name: "Prayer Room" });
     const off = screen.getByRole("switch", { name: "Finance" });
     // Host props: trackColor.true → onTintColor, trackColor.false → tintColor, thumbColor → thumbTintColor.
-    expect(on.props).toMatchObject({ onTintColor: c.text, tintColor: c.ruleStrong });
-    expect(on.props.thumbTintColor).toBe(scheme === "dark" ? c.onInverse : c.bg);
+    expect(on.props).toMatchObject({ onTintColor: c.primary, tintColor: c.ruleStrong });
+    expect(on.props.thumbTintColor).toBe(scheme === "dark" ? c.onPrimary : c.bg);
     expect(off.props.thumbTintColor).toBe(scheme === "dark" ? c.textSecondary : c.bg);
   });
 });

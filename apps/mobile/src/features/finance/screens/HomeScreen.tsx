@@ -124,7 +124,7 @@ function TeamRow({ team, pending, onPress }: { team: HomeTeam; pending: OutboxIt
           <Text variant="title" numberOfLines={2}>
             {team.team_name}
           </Text>
-          <Text variant="label" tone="secondary">
+          <Text variant="monoLabel" tone="secondary">
             {line2}
           </Text>
         </View>

@@ -2,17 +2,18 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { KeyboardAvoidingView, Platform, ScrollView, View, type ViewStyle } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 // ── One yellow band per screen ──────────────────────────────────────────────
-// Banner tone="needsYou" registers here; a second one on the same Screen
+// NeedsYouBand (and Banner tone="needsYou") registers here; a second one on the same Screen
 // warns in development. The rule stops working if it's repeated.
 
 type BandRegistry = { register: (id: symbol) => () => void };
 
 const BandContext = createContext<BandRegistry | null>(null);
 
-/** Called by Banner tone="needsYou" while mounted. */
+/** Called by NeedsYouBand / Banner tone="needsYou" while mounted. */
 export function useRegisterNeedsYouBand(active: boolean) {
   const registry = useContext(BandContext);
   useEffect(() => {
@@ -36,6 +37,12 @@ function createBandRegistry(): BandRegistry {
   };
 }
 
+/** One-band scope for page wrappers other than Screen (LargeTitleScrollView). */
+export function NeedsYouBandScope({ children }: { children: ReactNode }) {
+  const [registry] = useState(createBandRegistry);
+  return <BandContext.Provider value={registry}>{children}</BandContext.Provider>;
+}
+
 // ── Screen ──────────────────────────────────────────────────────────────────
 
 export type ScreenProps = {
@@ -52,7 +59,7 @@ export type ScreenProps = {
 export function Screen({ children, scroll = true, keyboard = false, edges = ["top", "bottom"], contentStyle }: ScreenProps) {
   const { colors } = useTheme();
   const [registry] = useState(createBandRegistry);
-  const padding: ViewStyle = { paddingHorizontal: 20, paddingVertical: 16, gap: 16 };
+  const padding: ViewStyle = { paddingHorizontal: space.gutter, paddingVertical: space.lg, gap: space.lg };
 
   const body = scroll ? (
     <ScrollView

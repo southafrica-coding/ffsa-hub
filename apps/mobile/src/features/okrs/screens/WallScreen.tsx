@@ -153,7 +153,7 @@ function OwnerRow({ owner, onPress }: { owner: OwnerSummary; onPress: () => void
           {owner.name}
         </Text>
         {owner.retired ? (
-          <Text variant="label" tone="secondary">
+          <Text variant="monoLabel" tone="secondary">
             {s.retired}
           </Text>
         ) : null}

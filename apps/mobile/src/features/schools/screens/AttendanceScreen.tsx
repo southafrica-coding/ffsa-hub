@@ -55,7 +55,7 @@ export default function AttendanceScreen() {
           testID="summary"
           style={{ gap: 6, paddingBottom: 14, borderBottomWidth: hairline, borderBottomColor: colors.text }}
         >
-          <Text variant="label" tone="secondary">
+          <Text variant="monoLabel" tone="secondary">
             {s.present}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", gap: 12 }}>
