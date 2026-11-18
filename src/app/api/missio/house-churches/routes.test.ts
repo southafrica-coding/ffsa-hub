@@ -44,7 +44,7 @@ const state = vi.hoisted(() => {
     rpcError: null as { message: string } | null,
     tableError: null as string | null,
     failInsert: null as string | null,
-    constraintError: null as { table: string; code: string; message: string } | null,
+    constraintError: null as { table: string; code: string; message: string; details?: string; hint?: string } | null,
     adminBuilds: 0,
     ops: [] as { client: "user" | "admin"; table: string; op: Op }[],
     writes: [] as Write[],
@@ -252,7 +252,11 @@ const state = vi.hoisted(() => {
     if (state.constraintError?.table === table) {
       const constraint = state.constraintError;
       state.constraintError = null;
-      return { data: null, error: { code: constraint.code, message: constraint.message }, count: null };
+      return {
+        data: null,
+        error: { code: constraint.code, message: constraint.message, details: constraint.details, hint: constraint.hint },
+        count: null,
+      };
     }
     const payloads = Array.isArray(op.payload) ? op.payload : [op.payload ?? {}];
     const inserted: Row[] = [];
@@ -307,7 +311,11 @@ const state = vi.hoisted(() => {
     if (state.constraintError?.table === table) {
       const constraint = state.constraintError;
       state.constraintError = null;
-      return { data: null, error: { code: constraint.code, message: constraint.message }, count: null };
+      return {
+        data: null,
+        error: { code: constraint.code, message: constraint.message, details: constraint.details, hint: constraint.hint },
+        count: null,
+      };
     }
     const hits = state.tables[table].filter((row) => matches(row, op));
     const payload = (op.payload ?? {}) as Row;
@@ -946,13 +954,77 @@ describe("membership writes", () => {
       table: "house_church_members",
       code: "23514",
       message: "missio_ended_at_in_future",
+      details: "sheet line with Grace Hopper",
+      hint: "ended_at > current_date",
     };
     const res = await remove(HOUSE_1, ADA);
     expect(res.status).toBe(409);
     const body = await res.json();
-    expect(body.code).toBe("invalid_input");
+    expect(body).toEqual({ error: "That end date is after today.", code: "ended_at_in_future" });
     expect(JSON.stringify(body)).not.toContain("missio_ended_at_in_future");
+    expect(JSON.stringify(body)).not.toContain("ended_at > current_date");
+    expect(JSON.stringify(body)).not.toContain("sheet line with Grace Hopper");
     expect(state.tables.house_church_members[0].ended_at).toBeNull();
+  });
+
+  it.each(["missio_member_not_in_org", "missio_contact_not_in_org"])(
+    "maps 23503 %s to not_missio_person and hides database text",
+    async (message) => {
+      addHouse({ id: HOUSE_1, number: 3 });
+      addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+      state.constraintError = {
+        table: "house_church_members",
+        code: "23503",
+        message,
+        details: "sheet line with Grace Hopper",
+        hint: "Key (contact_id) is not in org_people",
+      };
+      const res = await post(HOUSE_1, { contactId: ADA, role: "member" });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+      const text = JSON.stringify(body);
+      expect(text).not.toContain(message);
+      expect(text).not.toContain("Grace Hopper");
+      expect(text).not.toContain("org_people");
+      expect(text).not.toContain("23503");
+    }
+  );
+
+  it("maps an unrecognised database error to server_error and hides the text", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    state.constraintError = {
+      table: "house_church_members",
+      code: "XX000",
+      message: "sheet line with Grace Hopper",
+      details: "duplicate key value violates unique constraint",
+      hint: "check the raw sheet line",
+    };
+    const res = await post(HOUSE_1, { contactId: ADA, role: "member" });
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body).toEqual({ error: "Something went wrong.", code: "server_error" });
+    const text = JSON.stringify(body);
+    expect(text).not.toContain("Grace Hopper");
+    expect(text).not.toContain("duplicate key");
+    expect(text).not.toContain("raw sheet");
+    expect(text).not.toContain("XX000");
+  });
+
+  it("returns field paths for a bad member body and not the submitted value", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    const secret = "Grace Hopper sheet note";
+    const res = await post(HOUSE_1, { contactId: secret, role: "nope" });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe("invalid_input");
+    expect(body.error).toBe("Check the fields and try again.");
+    expect(body.fields).toEqual(expect.arrayContaining(["contactId", "role"]));
+    const text = JSON.stringify(body);
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain("Invalid");
+    expect(text).not.toContain("uuid");
   });
 });
 
@@ -980,7 +1052,7 @@ describe("import review", () => {
       kind: "person",
       match_type: "multiple",
       candidate_contact_ids: ids,
-      notes: "check spelling",
+      notes: "check spelling — Grace Hopper lives next door",
     });
     addReview({
       rawName: "Done",
@@ -1003,19 +1075,22 @@ describe("import review", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.items.map((item: { rawName: string }) => item.rawName)).toEqual(["Someone", "Missing house"]);
-    expect(body.items[0]).toMatchObject({
+    expect(body.items[0]).toEqual({
       id: REVIEW,
       status: "pending",
       sourceLine: 2,
       rawName: "Someone",
-      kind: "person",
       matchType: "multiple",
       houseNumber: 3,
       house: { id: HOUSE_1, number: 3, name: "Riverside" },
       role: "leader",
-      notes: "check spelling",
-      resolvedAt: null,
+      candidates: body.items[0].candidates,
     });
+    const listed = JSON.stringify(body);
+    expect(listed).not.toContain("check spelling");
+    expect(listed).not.toContain("Grace Hopper");
+    expect(listed).not.toContain("kind");
+    expect(listed).not.toContain("notes");
     expect(body.items[0].candidates.map((candidate: { orgPersonId: string; lastName: string }) => [candidate.orgPersonId, candidate.lastName])).toEqual([
       ["person-0", "0"],
       ["person-1", "1"],
@@ -1049,7 +1124,8 @@ describe("import review", () => {
     const res = await resolve(REVIEW, { action: "link", contactId: ADA });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.item).toMatchObject({ id: REVIEW, status: "matched", resolvedAt: expect.any(String) });
+    expect(body.item).toMatchObject({ id: REVIEW, status: "matched", rawName: "Ada Lovelace", sourceLine: 4 });
+    expect(JSON.stringify(body.item)).not.toContain("notes");
     expect(body.member).toMatchObject({ contactId: ADA, role: "leader", orgPersonId: "person-ada" });
     expect(state.tables.missio_import_review[0]).toMatchObject({
       status: "matched",
@@ -1120,13 +1196,37 @@ describe("import review", () => {
     expect(state.writes.filter((write) => write.table === "contacts" && write.op === "insert").every((write) => write.client === "admin")).toBe(true);
   });
 
+  it("maps missio_resolve_not_allowed to not_missio_person and hides database text", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    addReview({ id: REVIEW, rawName: "Ada Lovelace", sourceLine: 4, houseNumber: 3, role: "leader" });
+    state.constraintError = {
+      table: "missio_import_review",
+      code: "23503",
+      message: "missio_resolve_not_allowed",
+      details: "sheet line with Grace Hopper",
+      hint: "resolved_contact_id is not a candidate",
+    };
+    const res = await resolve(REVIEW, { action: "link", contactId: ADA });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+    const text = JSON.stringify(body);
+    expect(text).not.toContain("missio_resolve_not_allowed");
+    expect(text).not.toContain("Grace Hopper");
+    expect(text).not.toContain("resolved_contact_id");
+    expect(state.tables.missio_import_review[0].status).toBe("pending");
+  });
+
   it("skips without a membership and refuses a row that is already resolved", async () => {
     addHouse({ id: HOUSE_1, number: 3 });
     addReview({ id: REVIEW, rawName: "Skip me", sourceLine: 2, houseNumber: 3, candidate_contact_ids: [] });
     const skipped = await resolve(REVIEW, { action: "skip", notes: "not a person" });
     expect(skipped.status).toBe(200);
     const body = await skipped.json();
-    expect(body.item).toMatchObject({ status: "skipped", notes: "not a person" });
+    expect(body.item).toMatchObject({ status: "skipped", rawName: "Skip me", sourceLine: 2, role: "member" });
+    expect(JSON.stringify(body)).not.toContain("not a person");
+    expect(state.tables.missio_import_review[0].notes).toBe("not a person");
     expect(body.member).toBeUndefined();
     expect(state.tables.house_church_members).toEqual([]);
     expect(state.tables.org_people).toEqual([]);

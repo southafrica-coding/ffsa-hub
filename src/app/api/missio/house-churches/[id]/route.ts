@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getHouse, isUuid, pastorHouseAccess } from "@/lib/missio/house-churches";
+import { getHouse, isUuid, pastorHouseAccess, publicError } from "@/lib/missio/house-churches";
 
 // GET /api/missio/house-churches/:id
 
@@ -19,6 +19,6 @@ export async function GET(_request: Request, context: Ctx) {
   if (!isUuid(id)) return json({ error: "House not found.", code: "not_found" }, 404);
 
   const result = await getHouse(access.auth, access.scope, id);
-  if (!result.ok) return json({ error: result.error, code: result.code }, result.status);
+  if (!result.ok) return json(publicError(result), result.status);
   return json(result.body);
 }

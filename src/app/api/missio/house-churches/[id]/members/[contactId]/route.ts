@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { changeMemberRole, endMember, isUuid, pastorHouseAccess } from "@/lib/missio/house-churches";
+import { changeMemberRole, endMember, isUuid, pastorHouseAccess, publicError } from "@/lib/missio/house-churches";
 import { missioRateLimit } from "@/lib/missio/limit";
 
 // PATCH  /api/missio/house-churches/:id/members/:contactId  { role }
@@ -35,7 +35,7 @@ export async function PATCH(request: Request, context: Ctx) {
   }
 
   const result = await changeMemberRole(access.auth, access.scope, id, contactId, body);
-  if (!result.ok) return json({ error: result.error, code: result.code }, result.status);
+  if (!result.ok) return json(publicError(result), result.status);
   return json({ member: result.member });
 }
 
@@ -50,6 +50,6 @@ export async function DELETE(_request: Request, context: Ctx) {
   if (!isUuid(id)) return json({ error: "House not found.", code: "not_found" }, 404);
 
   const result = await endMember(access.auth, access.scope, id, contactId);
-  if (!result.ok) return json({ error: result.error, code: result.code }, result.status);
+  if (!result.ok) return json(publicError(result), result.status);
   return json({ ok: true });
 }

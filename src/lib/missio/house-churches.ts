@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MISSIO_PEOPLE_ROLES, MISSIO_SLUG, requireOrgRole, type OrgAccess } from "@/lib/missio/access";
+import { invalidInput, mapMissioDbError } from "@/lib/missio/db-errors";
 import { membershipBlocksInsert, membershipIsCurrent, membershipIsOpen } from "@/lib/missio/house-church-import";
 import { createPerson } from "@/lib/missio/people";
 import type {
@@ -60,7 +61,7 @@ const ROLE_ORDER: Record<HouseChurchRole, number> = { leader: 0, co_leader: 1, m
 
 export type HouseScope = { mode: "all" } | { mode: "houses"; ids: readonly string[] };
 
-type Fail = { ok: false; status: number; error: string; code: MissioErrorCode };
+type Fail = { ok: false; status: number; error: string; code: MissioErrorCode; fields?: string[] };
 
 type HouseRow = {
   id: string;
@@ -109,6 +110,18 @@ type ContactNameRow = {
 
 function fail(status: number, code: MissioErrorCode, error: string): Fail {
   return { ok: false, status, code, error };
+}
+
+/** Response body for a failed call. Field paths are ours; database and Zod text are not. */
+export function publicError(result: Fail): { error: string; code: MissioErrorCode; fields?: string[] } {
+  const body: { error: string; code: MissioErrorCode; fields?: string[] } = { error: result.error, code: result.code };
+  if (result.fields && result.fields.length > 0) body.fields = result.fields;
+  return body;
+}
+
+function zodFail(error: z.ZodError): Fail {
+  const mapped = invalidInput(error.issues.map((issue) => issue.path.map(String).join(".")).filter(Boolean));
+  return { ok: false, status: mapped.status, code: mapped.code, error: mapped.error, fields: mapped.fields };
 }
 
 function isFail(value: Map<string, PersonRef> | Fail): value is Fail {
@@ -294,30 +307,11 @@ async function requireMissioPerson(
   };
 }
 
-/**
- * Migration 331 raises these for every role, including the service role.
- * Match SQLSTATE and the exception text. Anything else stays a server error.
- */
-function constraintFailure(error: { code?: string; message?: string }): Fail | null {
-  const message = error.message ?? "";
-  if (error.code === "23514" && message.includes("missio_ended_at_in_future")) {
-    return fail(409, "invalid_input", "Check the fields and try again.");
-  }
-  if (
-    error.code === "23503" &&
-    (message.includes("missio_member_not_in_org") || message.includes("missio_resolve_not_allowed"))
-  ) {
-    return NOT_MISSIO;
-  }
-  return null;
-}
-
-function membershipWriteError(error: { code?: string; message?: string }): Fail {
-  const constraint = constraintFailure(error);
-  if (constraint) return constraint;
-  if (error.code === "23505") return fail(409, "already_member", "This person is already in this house.");
-  console.error("[missio] membership write failed", error.message ?? error.code ?? "write failed");
-  return fail(500, "server_error", "Something went wrong.");
+/** Postgres errors go through mapMissioDbError. The database text stays out of the body. */
+function dbWriteError(error: { code?: string; message?: string; details?: string; hint?: string }, label: string): Fail {
+  const mapped = mapMissioDbError(error);
+  console.error(`[missio] ${label} failed`, error.code ?? "write failed");
+  return fail(mapped.status, mapped.code, mapped.error);
 }
 
 async function loadRefs(auth: OrgAccess, contactIds: string[]): Promise<Map<string, PersonRef> | Fail> {
@@ -543,7 +537,7 @@ async function insertMember(
     })
     .select(MEMBER_COLUMNS)
     .maybeSingle();
-  if (inserted.error) return membershipWriteError(inserted.error);
+  if (inserted.error) return dbWriteError(inserted.error, "membership write");
   const row = inserted.data as MemberRow | null;
   if (!row?.id) return fail(500, "server_error", "Something went wrong.");
 
@@ -673,7 +667,7 @@ export async function addMember(
   body: unknown
 ): Promise<{ ok: true; status: 201; member: HouseChurchMemberView } | Fail> {
   const parsed = addMemberSchema.safeParse(body);
-  if (!parsed.success) return fail(400, "invalid_input", "Check the fields and try again.");
+  if (!parsed.success) return zodFail(parsed.error);
 
   const person = await requireMissioPerson(auth, parsed.data.contactId);
   if (!person.ok) return person;
@@ -706,7 +700,7 @@ export async function changeMemberRole(
 ): Promise<{ ok: true; member: HouseChurchMemberView } | Fail> {
   if (!isUuid(contactId)) return fail(404, "not_found", "Member not found.");
   const parsed = roleSchema.safeParse(body);
-  if (!parsed.success) return fail(400, "invalid_input", "Check the fields and try again.");
+  if (!parsed.success) return zodFail(parsed.error);
 
   const house = await loadHouse(auth, scope, houseId);
   if (!house.ok) return house;
@@ -725,7 +719,7 @@ export async function changeMemberRole(
     .eq("house_church_id", house.house.id)
     .select(MEMBER_COLUMNS)
     .maybeSingle();
-  if (updated.error) return membershipWriteError(updated.error);
+  if (updated.error) return dbWriteError(updated.error, "membership write");
   const row = updated.data as MemberRow | null;
   if (!row) return fail(404, "not_found", "Member not found.");
 
@@ -769,9 +763,10 @@ export async function endMember(
   const started = (target.started_at ?? todayIsoDate()).slice(0, 10);
   if (started > todayIsoDate()) {
     // It never began. Setting ended_at to that future date raises 23514
-    // missio_ended_at_in_future. Migration 331 allows DELETE, and
-    // guard_house_church_member runs only on INSERT and UPDATE, including
-    // for the service role.
+    // missio_ended_at_in_future. Authenticated DELETE was revoked in
+    // 53acd953; the service role still can, and guard_house_church_member
+    // does not run on DELETE. A new insert with started_at after today
+    // raises 23514 missio_started_at_in_future and is a server_error.
     const admin = adminClient();
     if ("error" in admin) return fail(500, "server_error", admin.error);
     const removed = await admin.client
@@ -779,7 +774,7 @@ export async function endMember(
       .delete()
       .eq("id", target.id)
       .eq("house_church_id", house.house.id);
-    if (removed.error) return membershipWriteError(removed.error);
+    if (removed.error) return dbWriteError(removed.error, "membership write");
     await audit(admin.client, {
       userId: auth.user.id,
       action: "missio.house_member_end",
@@ -797,7 +792,7 @@ export async function endMember(
     .eq("house_church_id", house.house.id)
     .select("id")
     .maybeSingle();
-  if (updated.error) return membershipWriteError(updated.error);
+  if (updated.error) return dbWriteError(updated.error, "membership write");
   if (!updated.data?.id) return fail(404, "not_found", "Member not found.");
 
   const admin = adminClient();
@@ -821,15 +816,11 @@ function toReviewItem(row: ReviewRow, house: HouseRow | null, candidates: Person
     status,
     sourceLine: Number(row.source_line),
     rawName: row.raw_name,
-    kind: blankToNull(row.kind),
     matchType: blankToNull(row.match_type),
     houseNumber: Number(row.house_number),
     house: house ? { id: house.id, number: Number(house.number), name: blankToNull(house.name) } : null,
     role,
     candidates,
-    notes: blankToNull(row.notes),
-    createdAt: row.created_at,
-    resolvedAt: row.resolved_at ?? null,
   };
 }
 
@@ -947,12 +938,7 @@ async function claimReview(
     .eq("status", "pending")
     .select(REVIEW_COLUMNS)
     .maybeSingle();
-  if (updated.error) {
-    const constraint = constraintFailure(updated.error);
-    if (constraint) return constraint;
-    console.error("[missio] import review update failed", updated.error.message);
-    return fail(500, "server_error", "Something went wrong.");
-  }
+  if (updated.error) return dbWriteError(updated.error, "import review update");
   if (!updated.data) return fail(409, "already_resolved", "This row is already resolved.");
   return { ok: true, row: updated.data as ReviewRow };
 }
@@ -1009,7 +995,7 @@ export async function resolveImportReview(
   body: unknown
 ): Promise<{ ok: true; body: ResolveImportReviewResponse } | Fail> {
   const parsed = resolveSchema.safeParse(body);
-  if (!parsed.success) return fail(400, "invalid_input", "Check the fields and try again.");
+  if (!parsed.success) return zodFail(parsed.error);
 
   const loaded = await loadReview(auth, itemId);
   if (!loaded.ok) return loaded;
@@ -1096,8 +1082,11 @@ export async function resolveImportReview(
     .eq("status", "new")
     .select(REVIEW_COLUMNS)
     .maybeSingle();
-  if (stamped.error || !stamped.data) {
-    console.error("[missio] import review contact stamp failed", stamped.error?.message ?? "no row");
+  if (stamped.error) {
+    await releaseReview(auth, itemId);
+    return dbWriteError(stamped.error, "import review contact stamp");
+  }
+  if (!stamped.data) {
     await releaseReview(auth, itemId);
     return fail(500, "server_error", "Something went wrong.");
   }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isUuid, pastorHouseAccess, resolveImportReview } from "@/lib/missio/house-churches";
+import { isUuid, pastorHouseAccess, publicError, resolveImportReview } from "@/lib/missio/house-churches";
 import { missioRateLimit } from "@/lib/missio/limit";
 
 // POST /api/missio/house-churches/import-review/:itemId/resolve
@@ -32,6 +32,6 @@ export async function POST(request: Request, context: Ctx) {
   }
 
   const result = await resolveImportReview(access.auth, access.scope, itemId, body);
-  if (!result.ok) return json({ error: result.error, code: result.code }, result.status);
+  if (!result.ok) return json(publicError(result), result.status);
   return json(result.body);
 }
