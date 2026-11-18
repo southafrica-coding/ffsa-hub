@@ -24,6 +24,10 @@ const ANN = "cccccccc-cccc-4ccc-8ccc-ccccccccccc3";
 const state = vi.hoisted(() => {
   const state = {
     tableError: null as string | null,
+    dbCode: null as string | null,
+    dbMessage: null as string | null,
+    dbDetails: null as string | null,
+    dbHint: null as string | null,
     writes: [] as { table: string; op: string; payload: unknown }[],
     tables: {} as Record<string, Row[]>,
     hits: new Map<string, number>(),
@@ -77,7 +81,15 @@ const state = vi.hoisted(() => {
         function finish(maybe: boolean) {
           if (!state.tables[table]) state.tables[table] = [];
           if (state.tableError === table) {
-            return { data: null, error: { code: "XX000", message: `boom reading ${table}` } };
+            return {
+              data: null,
+              error: {
+                code: state.dbCode ?? "XX000",
+                message: state.dbMessage ?? `boom reading ${table}`,
+                details: state.dbDetails ?? undefined,
+                hint: state.dbHint ?? undefined,
+              },
+            };
           }
           if (op.action === "insert") {
             const payloads = Array.isArray(op.payload) ? op.payload : [op.payload ?? {}];
@@ -145,6 +157,10 @@ const { CONNECT_GLOBAL_LIMIT } = await import("@/lib/missio/connect");
 
 function reset() {
   state.tableError = null;
+  state.dbCode = null;
+  state.dbMessage = null;
+  state.dbDetails = null;
+  state.dbHint = null;
   state.writes = [];
   state.hits = new Map();
   state.seq = 0;
@@ -280,12 +296,12 @@ describe("POST /api/missio/connect", () => {
       error: "Check the fields and try again.",
       code: "invalid_input",
       fieldErrors: {
-        name: "Enter a name between 2 and 80 characters.",
-        phone: "Enter a valid phone number.",
-        email: "That email address isn't valid.",
-        visitType: "Choose first time, been a while, or regular.",
-        prayerRequest: "Keep the prayer request under 1000 characters.",
-        notes: "Keep notes under 1000 characters.",
+        name: "Check this field and try again.",
+        phone: "Check this field and try again.",
+        email: "Check this field and try again.",
+        visitType: "Check this field and try again.",
+        prayerRequest: "Check this field and try again.",
+        notes: "Check this field and try again.",
       },
     });
     expect(state.tables.connect_responses).toHaveLength(0);
@@ -367,6 +383,51 @@ describe("POST /api/missio/connect", () => {
     expect(state.tables.connect_responses[0].matched_contact_id).toBeNull();
     expect(state.writes.filter((write) => write.table === "org_people")).toHaveLength(0);
     expect(state.tables.org_people.map((row) => row.contact_id)).toEqual([ANN]);
+  });
+
+  it("does not put database text or the submitted value into an error body", async () => {
+    const secret = "23503 missio_contact_not_in_org secret_table Ada Lovelace";
+    const invalid = await POST(
+      card({
+        ...valid,
+        name: "J",
+        visitType: secret,
+        notes: secret,
+        prayerRequest: secret,
+      })
+    );
+    expect(invalid.status).toBe(400);
+    const invalidBody = JSON.stringify(await invalid.json());
+    expect(invalidBody).not.toContain(secret);
+    expect(invalidBody).not.toContain("missio_contact_not_in_org");
+    expect(invalidBody).not.toContain("Ada Lovelace");
+    expect(invalidBody).toContain("invalid_input");
+
+    state.tableError = "connect_responses";
+    state.dbCode = "23514";
+    state.dbMessage = "missio_ended_at_in_future";
+    state.dbDetails = secret;
+    state.dbHint = "ended_at > current_date";
+    const ended = await POST(card({ ...valid, phone: "0830000000" }, "203.0.113.50"));
+    expect(ended.status).toBe(409);
+    const endedBody = JSON.stringify(await ended.json());
+    expect(endedBody).toContain("ended_at_in_future");
+    expect(endedBody).not.toContain("missio_ended_at_in_future");
+    expect(endedBody).not.toContain(secret);
+    expect(endedBody).not.toContain("current_date");
+
+    state.tableError = "connect_responses";
+    state.dbCode = "XX000";
+    state.dbMessage = secret;
+    state.dbDetails = "Key (contact_id)=(secret) already exists";
+    state.dbHint = secret;
+    const other = await POST(card({ ...valid, phone: "0840000000" }, "203.0.113.51"));
+    expect(other.status).toBe(500);
+    const otherBody = JSON.stringify(await other.json());
+    expect(otherBody).toContain("server_error");
+    expect(otherBody).not.toContain(secret);
+    expect(otherBody).not.toContain("contact_id");
+    expect(otherBody).not.toContain("XX000");
   });
 
   it("does not store the raw IP when the HMAC key is missing", async () => {

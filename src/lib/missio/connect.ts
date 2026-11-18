@@ -2,10 +2,10 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeEmail, normalizePhoneE164 } from "@/lib/phone";
 import { clientIp, getRateLimiter, retryAfterSeconds } from "@/lib/rate-limit";
-import { mapMissioDbError } from "@/lib/missio/db-errors";
+import { fieldError, invalidInput, mapMissioDbError } from "@/lib/missio/db-errors";
 import { connectRateKeyHash } from "@/lib/missio/match-token";
 import { MISSIO_SLUG } from "@/lib/missio/access";
-import type { ConnectFieldErrors, ConnectVisitType } from "@/lib/missio/types";
+import type { ConnectVisitType } from "@/lib/missio/types";
 
 // Public QR connect card. No session. Inserts with the service role because
 // migration 332 grants anon nothing and limits authenticated inserts to
@@ -41,17 +41,27 @@ type SubmitResult =
   | { ok: true }
   | { ok: false; status: number; body: Record<string, unknown>; headers?: Record<string, string> };
 
-function invalid(fieldErrors: ConnectFieldErrors): SubmitResult {
+function invalid(fieldErrors: Record<string, string>): SubmitResult {
+  const mapped = invalidInput(fieldErrors);
   return {
     ok: false,
-    status: 400,
-    body: { error: "Check the fields and try again.", code: "invalid_input", fieldErrors },
+    status: mapped.status,
+    body: { error: mapped.error, code: mapped.code, fieldErrors: mapped.fieldErrors },
   };
 }
 
 function serverError(scope: string, detail?: string): SubmitResult {
   console.error(`[missio] ${scope}`, detail ?? "failed");
   return { ok: false, status: 500, body: { error: "Something went wrong.", code: "server_error" } };
+}
+
+function dbFailure(
+  error: { code?: string; message?: string; details?: string; hint?: string } | null | undefined,
+  scope: string
+): SubmitResult {
+  const mapped = mapMissioDbError(error ?? {});
+  console.error(`[missio] ${scope} failed`, error?.code ?? "failed");
+  return { ok: false, status: mapped.status, body: { error: mapped.error, code: mapped.code } };
 }
 
 function collapse(value: string): string {
@@ -75,11 +85,8 @@ function adminClient(): { client: Client } | { error: string } {
 }
 
 function badBody(): { ok: false; status: number; body: Record<string, unknown> } {
-  return {
-    ok: false,
-    status: 400,
-    body: { error: "Check the fields and try again.", code: "invalid_input", fieldErrors: {} },
-  };
+  const mapped = invalidInput();
+  return { ok: false, status: mapped.status, body: { error: mapped.error, code: mapped.code, fieldErrors: mapped.fieldErrors } };
 }
 
 export async function readCappedBody(
@@ -127,16 +134,14 @@ const bodySchema = z.object({
   notes: z.preprocess(emptyToUndefined, z.string().trim().max(1000).optional()),
 });
 
-function fieldErrorsFrom(error: z.ZodError): ConnectFieldErrors {
-  const out: ConnectFieldErrors = {};
+const CONNECT_FIELDS = new Set(["name", "phone", "email", "visitType", "prayerRequest", "notes"]);
+
+function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
+  const out: Record<string, string> = {};
   for (const issue of error.issues) {
-    const key = issue.path[0];
-    if (key === "name" && !out.name) out.name = "Enter a name between 2 and 80 characters.";
-    if (key === "phone" && !out.phone) out.phone = "Enter a valid phone number.";
-    if (key === "email" && !out.email) out.email = "That email address isn't valid.";
-    if (key === "visitType" && !out.visitType) out.visitType = "Choose first time, been a while, or regular.";
-    if (key === "prayerRequest" && !out.prayerRequest) out.prayerRequest = "Keep the prayer request under 1000 characters.";
-    if (key === "notes" && !out.notes) out.notes = "Keep notes under 1000 characters.";
+    const key = String(issue.path[0] ?? "");
+    if (!CONNECT_FIELDS.has(key) || out[key]) continue;
+    Object.assign(out, fieldError(key));
   }
   return out;
 }
@@ -172,7 +177,8 @@ async function limitConnect(ip: string): Promise<SubmitResult | null> {
 
 async function missioOrgId(admin: Client): Promise<{ orgId: string } | SubmitResult> {
   const org = await admin.from("organisations").select("id").eq("slug", MISSIO_SLUG).maybeSingle();
-  if (org.error || !org.data?.id) return serverError("connect org lookup", org.error?.code ?? org.error?.message);
+  if (org.error) return dbFailure(org.error, "connect org lookup");
+  if (!org.data?.id) return serverError("connect org lookup");
   return { orgId: org.data.id as string };
 }
 
@@ -286,21 +292,21 @@ export async function submitConnectCard(args: { body: unknown; ip: string }): Pr
   if (honeypotTripped(args.body)) return { ok: true };
 
   const parsed = bodySchema.safeParse(args.body);
-  const fieldErrors: ConnectFieldErrors = parsed.success ? {} : fieldErrorsFrom(parsed.error);
+  const fieldErrors: Record<string, string> = parsed.success ? {} : fieldErrorsFrom(parsed.error);
   const raw = args.body && typeof args.body === "object" && !Array.isArray(args.body) ? (args.body as Record<string, unknown>) : {};
   if (!fieldErrors.phone && typeof raw.phone === "string" && raw.phone.trim() && !normalizePhoneE164(raw.phone)) {
-    fieldErrors.phone = "Enter a valid phone number.";
+    Object.assign(fieldErrors, fieldError("phone"));
   }
   let email: string | null = null;
   if (!fieldErrors.email && typeof raw.email === "string" && raw.email.trim()) {
     const normalized = normalizeEmail(raw.email);
     const domain = normalized?.split("@")[1] ?? "";
-    if (!normalized || !domain.includes(".")) fieldErrors.email = "That email address isn't valid.";
+    if (!normalized || !domain.includes(".")) Object.assign(fieldErrors, fieldError("email"));
     else email = normalized;
   }
   if (!parsed.success || Object.keys(fieldErrors).length > 0) return invalid(fieldErrors);
   const phone = normalizePhoneE164(parsed.data.phone);
-  if (!phone) return invalid({ ...fieldErrors, phone: "Enter a valid phone number." });
+  if (!phone) return invalid({ ...fieldErrors, ...fieldError("phone") });
   if (parsed.data.email && !email) {
     email = normalizeEmail(parsed.data.email);
   }
@@ -324,7 +330,7 @@ export async function submitConnectCard(args: { body: unknown; ip: string }): Pr
     .eq("phone_e164", phone)
     .gte("submitted_at", cutoff)
     .limit(1);
-  if (recent.error) return serverError("connect dedupe", recent.error.code ?? "query");
+  if (recent.error) return dbFailure(recent.error, "connect dedupe");
   if ((recent.data ?? []).length > 0) return { ok: true };
 
   let matchedContactId: string | null = null;
@@ -354,10 +360,10 @@ export async function submitConnectCard(args: { body: unknown; ip: string }): Pr
   const inserted = await admin.client.from("connect_responses").insert(row);
   if (inserted.error && mapMissioDbError(inserted.error).code === "not_missio_person" && matchedContactId) {
     const again = await admin.client.from("connect_responses").insert({ ...row, matched_contact_id: null });
-    if (again.error) return serverError("connect insert", again.error.code ?? "insert");
+    if (again.error) return dbFailure(again.error, "connect insert");
     return { ok: true };
   }
-  if (inserted.error) return serverError("connect insert", inserted.error.code ?? "insert");
+  if (inserted.error) return dbFailure(inserted.error, "connect insert");
   return { ok: true };
 }
 

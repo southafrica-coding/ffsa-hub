@@ -48,7 +48,7 @@ const state = vi.hoisted(() => {
     reads: [] as { client: "user" | "admin"; table: string }[],
     conflictTable: null as string | null,
     duplicateFollowup: false,
-    dbError: null as { table: string; code: string; message: string } | null,
+    dbError: null as { table: string; code: string; message: string; details?: string; hint?: string } | null,
     tables: {} as Record<string, Row[]>,
     hits: new Map<string, number>(),
     seq: 0,
@@ -140,7 +140,11 @@ const state = vi.hoisted(() => {
           if (state.dbError?.table === table && (op.action === "insert" || op.action === "update")) {
             const dbError = state.dbError;
             state.dbError = null;
-            return { data: null, error: { code: dbError.code, message: dbError.message }, count: null };
+            return {
+              data: null,
+              error: { code: dbError.code, message: dbError.message, details: dbError.details, hint: dbError.hint },
+              count: null,
+            };
           }
           if (!state.tables[table]) state.tables[table] = [];
           if (op.action === "insert") return writeInsert(table, client, op, single);
@@ -838,17 +842,56 @@ describe("missio follow-up", () => {
     expect(state.tables.missio_followups.filter((row) => row.connect_response_id === CARD && row.id !== FOLLOW)).toHaveLength(0);
   });
 
-  it("maps a missio_contact_not_in_org trigger to not_missio_person", async () => {
-    state.dbError = { table: "missio_followups", code: "23503", message: "missio_contact_not_in_org" };
-    const res = await patchLeader(
-      new Request("https://hub.test", { method: "PATCH", body: JSON.stringify({ leaderContactId: ADA }) }),
+  it("keeps database text out of every error body", async () => {
+    const secret = "relation secret_table detail hint Ada Lovelace note";
+    const cases = [
+      { code: "23503", message: "missio_contact_not_in_org", status: 400, responseCode: "not_missio_person" },
+      { code: "23503", message: "missio_member_not_in_org", status: 400, responseCode: "not_missio_person" },
+      { code: "23503", message: "missio_resolve_not_allowed", status: 400, responseCode: "not_missio_person" },
+      { code: "23514", message: "missio_ended_at_in_future", status: 409, responseCode: "ended_at_in_future" },
+      { code: "23503", message: secret, status: 500, responseCode: "server_error" },
+      { code: "XX000", message: secret, status: 500, responseCode: "server_error" },
+    ];
+    for (const item of cases) {
+      state.dbError = {
+        table: "missio_followups",
+        code: item.code,
+        message: item.message,
+        details: secret,
+        hint: "ended_at > current_date",
+      };
+      const res = await patchLeader(
+        new Request("https://hub.test", { method: "PATCH", body: JSON.stringify({ leaderContactId: ADA }) }),
+        ctx(`c_${VEE}`)
+      );
+      expect(res.status).toBe(item.status);
+      const body = await res.json();
+      expect(body).toEqual(
+        item.responseCode === "not_missio_person"
+          ? { error: "This person is not in Missio.", code: "not_missio_person" }
+          : item.responseCode === "ended_at_in_future"
+            ? { error: "That end date is after today.", code: "ended_at_in_future" }
+            : { error: "Something went wrong.", code: "server_error" }
+      );
+      const text = JSON.stringify(body);
+      expect(text).not.toContain(secret);
+      expect(text).not.toContain(item.message);
+      expect(text).not.toContain("current_date");
+      expect(text).not.toContain(item.code);
+    }
+
+    const badInput = await patchStage(
+      new Request("https://hub.test", {
+        method: "PATCH",
+        body: JSON.stringify({ stage: secret, note: secret }),
+      }),
       ctx(`c_${VEE}`)
     );
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
-    expect(JSON.stringify(body)).not.toContain("missio_contact_not_in_org");
-    expect(JSON.stringify(body)).not.toContain("23503");
+    expect(badInput.status).toBe(400);
+    const inputBody = JSON.stringify(await badInput.json());
+    expect(inputBody).toContain("invalid_input");
+    expect(inputBody).not.toContain(secret);
+    expect(inputBody).not.toContain("Ada Lovelace");
 
     const missingId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee8";
     state.tables.connect_responses.push({

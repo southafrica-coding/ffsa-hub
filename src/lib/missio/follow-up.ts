@@ -142,10 +142,13 @@ function serverError(scope: string, detail?: string): Fail {
   return fail(500, "server_error", "Something went wrong.");
 }
 
-/** SQLSTATE plus the exception text. Database text stays out of the response. */
-function fromDb(error: { code?: string; message?: string } | null | undefined, scope: string): Fail {
+/** SQLSTATE plus the exception text. The response is only the mapped code and fixed message. */
+function fromDb(
+  error: { code?: string; message?: string; details?: string; hint?: string } | null | undefined,
+  scope: string
+): Fail {
   const mapped = mapMissioDbError(error ?? {});
-  if (mapped.code === "server_error") return serverError(scope, error?.code ?? "failed");
+  console.error(`[missio] ${scope} failed`, error?.code ?? "failed");
   return fail(mapped.status, mapped.code, mapped.error);
 }
 
@@ -258,7 +261,7 @@ async function loadViewRow(auth: OrgAccess, key: Exclude<ParsedKey, { ok: false 
   if (key.kind === "c") query = query.eq("source", "contact").eq("contact_id", key.contactId);
   else query = query.eq("source", "connect_response").eq("connect_response_id", key.connectResponseId);
   const { data, error } = await query.limit(1);
-  if (error) return serverError("follow-up person", error.code ?? error.message);
+  if (error) return fromDb(error, "follow-up person");
   const row = ((data ?? []) as ViewRow[])[0];
   if (!row) return fail(404, "not_found", "Person not found.");
   return { row };
@@ -276,7 +279,7 @@ async function rowsByIds(
   for (let i = 0; i < unique.length; i += 100) {
     const slice = unique.slice(i, i + 100);
     const { data, error } = await auth.supabase.from(table).select(columns).eq("org_id", auth.orgId).in(column, slice);
-    if (error) return serverError(`${table} read`, error.code ?? error.message);
+    if (error) return fromDb(error, `${table} read`);
     rows.push(...((data ?? []) as Record<string, unknown>[]));
   }
   return { rows };
@@ -339,7 +342,7 @@ async function loadPersonRefs(auth: OrgAccess, contactIds: string[]): Promise<{ 
       auth.supabase.from("org_people").select("id, contact_id").eq("org_id", auth.orgId).in("contact_id", slice),
     ]);
     if (contacts.error || people.error) {
-      return serverError("follow-up names", contacts.error?.code ?? people.error?.code ?? "query");
+      return fromDb(contacts.error ?? people.error, "follow-up names");
     }
     const orgByContact = new Map<string, string>();
     for (const row of (people.data ?? []) as Array<{ id?: string; contact_id?: string }>) {
@@ -380,7 +383,7 @@ export async function listFollowups(
   query: { stage: FollowupStage | null; leader: string | null }
 ): Promise<{ ok: true; body: FollowupListResponse } | Fail> {
   const listed = await auth.supabase.from(VIEW).select(VIEW_COLUMNS);
-  if (listed.error) return serverError("follow-up list", listed.error.code ?? listed.error.message);
+  if (listed.error) return fromDb(listed.error, "follow-up list");
   const views = (listed.data ?? []) as ViewRow[];
   const followups = await loadFollowups(auth, views);
   if (isFail(followups)) return followups;
@@ -530,7 +533,7 @@ async function cardFor(auth: OrgAccess, id: string | null): Promise<{ card: Card
     .eq("id", id)
     .eq("org_id", auth.orgId)
     .maybeSingle();
-  if (error) return serverError("connect card", error.code ?? error.message);
+  if (error) return fromDb(error, "connect card");
   return { card: (data as CardRow | null) ?? null };
 }
 
@@ -622,7 +625,7 @@ export async function setFollowupStage(
 
 export async function listLeaders(auth: OrgAccess): Promise<{ ok: true; leaders: PersonRef[] } | Fail> {
   const houses = await auth.supabase.from("house_churches").select("id").eq("org_id", auth.orgId);
-  if (houses.error) return serverError("follow-up leaders", houses.error.code ?? houses.error.message);
+  if (houses.error) return fromDb(houses.error, "follow-up leaders");
   const houseIds = ((houses.data ?? []) as Array<{ id?: string }>).map((row) => row.id).filter((id): id is string => Boolean(id));
 
   const memberContactIds: string[] = [];
@@ -632,7 +635,7 @@ export async function listLeaders(auth: OrgAccess): Promise<{ ok: true; leaders:
       .select("contact_id, role, started_at, ended_at")
       .in("house_church_id", houseIds)
       .in("role", ["leader", "co_leader"]);
-    if (members.error) return serverError("follow-up leaders", members.error.code ?? members.error.message);
+    if (members.error) return fromDb(members.error, "follow-up leaders");
     for (const row of (members.data ?? []) as Array<{ contact_id?: string; started_at?: string | null; ended_at?: string | null }>) {
       if (!row.contact_id) continue;
       if (!membershipIsCurrent({ startedAt: row.started_at, endedAt: row.ended_at })) continue;
@@ -647,14 +650,14 @@ export async function listLeaders(auth: OrgAccess): Promise<{ ok: true; leaders:
     .select("user_id")
     .eq("org_id", auth.orgId)
     .eq("role", "pastor");
-  if (pastors.error) return serverError("follow-up pastors", pastors.error.code ?? pastors.error.message);
+  if (pastors.error) return fromDb(pastors.error, "follow-up pastors");
   const pastorUserIds = ((pastors.data ?? []) as Array<{ user_id?: string }>)
     .map((row) => row.user_id)
     .filter((id): id is string => Boolean(id));
   const pastorContactIds: string[] = [];
   if (pastorUserIds.length > 0) {
     const users = await admin.client.from("users").select("id, contact_id").in("id", pastorUserIds);
-    if (users.error) return serverError("follow-up pastors", users.error.code ?? users.error.message);
+    if (users.error) return fromDb(users.error, "follow-up pastors");
     for (const row of (users.data ?? []) as Array<{ contact_id?: string | null }>) {
       if (row.contact_id) pastorContactIds.push(row.contact_id);
     }
@@ -667,7 +670,7 @@ export async function listLeaders(auth: OrgAccess): Promise<{ ok: true; leaders:
     .select("contact_id")
     .eq("org_id", auth.orgId)
     .in("contact_id", candidateIds);
-  if (people.error) return serverError("follow-up leaders", people.error.code ?? people.error.message);
+  if (people.error) return fromDb(people.error, "follow-up leaders");
   const missioIds = ((people.data ?? []) as Array<{ contact_id?: string }>)
     .map((row) => row.contact_id)
     .filter((id): id is string => Boolean(id));
@@ -775,7 +778,7 @@ async function submittedEntries(auth: OrgAccess, view: ViewRow): Promise<{ entri
       .select("id, submitted_at")
       .eq("org_id", auth.orgId)
       .eq("matched_contact_id", view.contact_id);
-    if (matched.error) return serverError("follow-up timeline", matched.error.code ?? matched.error.message);
+    if (matched.error) return fromDb(matched.error, "follow-up timeline");
     for (const row of (matched.data ?? []) as Array<{ id?: string }>) {
       if (row.id) ids.push(row.id);
     }
@@ -820,7 +823,7 @@ export async function listTimeline(
       .select(HISTORY_COLUMNS)
       .eq("followup_id", followup.row.id)
       .order("changed_at", { ascending: false });
-    if (rows.error) return serverError("follow-up timeline", rows.error.code ?? rows.error.message);
+    if (rows.error) return fromDb(rows.error, "follow-up timeline");
     const historyRows = (rows.data ?? []) as HistoryRow[];
     const names = await displayNames(
       auth,
@@ -879,14 +882,14 @@ async function missioOrgPersonId(auth: OrgAccess, contactId: string): Promise<{ 
     .eq("org_id", auth.orgId)
     .eq("contact_id", contactId)
     .maybeSingle();
-  if (error) return serverError("follow-up contact", error.code ?? error.message);
+  if (error) return fromDb(error, "follow-up contact");
   if (!data?.id) return NOT_MISSIO;
   return { id: data.id as string };
 }
 
 async function isCurrentHouseLeader(auth: OrgAccess, contactId: string): Promise<boolean | Fail> {
   const houses = await auth.supabase.from("house_churches").select("id").eq("org_id", auth.orgId);
-  if (houses.error) return serverError("follow-up leader", houses.error.code ?? houses.error.message);
+  if (houses.error) return fromDb(houses.error, "follow-up leader");
   const houseIds = ((houses.data ?? []) as Array<{ id?: string }>).map((row) => row.id).filter((id): id is string => Boolean(id));
   if (houseIds.length === 0) return false;
   const members = await auth.supabase
@@ -895,7 +898,7 @@ async function isCurrentHouseLeader(auth: OrgAccess, contactId: string): Promise
     .eq("contact_id", contactId)
     .in("house_church_id", houseIds)
     .in("role", ["leader", "co_leader"]);
-  if (members.error) return serverError("follow-up leader", members.error.code ?? members.error.message);
+  if (members.error) return fromDb(members.error, "follow-up leader");
   for (const row of (members.data ?? []) as Array<{ started_at?: string | null; ended_at?: string | null }>) {
     if (membershipIsCurrent({ startedAt: row.started_at, endedAt: row.ended_at })) return true;
   }
@@ -913,7 +916,7 @@ async function isMissioPastorContact(auth: OrgAccess, contactId: string): Promis
     .select("user_id")
     .eq("org_id", auth.orgId)
     .eq("role", "pastor");
-  if (roles.error) return serverError("follow-up leader", roles.error.code ?? roles.error.message);
+  if (roles.error) return fromDb(roles.error, "follow-up leader");
   const userIds = ((roles.data ?? []) as Array<{ user_id?: string }>)
     .map((row) => row.user_id)
     .filter((id): id is string => Boolean(id));
@@ -925,7 +928,7 @@ async function isMissioPastorContact(auth: OrgAccess, contactId: string): Promis
   const admin = adminClient();
   if ("error" in admin) return false;
   const hidden = await admin.client.from("users").select("id").in("id", userIds).eq("contact_id", contactId);
-  if (hidden.error) return serverError("follow-up leader", hidden.error.code ?? "users");
+  if (hidden.error) return fromDb(hidden.error, "follow-up leader");
   return ((hidden.data ?? []) as Array<{ id?: string }>).some((row) => row.id);
 }
 
@@ -969,11 +972,17 @@ async function releaseCard(auth: OrgAccess, cardId: string) {
 
 async function attachFollowupContact(auth: OrgAccess, view: ViewRow, card: CardRow, contactId: string) {
   const existing = await findFollowup(auth, { ...view, contact_id: contactId, connect_response_id: card.id });
-  const followup = isFail(existing) ? null : existing.row;
+  if (isFail(existing)) return existing;
+  const followup = existing.row;
   if (followup && !followup.contact_id) {
-    await auth.supabase.from("missio_followups").update({ contact_id: contactId }).eq("id", followup.id).eq("org_id", auth.orgId);
+    const updated = await auth.supabase
+      .from("missio_followups")
+      .update({ contact_id: contactId })
+      .eq("id", followup.id)
+      .eq("org_id", auth.orgId);
+    if (updated.error) return fromDb(updated.error, "follow-up contact");
   }
-  return followup;
+  return { row: followup };
 }
 
 async function personAfterLink(
@@ -1033,7 +1042,8 @@ export async function linkFollowupContact(
     const claimed = await claimCard(auth, card, card.matched_contact_id);
     if (isFail(claimed)) return claimed;
     const followup = await attachFollowupContact(auth, view.row, card, card.matched_contact_id);
-    return personAfterLink(auth, card, card.matched_contact_id, followup, "linked");
+    if (isFail(followup)) return followup;
+    return personAfterLink(auth, card, card.matched_contact_id, followup.row, "linked");
   }
 
   const claimed = await claimCard(auth, card, null);
@@ -1048,10 +1058,11 @@ export async function linkFollowupContact(
   });
   if (!created.ok) {
     await releaseCard(auth, card.id);
-    if (created.code === "exists_use_search" || created.code === "already_in_org") {
-      return fail(created.status, created.code, created.error);
-    }
-    return fail(created.status === 400 ? 400 : 500, created.status === 400 ? "invalid_input" : "server_error", "Check the fields and try again.");
+    if (created.code === "exists_use_search") return { ok: false, status: 409, ...EXISTS_USE_SEARCH };
+    if (created.code === "already_in_org") return fail(409, "already_in_org", "This person is already in Missio.");
+    if (created.code === "not_missio_person") return NOT_MISSIO;
+    const input = created.status === 400;
+    return fail(input ? 400 : 500, input ? "invalid_input" : "server_error", input ? "Check the fields and try again." : "Something went wrong.");
   }
 
   const contactId = created.body.person.contactId;
@@ -1067,5 +1078,6 @@ export async function linkFollowupContact(
   if (linked.error) return fromDb(linked.error, "follow-up contact link");
   if (!linked.data?.id) return CONFLICT;
   const followup = await attachFollowupContact(auth, view.row, card, contactId);
-  return personAfterLink(auth, card, contactId, followup, "created");
+  if (isFail(followup)) return followup;
+  return personAfterLink(auth, card, contactId, followup.row, "created");
 }

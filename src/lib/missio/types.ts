@@ -102,6 +102,7 @@ export type MissioErrorCode =
   | "forbidden"
   | "not_found"
   | "ended_at_in_future"
+  | "membership_not_current"
   | "server_error"
   | "method_not_allowed";
 
