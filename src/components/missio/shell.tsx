@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -155,6 +155,7 @@ function MissioReady({
           <div className={styles.content} data-missio-content="">
             <MissioViewerProvider me={me}>{children}</MissioViewerProvider>
           </div>
+          <MissioTabBar me={me} />
         </div>
       </div>
       <SheetContent side="left" id="missio-nav" className={styles.drawer} style={skinStyle}>
@@ -256,6 +257,50 @@ function MissioSidebar({
         </div>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Phone only (CSS hides it from 768px). The daily sections, one thumb away.
+ * The drawer keeps the org switcher, search and everything else.
+ */
+function MissioTabBar({ me }: { me: MissioMe }) {
+  const pathname = usePathname();
+  const section = missioSection(pathname);
+  const pastor = canAccessMissio(me);
+  const volunteers = pathname.startsWith("/missio/volunteers");
+  const tabs: Array<{ key: string; href: string; label: string; on: boolean; icon: ReactNode }> = [
+    {
+      key: "home",
+      href: "/missio",
+      label: "Home",
+      on: section === "home" && !volunteers,
+      icon: <HomeIcon />,
+    },
+    { key: "people", href: "/missio/people", label: "People", on: section === "people", icon: <PeopleIcon /> },
+  ];
+  if (pastor) {
+    tabs.push(
+      { key: "house-churches", href: "/missio/house-churches", label: "Houses", on: section === "houses", icon: <HouseIcon /> },
+      { key: "follow-up", href: "/missio/follow-up", label: "Follow-up", on: section === "follow", icon: <FollowIcon /> },
+      { key: "volunteers", href: "/missio/volunteers", label: "Volunteers", on: volunteers, icon: <CalendarIcon /> }
+    );
+  }
+  return (
+    <nav className={styles.tabBar} aria-label="Missio sections" data-testid="missio-tab-bar">
+      {tabs.map((tab) => (
+        <Link
+          key={tab.key}
+          href={tab.href}
+          className={`${styles.tab} ${tab.on ? styles.tabOn : ""}`}
+          aria-current={tab.on ? "page" : undefined}
+          data-testid={`missio-tab-${tab.key}`}
+        >
+          {tab.icon}
+          <span>{tab.label}</span>
+        </Link>
+      ))}
+    </nav>
   );
 }
 

@@ -275,8 +275,15 @@
 }
 
 .content {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 28px 28px 40px;
   overflow: auto;
+}
+
+/* Phone tab bar. Hidden until the phone breakpoint below. */
+.tabBar {
+  display: none;
 }
 
 .eyebrow {
@@ -882,6 +889,64 @@
   .top {
     min-width: 0;
     max-width: 100%;
+  }
+
+  /* 100vh is taller than the visible page under mobile browser chrome,
+     which would push the tab bar off screen. */
+  .shell {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .tabBar {
+    display: flex;
+    flex: none;
+    align-items: stretch;
+    border-top: 1px solid var(--rule);
+    background: var(--panel);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .shell .tab {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 2px;
+    color: var(--sub);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 14px;
+  }
+
+  .tab svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .tab span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shell .tabOn,
+  .shell .tabOn:hover {
+    color: var(--accent-text, #8e3d1f);
+  }
+
+  .tab:active {
+    background: var(--subtle);
+  }
+
+  .tab:focus-visible {
+    outline: 2px solid var(--link, #2f5d50);
+    outline-offset: -2px;
   }
 
   .shell {

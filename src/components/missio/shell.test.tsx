@@ -170,6 +170,46 @@ describe("Missio access state", () => {
     expect(host.textContent).toContain("Missio Church / Follow-up");
   });
 
+  it("gives a pastor a phone tab bar and marks the current section", async () => {
+    nav.pathname = "/missio/house-churches/house-2";
+    const { host, root } = render(
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
+        <p>House lives here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+    const bar = host.querySelector("[data-testid=missio-tab-bar]") as HTMLElement;
+    expect(bar.getAttribute("aria-label")).toBe("Missio sections");
+    const tabs = [...bar.querySelectorAll("a")];
+    expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual([
+      "/missio",
+      "/missio/people",
+      "/missio/house-churches",
+      "/missio/follow-up",
+      "/missio/volunteers",
+    ]);
+    const current = tabs.filter((tab) => tab.getAttribute("aria-current") === "page");
+    expect(current).toHaveLength(1);
+    expect(current[0]?.getAttribute("data-testid")).toBe("missio-tab-house-churches");
+    expect(bar.textContent?.toLowerCase()).not.toContain("soon");
+  });
+
+  it("marks Volunteers, not Home, on the volunteers page", async () => {
+    nav.pathname = "/missio/volunteers";
+    const { host, root } = render(
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
+        <p>Volunteers live here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+    const on = [...host.querySelectorAll("[data-testid=missio-tab-bar] a[aria-current=page]")];
+    expect(on.map((tab) => tab.getAttribute("data-testid"))).toEqual(["missio-tab-volunteers"]);
+  });
+
   it("shows no access for an FFSA admin with no Missio role", async () => {
     const { host, root } = render(
       <MissioFrame client={client(async () => ffsaAdmin)} loadFfsaRoles={noRoles}>
