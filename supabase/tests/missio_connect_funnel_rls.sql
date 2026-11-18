@@ -200,6 +200,16 @@ INSERT INTO public.contact_labels (contact_id, label_id, added_via)
 SELECT 'c1111111-1111-1111-1111-111111111111', id, 'manual'
 FROM public.labels WHERE slug = 'missio';
 
+-- The service-role API inserts org_people before a card or a house
+-- membership may point at that contact.
+INSERT INTO public.org_people (org_id, contact_id, campus, status)
+SELECT o.id, v.cid::uuid, 'potch', 'active'
+FROM (VALUES
+  ('c1111111-1111-1111-1111-111111111111'),
+  ('c3333333-3333-3333-3333-333333333333')
+) AS v(cid)
+JOIN public.organisations o ON o.slug = 'missio';
+
 CREATE TEMP TABLE checks (
   n serial PRIMARY KEY,
   label text NOT NULL,
@@ -234,6 +244,19 @@ BEGIN
     PERFORM set_config('request.jwt.claim.sub', who, true);
     EXECUTE 'SET LOCAL ROLE authenticated';
   END IF;
+END;
+$$;
+
+CREATE FUNCTION pg_temp.fail(who text, stmt text)
+RETURNS text
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_temp.become(who);
+  EXECUTE stmt;
+  EXECUTE 'RESET ROLE';
+  RETURN 'ok';
+EXCEPTION WHEN OTHERS THEN
+  RETURN SQLSTATE || ' ' || SQLERRM;
 END;
 $$;
 
@@ -288,22 +311,29 @@ SELECT pg_temp.expect('pastor can insert a manual connect card',
     FROM public.organisations WHERE slug = 'missio'
   $$),
   'rows=1');
-SELECT pg_temp.expect('pastor can read and update that card',
+SELECT pg_temp.expect('pastor can read and update the allowed card columns',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     UPDATE public.connect_responses
-       SET notes = 'Sat on the left',
-           matched_by = 'a1111111-1111-1111-1111-111111111111',
-           matched_at = now()
+       SET notes = 'Sat on the left'
      WHERE id = 'd1111111-1111-4111-8111-111111111111'
   $$),
   'rows=1');
-SELECT pg_temp.expect('pastor update of the card stuck',
+SELECT pg_temp.expect('pastor update of the card stuck and matched_by was pinned',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
-    SELECT notes || '/' || matched_contact_id::text || '/' || source
+    SELECT notes || '/' || matched_contact_id::text || '/' || source || '/' ||
+           matched_by::text || '/' || (matched_at IS NOT NULL)::text || '/' ||
+           phone || '/' || coalesce(phone_e164, '')
     FROM public.connect_responses
     WHERE id = 'd1111111-1111-4111-8111-111111111111'
   $$),
-  'Sat on the left/c1111111-1111-1111-1111-111111111111/manual');
+  'Sat on the left/c1111111-1111-1111-1111-111111111111/manual/a1111111-1111-1111-1111-111111111111/true/5550100/');
+SELECT pg_temp.expect('pastor cannot change source to qr',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.connect_responses
+       SET source = 'qr'
+     WHERE id = 'd1111111-1111-4111-8111-111111111111'
+  $$),
+  'err 42501');
 SELECT pg_temp.expect('pastor can insert an unmatched card',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.connect_responses (
@@ -342,25 +372,26 @@ SELECT pg_temp.expect('pastor can read the service-role qr row',
     WHERE id = 'd3333333-3333-4333-8333-333333333333'
   $$),
   'qr/hmac-fixture');
-SELECT pg_temp.exec('service', $$
-  DELETE FROM public.connect_responses
-  WHERE id = 'd3333333-3333-4333-8333-333333333333'
-$$);
-
-SELECT pg_temp.expect('pastor can insert a follow-up',
-  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
-    INSERT INTO public.missio_followups (
-      id, org_id, contact_id, connect_response_id, assigned_leader_contact_id
-    )
-    SELECT
-      'e1111111-1111-4111-8111-111111111111',
-      id,
-      'c1111111-1111-1111-1111-111111111111',
-      'd1111111-1111-4111-8111-111111111111',
-      'c3333333-3333-3333-3333-333333333333'
-    FROM public.organisations WHERE slug = 'missio'
+SELECT pg_temp.expect('service role removes the qr follow-up',
+  pg_temp.exec('service', $$
+    DELETE FROM public.missio_followups
+    WHERE connect_response_id = 'd3333333-3333-4333-8333-333333333333'
   $$),
   'rows=1');
+SELECT pg_temp.expect('service role removes the qr card',
+  pg_temp.exec('service', $$
+    DELETE FROM public.connect_responses
+    WHERE id = 'd3333333-3333-4333-8333-333333333333'
+  $$),
+  'rows=1');
+
+SELECT pg_temp.expect('the first card created one follow-up',
+  pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
+    SELECT count(*)::text || '/' || min(stage) || '/' || min(contact_id::text)
+    FROM public.missio_followups
+    WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
+  $$),
+  '1/new/c1111111-1111-1111-1111-111111111111');
 SELECT pg_temp.expect('insert wrote one stage_change from nothing to new',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT count(*)::text || '/' ||
@@ -369,29 +400,36 @@ SELECT pg_temp.expect('insert wrote one stage_change from nothing to new',
            min(to_stage) || '/' ||
            min(changed_by::text)
     FROM public.missio_followup_stage_history
-    WHERE followup_id = 'e1111111-1111-4111-8111-111111111111'
+    WHERE kind = 'stage_change'
+      AND followup_id = (
+      SELECT id FROM public.missio_followups
+      WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
+    )
   $$),
   '1/stage_change//new/a1111111-1111-1111-1111-111111111111');
 SELECT pg_temp.expect('setting the stage to itself writes no history',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     UPDATE public.missio_followups
        SET stage = stage
-     WHERE id = 'e1111111-1111-4111-8111-111111111111'
+     WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
   $$),
   'rows=1');
 SELECT pg_temp.expect('history count is still 1 after the no-op stage update',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT count(*)::text
     FROM public.missio_followup_stage_history
-    WHERE followup_id = 'e1111111-1111-4111-8111-111111111111'
+    WHERE followup_id = (
+      SELECT id FROM public.missio_followups
+      WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
+    )
   $$),
-  '1');
+  '2');
 SELECT pg_temp.expect('updating the assignees writes no history',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     UPDATE public.missio_followups
        SET assigned_leader_contact_id = 'c3333333-3333-3333-3333-333333333333',
            assigned_user_id = 'a1111111-1111-1111-1111-111111111111'
-     WHERE id = 'e1111111-1111-4111-8111-111111111111'
+     WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
   $$),
   'rows=1');
 SELECT pg_temp.expect('assignees stuck and history is still 1',
@@ -399,19 +437,22 @@ SELECT pg_temp.expect('assignees stuck and history is still 1',
     SELECT (
       SELECT assigned_leader_contact_id::text || '/' || assigned_user_id::text
       FROM public.missio_followups
-      WHERE id = 'e1111111-1111-4111-8111-111111111111'
+      WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
     ) || '/' || (
       SELECT count(*)::text
       FROM public.missio_followup_stage_history
-      WHERE followup_id = 'e1111111-1111-4111-8111-111111111111'
+      WHERE followup_id = (
+      SELECT id FROM public.missio_followups
+      WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
+    )
     )
   $$),
-  'c3333333-3333-3333-3333-333333333333/a1111111-1111-1111-1111-111111111111/1');
+  'c3333333-3333-3333-3333-333333333333/a1111111-1111-1111-1111-111111111111/2');
 SELECT pg_temp.expect('pastor can move the stage to contacted',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     UPDATE public.missio_followups
        SET stage = 'contacted'
-     WHERE id = 'e1111111-1111-4111-8111-111111111111'
+     WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
   $$),
   'rows=1');
 SELECT pg_temp.expect('stage change wrote from new to contacted',
@@ -421,60 +462,70 @@ SELECT pg_temp.expect('stage change wrote from new to contacted',
              WHERE kind = 'stage_change' AND from_stage = 'new' AND to_stage = 'contacted'
            )::text
     FROM public.missio_followup_stage_history
-    WHERE followup_id = 'e1111111-1111-4111-8111-111111111111'
+    WHERE followup_id = (
+      SELECT id FROM public.missio_followups
+      WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
+    )
   $$),
-  '2/1');
+  '3/1');
 SELECT pg_temp.expect('pastor can insert a note',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.missio_followup_stage_history (followup_id, kind, notes)
-    VALUES (
-      'e1111111-1111-4111-8111-111111111111',
-      'note',
-      'Called the card'
-    )
+    SELECT id, 'note', 'Called the card'
+    FROM public.missio_followups
+    WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
   $$),
   'rows=1');
 SELECT pg_temp.expect('the note is a note, with no to_stage, attributed to the pastor',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT kind || '/' || coalesce(to_stage, '') || '/' || notes || '/' || changed_by::text
     FROM public.missio_followup_stage_history
-    WHERE followup_id = 'e1111111-1111-4111-8111-111111111111'
+    WHERE followup_id = (
+      SELECT id FROM public.missio_followups
+      WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
+    )
       AND kind = 'note'
   $$),
   'note//Called the card/a1111111-1111-1111-1111-111111111111');
 SELECT pg_temp.expect('pastor cannot insert a stage_change row',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.missio_followup_stage_history (followup_id, kind, to_stage)
-    VALUES (
-      'e1111111-1111-4111-8111-111111111111',
-      'stage_change',
-      'joined'
-    )
+    SELECT id, 'stage_change', 'joined'
+    FROM public.missio_followups
+    WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
   $$),
   'err 42501');
 SELECT pg_temp.expect('a note without notes is rejected',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.missio_followup_stage_history (followup_id, kind, notes)
-    VALUES ('e1111111-1111-4111-8111-111111111111', 'note', NULL)
+    SELECT id, 'note', NULL
+    FROM public.missio_followups
+    WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
   $$),
   'err 23514');
 SELECT pg_temp.expect('pastor cannot update history',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     UPDATE public.missio_followup_stage_history
        SET notes = 'rewritten'
-     WHERE followup_id = 'e1111111-1111-4111-8111-111111111111'
+     WHERE followup_id = (
+      SELECT id FROM public.missio_followups
+      WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
+    )
   $$),
   'err 42501');
 SELECT pg_temp.expect('pastor cannot delete history',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     DELETE FROM public.missio_followup_stage_history
-    WHERE followup_id = 'e1111111-1111-4111-8111-111111111111'
+    WHERE followup_id = (
+      SELECT id FROM public.missio_followups
+      WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
+    )
   $$),
   'err 42501');
 SELECT pg_temp.expect('pastor cannot delete a follow-up',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     DELETE FROM public.missio_followups
-    WHERE id = 'e1111111-1111-4111-8111-111111111111'
+    WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
   $$),
   'err 42501');
 SELECT pg_temp.expect('pastor cannot delete a connect card',
@@ -490,15 +541,16 @@ SELECT pg_temp.expect('pastor sees the labelled person once, with the card folde
     SELECT count(*)::text || '/' ||
            min(source) || '/' ||
            min(connect_response_id::text) || '/' ||
+           min(first_name) || '/' || min(last_name) || '/' ||
            min(display_name) || '/' ||
-           min(phone) || '/' ||
-           min(email) || '/' ||
+           coalesce(min(phone), '') || '/' ||
+           coalesce(min(phone_e164), '') || '/' ||
            min(wants_house_church::text) || '/' ||
            min(followup_stage)
     FROM public.missio_not_in_house
     WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
   $$),
-  '1/contact/d1111111-1111-4111-8111-111111111111/Label Person/5550101/label@example.test/true/contacted');
+  '1/contact/d1111111-1111-4111-8111-111111111111/Label/Person/Label Person///true/contacted');
 SELECT pg_temp.expect('the matched card is not also a connect_response row',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT count(*)::text
@@ -510,15 +562,16 @@ SELECT pg_temp.expect('the matched card is not also a connect_response row',
 SELECT pg_temp.expect('an unmatched card is its own row',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT count(*)::text || '/' || min(display_name) || '/' || min(phone) || '/' ||
+           coalesce(min(phone_e164), '') || '/' ||
            bool_and(contact_id IS NULL)::text || '/' || min(source)
     FROM public.missio_not_in_house
     WHERE connect_response_id = 'd2222222-2222-4222-8222-222222222222'
   $$),
-  '1/Walk In/5550199/true/connect_response');
-SELECT pg_temp.expect('pastor not-in-house total is the person plus the unmatched card',
+  '1/Walk In/5550199//true/connect_response');
+SELECT pg_temp.expect('not-in-house lists the person, the unmatched card, and the unhoused org person',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111',
     $$SELECT count(*)::text FROM public.missio_not_in_house$$),
-  '2');
+  '3');
 SELECT pg_temp.expect('pastor still cannot read the contacts table',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111',
     $$SELECT count(*)::text FROM public.contacts$$),
@@ -557,7 +610,7 @@ SELECT pg_temp.expect('HARD WALL admin cannot insert a manual card',
 SELECT pg_temp.expect('HARD WALL admin cannot insert a follow-up',
   pg_temp.exec('a4444444-4444-4444-4444-444444444444', $$
     INSERT INTO public.missio_followups (org_id, contact_id)
-    SELECT id, 'c2222222-2222-2222-2222-222222222222'
+    SELECT id, 'c3333333-3333-3333-3333-333333333333'
     FROM public.organisations WHERE slug = 'missio'
   $$),
   'err 42501');
@@ -651,7 +704,7 @@ SELECT pg_temp.expect('stage is still contacted and the person is still not in a
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT (
       SELECT stage FROM public.missio_followups
-      WHERE id = 'e1111111-1111-4111-8111-111111111111'
+      WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
     ) || '/' || (
       SELECT count(*)::text FROM public.missio_not_in_house
       WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
@@ -672,13 +725,16 @@ SELECT pg_temp.expect('stored stage is joined and history recorded the change',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT (
       SELECT stage FROM public.missio_followups
-      WHERE id = 'e1111111-1111-4111-8111-111111111111'
+      WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
     ) || '/' || (
       SELECT count(*) FILTER (
         WHERE kind = 'stage_change' AND from_stage = 'contacted' AND to_stage = 'joined'
       )::text
       FROM public.missio_followup_stage_history
-      WHERE followup_id = 'e1111111-1111-4111-8111-111111111111'
+      WHERE followup_id = (
+      SELECT id FROM public.missio_followups
+      WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
+    )
     )
   $$),
   'joined/1');
@@ -692,29 +748,32 @@ SELECT pg_temp.expect('joining a house drops the person from not-in-house',
       SELECT count(*) FROM public.missio_not_in_house
     )::text
   $$),
-  '0/1');
+  '0/2');
 SELECT pg_temp.expect('effective_stage agrees with the stored joined stage',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT stage || '/' || effective_stage
     FROM public.missio_followup_effective
-    WHERE id = 'e1111111-1111-4111-8111-111111111111'
+    WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
   $$),
   'joined/joined');
 
 ALTER TABLE public.house_church_members DISABLE TRIGGER trg_house_church_member_mark_joined;
 UPDATE public.missio_followups
    SET stage = 'visited_house'
- WHERE id = 'e1111111-1111-4111-8111-111111111111';
+ WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111';
 ALTER TABLE public.house_church_members ENABLE TRIGGER trg_house_church_member_mark_joined;
 
 SELECT pg_temp.expect('effective_stage stays joined while the membership is active',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT stage || '/' || effective_stage
     FROM public.missio_followup_effective
-    WHERE id = 'e1111111-1111-4111-8111-111111111111'
+    WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
   $$),
   'visited_house/joined');
 
+INSERT INTO public.org_people (org_id, contact_id, campus, status)
+SELECT id, 'c2222222-2222-2222-2222-222222222222', 'potch', 'active'
+FROM public.organisations WHERE slug = 'missio';
 SELECT pg_temp.expect('an active membership does not create a follow-up',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.house_church_members (house_church_id, contact_id, role)
@@ -751,15 +810,12 @@ SELECT pg_temp.expect('the same contact cannot have two open follow-ups',
   $$),
   'err 23505');
 SELECT pg_temp.expect('a card alone is a valid follow-up subject',
-  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
-    INSERT INTO public.missio_followups (id, org_id, connect_response_id)
-    SELECT
-      'e2222222-2222-4222-8222-222222222222',
-      id,
-      'd2222222-2222-4222-8222-222222222222'
-    FROM public.organisations WHERE slug = 'missio'
+  pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
+    SELECT count(*)::text || '/' || bool_and(contact_id IS NULL)::text || '/' || min(stage)
+    FROM public.missio_followups
+    WHERE connect_response_id = 'd2222222-2222-4222-8222-222222222222'
   $$),
-  'rows=1');
+  '1/true/new');
 SELECT pg_temp.expect('the same card cannot have two follow-ups',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.missio_followups (org_id, connect_response_id)
@@ -860,6 +916,222 @@ SELECT pg_temp.expect('second apply did not duplicate policies',
       'connect_responses', 'missio_followups', 'missio_followup_stage_history'
     )),
   '8');
+
+-- ── Phone, attach, and all-role contact guard ─────────────
+SELECT pg_temp.expect('082 123 4567 normalizes to +27821234567',
+  (SELECT public.missio_phone_e164('082 123 4567')),
+  '+27821234567');
+SELECT pg_temp.expect('+27 82 123 4567 normalizes to +27821234567',
+  (SELECT public.missio_phone_e164('+27 82 123 4567')),
+  '+27821234567');
+SELECT pg_temp.expect('garbage phone normalizes to null',
+  (SELECT (public.missio_phone_e164('garbage') IS NULL)::text),
+  'true');
+SELECT pg_temp.expect('pastor stores the raw phone and the e164 form',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source
+    )
+    SELECT 'd4444444-4444-4444-8444-444444444444', id,
+           'Local Phone', '082 123 4567', 'first_time', 'manual'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('the stored card kept the raw phone and the e164 form',
+  (SELECT phone || '/' || phone_e164
+     FROM public.connect_responses
+    WHERE id = 'd4444444-4444-4444-8444-444444444444'),
+  '082 123 4567/+27821234567');
+SELECT pg_temp.expect('a repeat card with the same phone attaches',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source
+    )
+    SELECT 'd5555555-5555-4555-8555-555555555555', id,
+           'Same Phone', '+27 82 123 4567', 'been_a_while', 'manual'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('same phone did not create a second follow-up',
+  (SELECT count(DISTINCT h.followup_id)::text || '/' || count(*)::text
+     FROM public.missio_followup_stage_history h
+    WHERE h.kind = 'connect_card'
+      AND h.connect_response_id IN (
+        'd4444444-4444-4444-8444-444444444444',
+        'd5555555-5555-4555-8555-555555555555'
+      )),
+  '1/2');
+UPDATE public.missio_followups
+   SET stage = 'joined'
+ WHERE id = (
+   SELECT followup_id FROM public.missio_followup_stage_history
+   WHERE connect_response_id = 'd4444444-4444-4444-8444-444444444444'
+     AND kind = 'connect_card'
+ );
+SELECT pg_temp.expect('a card after the person joined creates a new follow-up',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source
+    )
+    SELECT 'd6666666-6666-4666-8666-666666666666', id,
+           'After Join', '082 123 4567', 'regular', 'manual'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('the post-join card has its own open follow-up',
+  (SELECT count(DISTINCT h.followup_id)::text || '/' ||
+          count(*) FILTER (WHERE f.stage = 'new')::text
+     FROM public.missio_followup_stage_history h
+     JOIN public.missio_followups f ON f.id = h.followup_id
+    WHERE h.kind = 'connect_card'
+      AND h.connect_response_id IN (
+        'd4444444-4444-4444-8444-444444444444',
+        'd6666666-6666-4666-8666-666666666666'
+      )),
+  '2/1');
+SELECT pg_temp.expect('a repeat card for the same matched contact attaches',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source, matched_contact_id
+    )
+    SELECT 'd7777777-7777-4777-8777-777777777777', id,
+           'Again', '5550111', 'first_time', 'manual',
+           'c1111111-1111-1111-1111-111111111111'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('the matched contact still has one open follow-up',
+  (SELECT count(*)::text
+     FROM public.missio_followups
+    WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+      AND stage <> 'joined'),
+  '1');
+
+INSERT INTO public.contacts (id, first_name, last_name)
+VALUES ('c5555555-5555-5555-5555-555555555555', 'Outside', 'Person');
+SELECT pg_temp.expect('service role cannot match a card to a non-org contact',
+  pg_temp.fail('service', $$
+    INSERT INTO public.connect_responses (
+      org_id, name, phone, visit_type, source, matched_contact_id, matched_by
+    )
+    SELECT id, 'Outside Card', '5550122', 'first_time', 'manual',
+           'c5555555-5555-5555-5555-555555555555',
+           'a4444444-4444-4444-4444-444444444444'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  '23503 missio_contact_not_in_org');
+SELECT pg_temp.expect('service role cannot open a follow-up for a non-org contact',
+  pg_temp.fail('service', $$
+    INSERT INTO public.missio_followups (org_id, contact_id)
+    SELECT id, 'c5555555-5555-5555-5555-555555555555'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  '23503 missio_contact_not_in_org');
+SELECT pg_temp.expect('service role cannot assign a leader who is not in the org',
+  pg_temp.fail('service', $$
+    INSERT INTO public.missio_followups (org_id, connect_response_id, assigned_leader_contact_id)
+    SELECT id, 'd2222222-2222-4222-8222-222222222222',
+           'c5555555-5555-5555-5555-555555555555'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  '23503 missio_contact_not_in_org');
+SELECT pg_temp.expect('service role keeps the supplied matched_by',
+  pg_temp.exec('service', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source,
+      matched_contact_id, matched_by, matched_at
+    )
+    SELECT 'd8888888-8888-4888-8888-888888888888', id,
+           'Kept By', '5550133', 'first_time', 'qr',
+           'c2222222-2222-2222-2222-222222222222',
+           'a4444444-4444-4444-4444-444444444444',
+           timestamptz '2000-01-01'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('matched_by stayed and matched_at is now',
+  (SELECT matched_by::text || '/' || (matched_at::date = current_date)::text
+     FROM public.connect_responses
+    WHERE id = 'd8888888-8888-4888-8888-888888888888'),
+  'a4444444-4444-4444-4444-444444444444/true');
+
+SELECT pg_temp.expect('an unmatched card can be matched later when the contact is free',
+  pg_temp.exec('service', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source
+    )
+    SELECT 'd9999999-9999-4999-8999-999999999999', id,
+           'Late Free', 'not-a-phone', 'first_time', 'manual'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.exec('service', $$
+  UPDATE public.connect_responses
+     SET matched_contact_id = 'c3333333-3333-3333-3333-333333333333'
+   WHERE id = 'd9999999-9999-4999-8999-999999999999'
+$$);
+SELECT pg_temp.expect('late match set the follow-up contact when nobody else was open',
+  (SELECT contact_id::text
+     FROM public.missio_followups
+    WHERE connect_response_id = 'd9999999-9999-4999-8999-999999999999'),
+  'c3333333-3333-3333-3333-333333333333');
+
+SELECT pg_temp.expect('a second unmatched card is staged for the conflict',
+  pg_temp.exec('service', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source
+    )
+    SELECT 'daaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', id,
+           'Late Clash', 'also-not-a-phone', 'regular', 'manual'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.exec('service', $$
+  UPDATE public.connect_responses
+     SET matched_contact_id = 'c3333333-3333-3333-3333-333333333333'
+   WHERE id = 'daaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+$$);
+SELECT pg_temp.expect('late match conflict leaves the card follow-up unmatched',
+  (SELECT (contact_id IS NULL)::text
+     FROM public.missio_followups
+    WHERE connect_response_id = 'daaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+  'true');
+SELECT pg_temp.expect('late match conflict wrote a note on both follow-ups',
+  (SELECT count(DISTINCT followup_id)::text
+     FROM public.missio_followup_stage_history
+    WHERE kind = 'note'
+      AND notes = 'A duplicate needs a manual merge.'),
+  '2');
+
+CREATE TEMP TABLE leak_log (got text);
+GRANT INSERT, SELECT ON leak_log TO authenticated, anon;
+CREATE FUNCTION pg_temp.leak(t text)
+RETURNS boolean
+LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO leak_log VALUES (t);
+  RETURN true;
+END $$;
+SELECT pg_temp.expect('security barrier returns no rows to a non-pastor',
+  pg_temp.scalar('a9999999-9999-9999-9999-999999999999', $$
+    SELECT count(*)::text
+    FROM public.missio_not_in_house
+    WHERE pg_temp.leak(coalesce(display_name, ''))
+  $$),
+  '0');
+SELECT pg_temp.expect('the leak function saw no not-in-house names',
+  (SELECT count(*)::text FROM leak_log),
+  '0');
+SELECT pg_temp.expect('not-in-house has no email column',
+  (SELECT count(*)::text
+     FROM pg_attribute
+    WHERE attrelid = 'public.missio_not_in_house'::regclass
+      AND attname = 'email'
+      AND NOT attisdropped),
+  '0');
+SELECT pg_temp.expect('anon still cannot read not-in-house after the extra rows',
+  pg_temp.scalar('anon', $$SELECT count(*)::text FROM public.missio_not_in_house$$),
+  'err 42501');
 
 -- ── Report ────────────────────────────────────────────────
 DO $$
