@@ -3,6 +3,7 @@
 import { useMemo, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { missioSkinVars } from "./access";
+import { missioPortalClass } from "./portal";
 import styles from "./shell.module.css";
 
 /**
@@ -38,11 +39,14 @@ export function MissioDialog({
   title,
   testId,
   children,
+  returnFocus = true,
 }: {
   onClose: () => void;
   title: string;
   testId: string;
   children: React.ReactNode;
+  /** When a write removes the control that opened the dialog, the caller moves focus itself. */
+  returnFocus?: boolean;
 }) {
   const faces = useMemo(() => dialogStyle(), []);
   return (
@@ -55,11 +59,14 @@ export function MissioDialog({
       <Dialog.Portal>
         <Dialog.Overlay className={styles.backdrop} />
         <Dialog.Content
-          className={styles.dialog}
+          className={missioPortalClass(styles.dialog)}
           style={faces.style}
           aria-describedby={undefined}
           data-testid={testId}
           data-missio-dialog=""
+          onCloseAutoFocus={(event) => {
+            if (!returnFocus) event.preventDefault();
+          }}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             const content = event.currentTarget as HTMLElement;
