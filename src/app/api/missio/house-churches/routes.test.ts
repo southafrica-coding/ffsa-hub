@@ -45,6 +45,7 @@ const state = vi.hoisted(() => {
     tableError: null as string | null,
     failInsert: null as string | null,
     constraintError: null as { table: string; code: string; message: string; details?: string; hint?: string } | null,
+    failAdmin: false,
     adminBuilds: 0,
     ops: [] as { client: "user" | "admin"; table: string; op: Op }[],
     writes: [] as Write[],
@@ -358,6 +359,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => state.userCl
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => {
     state.adminBuilds += 1;
+    if (state.failAdmin) throw new Error("admin down");
     return state.adminClient();
   },
 }));
@@ -379,6 +381,7 @@ function reset() {
   state.tableError = null;
   state.failInsert = null;
   state.constraintError = null;
+  state.failAdmin = false;
   state.adminBuilds = 0;
   state.ops = [];
   state.writes = [];
@@ -737,13 +740,25 @@ describe("GET /api/missio/house-churches/:id", () => {
     expect(body.canWrite).toBe(true);
     expect(body.house.leaderNotes).toBe("Bring a chair");
     expect(body.house.memberCount).toBe(2);
-    expect(body.house.members.map((member: { contactId: string; role: string }) => [member.role, member.contactId])).toEqual([
-      ["leader", ADA],
-      ["member", ALAN],
+    expect(body.house.members.map((member: { contactId: string; role: string; leftMissio: boolean }) => [member.role, member.contactId, member.leftMissio])).toEqual([
+      ["leader", ADA, false],
+      ["co_leader", GRACE, true],
+      ["member", ALAN, false],
     ]);
+    expect(body.house.members[1]).toEqual({
+      contactId: GRACE,
+      displayName: null,
+      firstName: null,
+      lastName: null,
+      role: "co_leader",
+      startedAt: "2026-02-02",
+      leftMissio: true,
+    });
     expect(body.house.members[0].orgPersonId).toBe("person-ada");
-    expect(body.house.members[1].orgPersonId).toBe("person-alan");
+    expect(body.house.members[2].orgPersonId).toBe("person-alan");
+    expect(body.house.members[0].leftMissio).toBe(false);
     expect(JSON.stringify(body)).not.toContain("Amy");
+    expect(state.ops.filter((op) => op.table === "contacts")).toEqual([]);
 
     const missing = await detail("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1");
     expect(missing.status).toBe(404);
@@ -770,6 +785,7 @@ describe("membership writes", () => {
         orgPersonId: "person-ada",
         role: "leader",
         startedAt: todayIsoDate(),
+        leftMissio: false,
       },
     });
     expect(state.writes.some((write) => write.table === "org_people")).toBe(false);
@@ -887,6 +903,21 @@ describe("membership writes", () => {
     expect(visitorRole.status).toBe(200);
     expect(state.tables.org_people[0].status).toBe("visitor");
     expect(state.tables.house_church_members.find((row) => row.ended_at == null)?.role).toBe("leader");
+  });
+
+  it("returns member_left_missio when changing the role of someone who has left", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    addMember({ houseId: HOUSE_1, contactId: ADA, role: "member", startedAt: "2026-01-01" });
+    state.tables.org_people = [];
+    const res = await patch(HOUSE_1, ADA, { role: "leader" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: "This person is no longer in Missio; membership can't be changed here.",
+      code: "member_left_missio",
+    });
+    expect(state.tables.house_church_members[0].role).toBe("member");
+    expect(state.writes.some((write) => write.table === "house_church_members" && write.op === "update")).toBe(false);
   });
 
   it("returns 429 after 20 writes in a minute", async () => {
@@ -1224,6 +1255,39 @@ describe("import review", () => {
     expect(state.tables.house_church_members[0].role).toBe("member");
   });
 
+  it("does not claim a candidate who is not in Missio, and links one who is", async () => {
+    addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
+    addContact({ id: OUTSIDE, first: "Outside", last: "Person", inOrg: false });
+    addReview({
+      id: REVIEW,
+      rawName: "Outside Person",
+      sourceLine: 4,
+      houseNumber: 3,
+      role: "member",
+      candidate_contact_ids: [OUTSIDE],
+    });
+    const writesBefore = state.writes.length;
+    const refused = await resolve(REVIEW, { action: "link", contactId: OUTSIDE });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+    expect(state.tables.missio_import_review[0].status).toBe("pending");
+    expect(state.tables.missio_import_review[0].resolved_contact_id).toBeNull();
+    expect(state.writes.length).toBe(writesBefore);
+    expect(state.tables.house_church_members).toEqual([]);
+    expect(state.tables.org_people).toEqual([]);
+
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    state.tables.missio_import_review[0].candidate_contact_ids = [ADA];
+    const linked = await resolve(REVIEW, { action: "link", contactId: ADA });
+    expect(linked.status).toBe(200);
+    const body = await linked.json();
+    expect(body.item.status).toBe("matched");
+    expect(body.member).toMatchObject({ contactId: ADA, role: "member", orgPersonId: "person-ada", leftMissio: false });
+    expect(state.tables.missio_import_review[0].status).toBe("matched");
+    expect(state.tables.house_church_members).toHaveLength(1);
+    expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
+  });
+
   it("creates a contact through the people path, and returns not_missio_person when the email is already a contact", async () => {
     addHouse({ id: HOUSE_1, number: 3, campus: "jhb" });
     addContact({ id: OUTSIDE, first: "Taken", last: "Person", email: "taken@example.com", inOrg: false });
@@ -1244,6 +1308,21 @@ describe("import review", () => {
     expect(state.tables.house_church_members).toEqual([]);
     expect(state.tables.contacts).toHaveLength(1);
 
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", email: "ada@example.com", inOrg: true, personId: "person-ada" });
+    const already = await resolve(REVIEW, {
+      action: "create",
+      firstName: "Ada",
+      lastName: "Lovelace",
+      email: "ada@example.com",
+    });
+    expect(already.status).toBe(409);
+    expect(await already.json()).toEqual({
+      error: "This person is already in Missio.",
+      code: "already_in_org",
+    });
+    expect(state.tables.missio_import_review[0].status).toBe("pending");
+    expect(state.tables.house_church_members).toEqual([]);
+
     const created = await resolve(REVIEW, {
       action: "create",
       firstName: "New",
@@ -1255,9 +1334,9 @@ describe("import review", () => {
     expect(body.item.status).toBe("new");
     expect(body.member.role).toBe("member");
     expect(body.member.orgPersonId).toEqual(expect.any(String));
-    expect(state.tables.contacts).toHaveLength(2);
-    expect(state.tables.org_people).toHaveLength(1);
-    expect(state.tables.org_people[0]).toMatchObject({ campus: "jhb", status: "active" });
+    expect(state.tables.contacts).toHaveLength(3);
+    expect(state.tables.org_people).toHaveLength(2);
+    expect(state.tables.org_people.find((row) => row.contact_id !== ADA)).toMatchObject({ campus: "jhb", status: "active" });
     expect(state.tables.house_church_members).toHaveLength(1);
     expect(state.tables.missio_import_review[0].resolved_contact_id).toBe(body.member.contactId);
     expect(state.writes.filter((write) => write.table === "contacts" && write.op === "insert").every((write) => write.client === "admin")).toBe(true);
@@ -1283,6 +1362,25 @@ describe("import review", () => {
     expect(text).not.toContain("Grace Hopper");
     expect(text).not.toContain("resolved_contact_id");
     expect(state.tables.missio_import_review[0].status).toBe("pending");
+  });
+
+  it("releases the claim when a later step fails and leaves no orphans", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addReview({ id: REVIEW, rawName: "Skip me", sourceLine: 2, houseNumber: 3, notes: "see house 4" });
+    state.failAdmin = true;
+    const res = await resolve(REVIEW, { action: "skip", notes: "not a person" });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "Something went wrong.", code: "server_error" });
+    expect(state.tables.missio_import_review[0]).toMatchObject({
+      status: "pending",
+      resolved_contact_id: null,
+      resolved_by: null,
+      resolved_at: null,
+      notes: null,
+    });
+    expect(state.tables.house_church_members).toEqual([]);
+    expect(state.tables.org_people).toEqual([]);
+    expect(state.tables.contacts).toEqual([]);
   });
 
   it("skips without a membership and refuses a row that is already resolved", async () => {

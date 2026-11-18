@@ -9,10 +9,11 @@
 //
 // Uses NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (already in .env.local).
 // Reads contacts with the service role. Auto-link prefers contacts that
-// already have a Missio org_people row. A unique full-name match who is not
-// in Missio is staged for review (match_type non_missio_contact) and is not
-// linked. org_people inserts for those linked contacts happen before the
-// membership row, and only when --apply passes the project-ref gate.
+// already have a Missio org_people row. The Missio contact label is not a
+// match pool. A name that is not a unique org_people match is staged for
+// review and is not linked. org_people inserts, if a later plan asks for
+// them, happen before the membership row, and only when --apply passes the
+// project-ref gate.
 // guard_house_church_member rejects a member whose contact is not already
 // in org_people (23503 missio_member_not_in_org), including the service role.
 // An existing org_people row is not changed, and an open membership with a
@@ -92,18 +93,10 @@ async function loadSnapshot(db: Db, orgId: string): Promise<ImportSnapshot> {
   const orgPeopleContactIds = (
     await fetchAll(db, "org_people", "id, contact_id", (query) => query.eq("org_id", orgId))
   ).map((row) => String(row.contact_id));
-  const orgRow = await db.from("organisations").select("contact_label_id").eq("id", orgId).maybeSingle();
-  if (orgRow.error) {
-    console.error("[missio-import] organisation lookup failed", orgRow.error.message);
-    throw new Error("Could not read organisations.");
-  }
-  const labelId = orgRow.data?.contact_label_id as string | null | undefined;
-  const labelledIds = labelId
-    ? (await fetchAll(db, "contact_labels", "id, contact_id", (query) => query.eq("label_id", labelId))).map((row) =>
-        String(row.contact_id)
-      )
-    : [];
-  const matchIds = [...new Set([...orgPeopleContactIds, ...labelledIds])];
+  // Match pool is Missio org_people only. A later approved branch could add
+  // contacts that carry the Missio label, then create their org_people row
+  // before the membership. That branch is not enabled.
+  const matchIds = [...new Set(orgPeopleContactIds)];
   const contacts: ContactName[] = [];
   for (let index = 0; index < matchIds.length; index += 200) {
     const slice = matchIds.slice(index, index + 200);

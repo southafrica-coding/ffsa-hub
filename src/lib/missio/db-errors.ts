@@ -8,6 +8,7 @@ export const HOUSE_CHURCH_ERROR_CODES = [
   "not_missio_person",
   "not_found",
   "already_member",
+  "already_in_org",
   "already_resolved",
   "membership_not_current",
   "member_left_missio",
@@ -72,10 +73,12 @@ const FUTURE_START: MappedDbError = {
   fieldErrors: { startedAt: "Check this field and try again." },
 };
 
+export const MEMBER_LEFT_MISSIO_MESSAGE = "This person is no longer in Missio; membership can't be changed here.";
+
 const LEFT_MISSIO: MappedDbError = {
   status: 409,
   code: "member_left_missio",
-  error: "This person is no longer in Missio; membership can't be changed here.",
+  error: MEMBER_LEFT_MISSIO_MESSAGE,
 };
 
 export function mapMissioDbError(error: DbErrorLike): MappedDbError {

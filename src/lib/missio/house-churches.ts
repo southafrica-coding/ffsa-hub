@@ -8,6 +8,7 @@ import {
   isHouseChurchErrorCode,
   mapMembershipEndError,
   mapMissioDbError,
+  MEMBER_LEFT_MISSIO_MESSAGE,
   type HouseChurchErrorCode,
 } from "@/lib/missio/db-errors";
 import { endDateFor, isAfterDatabaseToday, todayIsoDate } from "@/lib/missio/dates";
@@ -161,6 +162,7 @@ function zodFail(error: z.ZodError): Fail {
 /** People-module codes that are not in the house-church contract become one of the pinned codes. */
 function fromPersonError(status: number, code: string | undefined): Fail {
   if (code === "exists_use_search") return fail(400, "not_missio_person", "This person is not in Missio.");
+  if (code === "already_in_org") return fail(409, "already_in_org", "This person is already in Missio.");
   if (code && isHouseChurchErrorCode(code)) {
     if (code === "invalid_input") return fail(400, "invalid_input", "Check the fields and try again.", {});
     if (code === "server_error") return fail(500, "server_error", "Something went wrong.");
@@ -430,6 +432,7 @@ function memberView(row: MemberRow, map: Map<string, PersonRef>, orgPersonId?: s
     ...ref,
     role,
     startedAt: (row.started_at ?? "").slice(0, 10),
+    leftMissio: false,
   };
   if (orgPersonId) view.orgPersonId = orgPersonId;
   else if (!ref.orgPersonId) delete view.orgPersonId;
@@ -439,7 +442,7 @@ function memberView(row: MemberRow, map: Map<string, PersonRef>, orgPersonId?: s
 function compareMembers(a: HouseChurchMemberView, b: HouseChurchMemberView): number {
   return (
     ROLE_ORDER[a.role] - ROLE_ORDER[b.role] ||
-    a.displayName.localeCompare(b.displayName, "en") ||
+    (a.displayName ?? "").localeCompare(b.displayName ?? "", "en") ||
     a.contactId.localeCompare(b.contactId)
   );
 }
@@ -451,7 +454,7 @@ function compareNames(a: PersonRef, b: PersonRef): number {
 function asPersonRef(member: HouseChurchMemberView): PersonRef {
   const ref: PersonRef = {
     contactId: member.contactId,
-    displayName: member.displayName,
+    displayName: member.displayName ?? "",
     firstName: member.firstName,
     lastName: member.lastName,
   };
@@ -542,6 +545,26 @@ function currentMembers(rows: MemberRow[], inMissio: ReadonlySet<string>, today 
   );
 }
 
+/** Open rows whose contact is no longer in org_people. Names are not loaded. */
+function leftMissioMembers(rows: MemberRow[], inMissio: ReadonlySet<string>): HouseChurchMemberView[] {
+  const views: HouseChurchMemberView[] = [];
+  for (const row of rows) {
+    if (inMissio.has(row.contact_id) || !membershipIsOpen(asMembership(row))) continue;
+    const role = asRole(row.role);
+    if (!role) continue;
+    views.push({
+      contactId: row.contact_id,
+      displayName: null,
+      firstName: null,
+      lastName: null,
+      role,
+      startedAt: (row.started_at ?? "").slice(0, 10),
+      leftMissio: true,
+    });
+  }
+  return views;
+}
+
 /** The open row (ended_at IS NULL). A second open row is what the unique index rejects. */
 function blockingMember(rows: MemberRow[]): MemberRow | null {
   return rows.find((row) => membershipBlocksInsert(asMembership(row))) ?? null;
@@ -626,7 +649,7 @@ async function insertMember(
   return {
     ok: true,
     memberId: row.id,
-    member: { ...ref, role, startedAt: (row.started_at ?? todayIsoDate()).slice(0, 10) },
+    member: { ...ref, role, startedAt: (row.started_at ?? todayIsoDate()).slice(0, 10), leftMissio: false },
   };
 }
 
@@ -716,12 +739,14 @@ export async function getHouse(
     refs = names;
   }
 
-  const members = memberRows
-    .map((row) => memberView(row, refs))
-    .filter((member): member is HouseChurchMemberView => Boolean(member))
-    .sort(compareMembers);
+  const members = [
+    ...memberRows
+      .map((row) => memberView(row, refs))
+      .filter((member): member is HouseChurchMemberView => Boolean(member)),
+    ...leftMissioMembers(rawMembers, inMissio.ids),
+  ].sort(compareMembers);
   const house: HouseChurchDetail = {
-    ...summaryFrom(loaded.house, members),
+    ...summaryFrom(loaded.house, members.filter((member) => !member.leftMissio)),
     leaderNotes: blankToNull(loaded.house.leader_notes),
     members,
   };
@@ -775,13 +800,19 @@ export async function changeMemberRole(
 
   const house = await loadHouse(auth, scope, houseId);
   if (!house.ok) return house;
-  const person = await requireMissioPerson(auth, contactId);
-  if (!person.ok) return person;
 
   const existing = await memberRowsFor(auth, house.house.id, contactId);
   if (!existing.ok) return existing;
   const target = blockingMember(existing.rows);
   if (!target) return closedMembership(existing.rows);
+
+  const person = await requireMissioPerson(auth, contactId);
+  if (!person.ok) {
+    if (person.code === "not_missio_person") {
+      return fail(409, "member_left_missio", MEMBER_LEFT_MISSIO_MESSAGE);
+    }
+    return person;
+  }
 
   const updated = await auth.supabase
     .from("house_church_members")
@@ -995,18 +1026,27 @@ async function claimReview(
   return { ok: true, row: updated.data as ReviewRow };
 }
 
-async function releaseReview(auth: OrgAccess, itemId: string) {
+async function releaseReview(
+  auth: OrgAccess,
+  itemId: string,
+  status: "matched" | "new" | "skipped",
+  clearNotes = false
+) {
+  const update: Partial<Record<(typeof REVIEW_RESOLVE_COLUMNS)[number], unknown>> = {
+    status: "pending",
+    resolved_contact_id: null,
+    resolved_by: null,
+    resolved_at: null,
+  };
+  if (clearNotes) update.notes = null;
   const released = await auth.supabase
     .from("missio_import_review")
-    .update({
-      status: "pending",
-      resolved_contact_id: null,
-      resolved_by: null,
-      resolved_at: null,
-    })
+    .update(update)
     .eq("id", itemId)
-    .eq("org_id", auth.orgId);
-  if (released.error) console.error("[missio] import review release failed", released.error.message);
+    .eq("org_id", auth.orgId)
+    .eq("status", status)
+    .eq("resolved_by", auth.user.id);
+  if (released.error) console.error("[missio] import review release failed", released.error.code ?? "update failed");
 }
 
 async function shapeClaimedReview(
@@ -1056,31 +1096,29 @@ export async function resolveImportReview(
   if (!role) return fail(500, "server_error", "Something went wrong.");
 
   if (parsed.data.action === "link") {
-    const candidates = loaded.row.candidate_contact_ids ?? [];
     const person = await requireMissioPerson(auth, parsed.data.contactId);
     if (!person.ok && person.status !== 400) return person;
-    if (!person.ok && !candidates.includes(parsed.data.contactId)) return NOT_MISSIO;
+    if (!person.ok) {
+      // A later branch, once approved, could create org_people for a
+      // candidate who carries the Missio label. It is not enabled, and it
+      // must not claim the row.
+      return NOT_MISSIO;
+    }
     const claimed = await claimReview(auth, itemId, { status: "matched", contactId: parsed.data.contactId });
     if (!claimed.ok) return claimed;
-    if (!person.ok) {
-      const admin = adminClient();
-      if ("error" in admin) return fail(500, "server_error", admin.error);
-      const house = await loadHouseByNumber(auth, scope, Number(loaded.row.house_number));
-      return shapeClaimedReview(auth, admin.client, claimed.row, house.ok ? house.house : null, undefined, "link");
-    }
     const house = await loadHouseByNumber(auth, scope, Number(loaded.row.house_number));
     if (!house.ok) {
-      await releaseReview(auth, itemId);
+      await releaseReview(auth, itemId, "matched");
       return house;
     }
     const admin = adminClient();
     if ("error" in admin) {
-      await releaseReview(auth, itemId);
-      return fail(500, "server_error", admin.error);
+      await releaseReview(auth, itemId, "matched");
+      return fail(500, "server_error", "Something went wrong.");
     }
     const attached = await attachKnownMember(auth, admin.client, house.house, person, role);
     if (!attached.ok) {
-      await releaseReview(auth, itemId);
+      await releaseReview(auth, itemId, "matched");
       return attached;
     }
     return shapeClaimedReview(auth, admin.client, claimed.row, house.house, attached.member, "link");
@@ -1094,9 +1132,15 @@ export async function resolveImportReview(
     });
     if (!claimed.ok) return claimed;
     const admin = adminClient();
-    if ("error" in admin) return fail(500, "server_error", admin.error);
+    if ("error" in admin) {
+      await releaseReview(auth, itemId, "skipped", true);
+      return fail(500, "server_error", "Something went wrong.");
+    }
     const house = await loadHouseByNumber(auth, scope, Number(loaded.row.house_number));
-    if (!house.ok && (house.status !== 404 || scope.mode !== "all")) return house;
+    if (!house.ok && (house.status !== 404 || scope.mode !== "all")) {
+      await releaseReview(auth, itemId, "skipped", true);
+      return house;
+    }
     return shapeClaimedReview(auth, admin.client, claimed.row, house.ok ? house.house : null, undefined, "skip");
   }
 
@@ -1113,18 +1157,18 @@ export async function resolveImportReview(
     campus: asCampus(house.house.campus),
   });
   if (!created.ok) {
-    await releaseReview(auth, itemId);
+    await releaseReview(auth, itemId, "new");
     return fromPersonError(created.status, created.code);
   }
   const person = await requireMissioPerson(auth, created.body.person.contactId);
   if (!person.ok) {
-    await releaseReview(auth, itemId);
+    await releaseReview(auth, itemId, "new");
     return person;
   }
   const admin = adminClient();
   if ("error" in admin) {
-    await releaseReview(auth, itemId);
-    return fail(500, "server_error", admin.error);
+    await releaseReview(auth, itemId, "new");
+    return fail(500, "server_error", "Something went wrong.");
   }
   const stamped = await auth.supabase
     .from("missio_import_review")
@@ -1135,16 +1179,16 @@ export async function resolveImportReview(
     .select(REVIEW_COLUMNS)
     .maybeSingle();
   if (stamped.error) {
-    await releaseReview(auth, itemId);
+    await releaseReview(auth, itemId, "new");
     return dbWriteError(stamped.error, "import review contact stamp");
   }
   if (!stamped.data) {
-    await releaseReview(auth, itemId);
+    await releaseReview(auth, itemId, "new");
     return fail(500, "server_error", "Something went wrong.");
   }
   const attached = await attachKnownMember(auth, admin.client, house.house, person, role);
   if (!attached.ok) {
-    await releaseReview(auth, itemId);
+    await releaseReview(auth, itemId, "new");
     return attached;
   }
   return shapeClaimedReview(auth, admin.client, stamped.data as ReviewRow, house.house, attached.member, "create");

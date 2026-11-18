@@ -137,6 +137,7 @@ describe("HOUSE_CHURCH_ERROR_CODES", () => {
       "not_missio_person",
       "not_found",
       "already_member",
+      "already_in_org",
       "already_resolved",
       "membership_not_current",
       "member_left_missio",

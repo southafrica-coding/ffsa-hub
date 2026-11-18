@@ -120,9 +120,13 @@ export type PersonRef = {
   orgPersonId?: string;
 };
 
-export type HouseChurchMemberView = PersonRef & {
+export type HouseChurchMemberView = Omit<PersonRef, "displayName"> & {
+  /** Null when leftMissio is true. The contact row is not read. */
+  displayName: string | null;
   role: HouseChurchRole;
   startedAt: string;
+  /** True for an open membership whose contact is no longer in Missio org_people. */
+  leftMissio: boolean;
 };
 
 export type HouseChurchSummary = {
