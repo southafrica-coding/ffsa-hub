@@ -152,7 +152,10 @@ describe("review queue", () => {
     (host.querySelector("[data-testid=review-skip]") as HTMLFormElement).requestSubmit();
     await settle();
     expect(bodies[1]).toEqual({ action: "skip" });
-    expect(host.querySelector("[data-testid=review-done]")?.textContent).toContain("Both names are resolved.");
+    expect(host.querySelector("#review-done-heading")?.textContent).toBe("All names sorted");
+    expect(host.querySelector("#review-done-heading")?.getAttribute("tabindex")).toBe("-1");
+    expect(host.textContent).toContain("Everyone from the sheet is matched, added, or skipped.");
+    expect(host.querySelector("[data-testid=review-done-back]")?.getAttribute("href")).toBe("/missio/house-churches");
     expect(host.querySelector("[data-testid=review-item]")).toBeNull();
   });
 
@@ -183,7 +186,7 @@ describe("review queue", () => {
       lastName: "Navarro",
       email: "elise@example.com",
     });
-    expect(host.querySelector("[data-testid=review-done]")?.textContent).toContain("That name is resolved.");
+    expect(host.querySelector("#review-done-heading")?.textContent).toBe("All names sorted");
   });
 
   it("searches the people list and links that contact", async () => {
@@ -287,8 +290,10 @@ describe("review queue", () => {
     (host.querySelector("[data-testid=review-skip]") as HTMLFormElement).requestSubmit();
     await settle();
     await settle();
-    expect(host.textContent).toContain("No names left to review.");
+    expect(host.querySelector("#review-done-heading")?.textContent).toBe("No names left to review.");
+    expect(host.textContent).not.toContain("All names sorted");
     expect(host.textContent).toContain("Someone else already sorted this one.");
+    expect(host.querySelector("[data-testid=review-done-back]")?.textContent?.trim()).toBe("Back to all houses");
     expect(host.textContent).not.toContain("All 0");
     expect(host.textContent).not.toContain(serverText);
     expect(document.activeElement).toBe(host.querySelector("#review-action-error"));

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { MissioApiError, missioClient, type MissioClient } from "../api";
 import content from "../content.module.css";
 import shell from "../shell.module.css";
@@ -149,9 +150,15 @@ export function ReviewQueue({
         </p>
       ) : null}
       {state.phase === "ready" && finished ? (
-        <h2 id="review-done-heading" tabIndex={-1} className={styles.doneTitle} data-testid="review-done">
-          {doneHeading(total)}
-        </h2>
+        <div data-testid="review-done">
+          <h2 id="review-done-heading" tabIndex={-1} className={styles.doneTitle}>
+            {doneHeading(total)}
+          </h2>
+          <p className={styles.doneNote}>Everyone from the sheet is matched, added, or skipped.</p>
+          <Link href="/missio/house-churches" className={`${shell.ghost} ${styles.doneBack}`} data-testid="review-done-back">
+            Back to all houses
+          </Link>
+        </div>
       ) : null}
       {item ? (
         <ReviewCard
@@ -202,9 +209,7 @@ export function ReviewQueue({
 
 function doneHeading(count: number): string {
   if (count <= 0) return "No names left to review.";
-  if (count === 1) return "That name is resolved.";
-  if (count === 2) return "Both names are resolved.";
-  return `All ${count} names are resolved.`;
+  return "All names sorted";
 }
 
 function ReviewCard({

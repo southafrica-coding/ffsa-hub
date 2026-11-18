@@ -269,10 +269,32 @@
 
 .root .doneTitle {
   margin: 40px 0 0;
+  padding: 4px 8px;
   font-size: 19px;
   font-weight: 560;
   line-height: 1.25;
   letter-spacing: -0.4px;
+}
+
+/* Reached by script focus, which this browser reports as :focus-visible. */
+.root .doneTitle:focus,
+.root .doneTitle:focus-visible {
+  outline: none;
+}
+
+.doneNote {
+  margin: 8px 0 0;
+  color: var(--quiet, #7a7466);
+}
+
+.root .doneBack {
+  box-sizing: border-box;
+  width: auto;
+  height: auto !important;
+  min-height: 44px;
+  margin-top: 16px;
+  padding: 8px 12px !important;
+  text-decoration: none;
 }
 
 .summary {
