@@ -98,6 +98,7 @@ describe("Missio access state", () => {
     expect(shell.style.getPropertyValue("--page").trim()).toBe("#F3F0E8");
     expect(shell.style.getPropertyValue("--panel").trim()).toBe("#FBF9F4");
     expect(host.textContent).toContain("People live here");
+    expect(host.textContent).toContain("Volunteers");
     expect(host.textContent).toContain("House churches");
     expect(host.textContent).toContain("Teams");
   });

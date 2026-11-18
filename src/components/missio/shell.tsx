@@ -173,6 +173,7 @@ function MissioSidebar({
   const missio = me.orgs.find((org) => org.slug === "missio");
   const home = pathname === "/missio";
   const people = pathname.startsWith("/missio/people");
+  const volunteers = pathname.startsWith("/missio/volunteers");
 
   const orgNode = <OrgHeader state={header} />;
 
@@ -191,6 +192,10 @@ function MissioSidebar({
         <Link href="/missio/people" className={`${styles.navLink} ${people ? styles.navOn : ""}`} aria-current={people ? "page" : undefined} onClick={onNavigate}>
           <PeopleIcon />
           <span>People</span>
+        </Link>
+        <Link href="/missio/volunteers" className={`${styles.navLink} ${volunteers ? styles.navOn : ""}`} aria-current={volunteers ? "page" : undefined} onClick={onNavigate}>
+          <CalendarIcon />
+          <span>Volunteers</span>
         </Link>
         <div className={styles.soon} aria-disabled="true">
           <HomeIcon />
@@ -243,7 +248,11 @@ function MissioTop({
   navOpen: boolean;
 }) {
   const pathname = usePathname();
-  const section = pathname.startsWith("/missio/people") ? "People" : "Home";
+  const section = pathname.startsWith("/missio/volunteers")
+    ? "Volunteers"
+    : pathname.startsWith("/missio/people")
+      ? "People"
+      : "Home";
   const orgName = me.orgs.find((org) => org.slug === "missio")?.name ?? "Missio";
   const header = missioOrgHeader({ orgs: me.orgs, ffsaRoleNames });
   return (
@@ -330,6 +339,15 @@ function HomeIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
       <path d="M3 10.5 12 3l9 7.5" />
       <path d="M5 9.5V21h14V9.5" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
+      <rect x="3.5" y="5" width="17" height="15" />
+      <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" />
     </svg>
   );
 }
