@@ -18,8 +18,12 @@
 --   * The sheet's "Leader 2" is the co_leader role.
 --   * A person may belong to more than one house church.
 --   * A Missio member is anyone with at least one current
---     house-church membership (started_at on or before today,
---     and ended_at null or after today).
+--     house-church membership. Current means the row is open
+--     (ended_at is null) and started_at is on or before today.
+--     ended_at in the future is rejected. A CHECK cannot call
+--     current_date (it is not immutable), so a BEFORE trigger
+--     raises 23514. The partial unique index is the same open
+--     row: ended_at IS NULL.
 --
 -- org_people rows are ensured by service-role API code when
 -- someone is added to a house. That sync is one-way and has no
@@ -112,12 +116,60 @@ COMMENT ON COLUMN public.house_church_members.role IS
   'leader, co_leader, or member. co_leader is what the import sheet calls Leader 2.';
 
 COMMENT ON COLUMN public.house_church_members.ended_at IS
-  'Null while the row is the open membership. A date on or before today has ended. A date after today is still current for missio_member_status, but it is not the open row the unique index guards.';
+  'Null while the row is the open, current membership. A date on or before today has ended and is not current. A date after today is rejected by reject_future_house_membership_end (23514). current_date is not immutable, so this is a trigger rather than a CHECK. The partial unique index uses the same open predicate, ended_at IS NULL.';
 
 DROP TRIGGER IF EXISTS set_updated_at ON public.house_church_members;
 CREATE TRIGGER set_updated_at
   BEFORE UPDATE ON public.house_church_members
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- current_date is stable, not immutable, so it cannot appear in a
+-- CHECK. This trigger is the guard.
+CREATE OR REPLACE FUNCTION public.reject_future_house_membership_end()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.ended_at IS NOT NULL AND NEW.ended_at > current_date THEN
+    RAISE EXCEPTION 'house_church_members.ended_at cannot be after today'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.reject_future_house_membership_end() FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.reject_future_house_membership_end() IS
+  'Rejects ended_at after today. Current membership is ended_at IS NULL, which is also what the partial unique index covers.';
+
+DROP TRIGGER IF EXISTS trg_house_church_member_end_not_future ON public.house_church_members;
+CREATE TRIGGER trg_house_church_member_end_not_future
+  BEFORE INSERT OR UPDATE OF ended_at ON public.house_church_members
+  FOR EACH ROW EXECUTE FUNCTION public.reject_future_house_membership_end();
+
+-- Authenticated callers cannot attribute the row to someone else.
+-- Service role and the migration owner may set created_by freely.
+CREATE OR REPLACE FUNCTION public.pin_house_church_member_created_by()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF current_user = 'authenticated' THEN
+    NEW.created_by := auth.uid();
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.pin_house_church_member_created_by() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_house_church_member_pin_created_by ON public.house_church_members;
+CREATE TRIGGER trg_house_church_member_pin_created_by
+  BEFORE INSERT OR UPDATE ON public.house_church_members
+  FOR EACH ROW EXECUTE FUNCTION public.pin_house_church_member_created_by();
 
 -- ────────────────────────────────────────────────────────────
 -- 3. missio_import_review
@@ -165,6 +217,47 @@ CREATE TRIGGER set_updated_at
   BEFORE UPDATE ON public.missio_import_review
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
+-- Pastor resolves may only point at a staged candidate or at someone
+-- already in this org's org_people. Service role is not restricted.
+-- Authenticated resolved_by is overwritten with auth.uid().
+CREATE OR REPLACE FUNCTION public.guard_missio_import_review_resolve()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF current_user <> 'authenticated' THEN
+    RETURN NEW;
+  END IF;
+
+  NEW.resolved_by := auth.uid();
+
+  IF NEW.resolved_contact_id IS NOT NULL
+     AND NOT (NEW.resolved_contact_id = ANY (COALESCE(NEW.candidate_contact_ids, '{}')))
+     AND NOT EXISTS (
+       SELECT 1
+       FROM public.org_people op
+       WHERE op.org_id = NEW.org_id
+         AND op.contact_id = NEW.resolved_contact_id
+     ) THEN
+    RAISE EXCEPTION 'resolved_contact_id must be a candidate or an org person'
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.guard_missio_import_review_resolve() FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.guard_missio_import_review_resolve() IS
+  'On authenticated updates, pins resolved_by to auth.uid() and rejects a resolved_contact_id that is neither in candidate_contact_ids nor in org_people for the row org. Service role is unchanged.';
+
+DROP TRIGGER IF EXISTS trg_missio_import_review_guard_resolve ON public.missio_import_review;
+CREATE TRIGGER trg_missio_import_review_guard_resolve
+  BEFORE UPDATE ON public.missio_import_review
+  FOR EACH ROW EXECUTE FUNCTION public.guard_missio_import_review_resolve();
+
 -- ────────────────────────────────────────────────────────────
 -- 4. Derived membership
 --    security_invoker so RLS on the base tables applies.
@@ -185,13 +278,19 @@ JOIN public.house_churches hc ON hc.id = m.house_church_id
 JOIN public.organisations o ON o.id = hc.org_id
 WHERE o.slug = 'missio'
   AND m.started_at <= current_date
-  AND (m.ended_at IS NULL OR m.ended_at > current_date)
+  AND m.ended_at IS NULL
+  AND EXISTS (
+    SELECT 1
+    FROM public.org_people op
+    WHERE op.org_id = hc.org_id
+      AND op.contact_id = m.contact_id
+  )
 GROUP BY hc.org_id, m.contact_id;
 
 ALTER VIEW public.missio_member_status SET (security_invoker = true);
 
 COMMENT ON VIEW public.missio_member_status IS
-  'One row per contact with a current Missio house-church membership. Current means started_at <= today and ended_at is null or after today. is_member is always true. No names. security_invoker: RLS on the base tables applies. org_people rows are ensured by service-role API code when someone is added to a house. That sync is one-way and has no trigger. Leaving a house never changes org_people. org_people.status is NOT auto-synced.';
+  'One row per contact with a current Missio house-church membership. Current means ended_at IS NULL and started_at <= today, and the contact has an org_people row in that org. A future ended_at cannot be stored. is_member is always true. No names. security_invoker: RLS on the base tables applies. org_people rows are ensured by service-role API code when someone is added to a house. That sync is one-way and has no trigger. Leaving a house never changes org_people. org_people.status is NOT auto-synced.';
 
 -- True only for a Missio pastor, and only when the contact has a
 -- current membership. SECURITY DEFINER so the check can see
@@ -216,7 +315,13 @@ AS $$
       WHERE m.contact_id = p_contact_id
         AND o.slug = 'missio'
         AND m.started_at <= current_date
-        AND (m.ended_at IS NULL OR m.ended_at > current_date)
+        AND m.ended_at IS NULL
+        AND EXISTS (
+          SELECT 1
+          FROM public.org_people op
+          WHERE op.org_id = hc.org_id
+            AND op.contact_id = m.contact_id
+        )
     );
 $$;
 
@@ -224,7 +329,7 @@ REVOKE ALL ON FUNCTION public.is_missio_member(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.is_missio_member(uuid) TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.is_missio_member(uuid) IS
-  'True when the caller is a Missio pastor and p_contact_id has a current Missio house-church membership. Returns false for every other caller, including FFSA admin and super_admin and a Missio org admin who is not a pastor. Does not read or write org_people. org_people rows are ensured by service-role API code when someone is added to a house (one-way, no trigger). Leaving a house never changes org_people. org_people.status is NOT auto-synced.';
+  'True when the caller is a Missio pastor and p_contact_id has a current Missio house-church membership: ended_at IS NULL, started_at on or before today, and an org_people row in that org. Returns false for every other caller, including FFSA admin and super_admin and a Missio org admin who is not a pastor. Does not write org_people. org_people rows are ensured by service-role API code when someone is added to a house (one-way, no trigger). Leaving a house never changes org_people. org_people.status is NOT auto-synced.';
 
 -- ────────────────────────────────────────────────────────────
 -- 5. RLS
@@ -337,6 +442,12 @@ CREATE POLICY "Pastors can insert house church members"
       FROM public.house_churches hc
       WHERE hc.id = house_church_id
         AND hc.org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
+        AND EXISTS (
+          SELECT 1
+          FROM public.org_people op
+          WHERE op.org_id = hc.org_id
+            AND op.contact_id = house_church_members.contact_id
+        )
     )
   );
 
@@ -361,6 +472,12 @@ CREATE POLICY "Pastors can update house church members"
       FROM public.house_churches hc
       WHERE hc.id = house_church_id
         AND hc.org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
+        AND EXISTS (
+          SELECT 1
+          FROM public.org_people op
+          WHERE op.org_id = hc.org_id
+            AND op.contact_id = house_church_members.contact_id
+        )
     )
   );
 
