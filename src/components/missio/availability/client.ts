@@ -4,7 +4,7 @@ import type { VolunteersSnapshot } from "@/lib/missio/availability/service";
 
 export type PeopleHit = { contactId: string; name: string };
 
-export type NudgeDraft = { whatsapp: string; email: string; count: number };
+export type NudgeDraft = { whatsapp: string; email: string; count: number; needsNewLink: string[] };
 
 export type VolunteersClient = {
   load(requestId?: string): Promise<VolunteersSnapshot>;

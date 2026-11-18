@@ -518,39 +518,60 @@ function tokenRow(request: VolunteerRequest, contactId: string, secret: string) 
   };
 }
 
-/** First writer wins. A second insert does not replace the nonce. */
+/**
+ * First writer wins. PostgREST's insert() drops onConflict, so a racing
+ * insert comes back as 23505. Upsert with ignoreDuplicates is a no-op when
+ * the pair already exists; 23505 means the same thing. Either way the caller
+ * re-reads the row that won.
+ */
 async function insertTokenIfAbsent(
   admin: Client,
   request: VolunteerRequest,
   contactId: string,
   secret: string
 ): Promise<Fail | null> {
-  const { error } = await admin.from("availability_tokens").insert(tokenRow(request, contactId, secret), {
+  const { error } = await admin.from("availability_tokens").upsert(tokenRow(request, contactId, secret), {
     onConflict: "request_id,contact_id",
     ignoreDuplicates: true,
   });
+  if (error?.code === "23505") return null;
   return tokenWriteError(error);
 }
 
-/** Replaces the nonce. Used for an explicit reset and for a secret that no longer matches. */
+/**
+ * Replaces the nonce only when token_hash is still the one we read.
+ * A lost race re-reads the winner so both pastors copy the same new link.
+ */
 async function rotateToken(
   admin: Client,
   request: VolunteerRequest,
   contactId: string,
   secret: string,
-  origin: string
+  origin: string,
+  expectedHash: string
 ): Promise<Ok<{ url: string; replaced: true }> | Fail> {
   const row = tokenRow(request, contactId, secret);
-  const { error } = await admin.from("availability_tokens").upsert(row, {
-    onConflict: "request_id,contact_id",
-  });
-  const failed = tokenWriteError(error);
+  const updated = await admin
+    .from("availability_tokens")
+    .update({
+      nonce: row.nonce,
+      token_hash: row.token_hash,
+      expires_at: row.expires_at,
+    })
+    .eq("request_id", request.id)
+    .eq("contact_id", contactId)
+    .eq("token_hash", expectedHash)
+    .select("nonce, token_hash, expires_at");
+  const failed = tokenWriteError(updated.error ?? null);
   if (failed) return failed;
-  return { ok: true, body: { url: personalAvailabilityUrl(origin, issuedRaw(secret, request.id, contactId, row.nonce)), replaced: true } };
-}
-
-function issuedRaw(secret: string, requestId: string, contactId: string, nonce: string) {
-  return issuedAvailabilityToken({ secret, requestId, contactId, nonce }).raw;
+  const won = Array.isArray(updated.data) ? (updated.data[0] as StoredToken | undefined) : undefined;
+  const current = won ?? (await readStoredToken(admin, request.id, contactId));
+  if (current && "status" in current) return current;
+  if (!current) return fail(500, "server_error", "The link didn't get written.");
+  const derived = urlForStoredToken(secret, request, contactId, current, origin);
+  if ("ok" in derived) return { ok: true, body: { url: derived.body.url, replaced: true } };
+  log("rotated availability token still does not match the server secret");
+  return fail(500, "server_error", "The link didn't get written.");
 }
 
 /**
@@ -572,9 +593,9 @@ export async function ensureLiveLink(
     const reused = urlForStoredToken(secret.secret, request, contactId, stored, origin);
     if ("ok" in reused) return { ok: true, body: { url: reused.body.url, replaced: false } };
     log("stored availability token hash does not match the derived link; writing a new nonce");
-    return rotateToken(admin, request, contactId, secret.secret, origin);
+    return rotateToken(admin, request, contactId, secret.secret, origin, stored.token_hash);
   }
-  if (stored) return rotateToken(admin, request, contactId, secret.secret, origin);
+  if (stored) return rotateToken(admin, request, contactId, secret.secret, origin, stored.token_hash);
   const inserted = await insertTokenIfAbsent(admin, request, contactId, secret.secret);
   if (inserted) return inserted;
   const current = await readStoredToken(admin, request.id, contactId);
@@ -583,7 +604,7 @@ export async function ensureLiveLink(
   const reused = urlForStoredToken(secret.secret, request, contactId, current, origin);
   if ("ok" in reused) return { ok: true, body: { url: reused.body.url, replaced: false } };
   log("stored availability token hash does not match the derived link; writing a new nonce");
-  return rotateToken(admin, request, contactId, secret.secret, origin);
+  return rotateToken(admin, request, contactId, secret.secret, origin, current.token_hash);
 }
 
 async function rotateLink(
@@ -594,7 +615,45 @@ async function rotateLink(
 ): Promise<Ok<{ url: string; replaced: true }> | Fail> {
   const secret = linkSecret();
   if (!("secret" in secret)) return secret;
-  return rotateToken(admin, request, contactId, secret.secret, origin);
+  const stored = await readStoredToken(admin, request.id, contactId);
+  if (stored && "status" in stored) return stored;
+  if (!stored) {
+    const created = await ensureLiveLink(admin, request, contactId, origin, new Date());
+    if (!created.ok) return created;
+    return { ok: true, body: { url: created.body.url, replaced: true } };
+  }
+  return rotateToken(admin, request, contactId, secret.secret, origin, stored.token_hash);
+}
+
+/**
+ * A nudge reuses a live link or creates one when there is none.
+ * A hash that does not match the current secret is skipped: no write, no rotation.
+ */
+export async function linkForNudge(
+  admin: Client,
+  request: VolunteerRequest,
+  contactId: string,
+  origin: string,
+  now: Date
+): Promise<Ok<{ url: string }> | { skip: true } | Fail> {
+  const secret = linkSecret();
+  if (!("secret" in secret)) return secret;
+  const stored = await readStoredToken(admin, request.id, contactId);
+  if (stored && "status" in stored) return stored;
+  if (stored) {
+    const reused = urlForStoredToken(secret.secret, request, contactId, stored, origin);
+    if (!("ok" in reused)) return { skip: true };
+    if (!isTokenExpired(stored.expires_at, now)) return reused;
+    return rotateToken(admin, request, contactId, secret.secret, origin, stored.token_hash);
+  }
+  const inserted = await insertTokenIfAbsent(admin, request, contactId, secret.secret);
+  if (inserted) return inserted;
+  const current = await readStoredToken(admin, request.id, contactId);
+  if (current && "status" in current) return current;
+  if (!current) return fail(500, "server_error", "The link didn't get written.");
+  const reused = urlForStoredToken(secret.secret, request, contactId, current, origin);
+  if ("ok" in reused) return reused;
+  return { skip: true };
 }
 
 export async function issuePersonalLink(
@@ -631,7 +690,7 @@ export async function prepareNudge(
   orgId: string,
   requestId: string,
   origin: string
-): Promise<Ok<{ whatsapp: string; email: string; count: number }> | Fail> {
+): Promise<Ok<{ whatsapp: string; email: string; count: number; needsNewLink: string[] }> | Fail> {
   const request = await loadOwnedRequest(supabase, orgId, requestId);
   if ("status" in request) return request;
   const rows = await loadTeamRows(supabase, orgId);
@@ -660,9 +719,15 @@ export async function prepareNudge(
   if ("error" in namesResult) return namesResult.error;
 
   const admin = createAdminClient();
+  const now = new Date();
   const people: NudgePerson[] = [];
+  const needsNewLink: string[] = [];
   for (const contactId of pending) {
-    const written = await ensureLiveLink(admin, request, contactId, origin, new Date());
+    const written = await linkForNudge(admin, request, contactId, origin, now);
+    if ("skip" in written) {
+      needsNewLink.push(namesResult.get(contactId)?.firstName ?? "there");
+      continue;
+    }
     if (!written.ok) return written;
     people.push({
       firstName: namesResult.get(contactId)?.firstName ?? "there",
@@ -670,7 +735,7 @@ export async function prepareNudge(
     });
   }
   const bundled = bundleNudges(people, labels);
-  return { ok: true, body: bundled };
+  return { ok: true, body: { ...bundled, needsNewLink } };
 }
 
 type TokenRow = { request_id: string; contact_id: string; expires_at: string; token_hash: string };

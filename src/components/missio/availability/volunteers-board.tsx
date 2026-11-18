@@ -282,6 +282,12 @@ export function VolunteersBoard({
             </button>
           </div>
           {selected && snapshot.unansweredPeople === 0 ? <p className={styles.meta}>Everyone on a team has answered.</p> : null}
+          {nudge && nudge.needsNewLink.length > 0 ? (
+            <p className={styles.meta}>
+              {nudge.needsNewLink.length === 1 ? "1 person needs" : `${nudge.needsNewLink.length} people need`} a new
+              link, use Copy link for them: {nudge.needsNewLink.join(", ")}.
+            </p>
+          ) : null}
           {nudge && nudge.count > 0 ? (
             <div className={styles.stack}>
               <label className={styles.field}>
