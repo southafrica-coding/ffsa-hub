@@ -116,60 +116,67 @@ COMMENT ON COLUMN public.house_church_members.role IS
   'leader, co_leader, or member. co_leader is what the import sheet calls Leader 2.';
 
 COMMENT ON COLUMN public.house_church_members.ended_at IS
-  'Null while the row is the open, current membership. A date on or before today has ended and is not current. A date after today is rejected by reject_future_house_membership_end (23514). current_date is not immutable, so this is a trigger rather than a CHECK. The partial unique index uses the same open predicate, ended_at IS NULL.';
+  'Null while the row is the open, current membership. A date on or before today has ended and is not current. A date after today raises 23514 missio_ended_at_in_future. current_date is not immutable, so this is a trigger rather than a CHECK. The partial unique index uses the same open predicate, ended_at IS NULL. Nothing in this migration blocks DELETE.';
 
 DROP TRIGGER IF EXISTS set_updated_at ON public.house_church_members;
 CREATE TRIGGER set_updated_at
   BEFORE UPDATE ON public.house_church_members
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- current_date is stable, not immutable, so it cannot appear in a
--- CHECK. This trigger is the guard.
-CREATE OR REPLACE FUNCTION public.reject_future_house_membership_end()
+-- Applies to every role, including service_role, which bypasses RLS.
+-- Does not run on DELETE: the service role may hard-delete a row.
+-- current_date is not immutable, so the future-end rule cannot be a CHECK.
+CREATE OR REPLACE FUNCTION public.guard_house_church_member()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = ''
 AS $$
+DECLARE
+  v_org uuid;
 BEGIN
   IF NEW.ended_at IS NOT NULL AND NEW.ended_at > current_date THEN
-    RAISE EXCEPTION 'house_church_members.ended_at cannot be after today'
+    RAISE EXCEPTION 'missio_ended_at_in_future'
       USING ERRCODE = '23514';
   END IF;
-  RETURN NEW;
-END;
-$$;
 
-REVOKE ALL ON FUNCTION public.reject_future_house_membership_end() FROM PUBLIC, anon, authenticated;
+  SELECT hc.org_id INTO v_org
+  FROM public.house_churches hc
+  WHERE hc.id = NEW.house_church_id;
 
-COMMENT ON FUNCTION public.reject_future_house_membership_end() IS
-  'Rejects ended_at after today. Current membership is ended_at IS NULL, which is also what the partial unique index covers.';
+  IF v_org IS NULL OR NOT EXISTS (
+    SELECT 1
+    FROM public.org_people op
+    WHERE op.org_id = v_org
+      AND op.contact_id = NEW.contact_id
+  ) THEN
+    RAISE EXCEPTION 'missio_member_not_in_org'
+      USING ERRCODE = '23503';
+  END IF;
 
-DROP TRIGGER IF EXISTS trg_house_church_member_end_not_future ON public.house_church_members;
-CREATE TRIGGER trg_house_church_member_end_not_future
-  BEFORE INSERT OR UPDATE OF ended_at ON public.house_church_members
-  FOR EACH ROW EXECUTE FUNCTION public.reject_future_house_membership_end();
-
--- Authenticated callers cannot attribute the row to someone else.
--- Service role and the migration owner may set created_by freely.
-CREATE OR REPLACE FUNCTION public.pin_house_church_member_created_by()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = ''
-AS $$
-BEGIN
-  IF current_user = 'authenticated' THEN
+  IF auth.uid() IS NOT NULL THEN
     NEW.created_by := auth.uid();
   END IF;
+
   RETURN NEW;
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.pin_house_church_member_created_by() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.guard_house_church_member() FROM PUBLIC, anon, authenticated;
 
+COMMENT ON FUNCTION public.guard_house_church_member() IS
+  'BEFORE INSERT OR UPDATE, every role. 23503 missio_member_not_in_org when the contact is not in org_people for the house org. 23514 missio_ended_at_in_future when ended_at is after today. Pins created_by to auth.uid() when that is set; a null auth.uid() (service role) keeps the supplied value. Does not run on DELETE.';
+
+DROP TRIGGER IF EXISTS trg_house_church_member_end_not_future ON public.house_church_members;
 DROP TRIGGER IF EXISTS trg_house_church_member_pin_created_by ON public.house_church_members;
-CREATE TRIGGER trg_house_church_member_pin_created_by
-  BEFORE INSERT OR UPDATE ON public.house_church_members
-  FOR EACH ROW EXECUTE FUNCTION public.pin_house_church_member_created_by();
+DROP FUNCTION IF EXISTS public.reject_future_house_membership_end();
+DROP FUNCTION IF EXISTS public.pin_house_church_member_created_by();
+
+DROP TRIGGER IF EXISTS trg_house_church_member_guard ON public.house_church_members;
+CREATE TRIGGER trg_house_church_member_guard
+  BEFORE INSERT OR UPDATE OF contact_id, house_church_id, ended_at, created_by
+  ON public.house_church_members
+  FOR EACH ROW EXECUTE FUNCTION public.guard_house_church_member();
 
 -- ────────────────────────────────────────────────────────────
 -- 3. missio_import_review
@@ -217,22 +224,28 @@ CREATE TRIGGER set_updated_at
   BEFORE UPDATE ON public.missio_import_review
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- Pastor resolves may only point at a staged candidate or at someone
--- already in this org's org_people. Service role is not restricted.
--- Authenticated resolved_by is overwritten with auth.uid().
+-- Every role, including service_role. A non-null resolved_contact_id
+-- must be one of the staged candidates or an org_people row for this org.
 CREATE OR REPLACE FUNCTION public.guard_missio_import_review_resolve()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = ''
 AS $$
+DECLARE
+  v_contact_set boolean;
+  v_at_changed boolean;
 BEGIN
-  IF current_user <> 'authenticated' THEN
-    RETURN NEW;
+  IF TG_OP = 'INSERT' THEN
+    v_contact_set := NEW.resolved_contact_id IS NOT NULL;
+    v_at_changed := NEW.resolved_at IS NOT NULL;
+  ELSE
+    v_contact_set := NEW.resolved_contact_id IS NOT NULL
+      AND NEW.resolved_contact_id IS DISTINCT FROM OLD.resolved_contact_id;
+    v_at_changed := NEW.resolved_at IS DISTINCT FROM OLD.resolved_at;
   END IF;
 
-  NEW.resolved_by := auth.uid();
-
-  IF NEW.resolved_contact_id IS NOT NULL
+  IF v_contact_set
      AND NOT (NEW.resolved_contact_id = ANY (COALESCE(NEW.candidate_contact_ids, '{}')))
      AND NOT EXISTS (
        SELECT 1
@@ -240,8 +253,16 @@ BEGIN
        WHERE op.org_id = NEW.org_id
          AND op.contact_id = NEW.resolved_contact_id
      ) THEN
-    RAISE EXCEPTION 'resolved_contact_id must be a candidate or an org person'
-      USING ERRCODE = '42501';
+    RAISE EXCEPTION 'missio_resolve_not_allowed'
+      USING ERRCODE = '23503';
+  END IF;
+
+  IF auth.uid() IS NOT NULL THEN
+    NEW.resolved_by := auth.uid();
+  END IF;
+
+  IF v_at_changed OR v_contact_set THEN
+    NEW.resolved_at := now();
   END IF;
 
   RETURN NEW;
@@ -251,11 +272,11 @@ $$;
 REVOKE ALL ON FUNCTION public.guard_missio_import_review_resolve() FROM PUBLIC, anon, authenticated;
 
 COMMENT ON FUNCTION public.guard_missio_import_review_resolve() IS
-  'On authenticated updates, pins resolved_by to auth.uid() and rejects a resolved_contact_id that is neither in candidate_contact_ids nor in org_people for the row org. Service role is unchanged.';
+  'BEFORE INSERT OR UPDATE, every role. 23503 missio_resolve_not_allowed when a newly set resolved_contact_id is neither in candidate_contact_ids nor in org_people for the row org. When auth.uid() is set, resolved_by is overwritten with it; a null auth.uid() keeps the supplied value. resolved_at becomes now() when it changes or when a contact is resolved.';
 
 DROP TRIGGER IF EXISTS trg_missio_import_review_guard_resolve ON public.missio_import_review;
 CREATE TRIGGER trg_missio_import_review_guard_resolve
-  BEFORE UPDATE ON public.missio_import_review
+  BEFORE INSERT OR UPDATE ON public.missio_import_review
   FOR EACH ROW EXECUTE FUNCTION public.guard_missio_import_review_resolve();
 
 -- ────────────────────────────────────────────────────────────
