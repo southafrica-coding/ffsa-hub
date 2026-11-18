@@ -1,8 +1,8 @@
 # UI polish checklist
 
-Based on @koppkev's 10-pass "Unslopping" UI polish video. Passes 1–6 are checkable rules for an FFSA Hub surface. Passes 7–10 are allowed only on showcase surfaces.
+Based on @koppkev's 10-pass "Unslopping" UI polish video. Passes 1–6 are checkable rules for any Hub surface, FFSA or Missio. Passes 7–10 are allowed only on showcase surfaces.
 
-This file is grounded in what the repo already uses. The FFSA skin is the tokens in `src/app/globals.css`, the Tailwind theme in `tailwind.config.ts`, the Roboto faces loaded in `src/app/layout.tsx`, and the primitives in `src/components/ffsa/index.tsx`. The Missio skin is Archivo and Fraunces from `src/components/missio/fonts.ts`, with its own spacing, radii, and pills in `src/components/missio/shell.module.css`. Do not invent a third scale, and do not mix the two skins on one screen.
+This file is grounded in what the repo already uses. The FFSA skin is the tokens in `src/app/globals.css`, the Tailwind theme in `tailwind.config.ts`, the Roboto faces loaded in `src/app/layout.tsx`, and the primitives in `src/components/ffsa/index.tsx`. The Missio skin is Archivo and Fraunces from `src/components/missio/fonts.ts`, with its own spacing, radii, and pills in `src/components/missio/shell.module.css`. Do not invent a third scale, and do not mix the two skins on purpose.
 
 A pull request that does not change UI is not blocked by this checklist. Reviewers **block** a UI pull request that overflows or feels cramped at 360, 390, or 430px, or that ships without a 390px screenshot of each screen it changes.
 
@@ -36,7 +36,15 @@ const overflows = shellOverflow || pageOverflow;
 
 A table or a week grid may scroll inside its own box. The shell pane and the page may not. Fix overflow in the screen you are editing. Do not paper over it with `overflow-x: hidden` on `body` or on `[data-shell-main]`.
 
-Missio does not use `[data-shell-main]`. On `/missio`, apply the same comparison to the scrolling content column (the shell’s main pane) and to `document.documentElement`.
+Missio has no `[data-shell-main]` and no `<main>`. The scrolling column is a hashed CSS-module class, so there is no stable hook yet. A `data-missio-main` attribute on that column is a suggested follow-up. Until then, compare the document and list every element that is wider than its own box. A region that is supposed to scroll (a wide table inside its own overflow box) is not a failure. The content column and the page are.
+
+```js
+const doc = document.documentElement;
+const pageOverflow = doc.scrollWidth > doc.clientWidth;
+const offenders = [...document.querySelectorAll("body *")].filter(
+  (el) => el.scrollWidth > el.clientWidth
+);
+```
 
 Showcase surfaces are only:
 
@@ -48,7 +56,7 @@ Dense admin tables and widgets are not showcase surfaces. That includes the dash
 
 ## Colour, frame, corners
 
-The org switcher re-skins the Hub per organisation. Each skin uses exactly one type system, consistently. Do not put Roboto on a Missio screen, or Archivo on an FFSA screen.
+The org switcher re-skins the Hub per organisation. Each skin has one type system, and a screen should stay inside it. Do not put Archivo on an FFSA screen. Missio’s type system is Archivo and Fraunces. A few global FFSA Roboto Mono rules currently leak in (the org pill, the Add person button, and the Campus label). That leak is known. Do not add more. Fix it with a scoped CSS-module override, not a change to the global rules in `globals.css`.
 
 **FFSA** is the black icon rail, bone module panel, and white content. Colour comes from the variables on `:root` in `globals.css`.
 
@@ -167,11 +175,13 @@ Loaded in `src/components/missio/fonts.ts`:
 | Body | `--font-missio-body` | Archivo | Sentences, names, table cells, the shell |
 | Display | `--font-missio-display` | Fraunces | Titles, including the portaled dialog |
 
-Missio does not use Roboto, Roboto Condensed, or Roboto Mono for its own UI. The dialog’s scoped button rule keeps Archivo so the global FFSA button face does not leak in. Do not add a third family.
+Missio’s own rules set Archivo and Fraunces. A few global FFSA Roboto Mono rules currently leak in (the org pill, the Add person button, and the Campus label). That leak is known. Do not add more Roboto, Roboto Condensed, or Roboto Mono on a Missio screen. Fix a leak with a scoped CSS-module override, not by editing `globals.css`. The dialog’s scoped button rule already keeps Archivo so the global FFSA button face does not take the dialog. Do not add a third family.
 
 ## 6. Type scale
 
-Use a step from this table. Don’t pick a size between them.
+### FFSA
+
+Use a step from this table on an FFSA screen. Don’t pick a size between them.
 
 | Role | Size | Weight | Line-height | Tracking | Face |
 | --- | --- | --- | --- | --- | --- |
@@ -190,13 +200,27 @@ Use a step from this table. Don’t pick a size between them.
 
 Not on the scale, so don’t add them: 11, 11.5, 12.5, 18, 19, 22 (except the KPI clamp floor), 38. `13.5px` exists only as the dialog-description token in `globals.css`. Don’t copy it into a new component.
 
-Headings in the FFSA frame are uppercase because `globals.css` sets `h1–h6` and `.masthead-title` that way. FFSA showcase display type may stay sentence case, still in Roboto Condensed, at 40px or 48px. Missio titles stay Fraunces and sentence case.
+Headings in the FFSA frame are uppercase because `globals.css` sets `h1–h6` and `.masthead-title` that way. FFSA showcase display type may stay sentence case, still in Roboto Condensed, at 40px or 48px.
+
+### Missio
+
+Sizes below are what `src/components/missio/shell.module.css` sets. Titles are Fraunces and sentence case. Body is Archivo. If `content.module.css` adjusts a size, it must keep those faces.
+
+| Role | Size | Weight | Line-height | Tracking | Face |
+| --- | --- | --- | --- | --- | --- |
+| Page greeting (`h1`) | 30px | 560 | 1.25 | -0.4px | Fraunces, sentence case |
+| Section heading (`h2`) | 19px | 560 | 1.25 | -0.4px | Fraunces, sentence case |
+| Dialog title | 22px | 560 | 1.25 | -0.3px | Fraunces, sentence case |
+| Body | 13px | 400 | 20px | 0 | Archivo |
+| Lede | 13.5px | 400 | 20px | 0 | Archivo |
+| Card title | 14px | 600 | — | 0 | Archivo |
+| Eyebrow | 12px | — | — | 0 | Archivo |
 
 ## 7–10. Showcase only
 
 Do not apply these to a dashboard widget, a people table, or any other dense admin surface.
 
-**7. Imagery that leads.** Use an existing image slot or a real brand file (`brand/ff-mark-*.png`, `brand/ff-wordmark-*.png`). Do not invent a photograph, and do not reuse an FFX collage as texture. The Missio landing has no photo slot; its lead is the condensed greeting, not a fake image.
+**7. Imagery that leads.** Use an existing image slot or a real brand file (`brand/ff-mark-*.png`, `brand/ff-wordmark-*.png`). Do not invent a photograph, and do not reuse an FFX collage as texture. The Missio landing has no photo slot; its lead is the Fraunces greeting, not a fake image.
 
 **8. Rich menus.** The org switcher may show the organisation name, one short blurb, and a selected mark. A table filter stays one control. Don’t add a second menu, a command palette, or descriptions under every nav item.
 
@@ -208,9 +232,9 @@ Do not apply these to a dashboard widget, a people table, or any other dense adm
 
 - [ ] Every new padding, margin, and gap is on the spacing scale, or is one of the named classes.
 - [ ] Every new font size is a row in the type scale.
-- [ ] The screen uses one type system: Roboto on FFSA, Archivo and Fraunces on Missio.
+- [ ] The screen stays in one type system: Roboto on FFSA, Archivo and Fraunces on Missio. Do not add another Roboto Mono leak on Missio.
 - [ ] Copy is sentence case, specific, and free of the filler list. A SOON nav tag is the only “coming next” signal. Numbers are real.
 - [ ] The screen has one masthead and at most one needs-you band.
 - [ ] Corners are square. Regions are rules, not shadows.
 - [ ] Passes 7–10 appear only on the org switcher, the Missio landing, or a public page.
-- [ ] A 390px screenshot is in the PR. At 360, 390, and 430px, `[data-shell-main]` does not have `scrollWidth > clientWidth`, and the document is not wider than the viewport.
+- [ ] A 390px screenshot is in the PR. At 360, 390, and 430px, `[data-shell-main]` does not have `scrollWidth > clientWidth` where that element exists, and the document is not wider than its client width. On Missio, use the document-and-offenders check until `data-missio-main` exists.
