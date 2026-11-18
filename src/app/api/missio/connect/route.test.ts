@@ -82,7 +82,12 @@ const state = vi.hoisted(() => {
           if (op.action === "insert") {
             const payloads = Array.isArray(op.payload) ? op.payload : [op.payload ?? {}];
             const inserted = payloads.map((payload) => {
-              const row = { id: payload.id ?? `${table}-${++state.seq}`, submitted_at: new Date().toISOString(), ...payload };
+              const row: Row = { id: payload.id ?? `${table}-${++state.seq}`, submitted_at: new Date().toISOString(), ...payload };
+              if (table === "connect_responses" && row.phone_e164 == null && typeof row.phone === "string") {
+                const digits = row.phone.replace(/\D/g, "");
+                if (digits.startsWith("0") && digits.length === 10) row.phone_e164 = `+27${digits.slice(1)}`;
+                else if (row.phone.startsWith("+")) row.phone_e164 = row.phone;
+              }
               state.tables[table].push(row);
               return row;
             });
@@ -194,7 +199,7 @@ describe("POST /api/missio/connect", () => {
     expect(rows[0]).toMatchObject({
       org_id: MISSIO,
       name: "Jane Doe",
-      phone: "+27821234567",
+      phone: "0821234567",
       email: "Jane@Example.com",
       visit_type: "first_time",
       wants_house_church: true,
@@ -206,9 +211,14 @@ describe("POST /api/missio/connect", () => {
       matched_contact_id: JANE,
       matched_by: null,
     });
-    expect(rows[0].matched_at).toEqual(expect.any(String));
+    expect(rows[0].matched_at).toBeUndefined();
     expect(rows[0].rate_key_hash).toBe(connectRateKeyHash("203.0.113.8"));
     expect(rows[0].rate_key_hash).not.toBe("203.0.113.8");
+    const inserted = (state.writes.find((write) => write.table === "connect_responses")?.payload as Row[])[0];
+    expect(inserted.phone).toBe("0821234567");
+    expect(inserted).not.toHaveProperty("phone_e164");
+    expect(inserted).not.toHaveProperty("matched_at");
+    expect(inserted.matched_by).toBeNull();
     expect(state.writes.filter((write) => write.table === "org_people")).toHaveLength(0);
     expect(state.tables.org_people).toHaveLength(1);
   });

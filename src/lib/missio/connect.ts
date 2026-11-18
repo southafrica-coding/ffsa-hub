@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeEmail, normalizePhoneE164 } from "@/lib/phone";
 import { clientIp, getRateLimiter, retryAfterSeconds } from "@/lib/rate-limit";
+import { mapMissioDbError } from "@/lib/missio/db-errors";
 import { connectRateKeyHash } from "@/lib/missio/match-token";
 import { MISSIO_SLUG } from "@/lib/missio/access";
 import type { ConnectFieldErrors, ConnectVisitType } from "@/lib/missio/types";
@@ -320,27 +321,24 @@ export async function submitConnectCard(args: { body: unknown; ip: string }): Pr
     .from("connect_responses")
     .select("id")
     .eq("org_id", org.orgId)
-    .eq("phone", phone)
+    .eq("phone_e164", phone)
     .gte("submitted_at", cutoff)
     .limit(1);
   if (recent.error) return serverError("connect dedupe", recent.error.code ?? "query");
   if ((recent.data ?? []).length > 0) return { ok: true };
 
   let matchedContactId: string | null = null;
-  let matchedAt: string | null = null;
   try {
     matchedContactId = await matchContact(admin.client, org.orgId, phone, email, collapse(parsed.data.name));
-    if (matchedContactId) matchedAt = new Date().toISOString();
   } catch (error) {
     console.error("[missio] connect match threw", error instanceof Error ? error.name : "error");
     matchedContactId = null;
-    matchedAt = null;
   }
 
-  const inserted = await admin.client.from("connect_responses").insert({
+  const row = {
     org_id: org.orgId,
     name: collapse(parsed.data.name),
-    phone,
+    phone: parsed.data.phone.trim(),
     email: parsed.data.email?.trim() || null,
     visit_type: parsed.data.visitType as ConnectVisitType,
     wants_house_church: parsed.data.wantsHouseChurch,
@@ -352,8 +350,13 @@ export async function submitConnectCard(args: { body: unknown; ip: string }): Pr
     rate_key_hash: rateKey,
     matched_contact_id: matchedContactId,
     matched_by: null,
-    matched_at: matchedAt,
-  });
+  };
+  const inserted = await admin.client.from("connect_responses").insert(row);
+  if (inserted.error && mapMissioDbError(inserted.error).code === "not_missio_person" && matchedContactId) {
+    const again = await admin.client.from("connect_responses").insert({ ...row, matched_contact_id: null });
+    if (again.error) return serverError("connect insert", again.error.code ?? "insert");
+    return { ok: true };
+  }
   if (inserted.error) return serverError("connect insert", inserted.error.code ?? "insert");
   return { ok: true };
 }

@@ -215,7 +215,7 @@ export type MissioMemberStatusRow = {
 /**
  * Connect card and follow-up funnel.
  *
- * Shapes follow migration 332 (PR 614, head 4a38ddc930f94cb7a0b9ca72b53b32668a387e01),
+ * Shapes follow migration 332 (PR 614, head 28d61f9c03e6363a1e6c1316614e4acb45ee5481),
  * stacked on 331. That migration is not applied here. Do not add these tables
  * to src/types/database.ts by hand.
  *
@@ -226,8 +226,12 @@ export type MissioMemberStatusRow = {
  *
  * A connect response does not create a follow-up. Joining a house does not
  * create one either. record_missio_followup_stage() writes kind stage_change
- * (including on insert). Pastors insert kind note only. changed_by defaults
- * to auth.uid(). The app must not insert stage_change rows.
+ * (including on insert). Pastors insert kind note only. A service-role
+ * note sets changed_by to the pastor. The pin trigger overwrites it
+ * when auth.uid() is set. The app must not insert stage_change rows.
+ * phone_e164 and matched_at are trigger-owned. matched_contact_id,
+ * contact_id, and assigned_leader_contact_id must be null or already
+ * in org_people, or the guard raises 23503 missio_contact_not_in_org.
  *
  * Partial uniques: (org_id, contact_id) WHERE contact_id IS NOT NULL, and
  * (connect_response_id) WHERE connect_response_id IS NOT NULL.
@@ -251,7 +255,10 @@ export type ConnectResponseRow = {
   org_id: string;
   submitted_at: string;
   name: string;
+  /** As typed. The trigger fills phone_e164. */
   phone: string;
+  /** Set by trigger. Null when phone cannot be parsed. Do not write it. */
+  phone_e164: string | null;
   email: string | null;
   visit_type: ConnectVisitType;
   wants_house_church: boolean;
@@ -299,14 +306,19 @@ export type MissioFollowupEffectiveRow = MissioFollowupRow & {
   effective_stage: FollowupStage;
 };
 
-/** Pastor-gated owner-rights view. No follow-up id and no visit type. */
+/**
+ * Pastor-gated owner-rights view. Contact rows expose names only.
+ * Card rows expose the typed phone and phone_e164. No email column.
+ */
 export type MissioNotInHouseRow = {
   source: "contact" | "connect_response";
   contact_id: string | null;
   connect_response_id: string | null;
+  first_name: string | null;
+  last_name: string | null;
   display_name: string | null;
   phone: string | null;
-  email: string | null;
+  phone_e164: string | null;
   wants_house_church: boolean | null;
   followup_stage: FollowupStage | null;
   submitted_at: string | null;

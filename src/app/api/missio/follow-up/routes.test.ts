@@ -48,6 +48,7 @@ const state = vi.hoisted(() => {
     reads: [] as { client: "user" | "admin"; table: string }[],
     conflictTable: null as string | null,
     duplicateFollowup: false,
+    dbError: null as { table: string; code: string; message: string } | null,
     tables: {} as Record<string, Row[]>,
     hits: new Map<string, number>(),
     seq: 0,
@@ -135,6 +136,11 @@ const state = vi.hoisted(() => {
           if (client === "admin") state.reads.push({ client, table });
           if (state.tableError === table) {
             return { data: null, error: { code: "XX000", message: `boom reading ${table}` }, count: null };
+          }
+          if (state.dbError?.table === table && (op.action === "insert" || op.action === "update")) {
+            const dbError = state.dbError;
+            state.dbError = null;
+            return { data: null, error: { code: dbError.code, message: dbError.message }, count: null };
           }
           if (!state.tables[table]) state.tables[table] = [];
           if (op.action === "insert") return writeInsert(table, client, op, single);
@@ -298,6 +304,7 @@ function reset() {
   state.reads = [];
   state.conflictTable = null;
   state.duplicateFollowup = false;
+  state.dbError = null;
   state.hits = new Map();
   state.seq = 0;
   state.tables = {
@@ -396,8 +403,8 @@ function reset() {
         contact_id: null,
         connect_response_id: CARD,
         display_name: "New Card",
-        phone: "+27333333333",
-        email: "coalesced@contact.test",
+        phone: "+27444444444",
+        phone_e164: "+27444444444",
         wants_house_church: true,
         followup_stage: null,
         submitted_at: "2026-11-01T10:00:00.000Z",
@@ -501,7 +508,7 @@ describe("missio follow-up", () => {
       source: "connect_response",
       contactId: null,
       phone: "+27444444444",
-      email: "typed@card.test",
+      email: null,
       visitType: "first_time",
       wantsPrayer: true,
       stage: "new",
@@ -573,8 +580,11 @@ describe("missio follow-up", () => {
     );
     const notes = state.writes.filter((write) => write.table === "missio_followup_stage_history");
     expect(notes).toHaveLength(1);
-    expect(notes[0]).toMatchObject({ client: "user", payload: { kind: "note", notes: "She visited", followup_id: FOLLOW } });
-    expect(notes[0].payload).not.toHaveProperty("changed_by");
+    expect(notes[0]).toMatchObject({
+      client: "user",
+      payload: { kind: "note", notes: "She visited", followup_id: FOLLOW, changed_by: PASTOR },
+    });
+    expect(notes[0].payload).not.toHaveProperty("changed_at");
     expect(JSON.stringify(notes)).not.toContain("stage_change");
   });
 
@@ -663,8 +673,8 @@ describe("missio follow-up", () => {
       entry: expect.objectContaining({ kind: "note", body: "Left a message", by: { displayName: "Pastor Piet" } }),
     });
     const note = state.writes.find((write) => write.table === "missio_followup_stage_history");
-    expect(note).toMatchObject({ client: "user", payload: { kind: "note", notes: "Left a message" } });
-    expect(note?.payload).not.toHaveProperty("changed_by");
+    expect(note).toMatchObject({ client: "user", payload: { kind: "note", notes: "Left a message", changed_by: PASTOR } });
+    expect(note?.payload).not.toHaveProperty("changed_at");
   });
 
   it("creates a Missio person from a card, links an existing one, and refuses a non-Missio contact", async () => {
@@ -735,11 +745,11 @@ describe("missio follow-up", () => {
       new Request("https://hub.test/api/missio/follow-up", { method: "POST", body: "" }),
       ctx(`r_${CARD_OUT}`)
     );
-    expect(refused.status).toBe(409);
+    expect(refused.status).toBe(400);
     const refusedBody = await refused.json();
     expect(refusedBody).toEqual({
-      error: "This person already exists. Search by their email or phone to add them.",
-      code: "exists_use_search",
+      error: "This person is not in Missio.",
+      code: "not_missio_person",
     });
     expect(JSON.stringify(refusedBody)).not.toContain(OUTSIDE);
     expect(JSON.stringify(refusedBody)).not.toContain("Olivia");
@@ -826,6 +836,54 @@ describe("missio follow-up", () => {
     expect(dup.status).toBe(409);
     expect((await dup.json()).code).toBe("conflict");
     expect(state.tables.missio_followups.filter((row) => row.connect_response_id === CARD && row.id !== FOLLOW)).toHaveLength(0);
+  });
+
+  it("maps a missio_contact_not_in_org trigger to not_missio_person", async () => {
+    state.dbError = { table: "missio_followups", code: "23503", message: "missio_contact_not_in_org" };
+    const res = await patchLeader(
+      new Request("https://hub.test", { method: "PATCH", body: JSON.stringify({ leaderContactId: ADA }) }),
+      ctx(`c_${VEE}`)
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+    expect(JSON.stringify(body)).not.toContain("missio_contact_not_in_org");
+    expect(JSON.stringify(body)).not.toContain("23503");
+
+    const missingId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee8";
+    state.tables.connect_responses.push({
+      id: "dddddddd-dddd-4ddd-8ddd-ddddddddddd6",
+      org_id: MISSIO,
+      name: "Unknown match",
+      phone: "+27820000000",
+      email: null,
+      visit_type: "first_time",
+      wants_house_church: false,
+      wants_prayer: false,
+      submitted_at: "2026-07-01T10:00:00.000Z",
+      matched_contact_id: missingId,
+      campus: "potch",
+    });
+    state.tables.missio_not_in_house.push({
+      source: "connect_response",
+      contact_id: missingId,
+      connect_response_id: "dddddddd-dddd-4ddd-8ddd-ddddddddddd6",
+      display_name: "Unknown match",
+      phone: "+27820000000",
+      phone_e164: "+27820000000",
+      wants_house_church: false,
+      followup_stage: null,
+      submitted_at: "2026-07-01T10:00:00.000Z",
+    });
+    state.reads = [];
+    const unknown = await postContact(
+      new Request("https://hub.test", { method: "POST", body: "" }),
+      ctx("r_dddddddd-dddd-4ddd-8ddd-ddddddddddd6")
+    );
+    expect(unknown.status).toBe(400);
+    expect(await unknown.json()).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+    expect(state.reads.filter((read) => read.client === "admin" || read.table === "contacts")).toEqual([]);
+    expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
   });
 
   it("rejects a bad key, an unknown person, and a database error without leaking it", async () => {

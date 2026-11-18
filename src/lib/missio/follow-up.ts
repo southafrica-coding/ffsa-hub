@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MISSIO_PEOPLE_ROLES, MISSIO_SLUG, requireOrgRole, type OrgAccess } from "@/lib/missio/access";
+import { mapMissioDbError } from "@/lib/missio/db-errors";
 import { membershipIsCurrent } from "@/lib/missio/house-church-import";
 import { isUuid, resolveHouseScope, toPersonRef } from "@/lib/missio/house-churches";
 import { createPerson } from "@/lib/missio/people";
@@ -41,7 +42,7 @@ type Fail = { ok: false; status: number; error: string; code: MissioErrorCode };
 
 const VIEW = "missio_not_in_house";
 const VIEW_COLUMNS =
-  "source, contact_id, connect_response_id, display_name, phone, email, wants_house_church, followup_stage, submitted_at";
+  "source, contact_id, connect_response_id, display_name, phone, phone_e164, wants_house_church, followup_stage, submitted_at";
 const FOLLOWUP_COLUMNS =
   "id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, effective_stage, created_at, updated_at";
 const FOLLOWUP_WRITE_COLUMNS =
@@ -51,10 +52,10 @@ const CARD_COLUMNS =
 const HISTORY_COLUMNS = "id, followup_id, from_stage, to_stage, changed_by, changed_at, notes, kind";
 
 /**
- * Until product decides, follow-up responses do not return directory phone
- * or email. Contact rows ('c_') return null. Card rows ('r_') return only
- * connect_responses.phone and connect_responses.email — what was typed on
- * the card. Flip this to return directory phone and email on 'c_' rows.
+ * Until Jack decides, the follow-up list shows the card phone only.
+ * false: r_ rows return the card's raw phone. c_ rows return null phone.
+ *        email is null on every row. The view has no email column.
+ * true: reserved for a later decision. This branch is the one place to flip.
  */
 export const FOLLOWUP_LIST_INCLUDES_CONTACT_PII = false;
 
@@ -72,7 +73,7 @@ type ViewRow = {
   connect_response_id: string | null;
   display_name: string | null;
   phone: string | null;
-  email: string | null;
+  phone_e164: string | null;
   wants_house_church: boolean | null;
   followup_stage: string | null;
   submitted_at: string | null;
@@ -141,6 +142,13 @@ function serverError(scope: string, detail?: string): Fail {
   return fail(500, "server_error", "Something went wrong.");
 }
 
+/** SQLSTATE plus the exception text. Database text stays out of the response. */
+function fromDb(error: { code?: string; message?: string } | null | undefined, scope: string): Fail {
+  const mapped = mapMissioDbError(error ?? {});
+  if (mapped.code === "server_error") return serverError(scope, error?.code ?? "failed");
+  return fail(mapped.status, mapped.code, mapped.error);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -205,16 +213,10 @@ function keyFor(source: FollowupSource, contactId: string | null, connectRespons
   return null;
 }
 
-function listPii(
-  source: FollowupSource,
-  view: { phone: string | null; email: string | null },
-  card: { phone: string | null; email: string | null } | null
-): { phone: string | null; email: string | null } {
-  if (source === "connect_response") {
-    return { phone: card?.phone ?? null, email: card?.email ?? null };
-  }
-  if (!FOLLOWUP_LIST_INCLUDES_CONTACT_PII) return { phone: null, email: null };
-  return { phone: view.phone, email: view.email };
+function listPii(source: FollowupSource, cardPhone: string | null): { phone: string | null; email: string | null } {
+  const phone = source === "connect_response" ? cardPhone : null;
+  if (!FOLLOWUP_LIST_INCLUDES_CONTACT_PII) return { phone, email: null };
+  return { phone, email: null };
 }
 
 function toPerson(args: {
@@ -223,7 +225,6 @@ function toPerson(args: {
   connectResponseId: string | null;
   displayName: string;
   viewPhone: string | null;
-  viewEmail: string | null;
   card: CardRow | null;
   followup: FollowupRow | null;
   leader: PersonRef | null;
@@ -233,7 +234,7 @@ function toPerson(args: {
   const key = keyFor(args.source, args.contactId, args.connectResponseId);
   if (!key) return null;
   const stage = asStage(args.followup?.effective_stage) ?? asStage(args.followup?.stage) ?? "new";
-  const pii = listPii(args.source, { phone: args.viewPhone, email: args.viewEmail }, args.card);
+  const pii = listPii(args.source, args.viewPhone);
   return {
     key,
     source: args.source,
@@ -366,7 +367,6 @@ function personFrom(view: ViewRow, card: CardRow | null, followup: FollowupRow |
     connectResponseId: view.connect_response_id,
     displayName: blank(view.display_name) ?? blank(card?.name) ?? "",
     viewPhone: view.phone,
-    viewEmail: view.email,
     card,
     followup,
     leader: leaderRef(leaders, followup?.assigned_leader_contact_id ?? null),
@@ -444,24 +444,37 @@ async function findFollowup(auth: OrgAccess, view: ViewRow): Promise<{ row: Foll
   };
 }
 
+async function orgContactOrNull(auth: OrgAccess, contactId: string | null): Promise<{ id: string | null } | Fail> {
+  if (!contactId) return { id: null };
+  const person = await missioOrgPersonId(auth, contactId);
+  if (!isFail(person)) return { id: contactId };
+  if (person.code === "not_missio_person") return { id: null };
+  return person;
+}
+
 async function insertFollowup(
   auth: OrgAccess,
   view: ViewRow,
   stage: FollowupStage,
   leaderContactId?: string | null
 ): Promise<{ row: FollowupRow } | Fail> {
-  if (!view.contact_id && !view.connect_response_id) return serverError("follow-up subject");
+  const contact = await orgContactOrNull(auth, view.contact_id);
+  if (isFail(contact)) return contact;
+  const leader = leaderContactId === undefined ? undefined : await orgContactOrNull(auth, leaderContactId);
+  if (leader && isFail(leader)) return leader;
+  if (!contact.id && !view.connect_response_id) return serverError("follow-up subject");
   const payload: Record<string, unknown> = {
     org_id: auth.orgId,
-    contact_id: view.contact_id,
+    contact_id: contact.id,
     connect_response_id: view.connect_response_id,
     stage,
   };
-  if (leaderContactId !== undefined) payload.assigned_leader_contact_id = leaderContactId;
+  if (leader) payload.assigned_leader_contact_id = leader.id;
   const inserted = await auth.supabase.from("missio_followups").insert(payload).select(FOLLOWUP_WRITE_COLUMNS).maybeSingle();
   // Another pastor inserted the same person. Do not adopt or overwrite their row.
   if (inserted.error?.code === "23505") return CONFLICT;
-  if (inserted.error || !inserted.data?.id) return serverError("follow-up insert", inserted.error?.code ?? "insert");
+  if (inserted.error) return fromDb(inserted.error, "follow-up insert");
+  if (!inserted.data?.id) return serverError("follow-up insert");
   const row = inserted.data as FollowupRow;
   return { row: { ...row, effective_stage: row.stage } };
 }
@@ -483,7 +496,7 @@ async function claimFollowup(
     .eq("stage", row.stage);
   if (row.updated_at) query = query.eq("updated_at", row.updated_at);
   const updated = await query.select(FOLLOWUP_WRITE_COLUMNS).maybeSingle();
-  if (updated.error) return serverError("follow-up claim", updated.error.code ?? "update");
+  if (updated.error) return fromDb(updated.error, "follow-up claim");
   if (!updated.data?.id) return CONFLICT;
   const next = updated.data as FollowupRow;
   const stage = typeof patch.stage === "string" ? patch.stage : next.stage;
@@ -539,10 +552,12 @@ async function insertNote(auth: OrgAccess, followupId: string, notes: string): P
       followup_id: followupId,
       kind: "note",
       notes,
+      changed_by: auth.user.id,
     })
     .select(HISTORY_COLUMNS)
     .maybeSingle();
-  if (inserted.error || !inserted.data?.id) return serverError("follow-up note", inserted.error?.code ?? "insert");
+  if (inserted.error) return fromDb(inserted.error, "follow-up note");
+  if (!inserted.data?.id) return serverError("follow-up note");
   const row = inserted.data as HistoryRow;
   const names = await displayNames(auth, row.changed_by ? [row.changed_by] : []);
   const entry = historyEntry(row, names);
@@ -930,16 +945,13 @@ async function requireAssignableLeader(auth: OrgAccess, contactId: string): Prom
 async function claimCard(auth: OrgAccess, card: CardRow, expectedContactId: string | null): Promise<{ ok: true } | Fail> {
   let query = auth.supabase
     .from("connect_responses")
-    .update({
-      matched_by: auth.user.id,
-      matched_at: new Date().toISOString(),
-    })
+    .update({ matched_by: auth.user.id })
     .eq("id", card.id)
     .eq("org_id", auth.orgId)
     .is("matched_by", null);
   query = expectedContactId ? query.eq("matched_contact_id", expectedContactId) : query.is("matched_contact_id", null);
   const updated = await query.select("id").maybeSingle();
-  if (updated.error) return serverError("follow-up contact claim", updated.error.code ?? "update");
+  if (updated.error) return fromDb(updated.error, "follow-up contact claim");
   if (!updated.data?.id) return CONFLICT;
   return { ok: true };
 }
@@ -947,7 +959,7 @@ async function claimCard(auth: OrgAccess, card: CardRow, expectedContactId: stri
 async function releaseCard(auth: OrgAccess, cardId: string) {
   const released = await auth.supabase
     .from("connect_responses")
-    .update({ matched_by: null, matched_at: null })
+    .update({ matched_by: null })
     .eq("id", cardId)
     .eq("org_id", auth.orgId)
     .eq("matched_by", auth.user.id)
@@ -981,7 +993,6 @@ async function personAfterLink(
     connectResponseId: card.id,
     displayName: refs.map.get(contactId)?.displayName || card.name,
     viewPhone: null,
-    viewEmail: null,
     card,
     followup,
     leader: leaderRef(leaders.map, followup?.assigned_leader_contact_id ?? null),
@@ -1016,7 +1027,7 @@ export async function linkFollowupContact(
     // Org wall before any service-role read. Unknown and non-Missio look the same.
     const person = await missioOrgPersonId(auth, card.matched_contact_id);
     if (isFail(person)) {
-      if (person.code === "not_missio_person") return { ok: false, status: 409, ...EXISTS_USE_SEARCH };
+      if (person.code === "not_missio_person") return NOT_MISSIO;
       return person;
     }
     const claimed = await claimCard(auth, card, card.matched_contact_id);
@@ -1053,9 +1064,8 @@ export async function linkFollowupContact(
     .is("matched_contact_id", null)
     .select("id")
     .maybeSingle();
-  if (linked.error || !linked.data?.id) {
-    return serverError("follow-up contact link", linked.error?.code ?? "update");
-  }
+  if (linked.error) return fromDb(linked.error, "follow-up contact link");
+  if (!linked.data?.id) return CONFLICT;
   const followup = await attachFollowupContact(auth, view.row, card, contactId);
   return personAfterLink(auth, card, contactId, followup, "created");
 }
