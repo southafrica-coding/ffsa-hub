@@ -194,6 +194,46 @@ describe("Missio access state", () => {
     await settle();
     expect(document.body.querySelector("[role='dialog']")).toBeNull();
   });
+
+  it("Escape closes the org switcher first, then the phone menu", async () => {
+    const { host, root } = render(
+      <MissioFrame client={client(async () => pastor)}>
+        <p>People live here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+
+    const openMenu = host.querySelector("button[aria-label='Open menu']") as HTMLButtonElement;
+    act(() => {
+      openMenu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const dialog = document.body.querySelector("[role='dialog']") as HTMLElement;
+    const trigger = dialog.querySelector("button[aria-haspopup='listbox']") as HTMLButtonElement;
+    act(() => {
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.body.querySelector("[role='listbox']")).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    expect(document.body.querySelector("[role='dialog']")).toBe(dialog);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.body.querySelector("[role='listbox']")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    await act(async () => {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.body.querySelector("[role='dialog']")).toBeNull();
+    expect(document.activeElement).toBe(openMenu);
+  });
 });
 
 describe("Missio mobile layout rules", () => {

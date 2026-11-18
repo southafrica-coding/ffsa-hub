@@ -178,11 +178,13 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
                     <span className={styles.campus}>{CAMPUS_LABEL[person.campus]}</span>
                     {person.campus === "potch" ? <span className={styles.campusMain}>Main</span> : null}
                   </div>
-                  <div className={styles.muted}>
-                    {person.currentStage?.trim() ? person.currentStage : "—"}
-                    <span className={styles.campusMain}>{formatJoined(person.joinedAt)}</span>
-                  </div>
-                  <button type="button" className={styles.textButton} onClick={() => setEditing(person)}>
+                  {personStage(person) || personJoined(person) ? (
+                    <div className={styles.muted}>
+                      {personStage(person) ? <span>{personStage(person)}</span> : null}
+                      {personJoined(person) ? <span className={styles.joined}>{personJoined(person)}</span> : null}
+                    </div>
+                  ) : null}
+                  <button type="button" className={styles.textButton} aria-label={`Edit ${person.name}`} onClick={() => setEditing(person)}>
                     Edit
                   </button>
                 </li>
@@ -212,10 +214,10 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
                       {STATUS_LABEL[person.status]}
                     </span>
                   </td>
-                  <td className={styles.muted}>{person.currentStage?.trim() ? person.currentStage : "—"}</td>
+                  <td className={styles.muted}>{personStage(person)}</td>
                   <td>{formatJoined(person.joinedAt)}</td>
                   <td>
-                    <button type="button" className={styles.textButton} onClick={() => setEditing(person)}>
+                    <button type="button" className={styles.textButton} aria-label={`Edit ${person.name}`} onClick={() => setEditing(person)}>
                       Edit
                     </button>
                   </td>
@@ -283,6 +285,14 @@ function badgeClass(status: MissioStatus): string {
   if (status === "active") return styles.badgeActive;
   if (status === "visitor") return styles.badgeVisitor;
   return styles.badgeInactive;
+}
+
+function personStage(person: MissioPerson): string {
+  return person.currentStage?.trim() ?? "";
+}
+
+function personJoined(person: MissioPerson): string {
+  return person.joinedAt ? formatJoined(person.joinedAt) : "";
 }
 
 function EditPerson({

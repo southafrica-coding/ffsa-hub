@@ -553,6 +553,19 @@
   margin-left: 6px;
 }
 
+.joined {
+  color: var(--quiet);
+  font-weight: 500;
+}
+
+.muted .joined {
+  margin-left: 6px;
+}
+
+.muted .joined:first-child {
+  margin-left: 0;
+}
+
 .muted {
   color: var(--sub);
 }
