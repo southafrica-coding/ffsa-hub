@@ -211,7 +211,7 @@
 .legend i[data-tone="in"] { background: var(--ok, #3f6e45); }
 .legend i[data-tone="maybe"] { background: var(--warn, #94631a); }
 .legend i[data-tone="out"] { background: var(--sub, #5b574d); }
-.legend i[data-tone="none"] { background: var(--quiet, #7a7466); }
+.legend i[data-tone="none"] { background: var(--quiet, #6e685b); }
 
 .scroll {
   width: 100%;
@@ -276,7 +276,7 @@
 .count[data-tone="in"] { color: var(--ok, #3f6e45); }
 .count[data-tone="maybe"] { color: var(--warn, #94631a); }
 .count[data-tone="out"] { color: var(--sub, #5b574d); }
-.count[data-tone="none"] { color: var(--quiet, #7a7466); }
+.count[data-tone="none"] { color: var(--quiet, #6e685b); }
 
 .results {
   display: grid;

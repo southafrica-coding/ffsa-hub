@@ -55,7 +55,7 @@
   font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
-  color: var(--quiet, #7a7466);
+  color: var(--quiet, #6e685b);
 }
 
 .lede {
@@ -98,7 +98,7 @@
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
-  color: var(--quiet, #7a7466);
+  color: var(--quiet, #6e685b);
 }
 
 .choices {
