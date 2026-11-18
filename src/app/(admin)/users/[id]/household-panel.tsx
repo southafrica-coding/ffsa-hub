@@ -64,7 +64,7 @@ export async function AdminHouseholdPanel({ userId }: { userId: string }) {
   if (memberRows.length === 0 && otherAccounts.length === 0) return null;
 
   return (
-    <section className="rounded-xl border p-4 space-y-3">
+    <section className="border p-4 space-y-3">
       <div>
         <p className="page-eyebrow">HOUSEHOLD</p>
         <h2 className="text-xl font-semibold">Family record</h2>
