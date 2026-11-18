@@ -2,7 +2,7 @@
 import { act, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MissioApiError, type MissioClient } from "../api";
-import type { HouseChurchesClient } from "./client";
+import { createHouseChurchesClient, type HouseChurchesClient } from "./client";
 import { ReviewQueue } from "./review-queue";
 import type { ResolveBody, ReviewItem } from "./types";
 import { cleanup, render, setValue, settle } from "./test-render";
@@ -18,13 +18,13 @@ vi.mock("next/link", () => ({
 const family: ReviewItem = {
   id: "review-family",
   status: "pending",
-  sourceLine: "Adler family — see house 4, unclear who",
+  sourceLine: 12,
   rawName: "The Adler family",
   kind: "family_label",
-  matchType: "family_label",
+  matchType: "none",
   houseNumber: 4,
   house: { id: "house-4", number: 4, name: null },
-  role: null,
+  role: "leader",
   candidates: [
     {
       contactId: "c-peter",
@@ -34,7 +34,7 @@ const family: ReviewItem = {
       orgPersonId: "person-peter",
     },
   ],
-  notes: null,
+  notes: "see house 4",
   createdAt: "2026-11-01T08:00:00.000Z",
   resolvedAt: null,
 };
@@ -42,9 +42,9 @@ const family: ReviewItem = {
 const partial: ReviewItem = {
   id: "review-jonah",
   status: "pending",
-  sourceLine: "Jonah",
+  sourceLine: 3,
   rawName: "Jonah",
-  kind: "person",
+  kind: "first_only",
   matchType: "first_only",
   houseNumber: 7,
   house: { id: "house-7", number: 7, name: "River Room" },
@@ -116,11 +116,12 @@ describe("review queue", () => {
     const host = mount(<ReviewQueue client={client([family, partial])} people={people} />);
     await settle();
     expect(host.querySelector("[data-testid=review-progress]")?.textContent?.trim()).toBe("1 of 2");
-    expect(host.textContent).toContain("Adler family — see house 4, unclear who");
-    expect(host.textContent).toContain("The Adler family");
-    expect(host.textContent).toContain("House 4");
+    expect(host.textContent).toContain("Line 12 · The Adler family");
+    expect(host.textContent).toContain("see house 4");
+    expect(host.textContent).not.toContain("Original line");
+    expect(host.textContent).toContain("House 4 · Leader");
     expect(host.textContent).toContain("Family name, not one person");
-    expect(host.textContent?.match(/Family name, not one person/g)).toHaveLength(1);
+    expect(host.textContent).toContain("No match found");
     expect(host.textContent).not.toMatch(/Delete|Coming soon/);
   });
 
@@ -137,12 +138,12 @@ describe("review queue", () => {
     );
     await settle();
     const usePeter = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Use Peter Adler"));
-    expect(usePeter?.textContent).toContain("In the people list");
+    expect(usePeter?.textContent).not.toContain("In the people list");
     usePeter?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await settle();
     expect(bodies[0]).toEqual({ action: "link", contactId: "c-peter" });
     expect(host.querySelector("[data-testid=review-progress]")?.textContent?.trim()).toBe("2 of 2");
-    expect(host.textContent).toContain("Jonah");
+    expect(host.textContent).toContain("Line 3 · Jonah");
     expect(host.textContent).toContain("First name only");
     expect(host.textContent).toContain("River Room");
     expect(host.textContent).toContain("House 7 · Member");
@@ -236,7 +237,8 @@ describe("review queue", () => {
     await settle();
     (host.querySelector("[data-testid=review-create]") as HTMLFormElement).requestSubmit();
     await settle();
-    expect(host.textContent).toMatch(/Search for them and link them/);
+    expect(host.textContent).toContain("Open Missio People, then Add person.");
+    expect(host.textContent).not.toContain("Search for them and link them");
     expect(host.querySelector("[data-testid=review-progress]")?.textContent?.trim()).toBe("2 of 2");
     expect(host.querySelector("[data-testid=review-done]")).toBeNull();
   });
@@ -259,5 +261,41 @@ describe("review queue", () => {
     );
     await settle();
     expect(forbidden.querySelector("[data-testid=missio-no-access]")?.getAttribute("data-status")).toBe("403");
+  });
+
+  it("maps every pinned code to fixed copy and never shows the server message", async () => {
+    const serverText = "violates foreign key constraint fk_house_church_members";
+    const cases: Array<{ status: number; code: string; copy: string; card?: "401" | "403" }> = [
+      { status: 400, code: "invalid_input", copy: "Check the details and try again." },
+      { status: 400, code: "not_missio_person", copy: "This person isn’t in Missio yet. Add them in Missio People first." },
+      { status: 404, code: "not_found", copy: "That couldn’t be found." },
+      { status: 409, code: "already_member", copy: "They’re already in this house." },
+      { status: 409, code: "already_resolved", copy: "Someone else already sorted this one." },
+      { status: 409, code: "membership_not_current", copy: "They’re no longer in this house." },
+      { status: 409, code: "ended_at_in_future", copy: "That end date is still in the future." },
+      { status: 401, code: "unauthenticated", copy: "Sign in required", card: "401" },
+      { status: 403, code: "forbidden", copy: "Pastors only", card: "403" },
+      { status: 429, code: "rate_limited", copy: "Too many attempts, try again in 12 seconds" },
+      { status: 500, code: "server_error", copy: "Something went wrong on our side. Try again." },
+      { status: 500, code: "brand_new_code", copy: "That didn’t work. Try again." },
+    ];
+    for (const item of cases) {
+      const fetchImpl: typeof fetch = async () =>
+        new Response(JSON.stringify({ error: serverText, message: serverText, code: item.code }), {
+          status: item.status,
+          headers: {
+            "content-type": "application/json",
+            ...(item.code === "rate_limited" ? { "retry-after": "12" } : {}),
+          },
+        });
+      const host = mount(<ReviewQueue client={createHouseChurchesClient(fetchImpl)} people={people} />);
+      await settle();
+      if (item.card) {
+        expect(host.querySelector("[data-testid=missio-no-access]")?.getAttribute("data-status")).toBe(item.card);
+      }
+      expect(host.textContent).toContain(item.copy);
+      expect(document.body.textContent).not.toContain("foreign key");
+      expect(document.body.textContent).not.toContain(serverText);
+    }
   });
 });

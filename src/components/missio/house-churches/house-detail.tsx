@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { formatJoined, missioSkinVars } from "../access";
 import { MissioApiError, missioClient, type MissioClient } from "../api";
@@ -14,8 +14,27 @@ import { useMissioLoad } from "./load";
 import { PeoplePicker } from "./people-picker";
 import { AllHousesLink, CampusTag, MeetingMeta, RoleBlock } from "./present";
 import { HouseStatus } from "./status";
-import type { HouseMember, HouseRole } from "./types";
+import type { HouseDetail, HouseMember, HouseRole } from "./types";
 import styles from "./house-churches.module.css";
+
+function portaledMissioClass() {
+  const root = typeof document === "undefined" ? null : document.querySelector("[data-missio-font]");
+  return [styles.menu, root?.className].filter(Boolean).join(" ");
+}
+
+function replaceMembers(house: HouseDetail, members: HouseMember[]): HouseDetail {
+  return {
+    ...house,
+    memberCount: members.length,
+    members,
+    leaders: members.filter((member) => member.role === "leader"),
+    coLeaders: members.filter((member) => member.role === "co_leader"),
+  };
+}
+
+function focusElement(id: string) {
+  requestAnimationFrame(() => document.getElementById(id)?.focus());
+}
 
 export function HouseDetailView({
   houseId,
@@ -27,32 +46,70 @@ export function HouseDetailView({
   people?: Pick<MissioClient, "listPeople">;
 }) {
   const { state, retry } = useMissioLoad(() => client.getHouse(houseId), [client, houseId]);
+  const [live, setLive] = useState<{ house: HouseDetail; canWrite: boolean } | null>(null);
   const [role, setRole] = useState<HouseRole>("member");
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (state.phase === "ready") setLive({ house: state.data.house, canWrite: state.data.canWrite });
+  }, [state]);
+
+  useEffect(() => {
+    if (notice) errorRef.current?.focus();
+  }, [notice]);
+
+  async function refreshHouse() {
+    const fresh = await client.getHouse(houseId);
+    setLive({ house: fresh.house, canWrite: fresh.canWrite });
+  }
 
   async function changeRole(member: HouseMember, next: HouseRole) {
     if (next === member.role) return;
     setPending(true);
     setNotice(null);
     try {
-      await client.updateMemberRole(houseId, member.contactId, next);
-      retry();
+      const result = await client.updateMemberRole(houseId, member.contactId, next);
+      setLive((current) => {
+        if (!current) return current;
+        const members = current.house.members.map((item) =>
+          item.contactId === member.contactId ? { ...item, ...result.member, contactId: member.contactId } : item
+        );
+        return { ...current, house: replaceMembers(current.house, members) };
+      });
+      focusElement(`house-edit-${member.contactId}`);
     } catch (caught) {
-      setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught, "The role didn’t change.") : "The role didn’t change.");
+      const copy = caught instanceof MissioApiError ? houseErrorCopy(caught) : "That didn’t work. Try again.";
+      setNotice(copy);
+      if (caught instanceof MissioApiError && (caught.code === "membership_not_current" || caught.code === "already_resolved")) {
+        await refreshHouse().catch(() => undefined);
+      }
     } finally {
       setPending(false);
     }
   }
 
   async function remove(member: HouseMember) {
+    const sorted = sortMembers(live?.house.members ?? []);
+    const index = sorted.findIndex((item) => item.contactId === member.contactId);
+    const next = sorted[index + 1] ?? sorted[index - 1];
     setPending(true);
     setNotice(null);
     try {
       await client.removeMember(houseId, member.contactId);
-      retry();
+      setLive((current) => {
+        if (!current) return current;
+        const members = current.house.members.filter((item) => item.contactId !== member.contactId);
+        return { ...current, house: replaceMembers(current.house, members) };
+      });
+      if (next) focusElement(`house-edit-${next.contactId}`);
     } catch (caught) {
-      setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught, "This person is still in the house.") : "This person is still in the house.");
+      const copy = caught instanceof MissioApiError ? houseErrorCopy(caught) : "That didn’t work. Try again.";
+      setNotice(copy);
+      if (caught instanceof MissioApiError && (caught.code === "membership_not_current" || caught.code === "already_resolved")) {
+        await refreshHouse().catch(() => undefined);
+      }
     } finally {
       setPending(false);
     }
@@ -62,28 +119,33 @@ export function HouseDetailView({
     setPending(true);
     setNotice(null);
     try {
-      await client.addMember(houseId, { contactId: person.contactId, role });
-      retry();
+      const result = await client.addMember(houseId, { contactId: person.contactId, role });
+      setLive((current) => {
+        if (!current) return current;
+        const without = current.house.members.filter((item) => item.contactId !== result.member.contactId);
+        return { ...current, house: replaceMembers(current.house, [...without, result.member]) };
+      });
+      focusElement(`house-edit-${result.member.contactId}`);
     } catch (caught) {
-      setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught, "They weren’t added.") : "They weren’t added.");
+      setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught) : "That didn’t work. Try again.");
     } finally {
       setPending(false);
     }
   }
 
-  const house = state.phase === "ready" ? state.data.house : null;
-  const canWrite = state.phase === "ready" ? state.data.canWrite : false;
+  const house = live?.house ?? null;
+  const canWrite = live?.canWrite ?? false;
   const members = house ? sortMembers(house.members) : [];
 
   return (
     <div className={`${content.page} ${styles.root}`}>
       <AllHousesLink />
-      {state.phase === "loading" ? (
+      {!house && state.phase === "loading" ? (
         <div className={shell.state} data-state="loading" role="status">
           Loading this house…
         </div>
       ) : null}
-      {state.phase === "error" ? (
+      {!house && state.phase === "error" ? (
         <HouseStatus error={state.error} fallback="This house didn’t load." onRetry={retry} />
       ) : null}
       {house ? (
@@ -104,7 +166,7 @@ export function HouseDetailView({
             </section>
           ) : null}
           {notice ? (
-            <p className={shell.alert} role="alert">
+            <p className={shell.alert} role="alert" tabIndex={-1} ref={errorRef} id="house-action-error">
               {notice}
             </p>
           ) : null}
@@ -207,11 +269,11 @@ function MemberRow({
           }}
         >
           <PopoverTrigger asChild>
-            <button type="button" className={shell.textButton} aria-label={`Edit ${member.displayName}`}>
+            <button type="button" className={shell.textButton} id={`house-edit-${member.contactId}`} aria-label={`Edit ${member.displayName}`}>
               Edit
             </button>
           </PopoverTrigger>
-          <PopoverContent className={styles.menu} style={missioSkinVars()} align="end">
+          <PopoverContent className={portaledMissioClass()} style={missioSkinVars()} align="end">
             <p className={styles.menuTitle}>{member.displayName}</p>
             <label className={shell.field}>
               Role

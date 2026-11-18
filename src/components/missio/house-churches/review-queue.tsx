@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MissioApiError, missioClient, type MissioClient } from "../api";
 import content from "../content.module.css";
 import shell from "../shell.module.css";
 import type { MissioPerson } from "../types-shim";
 import { houseChurchesClient, houseErrorCopy, type HouseChurchesClient } from "./client";
-import { candidateContext, houseTitle, reviewReasons, ROLE_LABEL } from "./format";
+import { houseTitle, reviewHeading, reviewReasons, ROLE_LABEL } from "./format";
 import { useMissioLoad } from "./load";
 import { PeoplePicker } from "./people-picker";
 import { AllHousesLink } from "./present";
@@ -22,6 +22,7 @@ export function ReviewQueue({
   people?: Pick<MissioClient, "listPeople">;
 }) {
   const { state, retry } = useMissioLoad(() => client.listReview(), [client]);
+  const [queue, setQueue] = useState<ReviewItem[] | null>(null);
   const [index, setIndex] = useState(0);
   const [finished, setFinished] = useState(false);
   const [pending, setPending] = useState(false);
@@ -31,10 +32,23 @@ export function ReviewQueue({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [skipNote, setSkipNote] = useState("");
+  const focusTarget = useRef<"item" | "done" | null>(null);
 
-  const items = state.phase === "ready" ? state.data.items : [];
+  useEffect(() => {
+    if (state.phase === "ready") setQueue(state.data.items);
+  }, [state]);
+
+  const items = queue ?? (state.phase === "ready" ? state.data.items : []);
   const total = items.length;
   const item = !finished && index < total ? items[index] : null;
+
+  useEffect(() => {
+    const target = focusTarget.current;
+    if (!target) return;
+    focusTarget.current = null;
+    const id = target === "done" ? "review-done-heading" : "review-item-heading";
+    document.getElementById(id)?.focus();
+  });
 
   function resetFields() {
     setFirstName("");
@@ -49,7 +63,24 @@ export function ReviewQueue({
     const next = index + 1;
     resetFields();
     setIndex(next);
-    if (next >= count) setFinished(true);
+    const done = next >= count;
+    if (done) setFinished(true);
+    focusTarget.current = done ? "done" : "item";
+  }
+
+  async function refreshQueue(currentId: string, fromIndex: number) {
+    const page = await client.listReview();
+    const remaining = page.items.filter((row) => row.id !== currentId);
+    setQueue(remaining);
+    if (remaining.length === 0) {
+      setFinished(true);
+      setIndex(0);
+      focusTarget.current = "done";
+      return;
+    }
+    setFinished(false);
+    setIndex(Math.min(fromIndex, remaining.length - 1));
+    focusTarget.current = "item";
   }
 
   async function resolve(body: ResolveBody, count: number) {
@@ -61,12 +92,11 @@ export function ReviewQueue({
       advance(count);
     } catch (caught) {
       if (caught instanceof MissioApiError && caught.code === "already_resolved") {
-        advance(count);
+        setNotice(houseErrorCopy(caught));
+        await refreshQueue(item.id, index).catch(() => advance(count));
         return;
       }
-      setNotice(
-        caught instanceof MissioApiError ? houseErrorCopy(caught, "That didn’t save. Try again.") : "That didn’t save. Try again."
-      );
+      setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught) : "That didn’t work. Try again.");
     } finally {
       setPending(false);
     }
@@ -91,11 +121,13 @@ export function ReviewQueue({
           </p>
         ) : null}
       </div>
-      <p className={`${shell.lede} ${content.lede}`}>
-        Match each imported name to a person, create them, or skip. Linking or creating adds them to the house.
-      </p>
+      {finished ? null : (
+        <p className={`${shell.lede} ${content.lede}`}>
+          Match each imported name to a person, create them, or skip. Linking or creating adds them to the house.
+        </p>
+      )}
 
-      {state.phase === "loading" ? (
+      {!queue && state.phase === "loading" ? (
         <div className={shell.state} data-state="loading" role="status">
           Loading names to review…
         </div>
@@ -103,15 +135,15 @@ export function ReviewQueue({
       {state.phase === "error" ? (
         <HouseStatus error={state.error} fallback="Names to review didn’t load." onRetry={retry} />
       ) : null}
-      {state.phase === "ready" && total === 0 ? (
+      {state.phase === "ready" && total === 0 && !finished ? (
         <div className={shell.state} data-state="empty" data-testid="review-empty">
           No imported names are waiting.
         </div>
       ) : null}
       {state.phase === "ready" && finished ? (
-        <div className={shell.state} data-state="done" data-testid="review-done">
+        <h2 id="review-done-heading" tabIndex={-1} className={styles.doneTitle} data-testid="review-done">
           {total === 1 ? "That name is resolved." : total === 2 ? "Both names are resolved." : `All ${total} names are resolved.`}
-        </div>
+        </h2>
       ) : null}
       {item ? (
         <ReviewCard
@@ -202,23 +234,23 @@ function ReviewCard({
   const houseLabel = item.house ? houseTitle(item.house) : `House ${item.houseNumber}`;
   const houseNumber = item.house?.number ?? item.houseNumber;
   const housePlace = item.role ? `House ${houseNumber} · ${ROLE_LABEL[item.role]}` : `House ${houseNumber}`;
-  const showName = item.sourceLine.trim() !== item.rawName.trim();
   const reasons = reviewReasons(item);
+  const note = item.notes?.trim() ?? "";
 
   return (
     <article data-testid="review-item">
       <section className={styles.summary} data-testid="review-summary">
-        <p className={`${shell.eyebrow} ${content.eyebrow}`}>Original line</p>
-        <p className={styles.quoteBox}>{item.sourceLine}</p>
-        {showName ? <h2>{item.rawName}</h2> : null}
+        <h2 id="review-item-heading" tabIndex={-1}>
+          {reviewHeading(item)}
+        </h2>
+        {note ? <p className={styles.quiet}>{note}</p> : null}
         {item.house?.name?.trim() ? <p className={styles.line}>{houseLabel}</p> : null}
-        <p className={item.house?.name?.trim() ? styles.number : styles.line}>{housePlace}</p>
+        <p className={styles.line}>{housePlace}</p>
         <ul className={styles.reasons}>
           {reasons.map((reason) => (
             <li key={reason}>{reason}</li>
           ))}
         </ul>
-        {item.notes?.trim() ? <p className={styles.line}>Note: {item.notes.trim()}</p> : null}
       </section>
       {notice ? (
         <p className={shell.alert} role="alert">
@@ -230,24 +262,18 @@ function ReviewCard({
         <section className={styles.section}>
           <h2>Possible matches</h2>
           <ul className={styles.choices} data-testid="review-candidates">
-            {item.candidates.map((candidate) => {
-              const context = candidateContext(candidate);
-              return (
-                <li key={candidate.contactId}>
-                  <button
-                    type="button"
-                    className={`${shell.ghost} ${styles.choice}`}
-                    disabled={pending}
-                    onClick={() => onLink(candidate.contactId)}
-                  >
-                    <span className={styles.choiceBody}>
-                      <span className={styles.choiceName}>Use {candidate.displayName}</span>
-                      {context ? <span className={styles.choiceMeta}>{context}</span> : null}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
+            {item.candidates.map((candidate) => (
+              <li key={candidate.contactId}>
+                <button
+                  type="button"
+                  className={`${shell.ghost} ${styles.choice}`}
+                  disabled={pending}
+                  onClick={() => onLink(candidate.contactId)}
+                >
+                  <span className={styles.choiceName}>Use {candidate.displayName}</span>
+                </button>
+              </li>
+            ))}
           </ul>
         </section>
       ) : null}

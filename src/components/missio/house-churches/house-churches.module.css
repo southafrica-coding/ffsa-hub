@@ -116,6 +116,9 @@
 }
 
 .personLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -257,6 +260,14 @@
   flex: none;
 }
 
+.doneTitle {
+  margin: 24px 0 0;
+  font-size: 19px;
+  font-weight: 560;
+  line-height: 1.25;
+  letter-spacing: -0.4px;
+}
+
 .summary {
   margin-top: 24px;
   min-width: 0;
@@ -267,7 +278,7 @@
 }
 
 .root .summary h2 {
-  margin: 12px 0 0;
+  margin: 0;
 }
 
 .quoteBox {
@@ -304,12 +315,10 @@
   width: 100%;
 }
 
-.choiceName,
-.choiceMeta {
+.choiceName {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .choiceMeta {
@@ -371,6 +380,11 @@
   box-shadow: none !important;
   padding: 16px !important;
   font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+}
+
+.menu,
+.menu * {
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
 }
 
 .menuTitle {

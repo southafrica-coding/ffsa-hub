@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { candidateContext, houseTitle, peopleCount, reviewReasons, sortHouses, sortMembers } from "./format";
+import { houseTitle, meetingDayLabel, peopleCount, reviewReasons, sortHouses, sortMembers } from "./format";
 
 describe("house church formatting", () => {
   it("uses House N when the name is missing", () => {
@@ -29,29 +29,24 @@ describe("house church formatting", () => {
     ]);
   });
 
-  it("mentions the people list only when the contact is already a Missio person", () => {
-    expect(
-      candidateContext({
-        contactId: "c",
-        displayName: "Peter Adler",
-        firstName: "Peter",
-        lastName: "Adler",
-        orgPersonId: "p",
-      })
-    ).toBe("In the people list");
-    expect(
-      candidateContext({ contactId: "c", displayName: "Jonah Feldman", firstName: "Jonah", lastName: "Feldman" })
-    ).toBeNull();
+  it("capitalises a lowercase meeting day", () => {
+    expect(meetingDayLabel("wednesday")).toBe("Wednesday");
+    expect(meetingDayLabel("Tuesday")).toBe("Tuesday");
   });
 
-  it("says a family label is not one person, once", () => {
+  it("labels known kinds and leaves person, null, and unknown kinds unlabelled", () => {
     expect(reviewReasons({ kind: "family_label", matchType: "family_label" })).toEqual(["Family name, not one person"]);
     expect(reviewReasons({ kind: "family_label", matchType: "none" })).toEqual([
       "Family name, not one person",
       "No match found",
     ]);
+    expect(reviewReasons({ kind: "couple_split", matchType: "none" })).toEqual([
+      "Couple, split into two",
+      "No match found",
+    ]);
     expect(reviewReasons({ kind: "person", matchType: "multiple" })).toEqual(["Several possible matches"]);
-    expect(reviewReasons({ kind: "person", matchType: "first_only" })).toEqual(["First name only"]);
-    expect(reviewReasons({ kind: "person", matchType: "partial" })).toEqual(["Partial name"]);
+    expect(reviewReasons({ kind: "first_only", matchType: "first_only" })).toEqual(["First name only"]);
+    expect(reviewReasons({ kind: null, matchType: null })).toEqual([]);
+    expect(reviewReasons({ kind: "widget", matchType: "partial" })).toEqual(["Partial name"]);
   });
 });

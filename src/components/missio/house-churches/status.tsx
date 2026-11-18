@@ -23,7 +23,7 @@ export function HouseStatus({
 }) {
   const status = accessStatus(error);
   if (status != null) return <NoAccess status={status} />;
-  const message = error instanceof MissioApiError ? houseErrorCopy(error, fallback) : fallback;
+  const message = error instanceof MissioApiError ? houseErrorCopy(error) : fallback;
   return (
     <div className={shell.state} data-state="error" role="alert">
       <p>{message}</p>
