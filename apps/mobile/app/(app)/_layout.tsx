@@ -6,7 +6,8 @@ import { PushProvider } from "@/features/push";
 import { MeProvider, TabBar } from "@/features/shell";
 import { useTheme } from "@/theme/use-theme";
 
-// Signed-in area: the bottom tab bar (Home · Finance · Tickets · Me). The
+// Signed-in area: the bottom tab bar (Home · Training · Finance · Prayer ·
+// Tickets · Me; Training only for Training staff). The
 // auth gate in app/_layout.tsx keeps signed-out users out of here entirely.
 //
 // Each tab's folder owns its own screens (route-folder contract, README):
@@ -29,6 +30,7 @@ export default function AppLayout() {
           screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg } }}
         >
           <Tabs.Screen name="index" options={{ title: "Home" }} />
+          <Tabs.Screen name="training" options={{ title: "Training" }} />
           <Tabs.Screen name="finance" options={{ title: "Finance" }} />
           <Tabs.Screen name="prayer" options={{ title: "Prayer" }} />
           <Tabs.Screen name="tickets" options={{ title: "Tickets" }} />

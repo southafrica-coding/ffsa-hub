@@ -30,6 +30,22 @@ export async function getMyDirectPermissions(supabase: Client, userId: string) {
     .eq("user_id", userId);
 }
 
+// Training ties for the phone's Training tab (migration 334 + 304): head
+// counts only. Before 334 is applied the enrollment_staff read errors; the
+// route then answers training: null instead of failing.
+export async function getMyTrainingTies(supabase: Client, userId: string, today: string) {
+  const [walking, staff] = await Promise.all([
+    supabase
+      .from("enrollment_staff")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .or(`ends_on.is.null,ends_on.gt.${today}`),
+    supabase.from("program_staff").select("id", { count: "exact", head: true }).eq("user_id", userId),
+  ]);
+  if (walking.error || staff.error) return null;
+  return { walkingWith: walking.count ?? 0, programStaff: staff.count ?? 0 };
+}
+
 // role_permissions is readable by any signed-in user (migration 089).
 export async function getRoleBundles(supabase: Client, roleIds: string[]) {
   if (roleIds.length === 0) return { data: [], error: null };

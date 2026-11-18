@@ -10,13 +10,14 @@
 // same tab. That lets the placeholders and the real slices swap in without
 // touching this file.
 
-import { CircleUser, Flame, House, Ticket, Wallet, type LucideIcon } from "lucide-react-native";
+import { CircleUser, Flame, GraduationCap, House, Ticket, Wallet, type LucideIcon } from "lucide-react-native";
 
+import { hasTrainingAccess } from "@/features/training/logic";
 import type { Me } from "@/lib/api";
 
 import { shellStrings } from "./strings";
 
-export type TabId = "home" | "finance" | "prayer" | "tickets" | "me";
+export type TabId = "home" | "training" | "finance" | "prayer" | "tickets" | "me";
 
 export type TabDef = {
   id: TabId;
@@ -31,11 +32,14 @@ export type TabDef = {
   visible?: (me: Me | null) => boolean;
 };
 
-// Every tab is for everyone today: My Finance, My Events/tickets and Me are
+// Every tab but Training is for everyone: My Finance, My Events/tickets and Me are
 // open to every signed-in user on the web (feature-inventory.md). Staff-only
 // things (door check-in) live INSIDE a tab and gate themselves with useCan().
 export const TABS: readonly TabDef[] = [
   { id: "home", segment: "index", label: shellStrings.tabs.home, icon: House },
+  // Training staff only (redesign 48i): Training module, program staff, or
+  // walking with a student. Everyone else keeps the five tabs below.
+  { id: "training", segment: "training", label: shellStrings.tabs.training, icon: GraduationCap, visible: hasTrainingAccess },
   { id: "finance", segment: "finance", label: shellStrings.tabs.finance, icon: Wallet },
   { id: "prayer", segment: "prayer", label: shellStrings.tabs.prayer, icon: Flame },
   { id: "tickets", segment: "tickets", label: shellStrings.tabs.tickets, icon: Ticket },

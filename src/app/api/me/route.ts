@@ -4,6 +4,7 @@ import {
   getMyDirectPermissions,
   getMyProfileRow,
   getMyRoleAssignments,
+  getMyTrainingTies,
   getRoleBundles,
 } from "@/services/me";
 import {
@@ -34,10 +35,13 @@ export async function GET() {
     );
   }
 
-  const [profile, assignments, direct] = await Promise.all([
+  const now = new Date();
+  const [profile, assignments, direct, training] = await Promise.all([
     getMyProfileRow(supabase, user.id),
     getMyRoleAssignments(supabase, user.id),
     getMyDirectPermissions(supabase, user.id),
+    // Optional: never fails the request (null until migration 334 is applied).
+    getMyTrainingTies(supabase, user.id, now.toISOString().slice(0, 10)),
   ]);
   const firstError = profile.error ?? assignments.error ?? direct.error;
   if (firstError) {
@@ -76,7 +80,8 @@ export async function GET() {
     assignments: assignmentRows,
     direct: (direct.data ?? []) as DirectPermissionRow[],
     bundles: (bundles.data ?? []) as RoleBundleRow[],
-    now: new Date(),
+    training,
+    now,
   });
   return NextResponse.json(body, { headers: NO_STORE });
 }

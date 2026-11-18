@@ -3053,6 +3053,165 @@ export type Database = {
           },
         ]
       }
+      org_people: {
+        Row: {
+          campus: string
+          contact_id: string
+          created_at: string
+          created_by: string | null
+          current_stage: string | null
+          id: string
+          joined_at: string | null
+          org_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          campus?: string
+          contact_id: string
+          created_at?: string
+          created_by?: string | null
+          current_stage?: string | null
+          id?: string
+          joined_at?: string | null
+          org_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          campus?: string
+          contact_id?: string
+          created_at?: string
+          created_by?: string | null
+          current_stage?: string | null
+          id?: string
+          joined_at?: string | null
+          org_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_people_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_people_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "v_campaign_audience"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "org_people_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "v_contact_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_people_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_people_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_staff_roles: {
+        Row: {
+          campus: string | null
+          created_at: string
+          granted_by: string | null
+          id: string
+          org_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          campus?: string | null
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          org_id: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          campus?: string | null
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          org_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_staff_roles_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_staff_roles_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_staff_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organisations: {
+        Row: {
+          contact_label_id: string | null
+          created_at: string
+          id: string
+          name: string
+          slug: string
+        }
+        Insert: {
+          contact_label_id?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          slug: string
+        }
+        Update: {
+          contact_label_id?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organisations_contact_label_id_fkey"
+            columns: ["contact_label_id"]
+            isOneToOne: false
+            referencedRelation: "labels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       outreach_budget_categories: {
         Row: {
           created_at: string
@@ -5605,6 +5764,38 @@ export type Database = {
       }
     }
     Views: {
+      org_people_directory: {
+        Row: {
+          campus: string | null
+          contact_id: string | null
+          created_at: string | null
+          current_stage: string | null
+          first_name: string | null
+          id: string | null
+          joined_at: string | null
+          last_name: string | null
+          org_id: string | null
+          preferred_name: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_people_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_people_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_campaign_audience: {
         Row: {
           campaign_id: string | null
@@ -5699,6 +5890,14 @@ export type Database = {
       get_my_contact_id: { Args: never; Returns: string }
       grade_to_points: { Args: { grade: string }; Returns: number }
       has_any_role: { Args: { required_roles: string[] }; Returns: boolean }
+      has_org_role: {
+        Args: { p_org_slug: string; p_roles?: string[] }
+        Returns: boolean
+      }
+      has_org_role_id: {
+        Args: { p_org_id: string; p_roles?: string[] }
+        Returns: boolean
+      }
       has_permission: {
         Args: { required_permission: string }
         Returns: boolean

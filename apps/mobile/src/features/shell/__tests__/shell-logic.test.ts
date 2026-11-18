@@ -48,8 +48,8 @@ describe("access (UX gates from /api/me)", () => {
 });
 
 describe("tabs", () => {
-  it("are Home · Finance · Prayer · Tickets · Me, for everyone", () => {
-    expect(TABS.map((t) => t.label)).toEqual(["Home", "Finance", "Prayer", "Tickets", "Me"]);
+  it("are Home · Finance · Prayer · Tickets · Me for everyone, plus Training for Training staff", () => {
+    expect(TABS.map((t) => t.label)).toEqual(["Home", "Training", "Finance", "Prayer", "Tickets", "Me"]);
     expect(visibleTabs(null).map((t) => t.id)).toEqual(["home", "finance", "prayer", "tickets", "me"]);
     expect(visibleTabs(makeMe({ roles: [], permissions: [] })).map((t) => t.id)).toEqual([
       "home",
@@ -60,12 +60,21 @@ describe("tabs", () => {
     ]);
   });
 
-  it("five labels fit a 320pt-wide phone at the default text size", () => {
+  it("the five labels everyone sees fit a 320pt-wide phone at the default text size", () => {
     // Roboto Mono advances 0.6em per character; labels are 11pt caps with
     // ~1.4pt tracking (TabBar). 320pt / 5 tabs = 64pt per tab. Larger text
     // sizes shrink the label to fit (adjustsFontSizeToFit) instead of cutting it.
+    const everyone = visibleTabs(makeMe());
+    expect(everyone).toHaveLength(5);
     const width = (label: string) => label.length * (11 * 0.6 + 1.6);
-    for (const t of TABS) expect(width(t.label)).toBeLessThanOrEqual(320 / TABS.length);
+    for (const t of everyone) expect(width(t.label)).toBeLessThanOrEqual(320 / everyone.length);
+  });
+
+  it("with Training, six labels fit a 320pt phone within the label's minimumFontScale (0.7)", () => {
+    const staff = visibleTabs(makeMe({ training: { walkingWith: 1, programStaff: 0 } }));
+    expect(staff.map((t) => t.id)).toEqual(["home", "training", "finance", "prayer", "tickets", "me"]);
+    const width = (label: string) => label.length * (11 * 0.6 + 1.6);
+    for (const t of staff) expect((320 / staff.length) / width(t.label)).toBeGreaterThanOrEqual(0.7);
   });
 
   it("match routes on the first segment, so placeholders and real slices are the same tab", () => {

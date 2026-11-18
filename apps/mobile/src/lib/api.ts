@@ -175,6 +175,13 @@ export const meSchema = z.object({
     )
     .nullish()
     .transform((v) => v ?? []),
+  // Training ties (migration 334): how many students this person walks with
+  // and how many schools name them as staff. null when the server could not
+  // read them or is older than the app; then only roles/permissions count.
+  training: z
+    .object({ walkingWith: z.number(), programStaff: z.number() })
+    .nullish()
+    .transform((v) => v ?? null),
   serverTime: nullableString,
 });
 

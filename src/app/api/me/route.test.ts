@@ -13,7 +13,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { GET } from "./route";
 
-function world(opts: { user?: { id: string; email?: string } | null; active?: boolean; error?: string }) {
+function world(opts: { user?: { id: string; email?: string } | null; active?: boolean; error?: string; trainingError?: boolean }) {
   state.fake = createFakeSupabase({
     user: opts.user === undefined ? { id: "u1", email: "me@hub.test" } : opts.user,
     resolve: (q: FakeQuery) => {
@@ -37,6 +37,10 @@ function world(opts: { user?: { id: string; email?: string } | null; active?: bo
       if (q.table === "user_permissions") {
         return { data: [{ scope_type: null, scope_id: null, permissions: { key: "events.view" } }] };
       }
+      if (q.table === "enrollment_staff") {
+        return opts.trainingError ? { error: { message: "relation does not exist" } } : { data: null, count: 2 };
+      }
+      if (q.table === "program_staff") return { data: null, count: 0 };
       if (q.table === "role_permissions") {
         return { data: [{ role_id: "r-pl", permissions: { key: "schools.manage" } }] };
       }
@@ -85,6 +89,22 @@ describe("GET /api/me", () => {
     expect(filterValue(byTable.user_roles, "eq", "user_id")).toBe("u1");
     expect(filterValue(byTable.user_permissions, "eq", "user_id")).toBe("u1");
     expect(filterValue(byTable.role_permissions, "in", "role_id")).toEqual(["r-pl"]);
+    expect(filterValue(byTable.enrollment_staff, "eq", "user_id")).toBe("u1");
+    expect(filterValue(byTable.program_staff, "eq", "user_id")).toBe("u1");
+  });
+
+  it("reports Training ties as head counts", async () => {
+    const body = await (await GET()).json();
+    expect(body.training).toEqual({ walkingWith: 2, programStaff: 0 });
+    const walking = state.fake.queries.find((q) => q.table === "enrollment_staff");
+    expect(walking?.head).toBe(true);
+  });
+
+  it("answers 200 with training: null when the ties can't be read (334 not applied)", async () => {
+    world({ trainingError: true });
+    const res = await GET();
+    expect(res.status).toBe(200);
+    expect((await res.json()).training).toBeNull();
   });
 
   it("403 deactivated if the users row says so", async () => {
