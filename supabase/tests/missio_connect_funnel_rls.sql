@@ -1165,6 +1165,31 @@ SELECT pg_temp.expect('RLS alone blocks a match to someone outside the org',
   $$),
   'err 42501');
 ALTER TABLE public.connect_responses ENABLE TRIGGER trg_connect_response_guard_contact;
+SELECT pg_temp.expect('changing org_id is in the connect-card guard',
+  (SELECT (pg_get_triggerdef(t.oid) LIKE '%UPDATE OF%org_id%')::text
+     FROM pg_trigger t
+     JOIN pg_class c ON c.oid = t.tgrelid
+    WHERE t.tgname = 'trg_connect_response_guard_contact'
+      AND c.relname = 'connect_responses'
+      AND NOT t.tgisinternal),
+  'true');
+SELECT pg_temp.expect('service role cannot move a matched card to an org the contact is not in',
+  pg_temp.fail('service', $$
+    UPDATE public.connect_responses
+       SET org_id = (SELECT id FROM public.organisations WHERE slug = 'ffsa')
+     WHERE id = 'd1111111-1111-4111-8111-111111111111'
+  $$),
+  '23503 missio_contact_not_in_org');
+SELECT pg_temp.expect('attach locks on org plus contact, else org plus phone',
+  (SELECT (
+      pg_get_functiondef('public.attach_missio_connect_response()'::regprocedure)
+        LIKE '%pg_advisory_xact_lock%'
+      AND pg_get_functiondef('public.attach_missio_connect_response()'::regprocedure)
+        LIKE '%:contact:%'
+      AND pg_get_functiondef('public.attach_missio_connect_response()'::regprocedure)
+        LIKE '%:phone:%'
+    )::text),
+  'true');
 SELECT pg_temp.expect('service role cannot assign a hub user with no Missio role',
   pg_temp.fail('service', $$
     UPDATE public.missio_followups
