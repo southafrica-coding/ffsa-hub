@@ -21,7 +21,7 @@ export function SchoolsPipelineCard() {
   if (withApplications.length === 0) return null;
 
   return (
-    <WidgetShell title="Pipeline & Conversion" href="/schools">
+    <WidgetShell title="Pipeline and conversion" href="/schools">
       {totals && (
         <div
           className="grid grid-cols-2"

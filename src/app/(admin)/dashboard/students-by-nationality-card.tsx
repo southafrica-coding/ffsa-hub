@@ -33,7 +33,7 @@ export function StudentsByNationalityCard() {
   const remainder = ranked.length - shown.length;
 
   return (
-    <WidgetShell title="Student Citizenship" href="/schools">
+    <WidgetShell title="Citizenship" href="/schools">
       <WidgetCaption>
         {data.overall.total} accepted or enrolled &middot; not the same as a school roster
       </WidgetCaption>
@@ -64,7 +64,7 @@ export function StudentsByNationalityCard() {
       </div>
 
       {total === 0 ? (
-        <WidgetEmpty>No students yet</WidgetEmpty>
+        <WidgetEmpty>No accepted or enrolled students yet.</WidgetEmpty>
       ) : (
         <>
           <div style={{ padding: "0.5rem 0" }}>

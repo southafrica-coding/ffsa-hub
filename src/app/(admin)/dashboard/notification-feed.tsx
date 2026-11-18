@@ -10,7 +10,6 @@ import {
   UserPlus,
   Archive,
   Car,
-  Check,
   ShieldAlert,
   Music,
   MailWarning,
@@ -27,16 +26,6 @@ const ICONS: Record<string, LucideIcon> = {
   insurance: ShieldAlert,
   practice: Music,
   reference: MailWarning,
-};
-
-const ACCENTS: Record<string, string> = {
-  booking: "var(--ink)",
-  user: "hsl(200 70% 62%)",
-  records: "hsl(265 60% 68%)",
-  vehicle: "hsl(150 55% 58%)",
-  insurance: "hsl(4 75% 62%)",
-  practice: "hsl(43 100% 50%)",
-  reference: "hsl(4 75% 62%)",
 };
 
 // Leaders get insurance-expiry notices "on behalf of" their people. The feed
@@ -104,44 +93,21 @@ export function NotificationFeed({ initial }: { initial: AppNotification[] }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-none border border-[color:var(--rule)] bg-[color:var(--surface-1)]">
-      <div className="flex items-center justify-between border-b border-[color:var(--rule)] px-5 py-4">
-        <div className="flex items-center gap-2.5">
-          <Bell className="h-4 w-4 text-ink" />
-          <span
-            className="text-lg tracking-wide text-[var(--text-primary)]"
-            style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em" }}
-          >
-            Notifications
-          </span>
-          {unread.length > 0 && (
-            <span className="bg-ink px-2 py-0.5 font-mono text-[10px] font-bold text-white">
-              {unread.length}
-            </span>
-          )}
-        </div>
+    <div className="min-w-0 overflow-hidden border border-ink bg-surface-1">
+      <div className="section-bar">
+        <span className="section-bar-title">Needs attention</span>
         {unread.length > 0 && (
-          <button
-            type="button"
-            onClick={markAll}
-            className="text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-tertiary)] transition-colors hover:text-foreground"
-          >
-            Mark all read
-          </button>
+          <span className="flex items-center gap-3">
+            <span className="section-bar-meta">{unread.length} unread</span>
+            <button type="button" onClick={markAll} className="section-bar-meta hover:text-white">
+              Mark all read
+            </button>
+          </span>
         )}
       </div>
 
       {items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-          <div
-            className="flex h-11 w-11 items-center justify-center rounded-none"
-            style={{ background: "var(--surface-2)" }}
-          >
-            <Check className="h-5 w-5 text-[color:var(--green-text)]" />
-          </div>
-          <p className="text-sm font-medium text-foreground">You&apos;re all caught up</p>
-          <p className="text-xs text-muted-foreground">Nothing needs your attention right now.</p>
-        </div>
+        <p className="px-6 py-8 text-center text-sm text-[color:var(--text-secondary)]">Nothing needs attention.</p>
       ) : (
         <div className="max-h-[26rem] divide-y divide-[color:var(--surface-4)] overflow-y-auto">
           {items.map((n) => {
@@ -152,14 +118,11 @@ export function NotificationFeed({ initial }: { initial: AppNotification[] }) {
                 href={n.href}
                 onClick={() => markOne(n.key)}
                 className={cn(
-                  "flex items-start gap-3 px-5 py-3 transition-colors hover:bg-[color:var(--surface-2)]",
+                  "flex min-w-0 items-start gap-3 px-6 py-3 hover:bg-[color:var(--surface-2)]",
                   !n.read && "bg-[color:var(--surface-2)]"
                 )}
               >
-                <div
-                  className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-none"
-                  style={{ background: "var(--rule)", color: ACCENTS[n.kind] ?? "var(--ink)" }}
-                >
+                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center bg-bone text-ink">
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -173,12 +136,12 @@ export function NotificationFeed({ initial }: { initial: AppNotification[] }) {
                       {n.title}
                     </p>
                     {n.when && (
-                      <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                      <span className="shrink-0 font-mono text-[10px] font-bold tabular-nums tracking-[0.1em] text-[color:var(--text-tertiary)]">
                         {n.when}
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{n.body}</p>
+                  <p className="mt-1 truncate text-[13px] text-[color:var(--text-secondary)]">{n.body}</p>
                 </div>
                 {!n.read && (
                   <span className="mt-1.5 h-2 w-2 shrink-0 rounded-none bg-ink" />

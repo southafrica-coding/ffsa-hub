@@ -34,7 +34,7 @@ export function StudentsByGenderCard() {
   const overallKeys = orderedKeys(data.overall.genders);
 
   return (
-    <WidgetShell title="Gender Split by School" href="/schools">
+    <WidgetShell title="Gender by school" href="/schools">
       <WidgetCaption>
         {data.overall.total} accepted or enrolled &middot; not the same as a school roster
       </WidgetCaption>
@@ -56,7 +56,7 @@ export function StudentsByGenderCard() {
       </div>
 
       {withPeople.length === 0 ? (
-        <WidgetEmpty>No students yet</WidgetEmpty>
+        <WidgetEmpty>No accepted or enrolled students yet.</WidgetEmpty>
       ) : (
         <div>
           {withPeople.map((p) => {

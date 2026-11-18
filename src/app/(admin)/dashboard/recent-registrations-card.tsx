@@ -24,10 +24,10 @@ export function RecentRegistrationsCard({
   registrations: RegistrationRow[];
 }) {
   return (
-    <WidgetShell title="Recent Registrations">
-      <div style={{ padding: "0.5rem 0" }}>
+    <WidgetShell title="Recent registrations">
+      <div className="py-2">
         {registrations.length === 0 ? (
-          <WidgetEmpty>No recent registrations</WidgetEmpty>
+          <WidgetEmpty>No registrations yet.</WidgetEmpty>
         ) : (
           registrations.map((reg) => {
             const contact = Array.isArray(reg.contacts) ? reg.contacts[0] : reg.contacts;
@@ -43,10 +43,10 @@ export function RecentRegistrationsCard({
                 <div className="flex min-w-0 items-center gap-3">
                   <Initials name={name || "—"} size={30} />
                   <div className="min-w-0">
-                    <p className="truncate text-[13px] font-medium text-[color:var(--text-primary)]">
+                    <p className="truncate text-sm font-medium text-[color:var(--text-primary)]">
                       {name || "—"}
                     </p>
-                    <p className="mt-0.5 truncate text-[11px] text-[color:var(--text-tertiary)]">
+                    <p className="mt-1 truncate text-[13px] text-[color:var(--text-tertiary)]">
                       {event?.title ?? "—"}
                     </p>
                   </div>
@@ -60,7 +60,7 @@ export function RecentRegistrationsCard({
                         : "quiet"
                   }
                 >
-                  {reg.status}
+                  {reg.status.charAt(0).toUpperCase() + reg.status.slice(1)}
                 </StatusPill>
               </div>
             );

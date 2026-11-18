@@ -15,7 +15,7 @@ export function SchoolsCountsCard() {
   if (programs.length === 0) return null;
 
   return (
-    <WidgetShell title="Applications & Enrolment" href="/schools">
+    <WidgetShell title="Applications and enrolment" href="/schools">
       {/* Aggregate strip — only present for viewers scoped to every school. */}
       {totals && (
         <div
@@ -82,7 +82,7 @@ export function SchoolsCountsCard() {
         ))}
       </div>
 
-      {programs.length === 0 && <WidgetEmpty>No active schools</WidgetEmpty>}
+      {programs.length === 0 && <WidgetEmpty>No schools are active.</WidgetEmpty>}
     </WidgetShell>
   );
 }

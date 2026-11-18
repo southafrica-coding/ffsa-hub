@@ -48,7 +48,7 @@ export function SchoolsTrackCard() {
           className="block border-b border-rule px-6 py-5 transition-colors duration-150 last:border-b-0 hover:bg-[color:var(--surface-2)]"
         >
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-[14px] font-bold text-ink">{p.name}</p>
+            <p className="text-sm font-bold text-ink">{p.name}</p>
             <p className="mono-label">
               {p.accepted} ACCEPTED
               {p.applying > 0 && ` · ${p.applying} STILL APPLYING (${p.applyingTold} TOLD US)`}
@@ -58,21 +58,21 @@ export function SchoolsTrackCard() {
           <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
             <Figure label="Whole programme" value={p.whole} />
             <Figure label="Part of the year" value={p.partYear} />
-            <Figure label="Not told us yet" value={p.unknown} muted />
+            <Figure label="Not reported yet" value={p.unknown} muted />
           </div>
 
-          <p className="mono-label mb-2 mt-5">Doing just this part (accepted)</p>
+          <p className="mono-label mb-2 mt-4">Accepted for this part only</p>
           <div className="grid grid-cols-2 gap-px border border-rule bg-[var(--rule)] md:grid-cols-4">
             {p.bySegment.map((s) => (
               <div key={s.code} className="bg-white px-4 py-3">
                 <p className="mono-label">{s.code}</p>
-                <p className="numeral mt-1 text-[32px] leading-none">{s.expected}</p>
+                <p className="numeral mt-1 text-[32px] leading-[0.85]">{s.expected}</p>
               </div>
             ))}
           </div>
 
           {p.combos.length > 0 && (
-            <p className="mt-4 text-[12.5px] text-[color:var(--text-secondary)]">
+            <p className="mt-4 text-[13px] text-[color:var(--text-secondary)]">
               <span className="mono-label mr-2">Part-year choices</span>
               {p.combos.map((c) => `${c.label}: ${c.count}`).join(" · ")}
             </p>
@@ -87,7 +87,7 @@ function Figure({ label, value, muted = false }: { label: string; value: number;
   return (
     <div>
       <p className="mono-label">{label}</p>
-      <p className="numeral mt-1 text-[38px] leading-none" style={muted ? { color: "#9A9689" } : undefined}>
+      <p className="numeral mt-1 text-[32px] leading-[0.85]" style={muted ? { color: "#9A9689" } : undefined}>
         {value}
       </p>
     </div>

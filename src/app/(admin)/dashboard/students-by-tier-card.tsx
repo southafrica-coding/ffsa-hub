@@ -40,7 +40,7 @@ export function StudentsByTierCard() {
       </div>
 
       {withPeople.length === 0 ? (
-        <WidgetEmpty>No students yet</WidgetEmpty>
+        <WidgetEmpty>No accepted or enrolled students yet.</WidgetEmpty>
       ) : (
         <div>
           {withPeople.map((p) => (

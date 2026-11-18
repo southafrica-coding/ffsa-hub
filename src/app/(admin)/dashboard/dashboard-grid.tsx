@@ -41,7 +41,7 @@ export function DashboardGrid({
           return (
             <div
               key={slot.key}
-              className={slot.fullWidth ? "lg:col-span-2" : undefined}
+              className={slot.fullWidth ? "min-w-0 lg:col-span-2" : "min-w-0"}
             >
               {node}
             </div>

@@ -160,7 +160,7 @@ export default async function DashboardPage() {
 
       <SlackConnectBanner show={!!authUser && !!slackLink && !slackLink.slackUserId} />
 
-      <div className="px-5 py-6 md:px-8 md:py-7">
+      <div className="min-w-0 px-5 py-6 md:px-8 md:py-8">
         {slots.length === 0 ? <EmptyDashboard /> : <DashboardGrid slots={slots} nodes={nodes} />}
       </div>
     </div>
@@ -187,12 +187,12 @@ function EmptyDashboard() {
       nodes={{
         empty: (
           <div className="border border-dashed border-rule-strong bg-surface-1 px-6 py-12 text-center">
-            <p className="text-[13px] text-[color:var(--text-secondary)]">
+            <p className="text-sm text-[color:var(--text-secondary)]">
               {WIDGET_REGISTRY.length > 0
-                ? "Your dashboard is empty."
+                ? "Nothing is selected for this dashboard."
                 : "No widgets are available for your account."}
             </p>
-            <p className="mono-label mt-2">Use Customise above to choose what appears here.</p>
+            <p className="mono-label mt-2">Use Customise, above, to choose widgets.</p>
           </div>
         ),
       }}

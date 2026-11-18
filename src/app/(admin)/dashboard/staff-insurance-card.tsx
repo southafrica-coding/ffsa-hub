@@ -61,7 +61,7 @@ export function StaffInsuranceCard() {
 
   if (alerts === null) {
     return (
-      <WidgetShell title="Staff Insurance Alerts">
+      <WidgetShell title="Staff insurance">
         <WidgetEmpty>Loading…</WidgetEmpty>
       </WidgetShell>
     );
@@ -69,14 +69,14 @@ export function StaffInsuranceCard() {
 
   if (alerts.length === 0) {
     return (
-      <WidgetShell title="Staff Insurance Alerts">
+      <WidgetShell title="Staff insurance">
         <WidgetEmpty>All staff insurance is current.</WidgetEmpty>
       </WidgetShell>
     );
   }
 
   return (
-    <WidgetShell title="Staff Insurance Alerts">
+    <WidgetShell title="Staff insurance">
       <div>
         {alerts.map((a) => {
           const s = STATE_STYLE[a.state];
