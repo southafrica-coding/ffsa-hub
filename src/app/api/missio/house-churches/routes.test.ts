@@ -902,13 +902,40 @@ describe("membership writes", () => {
     addHouse({ id: HOUSE_1, number: 3 });
     addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
     addMember({ id: "member-future", houseId: HOUSE_1, contactId: ADA, role: "member", startedAt: "2099-01-01" });
+    const orgBefore = JSON.stringify(state.tables.org_people);
     const res = await remove(HOUSE_1, ADA);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(state.tables.house_church_members).toEqual([]);
-    expect(state.writes.some((write) => write.table === "house_church_members" && write.op === "delete")).toBe(true);
+    const deleted = state.writes.find((write) => write.table === "house_church_members" && write.op === "delete");
+    expect(deleted?.client).toBe("admin");
     expect(state.writes.some((write) => write.table === "house_church_members" && write.op === "update")).toBe(false);
-    expect(state.tables.org_people[0]).toMatchObject({ id: "person-ada", status: "active" });
+    expect(JSON.stringify(state.tables.org_people)).toBe(orgBefore);
+  });
+
+  it("closes a membership that has started by setting ended_at to today", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    addMember({ id: "member-ada", houseId: HOUSE_1, contactId: ADA, role: "member", startedAt: "2026-01-01" });
+    const res = await remove(HOUSE_1, ADA);
+    expect(res.status).toBe(200);
+    expect(state.tables.house_church_members).toHaveLength(1);
+    expect(state.tables.house_church_members[0].ended_at).toBe(todayIsoDate());
+    expect(state.writes.some((write) => write.table === "house_church_members" && write.op === "delete")).toBe(false);
+    expect(state.writes.find((write) => write.table === "house_church_members" && write.op === "update")?.client).toBe(
+      "user"
+    );
+  });
+
+  it("does not change org_people when someone leaves a house", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada", status: "visitor", campus: "jhb" });
+    addMember({ houseId: HOUSE_1, contactId: ADA, role: "leader", startedAt: "2026-03-01" });
+    const before = JSON.stringify(state.tables.org_people);
+    const res = await remove(HOUSE_1, ADA);
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(state.tables.org_people)).toBe(before);
+    expect(state.writes.some((write) => write.table === "org_people")).toBe(false);
   });
 
   it("maps a future end date from the database to 409 and hides the database text", async () => {
