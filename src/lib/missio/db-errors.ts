@@ -10,6 +10,7 @@ export const HOUSE_CHURCH_ERROR_CODES = [
   "already_member",
   "already_resolved",
   "membership_not_current",
+  "member_left_missio",
   "ended_at_in_future",
   "unauthenticated",
   "forbidden",
@@ -71,12 +72,29 @@ const FUTURE_START: MappedDbError = {
   fieldErrors: { startedAt: "Check this field and try again." },
 };
 
+const LEFT_MISSIO: MappedDbError = {
+  status: 409,
+  code: "member_left_missio",
+  error: "This person is no longer in Missio; membership can't be changed here.",
+};
+
 export function mapMissioDbError(error: DbErrorLike): MappedDbError {
   const message = error.message ?? "";
   if (error.code === "23503" && NOT_IN_ORG.some((name) => message.includes(name))) return NOT_MISSIO;
   if (error.code === "23514" && message.includes("missio_started_at_in_future")) return FUTURE_START;
   if (error.code === "23514" && message.includes("missio_ended_at_in_future")) return ENDED_IN_FUTURE;
   return SERVER;
+}
+
+/**
+ * DELETE's mapper. Until the follow-up trigger, ending someone who is no
+ * longer in org_people raises 23503 missio_member_not_in_org. That is
+ * member_left_missio here. Every other database error uses mapMissioDbError.
+ */
+export function mapMembershipEndError(error: DbErrorLike): MappedDbError {
+  const message = error.message ?? "";
+  if (error.code === "23503" && message.includes("missio_member_not_in_org")) return LEFT_MISSIO;
+  return mapMissioDbError(error);
 }
 
 const FIELD_MESSAGE = "Check this field and try again.";
