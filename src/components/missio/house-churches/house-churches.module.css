@@ -484,3 +484,17 @@
 .added .formActions {
   margin-top: 12px;
 }
+
+/* Review queue: the contact a refused create collided with. */
+.existing {
+  margin: 12px 0 0;
+}
+
+.existing .choices {
+  margin-top: 0;
+}
+
+.existing .quiet {
+  margin: 8px 0 0;
+  font-size: 14px;
+}

@@ -276,6 +276,56 @@ describe("review queue", () => {
     expect(host.querySelector("[data-testid=review-done]")).toBeNull();
   });
 
+  it("names who a refused create collided with and links them in one tap", async () => {
+    const bodies: ResolveBody[] = [];
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(url).includes("/resolve")) {
+        return new Response(JSON.stringify({ items: [partial] }), { status: 200 });
+      }
+      const body = JSON.parse(String(init?.body)) as ResolveBody;
+      bodies.push(body);
+      if (body.action === "create") {
+        return new Response(
+          JSON.stringify({
+            error: "x",
+            code: "not_missio_person",
+            matches: [
+              {
+                contactId: "c-matt",
+                displayName: "Matt Gibson",
+                firstName: "Matt",
+                lastName: "Gibson",
+                hint: "m***@example.org · *** *** 0960",
+                inMissio: false,
+              },
+            ],
+          }),
+          { status: 400 }
+        );
+      }
+      return new Response(JSON.stringify({ item: { ...partial, status: "matched" } }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const host = mount(<ReviewQueue client={createHouseChurchesClient(fetchImpl)} />);
+    await settle();
+    await act(async () => {
+      host.querySelector("[data-testid=create-toggle]")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    setValue(host.querySelector("[aria-label='First name']") as HTMLInputElement, "Matthew");
+    setValue(host.querySelector("[aria-label='Phone']") as HTMLInputElement, "0722930960");
+    await settle();
+    (host.querySelector("[data-testid=review-create]") as HTMLFormElement).requestSubmit();
+    await settle();
+    expect(host.textContent).toContain("already belongs to someone in the Hub");
+    const link = host.querySelector("[data-testid=review-existing] button") as HTMLButtonElement;
+    expect(link.textContent).toContain("Link Matt Gibson");
+    expect(link.textContent).toContain("*** *** 0960 · Not in Missio yet");
+    link.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await settle();
+    expect(bodies.at(-1)).toEqual({ action: "link", contactId: "c-matt" });
+    expect(host.querySelector("[data-testid=review-existing]")).toBeNull();
+    expect(host.querySelector("[data-testid=review-added]")?.textContent).toContain("Matt Gibson");
+  });
+
   it("shows an empty queue and a no-access state", async () => {
     const empty = mount(<ReviewQueue client={client([])} />);
     await settle();

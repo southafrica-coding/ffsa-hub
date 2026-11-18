@@ -400,6 +400,22 @@ async function matchedContactIds(
   return { ids: [...new Set([...emailIds.ids, ...phoneIds.ids])] };
 }
 
+/**
+ * Contacts that already hold this email or phone. For callers that have
+ * passed their own role check and need to say who a refused create hit.
+ */
+export async function contactIdsByEmailOrPhone(
+  admin: Client,
+  email: string | null | undefined,
+  phone: string | null | undefined
+): Promise<string[]> {
+  const mail = email ? normalizeEmail(email) : null;
+  const number = phone ? normalizePhoneE164(phone) : null;
+  if (!mail && !number) return [];
+  const found = await matchedContactIds(admin, mail, number);
+  return "error" in found ? [] : found.ids;
+}
+
 function createQuery(email: string | null, phone: string | null): string {
   const parts: string[] = [];
   if (email) parts.push(`email:${email}`);

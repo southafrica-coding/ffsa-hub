@@ -1387,10 +1387,13 @@ describe("import review", () => {
       email: "taken@example.com",
     });
     expect(clash.status).toBe(400);
-    expect(await clash.json()).toEqual({
-      error: "This person is not in Missio.",
-      code: "not_missio_person",
-    });
+    // The refusal names who holds that email, masked, so they can be linked.
+    const clashBody = await clash.json();
+    expect(clashBody).toMatchObject({ error: "This person is not in Missio.", code: "not_missio_person" });
+    expect(clashBody.matches).toHaveLength(1);
+    expect(clashBody.matches[0]).toMatchObject({ contactId: OUTSIDE, displayName: "Taken Person", inMissio: false });
+    expect(JSON.stringify(clashBody)).not.toContain("taken@example.com");
+    expect(JSON.stringify(state.tables.audit_logs.at(-1))).toContain("missio.import_review_create_match");
     expect(state.tables.missio_import_review[0].status).toBe("pending");
     expect(state.tables.house_church_members).toEqual([]);
     expect(state.tables.contacts).toHaveLength(1);
@@ -1403,10 +1406,9 @@ describe("import review", () => {
       email: "ada@example.com",
     });
     expect(already.status).toBe(409);
-    expect(await already.json()).toEqual({
-      error: "This person is already in Missio.",
-      code: "already_in_org",
-    });
+    const alreadyBody = await already.json();
+    expect(alreadyBody.code).toBe("not_missio_person");
+    expect(alreadyBody.matches).toEqual([expect.objectContaining({ contactId: ADA, inMissio: true })]);
     expect(state.tables.missio_import_review[0].status).toBe("pending");
     expect(state.tables.house_church_members).toEqual([]);
 

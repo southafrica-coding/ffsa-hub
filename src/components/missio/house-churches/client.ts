@@ -11,6 +11,7 @@ import type {
   PersonRef,
   ResolveBody,
   ResolveResponse,
+  ReviewContactMatch,
   ReviewContactSearchResponse,
   ReviewHouseRef,
   ReviewItem,
@@ -36,6 +37,12 @@ export const houseChurchesApi = {
 } as const;
 
 const fieldErrorLines = new WeakMap<MissioApiError, string[]>();
+const existingMatches = new WeakMap<MissioApiError, ReviewContactMatch[]>();
+
+/** Who a refused create collided with, when the server named them. Review queue only. */
+export function houseErrorMatches(error: unknown): ReviewContactMatch[] {
+  return error instanceof MissioApiError ? existingMatches.get(error) ?? [] : [];
+}
 
 export const GENERIC_HOUSE_ERROR = "That didn’t work. Try again.";
 
@@ -165,6 +172,13 @@ async function parseResponse(res: Response): Promise<Record<string, unknown>> {
   const fields = code === "invalid_input" ? readFieldErrors(body.fieldErrors) : [];
   const error = new MissioApiError(res.status, "", seconds, code);
   fieldErrorLines.set(error, fields);
+  if (Array.isArray(body.matches)) {
+    try {
+      existingMatches.set(error, body.matches.slice(0, 5).map(contactMatch));
+    } catch {
+      // A malformed match list is dropped. The error itself still shows.
+    }
+  }
   error.message = houseErrorCopy(error);
   throw error;
 }
@@ -323,14 +337,13 @@ function reviewResponse(body: Record<string, unknown>): ReviewListResponse {
   return { items: body.items.map(reviewItem) };
 }
 
+function contactMatch(value: unknown): ReviewContactMatch {
+  return { ...personRef(value), inMissio: asRecord(value)?.inMissio === true };
+}
+
 function contactSearchResponse(body: Record<string, unknown>): ReviewContactSearchResponse {
   if (!Array.isArray(body.matches)) throw new MissioApiError(500, UNEXPECTED, null, "server_error");
-  return {
-    matches: body.matches.map((value) => ({
-      ...personRef(value),
-      inMissio: asRecord(value)?.inMissio === true,
-    })),
-  };
+  return { matches: body.matches.map(contactMatch) };
 }
 
 function resolveResponse(body: Record<string, unknown>): ResolveResponse {

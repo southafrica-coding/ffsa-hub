@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { MissioApiError } from "../api";
 import content from "../content.module.css";
 import shell from "../shell.module.css";
-import { houseChurchesClient, houseErrorCopy, type HouseChurchesClient } from "./client";
+import { houseChurchesClient, houseErrorCopy, houseErrorMatches, type HouseChurchesClient } from "./client";
 import { houseTitle, reviewHeading, reviewReasons, ROLE_LABEL } from "./format";
 import { useMissioLoad } from "./load";
 import { AllHousesLink } from "./present";
@@ -30,6 +30,8 @@ export function ReviewQueue({
   const [skipNote, setSkipNote] = useState("");
   // People already added from the name on screen. A sheet name can be a couple.
   const [added, setAdded] = useState<string[]>([]);
+  // Who a refused "create" collided with, so they can be linked in one tap.
+  const [existing, setExisting] = useState<ReviewContactMatch[]>([]);
   const focusTarget = useRef<"item" | "done" | "next" | null>(null);
   const noticeRef = useRef<HTMLParagraphElement>(null);
 
@@ -61,6 +63,7 @@ export function ReviewQueue({
     setPhone("");
     setSkipNote("");
     setNotice(null);
+    setExisting([]);
   }
 
   function resetPersonFields() {
@@ -98,6 +101,7 @@ export function ReviewQueue({
     if (!item) return;
     setPending(true);
     setNotice(null);
+    setExisting([]);
     try {
       const again = added.length > 0 && body.action !== "skip";
       await client.resolveReview(item.id, again ? { ...body, also: true } : body);
@@ -113,6 +117,16 @@ export function ReviewQueue({
       if (caught instanceof MissioApiError && caught.code === "already_resolved") {
         setNotice(houseErrorCopy(caught));
         await refreshQueue(item.id, index).catch(() => undefined);
+        return;
+      }
+      const matches = body.action === "create" ? houseErrorMatches(caught) : [];
+      if (matches.length > 0) {
+        setExisting(matches);
+        setNotice(
+          matches.length === 1
+            ? "That email or phone already belongs to someone in the Hub, so no new person was made. Is this them?"
+            : "That email or phone already belongs to people in the Hub, so no new person was made. Is it one of them?"
+        );
         return;
       }
       setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught, "review") : "That didn’t work. Try again.");
@@ -164,6 +178,31 @@ export function ReviewQueue({
         <p ref={noticeRef} id="review-action-error" className={shell.alert} role="alert" tabIndex={-1}>
           {notice}
         </p>
+      ) : null}
+      {item && existing.length > 0 ? (
+        <section className={styles.existing} data-testid="review-existing">
+          <ul className={styles.choices}>
+            {existing.map((person) => (
+              <li key={person.contactId}>
+                <button
+                  type="button"
+                  className={`${shell.ghost} ${styles.choice}`}
+                  disabled={pending}
+                  onClick={() => void resolve({ action: "link", contactId: person.contactId }, total, person.displayName)}
+                >
+                  <span className={styles.choiceText}>
+                    <span className={styles.choiceName}>Link {person.displayName}</span>
+                    <span className={styles.choiceMeta}>{matchMeta(person, person.inMissio)}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className={styles.quiet}>
+            Not them? Two people can’t share an email or phone in the Hub. Create the new person with their own
+            number or email instead.
+          </p>
+        </section>
       ) : null}
       {state.phase === "ready" && finished ? (
         <h2 id="review-done-heading" tabIndex={-1} className={styles.doneTitle} data-testid="review-done">

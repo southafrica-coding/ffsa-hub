@@ -14,7 +14,7 @@ import {
 import { endDateFor, isAfterDatabaseToday, todayIsoDate } from "@/lib/missio/dates";
 import { membershipBlocksInsert, membershipIsCurrent, membershipIsOpen } from "@/lib/missio/house-church-import";
 import { maskEmail, maskPhone } from "@/lib/missio/mask";
-import { createPerson } from "@/lib/missio/people";
+import { contactIdsByEmailOrPhone, createPerson } from "@/lib/missio/people";
 import type {
   HouseChurchDetail,
   HouseChurchDetailResponse,
@@ -80,6 +80,8 @@ type Fail = {
   error: string;
   code: HouseChurchErrorCode;
   fieldErrors?: Record<string, string>;
+  /** Review queue only: who a refused create collided with. */
+  matches?: ReviewContactMatch[];
 };
 
 type HouseRow = {
@@ -136,12 +138,19 @@ export function publicError(result: Fail): {
   error: string;
   code: HouseChurchErrorCode;
   fieldErrors?: Record<string, string>;
+  matches?: ReviewContactMatch[];
 } {
-  const body: { error: string; code: HouseChurchErrorCode; fieldErrors?: Record<string, string> } = {
+  const body: {
+    error: string;
+    code: HouseChurchErrorCode;
+    fieldErrors?: Record<string, string>;
+    matches?: ReviewContactMatch[];
+  } = {
     error: result.error,
     code: result.code,
   };
   if (result.code === "invalid_input") body.fieldErrors = result.fieldErrors ?? {};
+  if (result.matches && result.matches.length > 0) body.matches = result.matches;
   return body;
 }
 
@@ -508,6 +517,41 @@ export async function searchReviewContacts(
     changes: { tokens: tokens.length, results: matches.length },
   });
   return { ok: true, body: { matches } };
+}
+
+/**
+ * A create in the review queue was refused. When that is because the email
+ * or phone already belongs to a contact, name them (masked) so the pastor
+ * can link them instead of hunting by name.
+ */
+async function reviewCreateFail(
+  auth: OrgAccess,
+  created: { status: number; code?: string },
+  email: string | null | undefined,
+  phone: string | null | undefined
+): Promise<Fail> {
+  const base = fromPersonError(created.status, created.code);
+  if (created.code !== "exists_use_search" && created.code !== "already_in_org") return base;
+  const admin = adminClient();
+  if ("error" in admin) return base;
+  const ids = (await contactIdsByEmailOrPhone(admin.client, email, phone)).slice(0, 5);
+  if (ids.length === 0) return base;
+  const refs = await loadReviewRefs(auth, ids);
+  if (isFail(refs)) return base;
+  const matches: ReviewContactMatch[] = [];
+  for (const id of ids) {
+    const ref = refs.get(id);
+    if (ref) matches.push({ ...ref, inMissio: Boolean(ref.orgPersonId) });
+  }
+  if (matches.length === 0) return base;
+  await audit(admin.client, {
+    userId: auth.user.id,
+    action: "missio.import_review_create_match",
+    resourceType: "missio_import_review",
+    resourceId: auth.orgId,
+    changes: { results: matches.length },
+  });
+  return { ...base, code: "not_missio_person", matches };
 }
 
 /**
@@ -1263,7 +1307,7 @@ export async function resolveImportReview(
         phone: emptyToUndefined(parsed.data.phone),
         campus: asCampus(house.house.campus),
       });
-      if (!created.ok) return fromPersonError(created.status, created.code);
+      if (!created.ok) return reviewCreateFail(auth, created, parsed.data.email, parsed.data.phone);
       contactId = created.body.person.contactId;
     }
     const person = await requireMissioPerson(auth, contactId);
@@ -1342,7 +1386,7 @@ export async function resolveImportReview(
   });
   if (!created.ok) {
     await releaseReview(auth, itemId, "new");
-    return fromPersonError(created.status, created.code);
+    return reviewCreateFail(auth, created, parsed.data.email, parsed.data.phone);
   }
   const person = await requireMissioPerson(auth, created.body.person.contactId);
   if (!person.ok) {
