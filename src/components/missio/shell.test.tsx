@@ -124,9 +124,29 @@ describe("Missio access state", () => {
     expect(link.getAttribute("aria-current")).toBe("page");
     expect(link.textContent?.toLowerCase()).not.toContain("soon");
     expect(host.textContent).toContain("Missio Church / House churches");
+    expect(host.textContent).not.toContain("Missio Church / Home");
     const teams = [...host.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
     expect(teams).toHaveLength(1);
     expect(teams[0]?.parentElement?.textContent).toContain("Teams");
+  });
+
+  it("names a house and Follow-up in the crumb", async () => {
+    for (const [pathname, section] of [
+      ["/missio/house-churches/house-2", "House churches"],
+      ["/missio/follow-up", "Follow-up"],
+      ["/missio/follow-up/r_1", "Follow-up"],
+    ] as const) {
+      nav.pathname = pathname;
+      const { host, root } = render(
+        <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
+          <p>Section</p>
+        </MissioFrame>
+      );
+      roots.push(root);
+      hosts.push(host);
+      await settle();
+      expect(host.textContent).toContain(`Missio Church / ${section}`);
+    }
   });
 
   it("shows no access for an FFSA admin with no Missio role", async () => {

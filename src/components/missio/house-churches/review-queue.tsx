@@ -283,8 +283,8 @@ function ReviewCard({
         <PeoplePicker
           people={people}
           pending={pending}
-          label="Search people"
-          showLabel={false}
+          label="Name"
+          placeholder="Name"
           onPick={(person: MissioPerson) => onLink(person.contactId)}
         />
       </section>

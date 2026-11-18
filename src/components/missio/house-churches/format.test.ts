@@ -40,6 +40,11 @@ describe("house church formatting", () => {
       "Family name, not one person",
       "No match found",
     ]);
+    expect(reviewReasons({ kind: "family_label", matchType: "none", candidates: [{ contactId: "c-1" }] })).toEqual([
+      "Family name, not one person",
+      "No exact match",
+    ]);
+    expect(reviewReasons({ kind: null, matchType: "none", candidates: [] })).toEqual(["No match found"]);
     expect(reviewReasons({ kind: "couple_split", matchType: "none" })).toEqual([
       "Couple, split into two",
       "No match found",

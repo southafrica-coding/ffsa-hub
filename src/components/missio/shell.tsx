@@ -8,6 +8,7 @@ import { canAccessMissio, missioSkinVars } from "./access";
 import { MissioViewerProvider } from "./viewer";
 import { MissioApiError, missioClient, type MissioClient } from "./api";
 import { loadFfsaRoleNames } from "./ffsa-roles";
+import { missioCrumbLabel } from "./crumb";
 import { BACK_TO_FFSA_HUB, missioOrgHeader, needsPlatformRoleLookup, type OrgHeaderState } from "./org-header";
 import { OrgSwitcher, OrgTile } from "./org-switcher";
 import type { MissioMe } from "./types-shim";
@@ -253,11 +254,7 @@ function MissioTop({
   navOpen: boolean;
 }) {
   const pathname = usePathname();
-  const section = pathname.startsWith("/missio/people")
-    ? "People"
-    : pathname.startsWith("/missio/house-churches")
-      ? "House churches"
-      : "Home";
+  const section = missioCrumbLabel(pathname);
   const orgName = me.orgs.find((org) => org.slug === "missio")?.name ?? "Missio";
   const header = missioOrgHeader({ orgs: me.orgs, ffsaRoleNames });
   return (

@@ -197,7 +197,7 @@ describe("house detail", () => {
     await settle();
     const role = host.querySelector("[aria-label='Role for the new person']") as HTMLSelectElement;
     setValue(role, "co_leader");
-    const input = host.querySelector("[aria-label='Search people']") as HTMLInputElement;
+    const input = host.querySelector("[data-testid=people-picker] input") as HTMLInputElement;
     setValue(input, "Elise");
     await settle();
     (host.querySelector("[data-testid=people-picker]") as HTMLFormElement).requestSubmit();

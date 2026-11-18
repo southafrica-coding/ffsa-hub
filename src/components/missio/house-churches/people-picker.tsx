@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { MissioApiError, missioErrorCopy, type MissioClient } from "../api";
 import type { MissioPerson } from "../types-shim";
 import shell from "../shell.module.css";
@@ -11,14 +11,17 @@ export function PeoplePicker({
   onPick,
   pending = false,
   label = "Search people",
+  placeholder = "Name",
   showLabel = true,
 }: {
   people: Pick<MissioClient, "listPeople">;
   onPick: (person: MissioPerson) => void;
   pending?: boolean;
   label?: string;
+  placeholder?: string;
   showLabel?: boolean;
 }) {
+  const fieldId = useId();
   const [draft, setDraft] = useState("");
   const [rows, setRows] = useState<MissioPerson[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -55,18 +58,19 @@ export function PeoplePicker({
         void search(String(data.get("q") ?? ""));
       }}
     >
-      <label className={shell.field}>
+      <label className={shell.field} htmlFor={fieldId}>
         {showLabel ? label : <span className={shell.visuallyHidden}>{label}</span>}
         <input
+          id={fieldId}
           name="q"
-          aria-label={label}
+          placeholder={placeholder}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           autoComplete="off"
         />
       </label>
       <div className={styles.formActions}>
-        <button type="submit" className={shell.ghost} disabled={searching || pending}>
+        <button type="submit" className={`${shell.ghost} ${styles.searchButton}`} disabled={searching || pending}>
           Search
         </button>
       </div>

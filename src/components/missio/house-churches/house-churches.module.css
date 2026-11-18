@@ -196,6 +196,13 @@
   min-width: 0;
 }
 
+.root .searchButton {
+  box-sizing: border-box;
+  height: auto !important;
+  min-height: 44px;
+  padding: 8px 12px !important;
+}
+
 .note {
   min-height: 64px;
   resize: vertical;

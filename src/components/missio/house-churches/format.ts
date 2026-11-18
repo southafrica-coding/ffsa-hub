@@ -74,11 +74,17 @@ export function reviewHeading(item: { sourceLine: number | null; rawName: string
 }
 
 /** Kind label, then match type, without repeating the same sentence. Person and unknown kinds are omitted. */
-export function reviewReasons(item: Pick<ReviewItem, "kind" | "matchType">): string[] {
+export function reviewReasons(item: Pick<ReviewItem, "kind" | "matchType"> & { candidates?: unknown[] }): string[] {
   const reasons: string[] = [];
   const kind = item.kind ? KIND_LABEL[item.kind] : undefined;
   if (kind) reasons.push(kind);
-  const match = item.matchType ? MATCH_LABEL[item.matchType] : undefined;
+  const hasCandidates = (item.candidates?.length ?? 0) > 0;
+  const match =
+    item.matchType === "none" && hasCandidates
+      ? "No exact match"
+      : item.matchType
+        ? MATCH_LABEL[item.matchType]
+        : undefined;
   if (match && !reasons.includes(match)) reasons.push(match);
   return reasons;
 }

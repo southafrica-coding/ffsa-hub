@@ -121,7 +121,8 @@ describe("review queue", () => {
     expect(host.textContent).not.toContain("Original line");
     expect(host.textContent).toContain("House 4 · Leader");
     expect(host.textContent).toContain("Family name, not one person");
-    expect(host.textContent).toContain("No match found");
+    expect(host.textContent).toContain("No exact match");
+    expect(host.textContent).not.toContain("No match found");
     expect(host.textContent).not.toMatch(/Delete|Coming soon/);
   });
 
@@ -197,7 +198,15 @@ describe("review queue", () => {
       />
     );
     await settle();
-    setValue(host.querySelector("[aria-label='Search people']") as HTMLInputElement, "Elise");
+    const picker = host.querySelector("[data-testid=people-picker]") as HTMLElement;
+    const search = picker.querySelector("input") as HTMLInputElement;
+    const label = picker.querySelector("label");
+    expect(label?.getAttribute("for")).toBe(search.id);
+    expect(label?.textContent).toBe("Name");
+    expect(search.getAttribute("placeholder")).toBe("Name");
+    const searchButton = host.querySelector("[data-testid=people-picker] button[type=submit]") as HTMLButtonElement;
+    expect(searchButton.textContent?.trim()).toBe("Search");
+    setValue(search, "Elise");
     await settle();
     (host.querySelector("[data-testid=people-picker]") as HTMLFormElement).requestSubmit();
     await settle();
