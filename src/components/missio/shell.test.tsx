@@ -72,9 +72,11 @@ describe("Missio access state", () => {
   });
 
   async function settle() {
-    await act(async () => {
-      await Promise.resolve();
-    });
+    for (let i = 0; i < 8; i += 1) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
   }
 
   it("applies the Missio skin for a pastor", async () => {
@@ -209,5 +211,173 @@ describe("Missio mobile layout rules", () => {
     expect(css).toMatch(/\.menuButton,\s*\.topOrg\s*\{[^}]*display:\s*none/);
     expect(css).toMatch(/\.sideDrawer\s*\{[^}]*padding:\s*10px 8px 8px/);
     expect(css).toMatch(/padding-bottom:\s*max\(8px,\s*env\(safe-area-inset-bottom\)\)/);
+    expect(css).toMatch(/\.shell \.orgBack,\s*\.drawer \.orgBack\s*\{[^}]*min-height:\s*44px/);
+    expect(css).toMatch(/\.shell \.orgBack,\s*\.drawer \.orgBack\s*\{[^}]*text-decoration:\s*underline/);
+  });
+});
+
+/**
+ * GET /api/missio/me for a pastor whose only org_staff_roles row is Missio.
+ * FFSA super_admin and staff live on user_roles and are not in this payload.
+ * The organisation name is the seeded "Missio", not the fixture's "Missio Church".
+ */
+const prodPastor: MissioMe = {
+  orgs: [{ id: "org-missio", slug: "missio", name: "Missio" }],
+  rolesByOrg: { missio: ["pastor"] },
+  currentOrg: "missio",
+};
+
+describe("org switcher for a real FFSA and Missio user", () => {
+  const roots: Root[] = [];
+  const hosts: HTMLElement[] = [];
+
+  afterEach(() => {
+    nav.pathname = "/missio";
+    while (roots.length) act(() => roots.pop()?.unmount());
+    while (hosts.length) hosts.pop()?.remove();
+    document.body.innerHTML = "";
+  });
+
+  async function settle() {
+    for (let i = 0; i < 8; i += 1) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+  }
+
+  function mount(node: ReactNode) {
+    const { host, root } = render(node);
+    roots.push(root);
+    hosts.push(host);
+    return host;
+  }
+
+  it("gives a super_admin and staff pastor a working switcher for FFSA Hub and Missio", async () => {
+    const host = mount(
+      <MissioFrame client={client(async () => prodPastor)} loadFfsaRoles={async () => ["staff", "super_admin"]}>
+        <p>People live here</p>
+      </MissioFrame>
+    );
+    await settle();
+
+    const aside = host.querySelector("aside") as HTMLElement;
+    const trigger = aside.querySelector("[data-org-switcher] button") as HTMLButtonElement;
+    expect(trigger).toBeTruthy();
+    expect(trigger.getAttribute("aria-haspopup")).toBe("listbox");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.querySelector("svg")).toBeTruthy();
+    expect(trigger.textContent).toContain("Missio");
+    expect(trigger.textContent).not.toContain("Missio Church");
+    expect(aside.textContent).toContain("Pastor");
+
+    act(() => {
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const menu = document.body.querySelector("[role=listbox]") as HTMLElement;
+    expect(menu.textContent).toContain("FFSA Hub");
+    expect(menu.textContent).toContain("Fire & Fragrance South Africa");
+    expect(menu.textContent).toContain("Missio");
+    const ffsa = [...menu.querySelectorAll("a")].find((link) => link.textContent?.includes("FFSA Hub"));
+    const current = [...menu.querySelectorAll("a")].find((link) => link.getAttribute("aria-selected") === "true");
+    expect(ffsa?.getAttribute("href")).toBe("/dashboard");
+    expect(current?.textContent).toContain("Missio");
+    expect(current?.getAttribute("href")).toBe("/missio");
+
+    const openMenu = host.querySelector("button[aria-label='Open menu']") as HTMLButtonElement;
+    act(() => {
+      openMenu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const dialog = document.body.querySelector("[role=dialog]") as HTMLElement;
+    const drawerTrigger = dialog.querySelector("[data-org-switcher] button") as HTMLButtonElement;
+    expect(drawerTrigger.querySelector("svg")).toBeTruthy();
+    expect(drawerTrigger.textContent).toContain("Missio");
+    act(() => {
+      drawerTrigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const drawerMenu = [...document.body.querySelectorAll("[role=listbox]")].at(-1);
+    expect(drawerMenu?.textContent).toContain("FFSA Hub");
+    expect(drawerMenu?.querySelector("a[href='/dashboard']")).toBeTruthy();
+  });
+
+  it("keeps a Missio-only pastor on a static label", async () => {
+    const host = mount(
+      <MissioFrame client={client(async () => prodPastor)} loadFfsaRoles={async () => []}>
+        <p>People live here</p>
+      </MissioFrame>
+    );
+    await settle();
+
+    const aside = host.querySelector("aside") as HTMLElement;
+    const label = aside.querySelector("[data-org-header=static]") as HTMLElement;
+    expect(label.textContent).toContain("Missio");
+    expect(label.querySelector("button")).toBeNull();
+    expect(aside.querySelector("[data-org-switcher]")).toBeNull();
+    expect(host.textContent).not.toContain("Back to FFSA Hub");
+    expect(aside.textContent).toContain("Pastor");
+
+    const openMenu = host.querySelector("button[aria-label='Open menu']") as HTMLButtonElement;
+    act(() => {
+      openMenu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const dialog = document.body.querySelector("[role=dialog]") as HTMLElement;
+    expect(dialog.querySelector("[data-org-switcher]")).toBeNull();
+    expect(dialog.querySelector("[data-org-header=static]")?.textContent).toContain("Missio");
+    expect(dialog.textContent).not.toContain("Back to FFSA Hub");
+  });
+
+  it("links back to the hub when the org list is empty", async () => {
+    const empty: MissioMe = {
+      orgs: [],
+      rolesByOrg: { missio: ["pastor"] },
+      currentOrg: "missio",
+    };
+    const host = mount(
+      <MissioFrame client={client(async () => empty)} loadFfsaRoles={async () => ["super_admin"]}>
+        <p>People live here</p>
+      </MissioFrame>
+    );
+    await settle();
+
+    const link = host.querySelector("[data-org-header=back]") as HTMLAnchorElement;
+    expect(link.textContent).toBe("Back to FFSA Hub");
+    expect(link.getAttribute("href")).toBe("/dashboard");
+    expect(host.querySelector("[data-org-switcher]")).toBeNull();
+    expect(host.querySelector("[data-org-header=static]")).toBeNull();
+  });
+
+  it("links back to the hub when the org list fails to load", async () => {
+    const host = mount(
+      <MissioFrame
+        client={client(async () => {
+          throw new Error("membership lookup failed");
+        })}
+      >
+        <p>People live here</p>
+      </MissioFrame>
+    );
+    await settle();
+
+    const link = host.querySelector("[data-org-header=back]") as HTMLAnchorElement;
+    expect(link.textContent).toBe("Back to FFSA Hub");
+    expect(link.getAttribute("href")).toBe("/dashboard");
+    expect(host.querySelector("[data-org-switcher]")).toBeNull();
+    expect(host.textContent).toMatch(/didn.t load/);
+    expect(host.textContent).not.toContain("People live here");
+  });
+
+  it("links back to the hub when platform roles fail and the org list is only Missio", async () => {
+    const host = mount(
+      <MissioFrame client={client(async () => prodPastor)} loadFfsaRoles={async () => null}>
+        <p>People live here</p>
+      </MissioFrame>
+    );
+    await settle();
+
+    const link = host.querySelector("aside [data-org-header=back]") as HTMLAnchorElement;
+    expect(link.textContent).toBe("Back to FFSA Hub");
+    expect(link.getAttribute("href")).toBe("/dashboard");
+    expect(host.querySelector("[data-org-switcher]")).toBeNull();
+    expect(host.querySelector("[data-org-header=static]")).toBeNull();
   });
 });

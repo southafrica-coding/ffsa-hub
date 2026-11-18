@@ -4,8 +4,10 @@ import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { orgHref, shouldShowOrgSwitcher, canAccessMissio, missioSkinVars } from "./access";
+import { canAccessMissio, missioSkinVars } from "./access";
 import { MissioApiError, missioClient, type MissioClient } from "./api";
+import { loadFfsaRoleNames } from "./ffsa-roles";
+import { BACK_TO_FFSA_HUB, missioOrgHeader, needsPlatformRoleLookup, type OrgHeaderState } from "./org-header";
 import { OrgSwitcher, OrgTile } from "./org-switcher";
 import type { MissioMe } from "./types-shim";
 import styles from "./shell.module.css";
@@ -14,16 +16,19 @@ type Gate =
   | { kind: "loading" }
   | { kind: "error" }
   | { kind: "no-access"; status: 401 | 403 }
-  | { kind: "ready"; me: MissioMe };
+  | { kind: "ready"; me: MissioMe; ffsaRoleNames: string[] | null };
 
 const skinStyle = missioSkinVars() as CSSProperties;
 
 export function MissioFrame({
   children,
   client = missioClient,
+  loadFfsaRoles = loadFfsaRoleNames,
 }: {
   children: React.ReactNode;
   client?: MissioClient;
+  /** Platform roles from GET /api/me. Null when that read failed. */
+  loadFfsaRoles?: () => Promise<readonly string[] | null>;
 }) {
   const [gate, setGate] = useState<Gate>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -31,10 +36,17 @@ export function MissioFrame({
   useEffect(() => {
     let active = true;
     client.getMe().then(
-      (me) => {
+      async (me) => {
         if (!active) return;
-        if (!canAccessMissio(me)) setGate({ kind: "no-access", status: 403 });
-        else setGate({ kind: "ready", me });
+        if (!canAccessMissio(me)) {
+          setGate({ kind: "no-access", status: 403 });
+          return;
+        }
+        const ffsaRoleNames = needsPlatformRoleLookup(me.orgs)
+          ? await loadFfsaRoles().catch(() => null)
+          : [];
+        if (!active) return;
+        setGate({ kind: "ready", me, ffsaRoleNames: ffsaRoleNames ? [...ffsaRoleNames] : null });
       },
       (error: unknown) => {
         if (!active) return;
@@ -47,7 +59,7 @@ export function MissioFrame({
     return () => {
       active = false;
     };
-  }, [client, attempt]);
+  }, [client, loadFfsaRoles, attempt]);
 
   if (gate.kind === "loading") {
     return (
@@ -66,6 +78,9 @@ export function MissioFrame({
           <button type="button" className={styles.primary} onClick={() => setAttempt((n) => n + 1)}>
             Try again
           </button>
+          <Link href="/dashboard" className={styles.back} data-org-header="back">
+            {BACK_TO_FFSA_HUB}
+          </Link>
         </div>
       </div>
     );
@@ -79,19 +94,22 @@ export function MissioFrame({
     );
   }
 
-  return <MissioReady me={gate.me}>{children}</MissioReady>;
+  return (
+    <MissioReady me={gate.me} ffsaRoleNames={gate.ffsaRoleNames}>
+      {children}
+    </MissioReady>
+  );
 }
 
-function orgOptions(me: MissioMe) {
-  return me.orgs.map((org) => ({
-    id: org.id,
-    slug: org.slug,
-    name: org.name,
-    href: orgHref(org.slug),
-  }));
-}
-
-function MissioReady({ me, children }: { me: MissioMe; children: React.ReactNode }) {
+function MissioReady({
+  me,
+  ffsaRoleNames,
+  children,
+}: {
+  me: MissioMe;
+  ffsaRoleNames: string[] | null;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
 
@@ -115,17 +133,19 @@ function MissioReady({ me, children }: { me: MissioMe; children: React.ReactNode
     <Sheet open={navOpen} onOpenChange={setNavOpen}>
       <div data-missio-shell="" data-skin="missio" data-access="ready" className={styles.shell} style={skinStyle}>
         <div className={styles.sideSlot}>
-          <MissioSidebar me={me} />
+          <MissioSidebar me={me} ffsaRoleNames={ffsaRoleNames} />
         </div>
         <div className={styles.main}>
-          <MissioTop me={me} navOpen={navOpen} />
-          <div className={styles.content}>{children}</div>
+          <MissioTop me={me} ffsaRoleNames={ffsaRoleNames} navOpen={navOpen} />
+          <div className={styles.content} data-missio-content="">
+            {children}
+          </div>
         </div>
       </div>
       <SheetContent side="left" id="missio-nav" className={styles.drawer} style={skinStyle}>
         <SheetTitle className={styles.visuallyHidden}>Missio navigation</SheetTitle>
         <SheetDescription className={styles.visuallyHidden}>Sections in this church</SheetDescription>
-        <MissioSidebar me={me} inDrawer onNavigate={() => setNavOpen(false)} />
+        <MissioSidebar me={me} ffsaRoleNames={ffsaRoleNames} inDrawer onNavigate={() => setNavOpen(false)} />
       </SheetContent>
     </Sheet>
   );
@@ -133,27 +153,22 @@ function MissioReady({ me, children }: { me: MissioMe; children: React.ReactNode
 
 function MissioSidebar({
   me,
+  ffsaRoleNames,
   inDrawer = false,
   onNavigate,
 }: {
   me: MissioMe;
+  ffsaRoleNames: string[] | null;
   inDrawer?: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const orgs = orgOptions(me);
+  const header = missioOrgHeader({ orgs: me.orgs, ffsaRoleNames });
   const missio = me.orgs.find((org) => org.slug === "missio");
   const home = pathname === "/missio";
   const people = pathname.startsWith("/missio/people");
 
-  const orgNode = shouldShowOrgSwitcher(me.orgs.length) ? (
-    <OrgSwitcher orgs={orgs} currentOrg="missio" />
-  ) : (
-    <div className={styles.orgStatic}>
-      <OrgTile slug="missio" />
-      <span>{missio?.name ?? "Missio"}</span>
-    </div>
-  );
+  const orgNode = <OrgHeader state={header} />;
 
   return (
     <aside className={`${styles.side} ${inDrawer ? styles.sideDrawer : ""}`}>
@@ -193,10 +208,38 @@ function MissioSidebar({
   );
 }
 
-function MissioTop({ me, navOpen }: { me: MissioMe; navOpen: boolean }) {
+function OrgHeader({ state }: { state: OrgHeaderState }) {
+  if (state.kind === "switcher") {
+    return <OrgSwitcher orgs={state.orgs} currentOrg="missio" />;
+  }
+  if (state.kind === "back") {
+    return (
+      <Link href="/dashboard" className={styles.orgBack} data-org-header="back">
+        {BACK_TO_FFSA_HUB}
+      </Link>
+    );
+  }
+  return (
+    <div className={styles.orgStatic} data-org-header="static">
+      <OrgTile slug="missio" />
+      <span>{state.name}</span>
+    </div>
+  );
+}
+
+function MissioTop({
+  me,
+  ffsaRoleNames,
+  navOpen,
+}: {
+  me: MissioMe;
+  ffsaRoleNames: string[] | null;
+  navOpen: boolean;
+}) {
   const pathname = usePathname();
   const section = pathname.startsWith("/missio/people") ? "People" : "Home";
   const orgName = me.orgs.find((org) => org.slug === "missio")?.name ?? "Missio";
+  const header = missioOrgHeader({ orgs: me.orgs, ffsaRoleNames });
   return (
     <div className={styles.top}>
       <SheetTrigger asChild>
@@ -210,9 +253,9 @@ function MissioTop({ me, navOpen }: { me: MissioMe; navOpen: boolean }) {
           <MenuIcon />
         </button>
       </SheetTrigger>
-      {shouldShowOrgSwitcher(me.orgs.length) ? (
+      {header.kind === "switcher" ? (
         <div className={styles.topOrg}>
-          <OrgSwitcher orgs={orgOptions(me)} currentOrg="missio" compact />
+          <OrgSwitcher orgs={header.orgs} currentOrg="missio" compact />
         </div>
       ) : null}
       <span className={styles.crumb}>
