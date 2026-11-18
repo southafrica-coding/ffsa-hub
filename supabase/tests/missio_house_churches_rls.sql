@@ -193,11 +193,20 @@ FROM (VALUES
 ) AS v(uid, slug, role)
 JOIN public.organisations o ON o.slug = v.slug;
 
--- Service role puts Fixture Two into org_people. House membership
--- must not change that row.
+-- Service role puts people into org_people before a pastor may
+-- give them a house. Fixture Five stays out, on purpose.
 INSERT INTO public.org_people (org_id, contact_id, campus, status)
-SELECT id, 'c2222222-2222-2222-2222-222222222222', 'potch', 'visitor'
-FROM public.organisations WHERE slug = 'missio';
+SELECT o.id, v.cid::uuid, 'potch', v.status
+FROM (VALUES
+  ('c1111111-1111-1111-1111-111111111111', 'active'),
+  ('c2222222-2222-2222-2222-222222222222', 'visitor'),
+  ('c3333333-3333-3333-3333-333333333333', 'active'),
+  ('c4444444-4444-4444-4444-444444444444', 'active')
+) AS v(cid, status)
+JOIN public.organisations o ON o.slug = 'missio';
+
+INSERT INTO public.contacts (id, first_name, last_name)
+VALUES ('c5555555-5555-5555-5555-555555555555', 'Outside', 'Person');
 
 -- A house that is not Missio. Pastors must not see it or write it.
 INSERT INTO public.house_churches (id, org_id, number, campus)
@@ -337,6 +346,21 @@ SELECT pg_temp.expect('pastor cannot park a house on the ffsa org',
     SELECT id, 2 FROM public.organisations WHERE slug = 'ffsa'
   $$),
   'err 42501');
+SELECT pg_temp.expect('pastor cannot add a contact who is not in org_people',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    INSERT INTO public.house_church_members (house_church_id, contact_id, role)
+    VALUES (
+      '00000000-0000-4000-8000-000000000001',
+      'c5555555-5555-5555-5555-555555555555',
+      'member'
+    )
+  $$),
+  'err 42501');
+SELECT pg_temp.expect('is_missio_member stays false for that contact',
+  pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
+    SELECT public.is_missio_member('c5555555-5555-5555-5555-555555555555')::text
+  $$),
+  'false');
 SELECT pg_temp.expect('pastor can add a member',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.house_church_members (house_church_id, contact_id, role, created_by)
@@ -350,11 +374,36 @@ SELECT pg_temp.expect('pastor can add a member',
   'rows=1');
 SELECT pg_temp.expect('pastor reads that member back',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
-    SELECT role || '/' || contact_id::text
+    SELECT role || '/' || contact_id::text || '/' || created_by::text
     FROM public.house_church_members
     WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
   $$),
-  'co_leader/c1111111-1111-1111-1111-111111111111');
+  'co_leader/c1111111-1111-1111-1111-111111111111/a1111111-1111-1111-1111-111111111111');
+SELECT pg_temp.expect('authenticated created_by is pinned to the caller',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    INSERT INTO public.house_church_members (
+      house_church_id, contact_id, role, created_by
+    ) VALUES (
+      '00000000-0000-4000-8000-000000000005',
+      'c3333333-3333-3333-3333-333333333333',
+      'member',
+      'a4444444-4444-4444-4444-444444444444'
+    )
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('the spoofed created_by was overwritten',
+  (SELECT created_by::text FROM public.house_church_members
+    WHERE house_church_id = '00000000-0000-4000-8000-000000000005'
+      AND contact_id = 'c3333333-3333-3333-3333-333333333333'
+      AND ended_at IS NULL),
+  'a1111111-1111-1111-1111-111111111111');
+SELECT pg_temp.expect('pastor can remove the created_by probe',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    DELETE FROM public.house_church_members
+    WHERE house_church_id = '00000000-0000-4000-8000-000000000005'
+      AND contact_id = 'c3333333-3333-3333-3333-333333333333'
+  $$),
+  'rows=1');
 SELECT pg_temp.expect('sheet role leader2 is not a role',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.house_church_members (house_church_id, contact_id, role)
@@ -642,7 +691,7 @@ SELECT pg_temp.expect('future start stays out of member status',
     public.is_missio_member('c3333333-3333-3333-3333-333333333333')::text
   $$),
   '0/false');
-SELECT pg_temp.expect('a future end date is still current',
+SELECT pg_temp.expect('a future end date is rejected',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.house_church_members (
       house_church_id, contact_id, role, ended_at
@@ -653,25 +702,42 @@ SELECT pg_temp.expect('a future end date is still current',
       current_date + 7
     )
   $$),
+  'err 23514');
+SELECT pg_temp.expect('the rejected future end left no membership',
+  (SELECT count(*)::text FROM public.house_church_members
+    WHERE contact_id = 'c4444444-4444-4444-4444-444444444444'),
+  '0');
+SELECT pg_temp.expect('an open row is current and a same-day end is not',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    INSERT INTO public.house_church_members (house_church_id, contact_id, role)
+    VALUES (
+      '00000000-0000-4000-8000-000000000004',
+      'c4444444-4444-4444-4444-444444444444',
+      'member'
+    )
+  $$),
   'rows=1');
-SELECT pg_temp.expect('future end date counts as a member',
+SELECT pg_temp.expect('open row counts as a member',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
     SELECT active_house_count::text
     FROM public.missio_member_status
     WHERE contact_id = 'c4444444-4444-4444-4444-444444444444'
   $$),
   '1');
-SELECT pg_temp.expect('ending that future row today drops them',
+SELECT pg_temp.expect('ending that row today drops them',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     UPDATE public.house_church_members
        SET ended_at = current_date
      WHERE contact_id = 'c4444444-4444-4444-4444-444444444444'
+       AND ended_at IS NULL
   $$),
   'rows=1');
-SELECT pg_temp.expect('ended future row is gone from member status',
+SELECT pg_temp.expect('ended row is gone from member status',
   pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
-    SELECT count(*)::text FROM public.missio_member_status
-    WHERE contact_id = 'c4444444-4444-4444-4444-444444444444'
+    SELECT (
+      SELECT count(*) FROM public.missio_member_status
+      WHERE contact_id = 'c4444444-4444-4444-4444-444444444444'
+    )::text
   $$),
   '0');
 SELECT pg_temp.expect('house membership did not create or change org_people',
@@ -680,10 +746,12 @@ SELECT pg_temp.expect('house membership did not create or change org_people',
     WHERE contact_id = 'c2222222-2222-2222-2222-222222222222'
     GROUP BY status),
   'visitor/1');
-SELECT pg_temp.expect('house membership did not insert an org_people row for Fixture One',
-  (SELECT count(*)::text FROM public.org_people
-    WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'),
-  '0');
+SELECT pg_temp.expect('house membership did not change Fixture One org_people',
+  (SELECT status || '/' || count(*)::text
+     FROM public.org_people
+    WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+    GROUP BY status),
+  'active/1');
 
 -- ── Import review ─────────────────────────────────────────
 SELECT pg_temp.expect('service role can stage two names from one sheet line',
@@ -722,6 +790,40 @@ SELECT pg_temp.expect('pastor can read the staged rows',
     FROM public.missio_import_review
   $$),
   '2/Ada Fixture,Ben Fixture');
+SELECT pg_temp.expect('pastor cannot resolve to a contact outside candidates and org_people',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.missio_import_review
+       SET status = 'matched',
+           resolved_contact_id = 'c5555555-5555-5555-5555-555555555555'
+     WHERE raw_name = 'Ada Fixture'
+  $$),
+  'err 42501');
+SELECT pg_temp.expect('that rejected resolve did not stick',
+  (SELECT status || '/' || (resolved_contact_id IS NULL)::text
+     FROM public.missio_import_review
+    WHERE raw_name = 'Ada Fixture'),
+  'pending/true');
+SELECT pg_temp.expect('service role can put a contact on the candidate list',
+  pg_temp.exec('service', $$
+    UPDATE public.missio_import_review
+       SET candidate_contact_ids = ARRAY['c5555555-5555-5555-5555-555555555555']::uuid[]
+     WHERE raw_name = 'Ben Fixture'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('pastor can resolve to a listed candidate who is not in org_people',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.missio_import_review
+       SET status = 'matched',
+           resolved_contact_id = 'c5555555-5555-5555-5555-555555555555',
+           resolved_by = 'a4444444-4444-4444-4444-444444444444'
+     WHERE raw_name = 'Ben Fixture'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('candidate resolve stuck and resolved_by was pinned',
+  (SELECT status || '/' || resolved_contact_id::text || '/' || resolved_by::text
+     FROM public.missio_import_review
+    WHERE raw_name = 'Ben Fixture'),
+  'matched/c5555555-5555-5555-5555-555555555555/a1111111-1111-1111-1111-111111111111');
 SELECT pg_temp.expect('matched status requires a contact',
   pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     UPDATE public.missio_import_review
