@@ -712,6 +712,40 @@ export async function createPerson(
   return { ok: true, body: { person: linked.body.person, linkedExisting: false } };
 }
 
+/**
+ * Add a Missio person from a name alone, for a house-church sheet row where
+ * no email or phone was collected. The caller has passed its own pastor
+ * check and has already looked for a contact with the same name.
+ */
+export async function createNamedPerson(
+  auth: OrgAccess,
+  input: { firstName: string; lastName: string; campus: MissioCampus }
+): Promise<{ ok: true; contactId: string } | { ok: false; status: number; error: string; code?: string }> {
+  const admin = adminClient();
+  if ("error" in admin) return fail(500, "server_error", admin.error);
+  const created = await admin.client
+    .from("contacts")
+    .insert({
+      first_name: input.firstName,
+      last_name: input.lastName,
+      source: `missio:${auth.user.id}`,
+      marketing_status: "pending",
+    })
+    .select("id")
+    .single();
+  if (created.error || !created.data?.id) {
+    console.error("[missio] contact insert failed", created.error?.message ?? "no row");
+    return fail(500, "server_error", "Something went wrong.");
+  }
+  const contactId = created.data.id as string;
+  const linked = await linkPerson(auth, admin.client, { contactId, campus: input.campus });
+  if (!linked.ok) {
+    await removeOrphanContact(admin.client, contactId);
+    return linked;
+  }
+  return { ok: true, contactId };
+}
+
 export async function updatePerson(
   auth: OrgAccess,
   personId: string,

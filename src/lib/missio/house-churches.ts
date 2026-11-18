@@ -14,7 +14,7 @@ import {
 import { endDateFor, isAfterDatabaseToday, todayIsoDate } from "@/lib/missio/dates";
 import { membershipBlocksInsert, membershipIsCurrent, membershipIsOpen } from "@/lib/missio/house-church-import";
 import { maskEmail, maskPhone } from "@/lib/missio/mask";
-import { contactIdsByEmailOrPhone, createPerson } from "@/lib/missio/people";
+import { contactIdsByEmailOrPhone, createNamedPerson, createPerson } from "@/lib/missio/people";
 import type {
   HouseChurchDetail,
   HouseChurchDetailResponse,
@@ -286,6 +286,9 @@ const resolveSchema = z.discriminatedUnion("action", [
       email: z.string().trim().email().max(320).nullable().optional(),
       phone: z.string().trim().min(1).max(40).nullable().optional(),
       also: z.literal(true).optional(),
+      // Name-only create: make a new person even though a contact with the
+      // same name exists. Sent after the pastor has seen that contact.
+      allowDuplicate: z.literal(true).optional(),
     })
     .strict(),
   z
@@ -567,6 +570,77 @@ async function reviewCreateFail(
     changes: { results: matches.length },
   });
   return { ...base, code: "not_missio_person", matches };
+}
+
+type ReviewCreateInput = {
+  firstName: string;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  allowDuplicate?: true;
+};
+
+/**
+ * Create the person for a review row. With an email or phone this is the
+ * normal Missio create. With neither (the sheet often has only a name) a
+ * contact is made from first and last name, unless a contact with that
+ * name already exists: then they are offered for linking first.
+ */
+async function createForReview(
+  auth: OrgAccess,
+  input: ReviewCreateInput,
+  campus: MissioCampus
+): Promise<{ ok: true; contactId: string } | Fail> {
+  const email = emptyToUndefined(input.email);
+  const phone = emptyToUndefined(input.phone);
+  const firstName = input.firstName.trim();
+  const lastName = (emptyToUndefined(input.lastName) ?? "").trim();
+  if (email || phone) {
+    const created = await createPerson(auth, { name: [firstName, lastName].filter(Boolean).join(" "), email, phone, campus });
+    if (!created.ok) return reviewCreateFail(auth, created, email, phone);
+    return { ok: true, contactId: created.body.person.contactId };
+  }
+  if (!lastName) {
+    return fail(400, "invalid_input", "Add a last name, or an email or phone.", { lastName: "Add a last name, or an email or phone." });
+  }
+  const admin = adminClient();
+  if ("error" in admin) return fail(500, "server_error", "Something went wrong.");
+  if (!input.allowDuplicate) {
+    const literal = (value: string) => value.replace(/[\\%_]/g, (char) => `\\${char}`);
+    const same = await admin.client
+      .from("contacts")
+      .select("id")
+      .ilike("first_name", literal(firstName))
+      .ilike("last_name", literal(lastName))
+      .limit(5);
+    if (same.error) {
+      console.error("[missio] same-name lookup failed", same.error.message);
+      return fail(500, "server_error", "Something went wrong.");
+    }
+    const ids = ((same.data ?? []) as Array<{ id?: string }>).map((row) => row.id).filter((id): id is string => Boolean(id));
+    if (ids.length > 0) {
+      const refs = await loadReviewRefs(auth, ids);
+      if (isFail(refs)) return refs;
+      const matches: ReviewContactMatch[] = [];
+      for (const id of ids) {
+        const ref = refs.get(id);
+        if (ref) matches.push({ ...ref, inMissio: Boolean(ref.orgPersonId) });
+      }
+      if (matches.length > 0) {
+        return { ...fail(409, "not_missio_person", "A contact with this name exists."), matches };
+      }
+    }
+  }
+  const created = await createNamedPerson(auth, { firstName, lastName, campus });
+  if (!created.ok) return fromPersonError(created.status, created.code);
+  await audit(admin.client, {
+    userId: auth.user.id,
+    action: "missio.import_review_create_name_only",
+    resourceType: "contact",
+    resourceId: created.contactId,
+    changes: { allowDuplicate: input.allowDuplicate === true },
+  });
+  return created;
 }
 
 /**
@@ -1361,15 +1435,9 @@ export async function resolveImportReview(
         if (!renamed.ok) return renamed;
       }
     } else {
-      const name = [parsed.data.firstName, emptyToUndefined(parsed.data.lastName)].filter(Boolean).join(" ");
-      const created = await createPerson(auth, {
-        name,
-        email: emptyToUndefined(parsed.data.email),
-        phone: emptyToUndefined(parsed.data.phone),
-        campus: asCampus(house.house.campus),
-      });
-      if (!created.ok) return reviewCreateFail(auth, created, parsed.data.email, parsed.data.phone);
-      contactId = created.body.person.contactId;
+      const created = await createForReview(auth, parsed.data, asCampus(house.house.campus));
+      if (!created.ok) return created;
+      contactId = created.contactId;
     }
     const person = await requireMissioPerson(auth, contactId);
     if (!person.ok) return person;
@@ -1444,18 +1512,12 @@ export async function resolveImportReview(
   const claimed = await claimReview(auth, itemId, { status: "new", contactId: null });
   if (!claimed.ok) return claimed;
 
-  const name = [parsed.data.firstName, emptyToUndefined(parsed.data.lastName)].filter(Boolean).join(" ");
-  const created = await createPerson(auth, {
-    name,
-    email: emptyToUndefined(parsed.data.email),
-    phone: emptyToUndefined(parsed.data.phone),
-    campus: asCampus(house.house.campus),
-  });
+  const created = await createForReview(auth, parsed.data, asCampus(house.house.campus));
   if (!created.ok) {
     await releaseReview(auth, itemId, "new");
-    return reviewCreateFail(auth, created, parsed.data.email, parsed.data.phone);
+    return created;
   }
-  const person = await requireMissioPerson(auth, created.body.person.contactId);
+  const person = await requireMissioPerson(auth, created.contactId);
   if (!person.ok) {
     await releaseReview(auth, itemId, "new");
     return person;

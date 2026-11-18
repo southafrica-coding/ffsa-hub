@@ -265,6 +265,7 @@ describe("review queue", () => {
       host.querySelector("[data-testid=create-toggle]")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     setValue(host.querySelector("[aria-label='First name']") as HTMLInputElement, "Jonah");
+    setValue(host.querySelector("[aria-label='Last name']") as HTMLInputElement, "Reed");
     await settle();
     (host.querySelector("[data-testid=review-create]") as HTMLFormElement).requestSubmit();
     await settle();
@@ -326,6 +327,54 @@ describe("review queue", () => {
     expect(bodies.at(-1)).toEqual({ action: "link", contactId: "c-matt", rename: { firstName: "Matthew" } });
     expect(host.querySelector("[data-testid=review-existing]")).toBeNull();
     expect(host.querySelector("[data-testid=review-added]")?.textContent).toContain("Matthew");
+  });
+
+  it("creates from a name alone, and asks first when the name is already in the Hub", async () => {
+    const bodies: ResolveBody[] = [];
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(url).includes("/resolve")) {
+        return new Response(JSON.stringify({ items: [partial] }), { status: 200 });
+      }
+      const body = JSON.parse(String(init?.body)) as ResolveBody;
+      bodies.push(body);
+      if (body.action === "create" && !body.allowDuplicate) {
+        return new Response(
+          JSON.stringify({
+            error: "x",
+            code: "not_missio_person",
+            matches: [{ contactId: "c-j", displayName: "Josia Muhongo", firstName: "Josia", lastName: "Muhongo", inMissio: false }],
+          }),
+          { status: 409 }
+        );
+      }
+      return new Response(JSON.stringify({ item: { ...partial, status: "new" } }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const host = mount(<ReviewQueue client={createHouseChurchesClient(fetchImpl)} />);
+    await settle();
+    await act(async () => {
+      host.querySelector("[data-testid=create-toggle]")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(host.textContent).toContain("Email and phone are optional.");
+    setValue(host.querySelector("[aria-label='First name']") as HTMLInputElement, "Josia");
+    await settle();
+    (host.querySelector("[data-testid=review-create]") as HTMLFormElement).requestSubmit();
+    await settle();
+    expect(host.textContent).toContain("Add a last name, or an email or phone number.");
+    expect(bodies).toHaveLength(0);
+
+    setValue(host.querySelector("[aria-label='Last name']") as HTMLInputElement, "Muhongo");
+    await settle();
+    (host.querySelector("[data-testid=review-create]") as HTMLFormElement).requestSubmit();
+    await settle();
+    expect(bodies[0]).toEqual({ action: "create", firstName: "Josia", lastName: "Muhongo" });
+    expect(host.textContent).toContain("Someone with that name is already in the Hub");
+    expect(host.querySelector("[data-testid=review-link-rename]")).toBeNull();
+    const anyway = host.querySelector("[data-testid=review-create-anyway]") as HTMLButtonElement;
+    expect(anyway.textContent).toContain("No, create a new Josia Muhongo");
+    anyway.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await settle();
+    expect(bodies[1]).toEqual({ action: "create", firstName: "Josia", lastName: "Muhongo", allowDuplicate: true });
+    expect(host.querySelector("[data-testid=review-added]")?.textContent).toContain("Josia Muhongo");
   });
 
   it("shows an empty queue and a no-access state", async () => {

@@ -102,7 +102,15 @@ export interface ReviewListResponse {
 
 export type ResolveBody =
   | { action: "link"; contactId: string; also?: true; rename?: { firstName: string; lastName?: string } }
-  | { action: "create"; firstName: string; lastName?: string; email?: string; phone?: string; also?: true }
+  | {
+      action: "create";
+      firstName: string;
+      lastName?: string;
+      email?: string;
+      phone?: string;
+      also?: true;
+      allowDuplicate?: true;
+    }
   | { action: "skip"; notes?: string };
 
 /** Link and create add the person to the house. Skip does not. */

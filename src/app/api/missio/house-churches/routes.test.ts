@@ -11,7 +11,8 @@ type Filter =
   | { type: "eq"; col: string; val: unknown }
   | { type: "in"; col: string; vals: unknown[] }
   | { type: "is"; col: string; val: unknown }
-  | { type: "or"; expr: string };
+  | { type: "or"; expr: string }
+  | { type: "ilike"; col: string; pattern: string };
 
 type Op = {
   action: "select" | "insert" | "update" | "delete";
@@ -38,6 +39,7 @@ const GRACE = "cccccccc-cccc-4ccc-8ccc-ccccccccccc2";
 const ALAN = "cccccccc-cccc-4ccc-8ccc-ccccccccccc3";
 const OUTSIDE = "cccccccc-cccc-4ccc-8ccc-ccccccccccc4";
 const REVIEW = "dddddddd-dddd-4ddd-8ddd-ddddddddddd1";
+const REVIEW_2 = "dddddddd-dddd-4ddd-8ddd-ddddddddddd2";
 
 const state = vi.hoisted(() => {
   const state = {
@@ -143,6 +145,10 @@ const state = vi.hoisted(() => {
         op.filters.push({ type: "is", col, val });
         return b;
       },
+      ilike(col: string, pattern: string) {
+        op.filters.push({ type: "ilike", col, pattern });
+        return b;
+      },
       or(expr: string) {
         op.filters.push({ type: "or", expr });
         return b;
@@ -181,6 +187,10 @@ const state = vi.hoisted(() => {
     for (const filter of op.filters) {
       if (filter.type === "eq" && row[filter.col] !== filter.val) return false;
       if (filter.type === "in" && !(filter.vals ?? []).includes(row[filter.col])) return false;
+      if (filter.type === "ilike") {
+        const want = filter.pattern.replace(/\\(.)/g, "$1").toLowerCase();
+        if (String(row[filter.col] ?? "").toLowerCase() !== want) return false;
+      }
       if (filter.type === "or") {
         // Only `col.ilike.%term%` clauses, which is all the routes send.
         const hit = filter.expr.split(",").some((clause) => {
@@ -1300,6 +1310,35 @@ describe("import review", () => {
     state.userId = LEADER;
     expect((await search("ada")).status).toBe(403);
     state.userId = PASTOR;
+  });
+
+  it("creates a person from a name alone, after offering a contact with the same name", async () => {
+    addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
+    addContact({ id: OUTSIDE, first: "Josia", last: "Muhongo", inOrg: false });
+    addReview({ id: REVIEW, rawName: "Josia Muhongo", sourceLine: 23, houseNumber: 3, role: "member" });
+
+    expect((await resolve(REVIEW, { action: "create", firstName: "Josia" })).status).toBe(400);
+
+    const clash = await resolve(REVIEW, { action: "create", firstName: "josia", lastName: "MUHONGO" });
+    expect(clash.status).toBe(409);
+    expect((await clash.json()).matches).toEqual([expect.objectContaining({ contactId: OUTSIDE, inMissio: false })]);
+    expect(state.tables.contacts).toHaveLength(1);
+    expect(state.tables.missio_import_review[0].status).toBe("pending");
+
+    const made = await resolve(REVIEW, { action: "create", firstName: "Josia", lastName: "Muhongo", allowDuplicate: true });
+    expect(made.status).toBe(200);
+    const body = await made.json();
+    expect(body.item.status).toBe("new");
+    expect(body.member).toMatchObject({ displayName: "Josia Muhongo", role: "member" });
+    expect(state.tables.contacts).toHaveLength(2);
+    expect(state.tables.contacts[1]).toMatchObject({ first_name: "Josia", last_name: "Muhongo", marketing_status: "pending" });
+    expect(state.tables.org_people).toHaveLength(1);
+    expect(state.tables.house_church_members).toHaveLength(1);
+
+    // No namesake: straight through.
+    addReview({ id: REVIEW_2, rawName: "Pat Unique", sourceLine: 24, houseNumber: 3, role: "member" });
+    expect((await resolve(REVIEW_2, { action: "create", firstName: "Pat", lastName: "Unique" })).status).toBe(200);
+    expect(state.tables.contacts).toHaveLength(3);
   });
 
   it("renames the contact while linking, and keeps the old name in the audit log", async () => {

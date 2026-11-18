@@ -32,6 +32,9 @@ export function ReviewQueue({
   const [added, setAdded] = useState<string[]>([]);
   // Who a refused "create" collided with, so they can be linked in one tap.
   const [existing, setExisting] = useState<ReviewContactMatch[]>([]);
+  // Set when a name-only create met a contact with the same name. Holds the
+  // create to send again if the pastor says it is a different person.
+  const [sameName, setSameName] = useState<Extract<ResolveBody, { action: "create" }> | null>(null);
   const focusTarget = useRef<"item" | "done" | "next" | null>(null);
   const noticeRef = useRef<HTMLParagraphElement>(null);
 
@@ -65,6 +68,7 @@ export function ReviewQueue({
     setSkipNote("");
     setNotice(null);
     setExisting([]);
+    setSameName(null);
   }
 
   function resetPersonFields() {
@@ -103,6 +107,7 @@ export function ReviewQueue({
     setPending(true);
     setNotice(null);
     setExisting([]);
+    setSameName(null);
     try {
       const again = added.length > 0 && body.action !== "skip";
       await client.resolveReview(item.id, again ? { ...body, also: true } : body);
@@ -123,6 +128,11 @@ export function ReviewQueue({
       const matches = body.action === "create" ? houseErrorMatches(caught) : [];
       if (matches.length > 0) {
         setExisting(matches);
+        if (body.action === "create" && !body.email && !body.phone) {
+          setSameName(body);
+          setNotice("Someone with that name is already in the Hub, so no new person was made yet. Is this them?");
+          return;
+        }
         setNotice(
           matches.length === 1
             ? "That email or phone already belongs to someone in the Hub, so no new person was made. Is this them?"
@@ -225,10 +235,25 @@ export function ReviewQueue({
               </li>
             ))}
           </ul>
+          {sameName ? (
+            <button
+              type="button"
+              className={`${shell.ghost} ${styles.choice} ${styles.renameChoice}`}
+              disabled={pending}
+              data-testid="review-create-anyway"
+              onClick={() => void resolve({ ...sameName, allowDuplicate: true }, total, typedName)}
+            >
+              <span className={styles.choiceText}>
+                <span className={styles.choiceName}>No, create a new {typedName}</span>
+                <span className={styles.choiceMeta}>A different person who happens to share the name.</span>
+              </span>
+            </button>
+          ) : (
           <p className={styles.quiet}>
             Someone else entirely? Two people can’t share an email or phone in the Hub. Create the new person with
             their own number or email instead.
           </p>
+          )}
         </section>
       ) : null}
       {state.phase === "ready" && finished ? (
@@ -265,6 +290,10 @@ export function ReviewQueue({
             const family = lastName.trim();
             const mail = email.trim();
             const number = phone.trim();
+            if (!family && !mail && !number) {
+              setNotice("Add a last name, or an email or phone number.");
+              return;
+            }
             void resolve(
               {
                 action: "create",
@@ -425,6 +454,7 @@ function ReviewCard({
               onCreate();
             }}
           >
+            <p className={shell.help}>Email and phone are optional. Add them if you have them.</p>
             <label className={shell.field}>
               First name
               <input aria-label="First name" value={firstName} onChange={(event) => onFirstName(event.target.value)} />
