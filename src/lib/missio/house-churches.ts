@@ -27,13 +27,15 @@ import type {
 // else. That scope is not shipped: pastorHouseAccess still requires pastor.
 //
 // Names come from a service-role read of contacts after the pastor check.
-// Pastors cannot read contacts. orgPersonId comes from org_people when a row
-// exists. Adding someone to a house inserts that row with the service role
-// if it is missing and does not change it if it is already there. Ending a
-// membership never deletes or updates org_people, and org_people.status is
-// not a member flag. A current member is a house_church_members row with
-// started_at <= today and ended_at null or after today (missio_member_status).
-// The open row, which the partial unique index guards, is ended_at IS NULL.
+// Pastors cannot read contacts. These routes do not create org_people.
+// POST members and import-review link accept only a contact who already has
+// an org_people row in Missio. Status is not filtered: migration 331 allows
+// a visitor. Anyone with no row is not_missio_person, and nothing is inserted.
+// import-review create still uses the Phase 0 create-person path.
+// Candidate suggestions are limited to people who have that row. Ending a
+// membership sets ended_at to today and never changes org_people. A current
+// membership is an open row (ended_at IS NULL) whose started_at is on or
+// before today. ended_at after today is rejected by the database.
 //
 // Pastors may UPDATE missio_import_review only on status, resolved_contact_id,
 // notes, resolved_by, and resolved_at. Insert and delete stay on the service role.
@@ -117,6 +119,7 @@ export function isUuid(value: string): boolean {
   return UUID.test(value);
 }
 
+/** Calendar date in UTC. toISOString is UTC, so this is not the SAST civil date near midnight. */
 export function todayIsoDate(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
@@ -250,21 +253,20 @@ async function audit(
   if (error) console.error("[missio] audit failed", error.message ?? "insert failed");
 }
 
+const NOT_MISSIO = fail(400, "not_missio_person", "This person is not in Missio.");
+
 /**
- * Insert org_people for Missio when the contact has none. Does nothing when
- * the row is already there — campus, status, and stage stay as they are.
- * status here is the org_people lifecycle (visitor/active/inactive), not a
- * house-member flag.
+ * One Missio lookup. org_people_directory is org_people plus the name, so a
+ * missing row and a contact who is not in Missio look the same. This does
+ * not read the contacts table and does not insert org_people.
  */
-async function ensureOrgPerson(
+async function requireMissioPerson(
   auth: OrgAccess,
-  admin: Client,
-  contactId: string,
-  campus: MissioCampus
-): Promise<{ ok: true; orgPersonId: string; created: boolean } | Fail> {
+  contactId: string
+): Promise<{ ok: true; orgPersonId: string; contact: ContactNameRow } | Fail> {
   const existing = await auth.supabase
-    .from("org_people")
-    .select("id")
+    .from("org_people_directory")
+    .select("id, contact_id, first_name, last_name, preferred_name")
     .eq("org_id", auth.orgId)
     .eq("contact_id", contactId)
     .maybeSingle();
@@ -272,62 +274,104 @@ async function ensureOrgPerson(
     console.error("[missio] org person lookup failed", existing.error.message);
     return fail(500, "server_error", "Something went wrong.");
   }
-  if (existing.data?.id) return { ok: true, orgPersonId: existing.data.id as string, created: false };
-
-  const inserted = await admin
-    .from("org_people")
-    .insert({
-      org_id: auth.orgId,
-      contact_id: contactId,
-      campus,
-      status: "active",
-      created_by: auth.user.id,
-    })
-    .select("id")
-    .single();
-  if (inserted.error) {
-    if (inserted.error.code === "23505") {
-      const again = await auth.supabase
-        .from("org_people")
-        .select("id")
-        .eq("org_id", auth.orgId)
-        .eq("contact_id", contactId)
-        .maybeSingle();
-      if (again.data?.id) return { ok: true, orgPersonId: again.data.id as string, created: false };
-    }
-    console.error("[missio] org person insert failed", inserted.error.message);
-    return fail(500, "server_error", "Something went wrong.");
-  }
-  if (!inserted.data?.id) return fail(500, "server_error", "Something went wrong.");
-  return { ok: true, orgPersonId: inserted.data.id as string, created: true };
+  const row = existing.data as {
+    id?: string;
+    contact_id?: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    preferred_name?: string | null;
+  } | null;
+  if (!row?.id || !row.contact_id) return NOT_MISSIO;
+  return {
+    ok: true,
+    orgPersonId: row.id,
+    contact: {
+      id: row.contact_id,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      preferred_name: row.preferred_name,
+    },
+  };
 }
 
-async function loadRefs(
-  auth: OrgAccess,
-  admin: Client,
-  contactIds: string[]
-): Promise<Map<string, PersonRef> | Fail> {
+/**
+ * Migration 331 raises these for every role, including the service role.
+ * Match SQLSTATE and the exception text. Anything else stays a server error.
+ */
+function constraintFailure(error: { code?: string; message?: string }): Fail | null {
+  const message = error.message ?? "";
+  if (error.code === "23514" && message.includes("missio_ended_at_in_future")) {
+    return fail(409, "invalid_input", "Check the fields and try again.");
+  }
+  if (
+    error.code === "23503" &&
+    (message.includes("missio_member_not_in_org") || message.includes("missio_resolve_not_allowed"))
+  ) {
+    return NOT_MISSIO;
+  }
+  return null;
+}
+
+function membershipWriteError(error: { code?: string; message?: string }): Fail {
+  const constraint = constraintFailure(error);
+  if (constraint) return constraint;
+  if (error.code === "23505") return fail(409, "already_member", "This person is already in this house.");
+  console.error("[missio] membership write failed", error.message ?? error.code ?? "write failed");
+  return fail(500, "server_error", "Something went wrong.");
+}
+
+async function loadRefs(auth: OrgAccess, contactIds: string[]): Promise<Map<string, PersonRef> | Fail> {
   const ids = [...new Set(contactIds)];
   const map = new Map<string, PersonRef>();
   for (let i = 0; i < ids.length; i += 100) {
     const slice = ids.slice(i, i + 100);
-    const [contacts, people] = await Promise.all([
-      admin.from("contacts").select("id, first_name, last_name, preferred_name").in("id", slice),
-      auth.supabase.from("org_people").select("id, contact_id").eq("org_id", auth.orgId).in("contact_id", slice),
-    ]);
-    if (contacts.error || people.error) {
-      console.error("[missio] house names failed", contacts.error?.message ?? people.error?.message ?? "query error");
+    if (slice.length === 0) continue;
+    const directory = await auth.supabase
+      .from("org_people_directory")
+      .select("id, contact_id, first_name, last_name, preferred_name")
+      .eq("org_id", auth.orgId)
+      .in("contact_id", slice);
+    if (directory.error) {
+      console.error("[missio] org person lookup failed", directory.error.message);
       return fail(500, "server_error", "Something went wrong.");
     }
-    const orgByContact = new Map<string, string>();
-    for (const row of (people.data ?? []) as Array<{ id?: string; contact_id?: string }>) {
-      if (row.contact_id && row.id && !orgByContact.has(row.contact_id)) orgByContact.set(row.contact_id, row.id);
-    }
-    for (const contact of (contacts.data ?? []) as ContactNameRow[]) {
-      map.set(contact.id, toPersonRef(contact, orgByContact.get(contact.id)));
+    for (const row of (directory.data ?? []) as Array<{
+      id?: string;
+      contact_id?: string;
+      first_name?: string | null;
+      last_name?: string | null;
+      preferred_name?: string | null;
+    }>) {
+      if (!row.contact_id || !row.id) continue;
+      map.set(
+        row.contact_id,
+        toPersonRef(
+          {
+            id: row.contact_id,
+            first_name: row.first_name,
+            last_name: row.last_name,
+            preferred_name: row.preferred_name,
+          },
+          row.id
+        )
+      );
     }
   }
   return map;
+}
+
+function suggestedCandidates(ids: string[], refs: Map<string, PersonRef>): PersonRef[] {
+  const seen = new Set<string>();
+  const candidates: PersonRef[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const ref = refs.get(id);
+    if (!ref?.orgPersonId) continue;
+    candidates.push(ref);
+    if (candidates.length === 5) break;
+  }
+  return candidates;
 }
 
 function refFor(map: Map<string, PersonRef>, contactId: string): PersonRef {
@@ -427,22 +471,36 @@ function asMembership(row: MemberRow) {
   return { startedAt: row.started_at, endedAt: row.ended_at };
 }
 
-function currentMembers(rows: MemberRow[], today = todayIsoDate()): MemberRow[] {
-  return rows.filter((row) => membershipIsCurrent(asMembership(row), today));
+async function missioContactIds(auth: OrgAccess, contactIds: string[]): Promise<{ ok: true; ids: Set<string> } | Fail> {
+  const ids = [...new Set(contactIds)];
+  const found = new Set<string>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const slice = ids.slice(i, i + 100);
+    const people = await auth.supabase
+      .from("org_people")
+      .select("contact_id")
+      .eq("org_id", auth.orgId)
+      .in("contact_id", slice);
+    if (people.error) {
+      console.error("[missio] org person lookup failed", people.error.message);
+      return fail(500, "server_error", "Something went wrong.");
+    }
+    for (const row of (people.data ?? []) as Array<{ contact_id?: string }>) {
+      if (row.contact_id) found.add(row.contact_id);
+    }
+  }
+  return { ok: true, ids: found };
 }
 
-/**
- * The row a write must not duplicate: the open row if there is one, otherwise
- * a current membership whose ended_at is still in the future.
- */
-function blockingMember(rows: MemberRow[], today = todayIsoDate()): MemberRow | null {
-  const blocking = rows.filter((row) => membershipBlocksInsert(asMembership(row), today));
-  return blocking.find((row) => membershipIsOpen(asMembership(row))) ?? blocking[0] ?? null;
+function currentMembers(rows: MemberRow[], inMissio: ReadonlySet<string>, today = todayIsoDate()): MemberRow[] {
+  return rows.filter(
+    (row) => inMissio.has(row.contact_id) && membershipIsCurrent(asMembership(row), today)
+  );
 }
 
-function endDateFor(row: MemberRow, today = todayIsoDate()): string {
-  const started = (row.started_at ?? today).slice(0, 10);
-  return started > today ? started : today;
+/** The open row (ended_at IS NULL). A second open row is what the unique index rejects. */
+function blockingMember(rows: MemberRow[]): MemberRow | null {
+  return rows.find((row) => membershipBlocksInsert(asMembership(row))) ?? null;
 }
 
 async function memberRowsFor(
@@ -462,33 +520,14 @@ async function memberRowsFor(
   return { ok: true, rows: (data ?? []) as MemberRow[] };
 }
 
-async function loadContact(
-  admin: Client,
-  contactId: string
-): Promise<{ ok: true; contact: ContactNameRow } | Fail> {
-  const { data, error } = await admin
-    .from("contacts")
-    .select("id, first_name, last_name, preferred_name")
-    .eq("id", contactId)
-    .maybeSingle();
-  if (error) {
-    console.error("[missio] contact read failed", error.message);
-    return fail(500, "server_error", "Something went wrong.");
-  }
-  if (!data?.id) return fail(400, "invalid_input", "Check the fields and try again.");
-  return { ok: true, contact: data as ContactNameRow };
-}
-
 async function insertMember(
   auth: OrgAccess,
   admin: Client,
   house: HouseRow,
   contact: ContactNameRow,
-  role: HouseChurchRole
-): Promise<{ ok: true; member: HouseChurchMemberView; orgPersonCreated: boolean; memberId: string } | Fail> {
-  const ensured = await ensureOrgPerson(auth, admin, contact.id, asCampus(house.campus));
-  if (!ensured.ok) return ensured;
-
+  role: HouseChurchRole,
+  orgPersonId: string
+): Promise<{ ok: true; member: HouseChurchMemberView; memberId: string } | Fail> {
   const inserted = await auth.supabase
     .from("house_church_members")
     .insert({
@@ -497,17 +536,14 @@ async function insertMember(
       role,
       started_at: todayIsoDate(),
       ended_at: null,
+      // Pastor routes set created_by to the signed-in user. Migration 331
+      // keeps that value for a service-role write (auth.uid() is null) and
+      // overwrites it with auth.uid() when the caller is signed in.
       created_by: auth.user.id,
     })
     .select(MEMBER_COLUMNS)
     .maybeSingle();
-  if (inserted.error) {
-    if (inserted.error.code === "23505") {
-      return fail(409, "already_member", "This person is already in this house.");
-    }
-    console.error("[missio] member insert failed", inserted.error.message);
-    return fail(500, "server_error", "Something went wrong.");
-  }
+  if (inserted.error) return membershipWriteError(inserted.error);
   const row = inserted.data as MemberRow | null;
   if (!row?.id) return fail(500, "server_error", "Something went wrong.");
 
@@ -520,15 +556,14 @@ async function insertMember(
       houseChurchId: house.id,
       contactId: contact.id,
       role,
-      orgPersonCreated: ensured.created,
+      orgPersonCreated: false,
     },
   });
 
-  const ref = toPersonRef(contact, ensured.orgPersonId);
+  const ref = toPersonRef(contact, orgPersonId);
   return {
     ok: true,
     memberId: row.id,
-    orgPersonCreated: ensured.created,
     member: { ...ref, role, startedAt: (row.started_at ?? todayIsoDate()).slice(0, 10) },
   };
 }
@@ -565,13 +600,14 @@ export async function listHouses(
     console.error("[missio] member list failed", memberRes.error.message);
     return fail(500, "server_error", "Something went wrong.");
   }
-  const memberRows = currentMembers((memberRes.data ?? []) as MemberRow[]);
+  const rawMembers = (memberRes.data ?? []) as MemberRow[];
+  const inMissio = await missioContactIds(auth, rawMembers.map((row) => row.contact_id));
+  if (!inMissio.ok) return inMissio;
+  const memberRows = currentMembers(rawMembers, inMissio.ids);
   const contactIds = memberRows.map((row) => row.contact_id);
   let refs = new Map<string, PersonRef>();
   if (contactIds.length > 0) {
-    const admin = adminClient();
-    if ("error" in admin) return fail(500, "server_error", admin.error);
-    const loaded = await loadRefs(auth, admin.client, contactIds);
+    const loaded = await loadRefs(auth, contactIds);
     if (isFail(loaded)) return loaded;
     refs = loaded;
   }
@@ -607,12 +643,13 @@ export async function getHouse(
     console.error("[missio] member list failed", memberRes.error.message);
     return fail(500, "server_error", "Something went wrong.");
   }
-  const memberRows = currentMembers((memberRes.data ?? []) as MemberRow[]);
+  const rawMembers = (memberRes.data ?? []) as MemberRow[];
+  const inMissio = await missioContactIds(auth, rawMembers.map((row) => row.contact_id));
+  if (!inMissio.ok) return inMissio;
+  const memberRows = currentMembers(rawMembers, inMissio.ids);
   let refs = new Map<string, PersonRef>();
   if (memberRows.length > 0) {
-    const admin = adminClient();
-    if ("error" in admin) return fail(500, "server_error", admin.error);
-    const names = await loadRefs(auth, admin.client, memberRows.map((row) => row.contact_id));
+    const names = await loadRefs(auth, memberRows.map((row) => row.contact_id));
     if (isFail(names)) return names;
     refs = names;
   }
@@ -638,6 +675,8 @@ export async function addMember(
   const parsed = addMemberSchema.safeParse(body);
   if (!parsed.success) return fail(400, "invalid_input", "Check the fields and try again.");
 
+  const person = await requireMissioPerson(auth, parsed.data.contactId);
+  if (!person.ok) return person;
   const house = await loadHouse(auth, scope, houseId);
   if (!house.ok) return house;
   const existing = await memberRowsFor(auth, house.house.id, parsed.data.contactId);
@@ -646,10 +685,14 @@ export async function addMember(
 
   const admin = adminClient();
   if ("error" in admin) return fail(500, "server_error", admin.error);
-  const contact = await loadContact(admin.client, parsed.data.contactId);
-  if (!contact.ok) return contact;
-
-  const inserted = await insertMember(auth, admin.client, house.house, contact.contact, parsed.data.role);
+  const inserted = await insertMember(
+    auth,
+    admin.client,
+    house.house,
+    person.contact,
+    parsed.data.role,
+    person.orgPersonId
+  );
   if (!inserted.ok) return inserted;
   return { ok: true, status: 201, member: inserted.member };
 }
@@ -667,6 +710,8 @@ export async function changeMemberRole(
 
   const house = await loadHouse(auth, scope, houseId);
   if (!house.ok) return house;
+  const person = await requireMissioPerson(auth, contactId);
+  if (!person.ok) return person;
 
   const existing = await memberRowsFor(auth, house.house.id, contactId);
   if (!existing.ok) return existing;
@@ -680,20 +725,18 @@ export async function changeMemberRole(
     .eq("house_church_id", house.house.id)
     .select(MEMBER_COLUMNS)
     .maybeSingle();
-  if (updated.error) {
-    console.error("[missio] member role update failed", updated.error.message);
-    return fail(500, "server_error", "Something went wrong.");
-  }
+  if (updated.error) return membershipWriteError(updated.error);
   const row = updated.data as MemberRow | null;
   if (!row) return fail(404, "not_found", "Member not found.");
 
-  const admin = adminClient();
-  if ("error" in admin) return fail(500, "server_error", admin.error);
-  const names = await loadRefs(auth, admin.client, [contactId]);
+  const names = await loadRefs(auth, [contactId]);
   if (isFail(names)) return names;
   const view = memberView(row, names);
   if (!view) return fail(500, "server_error", "Something went wrong.");
+  view.orgPersonId = person.orgPersonId;
 
+  const admin = adminClient();
+  if ("error" in admin) return fail(500, "server_error", admin.error);
   await audit(admin.client, {
     userId: auth.user.id,
     action: "missio.house_member_role",
@@ -719,18 +762,37 @@ export async function endMember(
   const target = blockingMember(existing.rows);
   if (!target) return fail(404, "not_found", "Member not found.");
 
-  const endedAt = endDateFor(target);
+  const started = (target.started_at ?? todayIsoDate()).slice(0, 10);
+  if (started > todayIsoDate()) {
+    // It never began. ended_at = started_at would be after today and 331
+    // raises 23514. DELETE is granted, and the guard trigger does not run
+    // on DELETE, including for the service role.
+    const removed = await auth.supabase
+      .from("house_church_members")
+      .delete()
+      .eq("id", target.id)
+      .eq("house_church_id", house.house.id);
+    if (removed.error) return membershipWriteError(removed.error);
+    const admin = adminClient();
+    if ("error" in admin) return fail(500, "server_error", admin.error);
+    await audit(admin.client, {
+      userId: auth.user.id,
+      action: "missio.house_member_end",
+      resourceType: "house_church_member",
+      resourceId: target.id,
+      changes: { houseChurchId: house.house.id, contactId, deleted: true },
+    });
+    return { ok: true };
+  }
+
   const updated = await auth.supabase
     .from("house_church_members")
-    .update({ ended_at: endedAt })
+    .update({ ended_at: todayIsoDate() })
     .eq("id", target.id)
     .eq("house_church_id", house.house.id)
     .select("id")
     .maybeSingle();
-  if (updated.error) {
-    console.error("[missio] member end failed", updated.error.message);
-    return fail(500, "server_error", "Something went wrong.");
-  }
+  if (updated.error) return membershipWriteError(updated.error);
   if (!updated.data?.id) return fail(404, "not_found", "Member not found.");
 
   const admin = adminClient();
@@ -740,7 +802,7 @@ export async function endMember(
     action: "missio.house_member_end",
     resourceType: "house_church_member",
     resourceId: updated.data.id as string,
-    changes: { houseChurchId: house.house.id, contactId, endedAt },
+    changes: { houseChurchId: house.house.id, contactId, endedAt: todayIsoDate() },
   });
   return { ok: true };
 }
@@ -806,9 +868,7 @@ export async function listImportReview(
   const candidateIds = visible.flatMap((row) => (row.candidate_contact_ids ?? []).slice(0, 5));
   let refs = new Map<string, PersonRef>();
   if (candidateIds.length > 0) {
-    const admin = adminClient();
-    if ("error" in admin) return fail(500, "server_error", admin.error);
-    const loaded = await loadRefs(auth, admin.client, candidateIds);
+    const loaded = await loadRefs(auth, candidateIds);
     if (isFail(loaded)) return loaded;
     refs = loaded;
   }
@@ -816,7 +876,7 @@ export async function listImportReview(
   const items: ImportReviewItem[] = [];
   for (const row of visible) {
     const ids = (row.candidate_contact_ids ?? []).slice(0, 5);
-    const candidates = ids.map((id) => refs.get(id)).filter((ref): ref is PersonRef => Boolean(ref));
+    const candidates = suggestedCandidates(ids, refs);
     const item = toReviewItem(row, byNumber.get(Number(row.house_number)) ?? null, candidates);
     if (item) items.push(item);
   }
@@ -838,91 +898,99 @@ async function loadReview(auth: OrgAccess, itemId: string): Promise<{ ok: true; 
   return { ok: true, row: data as ReviewRow };
 }
 
-async function attachMember(
+async function attachKnownMember(
   auth: OrgAccess,
   admin: Client,
   house: HouseRow,
-  contact: ContactNameRow,
+  person: { orgPersonId: string; contact: ContactNameRow },
   role: HouseChurchRole
-): Promise<{ ok: true; member: HouseChurchMemberView; orgPersonCreated: boolean } | Fail> {
-  const existing = await memberRowsFor(auth, house.id, contact.id);
+): Promise<{ ok: true; member: HouseChurchMemberView } | Fail> {
+  const existing = await memberRowsFor(auth, house.id, person.contact.id);
   if (!existing.ok) return existing;
   const held = blockingMember(existing.rows);
   if (held) {
-    const ensured = await ensureOrgPerson(auth, admin, contact.id, asCampus(house.campus));
-    if (!ensured.ok) return ensured;
-    const view = memberView(held, new Map([[contact.id, toPersonRef(contact, ensured.orgPersonId)]]));
+    const view = memberView(held, new Map([[person.contact.id, toPersonRef(person.contact, person.orgPersonId)]]));
     if (!view) return fail(500, "server_error", "Something went wrong.");
-    view.orgPersonId = ensured.orgPersonId;
-    return { ok: true, member: view, orgPersonCreated: ensured.created };
+    view.orgPersonId = person.orgPersonId;
+    return { ok: true, member: view };
   }
-  const inserted = await insertMember(auth, admin, house, contact, role);
+  const inserted = await insertMember(auth, admin, house, person.contact, role, person.orgPersonId);
   if (!inserted.ok) return inserted;
-  return { ok: true, member: inserted.member, orgPersonCreated: inserted.orgPersonCreated };
+  return { ok: true, member: inserted.member };
 }
 
-async function finishReview(
+async function claimReview(
   auth: OrgAccess,
-  admin: Client,
-  item: ReviewRow,
-  house: HouseRow | null,
-  patch: { status: "matched" | "new" | "skipped"; contactId: string | null; notes?: string | null },
-  member: HouseChurchMemberView | undefined,
-  orgPersonCreated: boolean,
-  action: "link" | "create" | "skip"
-): Promise<{ ok: true; body: ResolveImportReviewResponse } | Fail> {
-  const update: Record<(typeof REVIEW_RESOLVE_COLUMNS)[number], unknown> = {
+  itemId: string,
+  patch: { status: "matched" | "new" | "skipped"; contactId: string | null; notes?: string | null }
+): Promise<{ ok: true; row: ReviewRow } | Fail> {
+  // resolved_at is not sent. Migration 331 sets it to now() when a contact
+  // is resolved. resolved_by is the signed-in pastor; the trigger pins it
+  // to auth.uid() when that is set, and a service-role write would keep
+  // whatever value was passed.
+  const update: Partial<Record<(typeof REVIEW_RESOLVE_COLUMNS)[number], unknown>> = {
     status: patch.status,
     resolved_contact_id: patch.contactId,
     resolved_by: auth.user.id,
-    resolved_at: new Date().toISOString(),
-    notes: patch.notes,
   };
-  if (patch.notes === undefined) delete update.notes;
-
+  if (patch.notes !== undefined) update.notes = patch.notes;
   const updated = await auth.supabase
     .from("missio_import_review")
     .update(update)
-    .eq("id", item.id)
+    .eq("id", itemId)
     .eq("org_id", auth.orgId)
     .eq("status", "pending")
     .select(REVIEW_COLUMNS)
     .maybeSingle();
   if (updated.error) {
+    const constraint = constraintFailure(updated.error);
+    if (constraint) return constraint;
     console.error("[missio] import review update failed", updated.error.message);
     return fail(500, "server_error", "Something went wrong.");
   }
-  if (!updated.data) {
-    const again = await loadReview(auth, item.id);
-    if (!again.ok) return again;
-    if (again.row.status !== "pending") return fail(409, "already_resolved", "This row is already resolved.");
-    return fail(500, "server_error", "Something went wrong.");
-  }
+  if (!updated.data) return fail(409, "already_resolved", "This row is already resolved.");
+  return { ok: true, row: updated.data as ReviewRow };
+}
 
+async function releaseReview(auth: OrgAccess, itemId: string) {
+  const released = await auth.supabase
+    .from("missio_import_review")
+    .update({
+      status: "pending",
+      resolved_contact_id: null,
+      resolved_by: null,
+      resolved_at: null,
+    })
+    .eq("id", itemId)
+    .eq("org_id", auth.orgId);
+  if (released.error) console.error("[missio] import review release failed", released.error.message);
+}
+
+async function shapeClaimedReview(
+  auth: OrgAccess,
+  admin: Client,
+  row: ReviewRow,
+  house: HouseRow | null,
+  member: HouseChurchMemberView | undefined,
+  action: "link" | "create" | "skip"
+): Promise<{ ok: true; body: ResolveImportReviewResponse } | Fail> {
   await audit(admin, {
     userId: auth.user.id,
     action: "missio.import_review_resolve",
     resourceType: "missio_import_review",
-    resourceId: item.id,
+    resourceId: row.id,
     changes: {
       action,
-      status: patch.status,
-      contactId: patch.contactId,
-      houseNumber: item.house_number,
-      orgPersonCreated,
+      status: row.status,
+      contactId: row.resolved_contact_id,
+      houseNumber: row.house_number,
+      orgPersonCreated: action === "create",
     },
   });
-
-  const row = updated.data as ReviewRow;
   const ids = (row.candidate_contact_ids ?? []).slice(0, 5);
-  let refs = new Map<string, PersonRef>();
-  if (ids.length > 0) {
-    const loaded = await loadRefs(auth, admin, ids);
-    if (isFail(loaded)) return loaded;
-    refs = loaded;
-  }
-  const candidates = ids.map((id) => refs.get(id)).filter((ref): ref is PersonRef => Boolean(ref));
-  const shaped = toReviewItem(row, house, candidates);
+  const refs = ids.length > 0 ? await loadRefs(auth, ids) : new Map<string, PersonRef>();
+  if (isFail(refs)) return refs;
+  const shaped = toReviewItem(row, house, suggestedCandidates(ids, refs));
   if (!shaped) return fail(500, "server_error", "Something went wrong.");
   const body: ResolveImportReviewResponse = { item: shaped };
   if (member) body.member = member;
@@ -944,49 +1012,55 @@ export async function resolveImportReview(
   const role = asRole(loaded.row.role);
   if (!role) return fail(500, "server_error", "Something went wrong.");
 
+  if (parsed.data.action === "link") {
+    const candidates = loaded.row.candidate_contact_ids ?? [];
+    const person = await requireMissioPerson(auth, parsed.data.contactId);
+    if (!person.ok && person.status !== 400) return person;
+    if (!person.ok && !candidates.includes(parsed.data.contactId)) return NOT_MISSIO;
+    const claimed = await claimReview(auth, itemId, { status: "matched", contactId: parsed.data.contactId });
+    if (!claimed.ok) return claimed;
+    if (!person.ok) {
+      const admin = adminClient();
+      if ("error" in admin) return fail(500, "server_error", admin.error);
+      const house = await loadHouseByNumber(auth, scope, Number(loaded.row.house_number));
+      return shapeClaimedReview(auth, admin.client, claimed.row, house.ok ? house.house : null, undefined, "link");
+    }
+    const house = await loadHouseByNumber(auth, scope, Number(loaded.row.house_number));
+    if (!house.ok) {
+      await releaseReview(auth, itemId);
+      return house;
+    }
+    const admin = adminClient();
+    if ("error" in admin) {
+      await releaseReview(auth, itemId);
+      return fail(500, "server_error", admin.error);
+    }
+    const attached = await attachKnownMember(auth, admin.client, house.house, person, role);
+    if (!attached.ok) {
+      await releaseReview(auth, itemId);
+      return attached;
+    }
+    return shapeClaimedReview(auth, admin.client, claimed.row, house.house, attached.member, "link");
+  }
+
   if (parsed.data.action === "skip") {
+    const claimed = await claimReview(auth, itemId, {
+      status: "skipped",
+      contactId: null,
+      notes: parsed.data.notes === undefined ? undefined : emptyToUndefined(parsed.data.notes) ?? null,
+    });
+    if (!claimed.ok) return claimed;
     const admin = adminClient();
     if ("error" in admin) return fail(500, "server_error", admin.error);
     const house = await loadHouseByNumber(auth, scope, Number(loaded.row.house_number));
     if (!house.ok && (house.status !== 404 || scope.mode !== "all")) return house;
-    return finishReview(
-      auth,
-      admin.client,
-      loaded.row,
-      house.ok ? house.house : null,
-      {
-        status: "skipped",
-        contactId: null,
-        notes: parsed.data.notes === undefined ? undefined : emptyToUndefined(parsed.data.notes) ?? null,
-      },
-      undefined,
-      false,
-      "skip"
-    );
+    return shapeClaimedReview(auth, admin.client, claimed.row, house.ok ? house.house : null, undefined, "skip");
   }
 
   const house = await loadHouseByNumber(auth, scope, Number(loaded.row.house_number));
   if (!house.ok) return house;
-
-  const admin = adminClient();
-  if ("error" in admin) return fail(500, "server_error", admin.error);
-
-  if (parsed.data.action === "link") {
-    const contact = await loadContact(admin.client, parsed.data.contactId);
-    if (!contact.ok) return contact;
-    const attached = await attachMember(auth, admin.client, house.house, contact.contact, role);
-    if (!attached.ok) return attached;
-    return finishReview(
-      auth,
-      admin.client,
-      loaded.row,
-      house.house,
-      { status: "matched", contactId: contact.contact.id },
-      attached.member,
-      attached.orgPersonCreated,
-      "link"
-    );
-  }
+  const claimed = await claimReview(auth, itemId, { status: "new", contactId: null });
+  if (!claimed.ok) return claimed;
 
   const name = [parsed.data.firstName, emptyToUndefined(parsed.data.lastName)].filter(Boolean).join(" ");
   const created = await createPerson(auth, {
@@ -996,21 +1070,36 @@ export async function resolveImportReview(
     campus: asCampus(house.house.campus),
   });
   if (!created.ok) {
+    await releaseReview(auth, itemId);
     return fail(created.status, (created.code ?? "server_error") as MissioErrorCode, created.error);
   }
-
-  const contact = await loadContact(admin.client, created.body.person.contactId);
-  if (!contact.ok) return contact;
-  const attached = await attachMember(auth, admin.client, house.house, contact.contact, role);
-  if (!attached.ok) return attached;
-  return finishReview(
-    auth,
-    admin.client,
-    loaded.row,
-    house.house,
-    { status: "new", contactId: contact.contact.id },
-    attached.member,
-    attached.orgPersonCreated,
-    "create"
-  );
+  const person = await requireMissioPerson(auth, created.body.person.contactId);
+  if (!person.ok) {
+    await releaseReview(auth, itemId);
+    return person;
+  }
+  const admin = adminClient();
+  if ("error" in admin) {
+    await releaseReview(auth, itemId);
+    return fail(500, "server_error", admin.error);
+  }
+  const stamped = await auth.supabase
+    .from("missio_import_review")
+    .update({ resolved_contact_id: person.contact.id })
+    .eq("id", itemId)
+    .eq("org_id", auth.orgId)
+    .eq("status", "new")
+    .select(REVIEW_COLUMNS)
+    .maybeSingle();
+  if (stamped.error || !stamped.data) {
+    console.error("[missio] import review contact stamp failed", stamped.error?.message ?? "no row");
+    await releaseReview(auth, itemId);
+    return fail(500, "server_error", "Something went wrong.");
+  }
+  const attached = await attachKnownMember(auth, admin.client, house.house, person, role);
+  if (!attached.ok) {
+    await releaseReview(auth, itemId);
+    return attached;
+  }
+  return shapeClaimedReview(auth, admin.client, stamped.data as ReviewRow, house.house, attached.member, "create");
 }

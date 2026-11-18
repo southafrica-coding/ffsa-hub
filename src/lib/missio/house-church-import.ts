@@ -31,7 +31,14 @@ export const HOUSE_CHURCH_CSV_COLUMNS = [
   "parts_in_row",
 ] as const;
 
-export const IMPORT_MATCH_TYPES = ["none", "multiple", "family_label", "first_only", "partial"] as const;
+export const IMPORT_MATCH_TYPES = [
+  "none",
+  "multiple",
+  "family_label",
+  "first_only",
+  "partial",
+  "non_missio_contact",
+] as const;
 
 export type ImportMatchType = (typeof IMPORT_MATCH_TYPES)[number];
 
@@ -79,8 +86,10 @@ export function membershipIsOpen(row: { endedAt?: string | null }): boolean {
 }
 
 /**
- * Current membership, matching missio_member_status:
- * started_at <= today AND (ended_at IS NULL OR ended_at > today).
+ * Current membership, matching missio_member_status at #612 head 571555e9:
+ * ended_at IS NULL and started_at <= today. The view also requires an
+ * org_people row; callers apply that separately. A future ended_at cannot
+ * be stored (23514 missio_ended_at_in_future).
  */
 export function membershipIsCurrent(
   row: { startedAt?: string | null; endedAt?: string | null },
@@ -88,16 +97,12 @@ export function membershipIsCurrent(
 ): boolean {
   const started = (row.startedAt ?? "0001-01-01").slice(0, 10);
   if (!started || started > today) return false;
-  if (membershipIsOpen(row)) return true;
-  return (row.endedAt ?? "").slice(0, 10) > today;
+  return membershipIsOpen(row);
 }
 
-/** A new open row is blocked by an open row or by a current membership. */
-export function membershipBlocksInsert(
-  row: { startedAt?: string | null; endedAt?: string | null },
-  today = new Date().toISOString().slice(0, 10)
-): boolean {
-  return membershipIsOpen(row) || membershipIsCurrent(row, today);
+/** The partial unique index blocks a second open row (ended_at IS NULL). */
+export function membershipBlocksInsert(row: { endedAt?: string | null }): boolean {
+  return membershipIsOpen(row);
 }
 
 export type ExistingReview = {
@@ -117,6 +122,11 @@ export type ImportSnapshot = {
   members: ExistingMember[];
   reviews: ExistingReview[];
   orgPeopleContactIds: string[];
+  /**
+   * Contacts the matcher may use. Defaults to orgPeopleContactIds.
+   * The script sets this to Missio org_people plus contacts carrying the Missio label.
+   */
+  matchContactIds?: string[];
 };
 
 export type PlannedLink = {
@@ -349,39 +359,43 @@ export function parseHouseChurchCsv(text: string): { ok: true; rows: CsvHouseRow
 
 export function classifyHouseChurchRow(
   row: Pick<CsvHouseRow, "kind" | "first" | "last">,
-  contacts: ContactName[]
+  contacts: ContactName[],
+  missioContactIds: ReadonlySet<string>
 ): { action: "link"; contactId: string } | { action: "review"; matchType: ImportMatchType; candidateContactIds: string[] } {
   const kind = row.kind.trim().toLowerCase();
   const first = row.first.trim();
   const last = row.last.trim();
   const bothNames = Boolean(first && last);
-  const exact = bothNames ? exactContactIds(contacts, first, last) : [];
+  const pool = contacts.filter((contact) => missioContactIds.has(contact.id));
+  const exact = bothNames ? exactContactIds(pool, first, last) : [];
+  const suggest = (ids: string[]) => ids.slice(0, 5);
 
   if (kind === "family_label") {
     return {
       action: "review",
       matchType: "family_label",
-      candidateContactIds: (bothNames ? exact : candidatesByGivenName(contacts, first)).slice(0, 5),
+      candidateContactIds: suggest(bothNames ? exact : candidatesByGivenName(pool, first)),
     };
   }
   if (kind === "first_only") {
     return {
       action: "review",
       matchType: "first_only",
-      candidateContactIds: (bothNames ? exact : candidatesByGivenName(contacts, first)).slice(0, 5),
+      candidateContactIds: suggest(bothNames ? exact : candidatesByGivenName(pool, first)),
     };
   }
   if (!bothNames || !AUTO_KINDS.has(kind)) {
     const candidates = bothNames
       ? exact
       : first
-        ? candidatesByGivenName(contacts, first)
-        : candidatesByLastName(contacts, last);
-    return { action: "review", matchType: "partial", candidateContactIds: candidates.slice(0, 5) };
+        ? candidatesByGivenName(pool, first)
+        : candidatesByLastName(pool, last);
+    return { action: "review", matchType: "partial", candidateContactIds: suggest(candidates) };
   }
+
   if (exact.length === 1) return { action: "link", contactId: exact[0] };
   if (exact.length === 0) return { action: "review", matchType: "none", candidateContactIds: [] };
-  return { action: "review", matchType: "multiple", candidateContactIds: exact.slice(0, 5) };
+  return { action: "review", matchType: "multiple", candidateContactIds: suggest(exact) };
 }
 
 export function planHouseChurchImport(
@@ -412,7 +426,11 @@ export function planHouseChurchImport(
   for (const row of rows) {
     const house = houses.get(row.houseNumber);
     if (!house) continue;
-    const classified = classifyHouseChurchRow(row, snapshot.contacts);
+    const classified = classifyHouseChurchRow(
+      row,
+      snapshot.contacts,
+      new Set(snapshot.matchContactIds ?? snapshot.orgPeopleContactIds)
+    );
     if (classified.action === "link") {
       const existing = active.get(`${house.id}\0${classified.contactId}`);
       let outcome: PlannedLink["outcome"] = "insert";
@@ -506,13 +524,15 @@ export async function applyHouseChurchImport(
 ): Promise<{ wrote: number }> {
   if (!options.apply) return { wrote: 0 };
   let wrote = 0;
+  // guard_house_church_member rejects a membership whose contact is not
+  // already in org_people, including for the service role.
+  for (const contactId of plan.orgPeopleToCreate) {
+    await writer.insertOrgPerson(contactId);
+    wrote += 1;
+  }
   for (const link of plan.links) {
     if (link.outcome !== "insert") continue;
     await writer.insertMember(link);
-    wrote += 1;
-  }
-  for (const contactId of plan.orgPeopleToCreate) {
-    await writer.insertOrgPerson(contactId);
     wrote += 1;
   }
   for (const review of plan.reviews) {
@@ -564,7 +584,7 @@ export async function runHouseChurchImport(input: {
 }
 
 function emptyReasons(): Record<ImportMatchType, number> {
-  return { none: 0, multiple: 0, family_label: 0, first_only: 0, partial: 0 };
+  return { none: 0, multiple: 0, family_label: 0, first_only: 0, partial: 0, non_missio_contact: 0 };
 }
 
 function reviewUnchanged(existing: ExistingReview, planned: PlannedReview): boolean {

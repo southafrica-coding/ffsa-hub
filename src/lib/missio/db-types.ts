@@ -102,11 +102,16 @@ export type OrgPeopleDirectoryRow = {
  *
  * An open membership is ended_at IS NULL (partial unique index
  * house_church_members_active_house_contact_uidx). A current membership,
- * which is what missio_member_status and is_missio_member count, is
- * started_at <= today AND (ended_at IS NULL OR ended_at > today). Ending
- * a row sets ended_at to today, which drops it out of current membership.
- * org_people is not written by the database. There is no member-status
- * column on org_people.
+ * which is what missio_member_status and is_missio_member count, is an
+ * open row with started_at <= today and an org_people row in that org.
+ * ended_at after today raises 23514 missio_ended_at_in_future from
+ * guard_house_church_member. A contact who is not in org_people for the
+ * house org raises 23503 missio_member_not_in_org, including for the
+ * service role. Ending a row sets ended_at to today. org_people is not written
+ * by the database. There is no member-status column on org_people.
+ * Authenticated inserts pin created_by to auth.uid(). An authenticated
+ * review resolve may only point resolved_contact_id at a candidate or at
+ * someone in org_people for that org, and resolved_by is pinned to auth.uid().
  */
 
 export type HouseChurchMemberRole = "leader" | "co_leader" | "member";
@@ -146,8 +151,8 @@ export type HouseChurchMemberRow = {
   started_at: string;
   /**
    * CHECK (ended_at IS NULL OR ended_at >= started_at).
-   * Null is the open row. A date on or before today has ended.
-   * A date after today is still current, and it is not the open row.
+   * Null is the open, current row. A date on or before today has ended.
+   * A date after today raises 23514 missio_ended_at_in_future.
    */
   ended_at: string | null;
   created_by: string | null;
@@ -168,7 +173,7 @@ export type MissioImportReviewRow = {
   role: HouseChurchMemberRole;
   /** Free text. No check constraint. */
   kind: string | null;
-  /** Free text. No check constraint. The importer uses none, multiple, family_label, first_only, partial. */
+  /** Free text. No check constraint. The importer uses none, multiple, family_label, first_only, partial, non_missio_contact. */
   match_type: string | null;
   /** NOT NULL. DEFAULT '{}'. */
   candidate_contact_ids: string[];

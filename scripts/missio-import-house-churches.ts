@@ -8,9 +8,15 @@
 // Do not point this at production without that approval.
 //
 // Uses NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (already in .env.local).
-// Reads contacts with the service role. Inserts org_people only when the
-// contact has none for Missio. Does not change an existing org_people row,
-// and does not change an active membership whose role differs from the sheet.
+// Reads contacts with the service role. Auto-link prefers contacts that
+// already have a Missio org_people row. A unique full-name match who is not
+// in Missio is staged for review (match_type non_missio_contact) and is not
+// linked. org_people inserts for those linked contacts happen before the
+// membership row, and only when --apply passes the project-ref gate.
+// guard_house_church_member rejects a member whose contact is not already
+// in org_people (23503 missio_member_not_in_org), including the service role.
+// An existing org_people row is not changed, and an open membership with a
+// different role is left as it is.
 
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
@@ -86,14 +92,36 @@ async function loadSnapshot(db: Db, orgId: string): Promise<ImportSnapshot> {
     })
   );
   const houseIds = new Set(houses.map((house) => house.id));
-  const contacts = (await fetchAll(db, "contacts", "id, first_name, last_name, preferred_name")).map(
-    (row): ContactName => ({
-      id: String(row.id),
-      firstName: (row.first_name as string | null) ?? null,
-      lastName: (row.last_name as string | null) ?? null,
-      preferredName: (row.preferred_name as string | null) ?? null,
-    })
-  );
+  const orgPeopleContactIds = (
+    await fetchAll(db, "org_people", "id, contact_id", (query) => query.eq("org_id", orgId))
+  ).map((row) => String(row.contact_id));
+  const orgRow = await db.from("organisations").select("contact_label_id").eq("id", orgId).maybeSingle();
+  if (orgRow.error) {
+    console.error("[missio-import] organisation lookup failed", orgRow.error.message);
+    throw new Error("Could not read organisations.");
+  }
+  const labelId = orgRow.data?.contact_label_id as string | null | undefined;
+  const labelledIds = labelId
+    ? (await fetchAll(db, "contact_labels", "id, contact_id", (query) => query.eq("label_id", labelId))).map((row) =>
+        String(row.contact_id)
+      )
+    : [];
+  const matchIds = [...new Set([...orgPeopleContactIds, ...labelledIds])];
+  const contacts: ContactName[] = [];
+  for (let index = 0; index < matchIds.length; index += 200) {
+    const slice = matchIds.slice(index, index + 200);
+    const named = await fetchAll(db, "contacts", "id, first_name, last_name, preferred_name", (query) =>
+      query.in("id", slice)
+    );
+    for (const row of named) {
+      contacts.push({
+        id: String(row.id),
+        firstName: (row.first_name as string | null) ?? null,
+        lastName: (row.last_name as string | null) ?? null,
+        preferredName: (row.preferred_name as string | null) ?? null,
+      });
+    }
+  }
   const members = (await fetchAll(db, "house_church_members", "id, house_church_id, contact_id, role, started_at, ended_at"))
     .filter((row) => houseIds.has(String(row.house_church_id)))
     .map(
@@ -117,10 +145,7 @@ async function loadSnapshot(db: Db, orgId: string): Promise<ImportSnapshot> {
       candidateContactIds: Array.isArray(row.candidate_contact_ids) ? (row.candidate_contact_ids as string[]) : [],
     })
   );
-  const orgPeopleContactIds = (
-    await fetchAll(db, "org_people", "id, contact_id", (query) => query.eq("org_id", orgId))
-  ).map((row) => String(row.contact_id));
-  return { houses, contacts, members, reviews, orgPeopleContactIds };
+  return { houses, contacts, members, reviews, orgPeopleContactIds, matchContactIds: matchIds };
 }
 
 function writerFor(db: Db, orgId: string): ImportWriter {
@@ -132,6 +157,9 @@ function writerFor(db: Db, orgId: string): ImportWriter {
         role: link.role,
         started_at: todayIsoDate(),
         ended_at: null,
+        // Migration 331 pins created_by to auth.uid() when that is set.
+        // The service role has no auth.uid(), so the supplied value is kept.
+        // This import is not attributed to a user.
         created_by: null,
       });
       if (!error) return;
