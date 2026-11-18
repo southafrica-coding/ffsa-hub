@@ -23,6 +23,9 @@ export const followUpApi = {
   leader: (key: string) => `/api/missio/follow-up/${encodeURIComponent(key)}/leader`,
   timeline: (key: string) => `/api/missio/follow-up/${encodeURIComponent(key)}/timeline`,
   contact: (key: string) => `/api/missio/follow-up/${encodeURIComponent(key)}/contact`,
+  /** Provisional until Hub Data finishes decline. */
+  confirmMatch: (key: string) => `/api/missio/followups/${encodeURIComponent(key)}/confirm-match`,
+  declineMatch: (key: string) => `/api/missio/followups/${encodeURIComponent(key)}/decline-match`,
 } as const;
 
 export interface FollowUpClient {
@@ -33,6 +36,8 @@ export interface FollowUpClient {
   timeline(key: string): Promise<TimelineResponse>;
   addNote(key: string, body: string): Promise<{ entry: TimelineEntry }>;
   createContact(key: string): Promise<{ person: FollowUpItem }>;
+  confirmMatch(key: string): Promise<{ person: FollowUpItem | null }>;
+  declineMatch(key: string): Promise<{ person: FollowUpItem | null }>;
 }
 
 type FetchLike = typeof fetch;
@@ -83,6 +88,11 @@ export function followUpItem(value: unknown): FollowUpItem {
   const stage = stageOrNull(row.stage);
   if (!source || !stage) shape();
   const visit = typeof row.visitType === "string" && VISITS.has(row.visitType as VisitType) ? (row.visitType as VisitType) : null;
+  const suggested = asRecord(row.suggestedContact);
+  const suggestedContact =
+    suggested && typeof suggested.contactId === "string" && typeof suggested.displayName === "string"
+      ? { contactId: suggested.contactId, displayName: suggested.displayName }
+      : null;
   return {
     key: row.key,
     source,
@@ -98,6 +108,8 @@ export function followUpItem(value: unknown): FollowUpItem {
     stage,
     assignedLeader: row.assignedLeader == null ? null : personRef(row.assignedLeader),
     submittedAt: stringOrNull(row.submittedAt),
+    matchStatus: typeof row.matchStatus === "string" ? row.matchStatus : null,
+    suggestedContact,
   };
 }
 
@@ -143,6 +155,7 @@ function codeFor(body: Record<string, unknown>, status: number): string {
   if (status === 404) return "not_found";
   if (status === 409) return "already_resolved";
   if (status === 429) return "rate_limited";
+  if (status === 501) return "not_available";
   return "server_error";
 }
 
@@ -224,6 +237,14 @@ export function createFollowUpClient(fetchImpl: FetchLike = fetch): FollowUpClie
     async createContact(key) {
       const parsed = await request(followUpApi.contact(key), { method: "POST" });
       return { person: followUpItem(parsed.person) };
+    },
+    async confirmMatch(key) {
+      const parsed = await request(followUpApi.confirmMatch(key), { method: "POST" });
+      return { person: parsed.person == null ? null : followUpItem(parsed.person) };
+    },
+    async declineMatch(key) {
+      const parsed = await request(followUpApi.declineMatch(key), { method: "POST" });
+      return { person: parsed.person == null ? null : followUpItem(parsed.person) };
     },
   };
 }

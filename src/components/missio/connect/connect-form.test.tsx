@@ -55,6 +55,9 @@ describe("connect card form", () => {
     expect(trap.getAttribute("tabindex")).toBe("-1");
     expect(trap.getAttribute("autocomplete")).toBe("off");
     expect(trap.getAttribute("aria-hidden")).toBe("true");
+    expect(form.querySelector("input[name=email]")).toBeNull();
+    expect(form.querySelector("[role=radiogroup] label")?.querySelector("input")).toBeTruthy();
+    expect(form.textContent).toContain("Anything else (optional)");
     setValue(trap, "https://spam.example");
     fill(form);
     await act(async () => {
@@ -66,6 +69,7 @@ describe("connect card form", () => {
     expect(sent.current?.name).toBe("Lerato Mokoena");
     const thanks = host.querySelector("[data-connect=thanks]") as HTMLElement;
     expect(thanks.textContent).toContain("Thanks for connecting with us");
+    expect(thanks.textContent).toContain("We’re glad you’re here.");
     expect(thanks.textContent).toContain("Someone from Missio will be in touch this week.");
     expect(thanks.textContent).not.toContain("Lerato");
     expect(thanks.textContent).not.toContain("082");

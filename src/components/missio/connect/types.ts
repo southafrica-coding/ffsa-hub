@@ -4,11 +4,10 @@ export type ConnectField = "name" | "phone" | "email" | "visitType" | "notes" | 
 
 export type ConnectFieldErrors = Partial<Record<ConnectField, string>>;
 
-/** Body for POST /api/missio/connect. `website` is the honeypot and is always empty. */
+/** Body for POST /api/missio/connect. `website` is the honeypot and is always empty. Email is not collected. */
 export interface ConnectSubmitBody {
   name: string;
   phone: string;
-  email?: string;
   visitType: VisitType;
   wantsHouseChurch: boolean;
   wantsPrayer?: boolean;
@@ -20,7 +19,6 @@ export interface ConnectSubmitBody {
 export interface ConnectDraft {
   name: string;
   phone: string;
-  email: string;
   visitType: VisitType | "";
   wantsHouseChurch: boolean;
   wantsPrayer: boolean;

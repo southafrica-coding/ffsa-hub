@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { MissioApiError, missioClient, type MissioClient } from "../api";
-import { missioFixedCopy, isStaleWrite } from "../errors";
+import { missioFixedCopy, shouldRefetch } from "../errors";
 import { houseChurchesClient, type HouseChurchesClient } from "../house-churches/client";
 import { houseTitle, meetingDayLabel, sortHouses } from "../house-churches/format";
 import { useMissioLoad } from "../house-churches/load";
@@ -54,7 +54,7 @@ export function AddHouseDialog({
       await addContact(contactId);
     } catch (caught) {
       const code = caught instanceof MissioApiError ? caught.code : null;
-      if (isStaleWrite(code)) {
+      if (shouldRefetch(code)) {
         setNotice(missioFixedCopy(code));
         onConflict();
         return;
@@ -74,7 +74,7 @@ export function AddHouseDialog({
       await addContact(contactId);
     } catch (caught) {
       const code = caught instanceof MissioApiError ? caught.code : null;
-      if (isStaleWrite(code)) {
+      if (shouldRefetch(code)) {
         setNotice(missioFixedCopy(code));
         onConflict();
         return;

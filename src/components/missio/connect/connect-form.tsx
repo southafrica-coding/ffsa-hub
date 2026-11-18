@@ -19,7 +19,6 @@ const VISITS: Array<{ value: VisitType; label: string }> = [
 const EMPTY: ConnectDraft = {
   name: "",
   phone: "",
-  email: "",
   visitType: "",
   wantsHouseChurch: false,
   wantsPrayer: false,
@@ -73,10 +72,11 @@ export function ConnectForm({ client = connectClient }: { client?: ConnectClient
         <div className={styles.column}>
           <Image src="/brands/missio/missio-wordmark.png" alt="Missio" width={677} height={188} className={styles.mark} priority />
           <h1>Thanks for connecting with us</h1>
+          <p className={styles.thanksBody}>We’re glad you’re here.</p>
           <p className={styles.thanksBody}>Someone from Missio will be in touch this week.</p>
           <button
             type="button"
-            style={{ marginTop: 24 }}
+            className={styles.quiet}
             onClick={() => {
               setThanks(false);
               setDraft(EMPTY);
@@ -136,27 +136,10 @@ export function ConnectForm({ client = connectClient }: { client?: ConnectClient
             </p>
           ) : null}
 
-          <label>
-            Email <span className={styles.optional}>(optional)</span>
-            <input
-              name="email"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              value={draft.email}
-              aria-invalid={fieldErrors.email ? true : undefined}
-              aria-describedby={fieldErrors.email ? "connect-email-error" : undefined}
-              onChange={(event) => update("email", event.target.value)}
-            />
-          </label>
-          {fieldErrors.email ? (
-            <p id="connect-email-error" className={styles.fieldError} role="alert">
-              {fieldErrors.email}
-            </p>
-          ) : null}
-
-          <fieldset className={styles.choices}>
-            <legend className={styles.lede}>How well do you know us?</legend>
+          <p className={styles.fieldLabel} id="visit-label">
+            How well do you know us?
+          </p>
+          <div className={styles.choices} role="radiogroup" aria-labelledby="visit-label">
             {VISITS.map((visit) => {
               const selected = draft.visitType === visit.value;
               return (
@@ -168,11 +151,11 @@ export function ConnectForm({ client = connectClient }: { client?: ConnectClient
                     checked={selected}
                     onChange={() => update("visitType", visit.value)}
                   />
-                  {visit.label}
+                  <span>{visit.label}</span>
                 </label>
               );
             })}
-          </fieldset>
+          </div>
           {fieldErrors.visitType ? (
             <p className={styles.fieldError} role="alert">
               {fieldErrors.visitType}
@@ -217,7 +200,9 @@ export function ConnectForm({ client = connectClient }: { client?: ConnectClient
           ) : null}
 
           <label>
-            Anything else <span className={styles.optional}>(optional)</span>
+            <span>
+              Anything else <span className={styles.optional}>(optional)</span>
+            </span>
             <textarea
               name="notes"
               value={draft.notes}

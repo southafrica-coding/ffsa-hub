@@ -6,7 +6,6 @@ function draft(overrides: Partial<ConnectDraft> = {}): ConnectDraft {
   return {
     name: "Lerato Mokoena",
     phone: "082 555 0142",
-    email: "",
     visitType: "first_time",
     wantsHouseChurch: true,
     wantsPrayer: false,
@@ -19,7 +18,7 @@ function draft(overrides: Partial<ConnectDraft> = {}): ConnectDraft {
 describe("connect card validation", () => {
   it("accepts a short card and always sends an empty honeypot", () => {
     expect(validateConnect(draft())).toEqual({});
-    expect(toConnectBody(draft({ email: "  ", notes: "  " }))).toEqual({
+    expect(toConnectBody(draft({ notes: "  " }))).toEqual({
       name: "Lerato Mokoena",
       phone: "082 555 0142",
       visitType: "first_time",
@@ -29,16 +28,15 @@ describe("connect card validation", () => {
     });
   });
 
-  it("keeps optional email, notes, and a prayer request when they are filled in", () => {
+  it("keeps optional notes and a prayer request when they are filled in", () => {
     const body = toConnectBody(
       draft({
-        email: " lerato@example.com ",
         wantsPrayer: true,
         prayerRequest: " My mother is unwell. ",
         notes: " Sat on the left. ",
       })
     );
-    expect(body.email).toBe("lerato@example.com");
+    expect(body).not.toHaveProperty("email");
     expect(body.prayerRequest).toBe("My mother is unwell.");
     expect(body.notes).toBe("Sat on the left.");
     expect(body.website).toBe("");
@@ -49,7 +47,6 @@ describe("connect card validation", () => {
       draft({
         name: " A ",
         phone: "12",
-        email: "not-an-email",
         visitType: "",
         notes: "x".repeat(1001),
         wantsPrayer: true,
@@ -58,7 +55,6 @@ describe("connect card validation", () => {
     );
     expect(errors.name).toMatch(/name/);
     expect(errors.phone).toMatch(/phone/);
-    expect(errors.email).toMatch(/email/);
     expect(errors.visitType).toBe("Choose one.");
     expect(errors.notes).toMatch(/1,000/);
     expect(errors.prayerRequest).toMatch(/1,000/);

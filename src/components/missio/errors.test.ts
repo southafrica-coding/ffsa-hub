@@ -13,6 +13,7 @@ describe("missio fixed error copy", () => {
       ["already_resolved", null, "Someone else already updated this."],
       ["membership_not_current", null, "That membership isn’t current."],
       ["ended_at_in_future", null, "That end date is still in the future."],
+      ["member_left_missio", null, "They’ve left Missio, so they can’t be changed here."],
       ["exists_use_search", null, "This person is already in FFSA’s contacts. Search for them and link them."],
       ["unauthenticated", null, "Sign in to continue."],
       ["forbidden", null, "Pastors only."],

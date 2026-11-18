@@ -7,7 +7,7 @@ import { MissioApiError } from "../api";
 import type { HouseSummary } from "../house-churches/types";
 import { cleanup, render, setValue, settle } from "../house-churches/test-render";
 import type { FollowUpClient } from "./client";
-import { FollowUpBoard } from "./board";
+import { FollowUpBoard, resetMatchReviewSession } from "./board";
 import type { FollowUpItem, FollowUpStage } from "./types";
 
 vi.mock("next/link", () => ({
@@ -46,6 +46,8 @@ const lerato: FollowUpItem = {
   stage: "new",
   assignedLeader: null,
   submittedAt: "2026-11-16T08:30:00.000Z",
+  matchStatus: null,
+  suggestedContact: null,
 };
 
 const sipho: FollowUpItem = {
@@ -63,6 +65,8 @@ const sipho: FollowUpItem = {
   stage: "new",
   assignedLeader: { contactId: "contact-chris", displayName: "Chris Naidoo", firstName: "Chris", lastName: "Naidoo" },
   submittedAt: "2026-11-12T06:00:00.000Z",
+  matchStatus: null,
+  suggestedContact: null,
 };
 
 const house: HouseSummary = {
@@ -92,6 +96,7 @@ describe("follow-up board", () => {
 
   afterEach(() => {
     nav.params = new URLSearchParams();
+    resetMatchReviewSession();
     cleanup(roots, hosts);
     document.body.innerHTML = "";
   });
@@ -127,16 +132,16 @@ describe("follow-up board", () => {
     expect(siphoCard.querySelector("button")?.textContent).toBe(sipho.displayName);
     const stages = host.querySelector("[aria-label=Stage]") as HTMLElement;
     expect(stages.textContent).toContain("New");
+    expect(stages.textContent).toContain("Joined");
     expect(stages.textContent).toContain("2");
-    expect(stages.textContent).not.toContain("Joined");
     expect(host.textContent).toContain("Not in a house yet.");
   });
 
   it("shows Joined only after asking for people who joined", async () => {
     const host = mount(<FollowUpBoard client={client()} />);
     await settle();
-    const button = [...host.querySelectorAll("button")].find((item) => item.textContent === "People who joined") as HTMLButtonElement;
-    act(() => button.click());
+    const link = host.querySelector("a[href='/missio/follow-up?stage=joined']") as HTMLAnchorElement;
+    act(() => link.click());
     await settle();
     expect(host.querySelector("[aria-label=Stage]")?.textContent).toContain("Joined");
     expect(host.textContent).toContain("In a house.");
@@ -194,7 +199,7 @@ describe("follow-up board", () => {
         client={client({
           list: async (query) => {
             calls += 1;
-            if (calls > 3) await gate;
+            if (calls > 4) await gate;
             const grouped = pages(people);
             return { people: grouped[query.stage], canWrite: true };
           },
@@ -217,7 +222,11 @@ describe("follow-up board", () => {
       />
     );
     await settle();
-    const select = host.querySelector("[aria-label='Stage for Lerato Mokoena']") as HTMLSelectElement;
+    act(() => {
+      (host.querySelector("#follow-up-open-r_response-1") as HTMLButtonElement).click();
+    });
+    await settle();
+    const select = document.body.querySelector("[aria-label='Stage for Lerato Mokoena']") as HTMLSelectElement;
     await act(async () => {
       setValue(select, "contacted");
       await Promise.resolve();
@@ -250,7 +259,11 @@ describe("follow-up board", () => {
     );
     await settle();
     const before = calls;
-    const select = host.querySelector("[aria-label='Leader for Lerato Mokoena']") as HTMLSelectElement;
+    act(() => {
+      (host.querySelector("#follow-up-open-r_response-1") as HTMLButtonElement).click();
+    });
+    await settle();
+    const select = document.body.querySelector("[aria-label='Leader for Lerato Mokoena']") as HTMLSelectElement;
     await act(async () => {
       setValue(select, "contact-chris");
       await Promise.resolve();
@@ -345,6 +358,116 @@ describe("follow-up board", () => {
     expect(document.body.textContent).not.toContain("RAW SERVER TEXT");
     expect(document.body.querySelector("[data-testid=people-picker]")).toBeTruthy();
   });
+
+  it("reviews a pending phone match, confirms it, and leaves unknown statuses alone", async () => {
+    const suggested = {
+      ...lerato,
+      key: "r_review",
+      displayName: "Naledi Khumalo",
+      phone: "083 555 0199",
+      matchStatus: "pending_confirm",
+      suggestedContact: { contactId: "contact-naledi", displayName: "Naledi Khumalo" },
+    };
+    const ordinary = { ...sipho, matchStatus: "linked", suggestedContact: { contactId: "c-x", displayName: "Should stay hidden" } };
+    let confirmed = false;
+    const host = mount(
+      <FollowUpBoard
+        client={client({
+          list: async (query) => ({
+            people: query.stage === "new" ? [confirmed ? { ...suggested, matchStatus: "confirmed", suggestedContact: null } : suggested, ordinary] : [],
+            canWrite: true,
+          }),
+          confirmMatch: async () => {
+            confirmed = true;
+            return { person: { ...suggested, matchStatus: "confirmed", suggestedContact: null } };
+          },
+        })}
+      />
+    );
+    await settle();
+    const review = host.querySelector("[data-testid=needs-review]") as HTMLElement;
+    expect(review.textContent).toContain("Needs review");
+    expect(review.textContent).toContain("Possible match: Naledi Khumalo");
+    expect(review.textContent).not.toContain("083");
+    expect(host.textContent).not.toContain("Should stay hidden");
+    const confirm = [...review.querySelectorAll("button")].find((item) => item.textContent === "Confirm") as HTMLButtonElement;
+    act(() => confirm.click());
+    await settle();
+    expect(host.textContent).not.toContain("Possible match:");
+    expect(host.textContent).toContain("Naledi Khumalo");
+  });
+
+  it("shows Needs review with no name when there is no suggested contact", async () => {
+    const host = mount(
+      <FollowUpBoard
+        client={client({
+          list: async (query) => ({
+            people: query.stage === "new" ? [{ ...lerato, displayName: "Johan Botha", matchStatus: "pending_confirm", suggestedContact: null }] : [],
+            canWrite: true,
+          }),
+        })}
+      />
+    );
+    await settle();
+    const review = host.querySelector("[data-testid=needs-review]") as HTMLElement;
+    expect(review.textContent).toBe("Needs review");
+    expect(review.querySelector("button")).toBeNull();
+  });
+
+  it("says someone already sorted a match and refetches", async () => {
+    let calls = 0;
+    const host = mount(
+      <FollowUpBoard
+        client={client({
+          list: async (query) => {
+            calls += 1;
+            return {
+              people: query.stage === "new" ? [{ ...lerato, matchStatus: "pending_confirm", suggestedContact: { contactId: "c1", displayName: "Naledi Khumalo" } }] : [],
+              canWrite: true,
+            };
+          },
+          confirmMatch: async () => {
+            throw new MissioApiError(409, "RAW SERVER TEXT", null, "already_resolved");
+          },
+        })}
+      />
+    );
+    await settle();
+    const before = calls;
+    const confirm = [...host.querySelectorAll("button")].find((item) => item.textContent === "Confirm") as HTMLButtonElement;
+    act(() => confirm.click());
+    await settle();
+    expect(host.textContent).toContain("Someone already sorted this one.");
+    expect(host.textContent).not.toContain("RAW SERVER TEXT");
+    expect(calls).toBeGreaterThan(before);
+  });
+
+  it("hides Not this person for the session when decline is not available", async () => {
+    const person = {
+      ...lerato,
+      matchStatus: "pending_confirm",
+      suggestedContact: { contactId: "c1", displayName: "Naledi Khumalo" },
+    };
+    const host = mount(
+      <FollowUpBoard
+        client={client({
+          list: async (query) => ({ people: query.stage === "new" ? [person, { ...person, key: "r_other", displayName: "Ayesha Patel" }] : [], canWrite: true }),
+          declineMatch: async () => {
+            throw new MissioApiError(501, "RAW SERVER TEXT", null, "not_available");
+          },
+        })}
+      />
+    );
+    await settle();
+    expect(host.textContent).toContain("Not this person");
+    const decline = [...host.querySelectorAll("button")].find((item) => item.textContent === "Not this person") as HTMLButtonElement;
+    act(() => decline.click());
+    await settle();
+    expect(host.textContent).not.toContain("Not this person");
+    expect(host.textContent).toContain("That didn’t work. Please try again.");
+    expect(host.textContent).not.toContain("RAW SERVER TEXT");
+    expect(host.textContent).toContain("Ayesha Patel");
+  });
 });
 
 function client(overrides: Partial<FollowUpClient> = {}): FollowUpClient {
@@ -388,6 +511,8 @@ function client(overrides: Partial<FollowUpClient> = {}): FollowUpClient {
     createContact: async () => {
       throw new Error("unused");
     },
+    confirmMatch: async () => ({ person: null }),
+    declineMatch: async () => ({ person: null }),
     ...overrides,
   };
 }

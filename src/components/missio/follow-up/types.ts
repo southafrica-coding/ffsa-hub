@@ -23,6 +23,10 @@ export interface FollowUpItem {
   stage: FollowUpStage;
   assignedLeader: PersonRef | null;
   submittedAt: string | null;
+  /** Null when the route omits it. Only `pending_confirm` changes the card. */
+  matchStatus: string | null;
+  /** A possible Missio contact for a phone-only connect card. No phone or email. */
+  suggestedContact: { contactId: string; displayName: string } | null;
 }
 
 export interface FollowUpListResponse {

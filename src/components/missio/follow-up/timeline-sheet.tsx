@@ -6,27 +6,35 @@ import { missioSkinVars } from "../access";
 import { MissioApiError } from "../api";
 import { missioFixedCopy } from "../errors";
 import { missioPortalClass } from "../portal";
-import { entryText, formatWhen, newestFirst } from "./format";
+import { entryText, formatWhen, newestFirst, STAGE_LABEL, STAGES } from "./format";
 import type { FollowUpClient } from "./client";
-import type { FollowUpItem, TimelineEntry } from "./types";
+import type { FollowUpItem, FollowUpStage, PersonRef, TimelineEntry } from "./types";
 import styles from "./follow-up.module.css";
 
 export function TimelineSheet({
   person,
   canWrite,
+  leaders,
   client,
   onClose,
+  onStage,
+  onLeader,
 }: {
   person: FollowUpItem;
   canWrite: boolean;
+  leaders: PersonRef[];
   client: FollowUpClient;
   onClose: () => void;
+  onStage: (stage: FollowUpStage) => Promise<boolean>;
+  onLeader: (leaderContactId: string | null) => Promise<boolean>;
 }) {
   const [entries, setEntries] = useState<TimelineEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stageValue, setStageValue] = useState(person.stage);
+  const [leaderValue, setLeaderValue] = useState(person.assignedLeader?.contactId ?? "");
 
   useEffect(() => {
     let active = true;
@@ -43,6 +51,11 @@ export function TimelineSheet({
       active = false;
     };
   }, [client, person.key]);
+
+  useEffect(() => {
+    setStageValue(person.stage);
+    setLeaderValue(person.assignedLeader?.contactId ?? "");
+  }, [person.stage, person.assignedLeader?.contactId]);
 
   async function addNote(event: React.FormEvent) {
     event.preventDefault();
@@ -82,6 +95,53 @@ export function TimelineSheet({
       >
         <SheetTitle className={styles.sheetTitle}>{person.displayName}</SheetTitle>
         <SheetDescription className={styles.muted}>What happened</SheetDescription>
+        {canWrite ? (
+          <div className={styles.sheetControls}>
+            <label>
+              Stage
+              <select
+                id={`follow-up-stage-${person.key}`}
+                aria-label={`Stage for ${person.displayName}`}
+                value={stageValue}
+                onChange={(event) => {
+                  const next = event.target.value as FollowUpStage;
+                  setStageValue(next);
+                  void onStage(next).then((ok) => {
+                    if (!ok) setStageValue(person.stage);
+                  });
+                }}
+              >
+                {STAGES.map((item) => (
+                  <option key={item} value={item}>
+                    {STAGE_LABEL[item]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Leader
+              <select
+                id={`follow-up-leader-${person.key}`}
+                aria-label={`Leader for ${person.displayName}`}
+                value={leaderValue}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setLeaderValue(next);
+                  void onLeader(next || null).then((ok) => {
+                    if (!ok) setLeaderValue(person.assignedLeader?.contactId ?? "");
+                  });
+                }}
+              >
+                <option value="">Unassigned</option>
+                {leaders.map((item) => (
+                  <option key={item.contactId} value={item.contactId}>
+                    {item.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
         {entries == null && !error ? <p role="status">Loading the timeline…</p> : null}
         {error ? (
           <p className={styles.notice} role="alert">
@@ -95,8 +155,8 @@ export function TimelineSheet({
               const who = entry.by?.displayName;
               return (
                 <li key={entry.id} className={styles.entry}>
-                  <p>{entryText(entry)}</p>
-                  <p className={styles.when}>{[who, when].filter(Boolean).join(" · ")}</p>
+                  <p className={styles.entryBody}>{entryText(entry)}</p>
+                  <p className={styles.entryMeta}>{[who, when].filter(Boolean).join(" · ")}</p>
                 </li>
               );
             })}

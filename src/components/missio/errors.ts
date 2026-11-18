@@ -20,6 +20,8 @@ export function missioFixedCopy(code: string | null | undefined, retryAfterSecon
       return "That membership isn’t current.";
     case "ended_at_in_future":
       return "That end date is still in the future.";
+    case "member_left_missio":
+      return "They’ve left Missio, so they can’t be changed here.";
     case "exists_use_search":
       return "This person is already in FFSA’s contacts. Search for them and link them.";
     case "unauthenticated":
@@ -38,7 +40,14 @@ export function missioFixedCopy(code: string | null | undefined, retryAfterSecon
   }
 }
 
-/** Codes that mean another pastor already changed the row. Refetch after showing the copy. */
-export function isStaleWrite(code: string | null | undefined): boolean {
-  return code === "already_resolved";
+/** Copy for confirm-match and decline-match. Never the server's sentence. */
+export function matchActionCopy(code: string | null | undefined): string {
+  if (code === "already_resolved") return "Someone already sorted this one.";
+  if (code === "not_missio_person") return missioFixedCopy("not_missio_person");
+  return missioFixedCopy(null);
+}
+
+/** The row on screen is no longer the one the pastor tried to change. Refetch after the copy. */
+export function shouldRefetch(code: string | null | undefined): boolean {
+  return code === "already_resolved" || code === "member_left_missio";
 }

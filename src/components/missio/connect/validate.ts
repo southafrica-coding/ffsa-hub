@@ -1,6 +1,5 @@
 import type { ConnectDraft, ConnectFieldErrors, ConnectSubmitBody, VisitType } from "./types";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VISIT: ReadonlySet<string> = new Set(["first_time", "been_a_while", "regular"]);
 
 export function phoneLooksOk(value: string): boolean {
@@ -17,9 +16,6 @@ export function validateConnect(draft: ConnectDraft): ConnectFieldErrors {
   const phone = draft.phone.trim();
   if (!phone) errors.phone = "Enter a phone number.";
   else if (!phoneLooksOk(phone)) errors.phone = "That phone number doesn’t look right.";
-
-  const email = draft.email.trim();
-  if (email && !EMAIL_RE.test(email)) errors.email = "That email address doesn’t look right.";
 
   if (!VISIT.has(draft.visitType)) errors.visitType = "Choose one.";
 
@@ -39,8 +35,6 @@ export function toConnectBody(draft: ConnectDraft): ConnectSubmitBody {
     wantsPrayer: draft.wantsPrayer,
     website: "",
   };
-  const email = draft.email.trim();
-  if (email) body.email = email;
   const notes = draft.notes.trim();
   if (notes) body.notes = notes;
   const prayer = draft.prayerRequest.trim();

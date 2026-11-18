@@ -55,16 +55,23 @@
   min-width: 0;
 }
 
+.chipRow {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  width: max-content;
   min-width: 0;
 }
 
 .chip,
-.linkButton,
-.contactActions a,
+.secondary,
+.joined,
 .name,
 .choice,
 .primary,
@@ -105,16 +112,15 @@
   margin: 8px 0 0;
 }
 
-.linkButton {
+.joined {
   display: inline-flex;
   align-items: center;
-  padding: 8px 0;
-  background: transparent;
-  border: 0;
+  box-sizing: border-box;
+  min-height: 44px;
+  font-weight: 600;
   color: var(--ink, #1c1b17);
   text-decoration: underline;
   text-underline-offset: 3px;
-  cursor: pointer;
 }
 
 .list {
@@ -188,30 +194,38 @@
   color: var(--sub, #5b574d);
 }
 
-.contactActions,
-.writes {
+.actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-top: 12px;
   min-width: 0;
 }
 
-.contactActions a,
-.primary,
-.ghost {
+.secondary {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 44px;
   padding: 8px 12px;
-  text-decoration: none;
-}
-
-.contactActions a,
-.ghost {
   background: var(--panel, #fbf9f4);
   border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 6px;
   color: var(--ink, #1c1b17);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.confirm {
+  margin-top: 12px;
+  min-width: 0;
+}
+
+.confirm p {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .primary {
@@ -251,7 +265,7 @@
 
 .entry {
   min-width: 0;
-  padding-top: 12px;
+  padding: 16px 0;
   border-top: 1px solid var(--rule, #ddd7c8);
   overflow-wrap: anywhere;
 }
@@ -259,6 +273,35 @@
 .timeline .entry:first-child {
   border-top: 0;
   padding-top: 0;
+}
+
+.entryBody {
+  margin: 0;
+}
+
+.entryMeta {
+  margin: 8px 0 0;
+  color: var(--quiet, #7a7466);
+}
+
+.sheetControls {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  min-width: 0;
+}
+
+.sheet > button {
+  top: 8px !important;
+  right: 8px !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  background: var(--panel, #fbf9f4) !important;
+  color: var(--ink, #1c1b17) !important;
+  border: 1px solid var(--rule, #ddd7c8) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
 }
 
 .noteBox {

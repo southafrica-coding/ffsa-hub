@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { MissioApiError, missioClient, type MissioClient } from "../api";
-import { missioFixedCopy, isStaleWrite } from "../errors";
+import { missioFixedCopy, matchActionCopy, shouldRefetch } from "../errors";
 import { houseChurchesClient, type HouseChurchesClient } from "../house-churches/client";
 import { NoAccess } from "../shell";
 import { accessStatus } from "../house-churches/status";
@@ -24,6 +25,12 @@ import { telHref, whatsAppHref } from "./whatsapp";
 import type { FollowUpItem, FollowUpListResponse, FollowUpStage, PersonRef } from "./types";
 import styles from "./follow-up.module.css";
 
+let declineHiddenForSession = false;
+
+export function resetMatchReviewSession() {
+  declineHiddenForSession = false;
+}
+
 type Board = {
   people: FollowUpItem[];
   canWrite: boolean;
@@ -34,7 +41,7 @@ type Board = {
 };
 
 async function fetchBoard(client: FollowUpClient, stage: FollowUpStage, leader: string): Promise<Board> {
-  const stages = stage === "joined" ? STAGES : STAGES.filter((item) => item !== "joined");
+  const stages = STAGES;
   const leaderQuery = leader || null;
   const [lists, leaderPage] = await Promise.all([
     Promise.all(stages.map((item) => client.list({ stage: item, leader: leaderQuery }))),
@@ -86,6 +93,7 @@ export function FollowUpBoard({
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
+  const [declineHidden, setDeclineHidden] = useState(declineHiddenForSession);
   const requestId = useRef(0);
   const focusN = useRef(0);
 
@@ -159,7 +167,7 @@ export function FollowUpBoard({
     } catch (caught) {
       if (accessStatus(caught)) setFatal(caught);
       else setNotice(writeCopy(caught));
-      if (isStaleWrite(caught instanceof MissioApiError ? caught.code : null)) void load(true);
+      if (shouldRefetch(caught instanceof MissioApiError ? caught.code : null)) void load(true);
       focusOn(`follow-up-stage-${person.key}`);
       return false;
     }
@@ -180,10 +188,54 @@ export function FollowUpBoard({
     } catch (caught) {
       if (accessStatus(caught)) setFatal(caught);
       else setNotice(writeCopy(caught));
-      if (isStaleWrite(caught instanceof MissioApiError ? caught.code : null)) void load(true);
+      if (shouldRefetch(caught instanceof MissioApiError ? caught.code : null)) void load(true);
       focusOn(`follow-up-leader-${person.key}`);
       return false;
     }
+  }
+
+  async function confirmMatch(person: FollowUpItem) {
+    setNotice(null);
+    try {
+      const result = await client.confirmMatch(person.key);
+      if (result.person) {
+        applyPeople((board?.people ?? []).map((item) => (item.key === person.key ? result.person! : item)));
+      }
+      focusOn(`follow-up-open-${person.key}`);
+      void load(true);
+    } catch (caught) {
+      noteMatchError(caught, person.key);
+    }
+  }
+
+  async function declineMatch(person: FollowUpItem) {
+    setNotice(null);
+    try {
+      const result = await client.declineMatch(person.key);
+      if (result.person) {
+        applyPeople((board?.people ?? []).map((item) => (item.key === person.key ? result.person! : item)));
+      }
+      focusOn(`follow-up-open-${person.key}`);
+      void load(true);
+    } catch (caught) {
+      const code = caught instanceof MissioApiError ? caught.code : null;
+      if (code === "not_available" || (caught instanceof MissioApiError && caught.status === 501)) {
+        declineHiddenForSession = true;
+        setDeclineHidden(true);
+      }
+      noteMatchError(caught, person.key);
+    }
+  }
+
+  function noteMatchError(caught: unknown, key: string) {
+    if (accessStatus(caught)) {
+      setFatal(caught);
+      return;
+    }
+    const code = caught instanceof MissioApiError ? caught.code : null;
+    setNotice(matchActionCopy(code));
+    if (shouldRefetch(code)) void load(true);
+    focusOn(`follow-up-open-${key}`);
   }
 
   function added(person: FollowUpItem, index: number) {
@@ -199,7 +251,6 @@ export function FollowUpBoard({
 
   const openPerson = board?.people.find((item) => item.key === openKey) ?? null;
   const adding = board?.people.find((item) => item.key === addingKey) ?? null;
-  const visibleStages = stage === "joined" ? STAGES : STAGES.filter((item) => item !== "joined");
   const countsReady = board != null && board.stage === stage && board.leader === leader;
   const showPeople = countsReady && !listPending;
 
@@ -232,8 +283,9 @@ export function FollowUpBoard({
       <p className={`${shell.lede} ${content.lede}`}>{stage === "joined" ? "In a house." : "Not in a house yet."}</p>
 
       <div className={styles.filters} id="follow-up-filters">
-        <div className={styles.chips} role="group" aria-label="Stage">
-          {visibleStages.map((item) => {
+        <div className={styles.chipRow} role="group" aria-label="Stage">
+          <div className={styles.chips}>
+          {STAGES.map((item) => {
             const selected = item === stage;
             const count = countsReady ? board?.counts[item] : null;
             return (
@@ -252,6 +304,7 @@ export function FollowUpBoard({
               </button>
             );
           })}
+          </div>
         </div>
         <label className={styles.leaderFilter}>
           Leader
@@ -275,9 +328,16 @@ export function FollowUpBoard({
       </div>
       {stage !== "joined" ? (
         <p className={styles.joinedLink}>
-          <button type="button" className={styles.linkButton} onClick={() => setStage("joined")}>
+          <Link
+            href="/missio/follow-up?stage=joined"
+            className={styles.joined}
+            onClick={(event) => {
+              event.preventDefault();
+              setStage("joined");
+            }}
+          >
             People who joined
-          </button>
+          </Link>
         </p>
       ) : null}
 
@@ -295,23 +355,34 @@ export function FollowUpBoard({
       {listPending && board ? <p role="status">Loading this list…</p> : null}
       {showPeople && board && board.people.length > 0 ? (
         <ul className={styles.list} data-testid="follow-up-list">
-          {board.people.map((person, index) => (
+          {board.people.map((person) => (
             <PersonCard
               key={person.key}
               person={person}
               canWrite={board.canWrite}
-              leaders={board.leaders}
               onOpen={() => setOpenKey(person.key)}
               onAdd={() => setAddingKey(person.key)}
-              onStage={(next) => changeStage(person, next, index)}
-              onLeader={(next) => changeLeader(person, next, index)}
+              onConfirm={() => void confirmMatch(person)}
+              onDecline={() => void declineMatch(person)}
+              declineHidden={declineHidden}
             />
           ))}
         </ul>
       ) : null}
 
       {openPerson ? (
-        <TimelineSheet person={openPerson} canWrite={board?.canWrite ?? false} client={client} onClose={() => setOpenKey(null)} />
+        <TimelineSheet
+          person={openPerson}
+          canWrite={board?.canWrite ?? false}
+          leaders={board?.leaders ?? []}
+          client={client}
+          onClose={() => {
+            setOpenKey(null);
+            focusOn(`follow-up-open-${openPerson.key}`);
+          }}
+          onStage={(next) => changeStage(openPerson, next, board?.people.findIndex((item) => item.key === openPerson.key) ?? 0)}
+          onLeader={(next) => changeLeader(openPerson, next, board?.people.findIndex((item) => item.key === openPerson.key) ?? 0)}
+        />
       ) : null}
       {adding && board ? (
         <AddHouseDialog
@@ -339,107 +410,73 @@ export function FollowUpBoard({
 function PersonCard({
   person,
   canWrite,
-  leaders,
   onOpen,
   onAdd,
-  onStage,
-  onLeader,
+  onConfirm,
+  onDecline,
+  declineHidden,
 }: {
   person: FollowUpItem;
   canWrite: boolean;
-  leaders: PersonRef[];
   onOpen: () => void;
   onAdd: () => void;
-  onStage: (stage: FollowUpStage) => Promise<boolean>;
-  onLeader: (leaderContactId: string | null) => Promise<boolean>;
+  onConfirm: () => void;
+  onDecline: () => void;
+  declineHidden: boolean;
 }) {
-  const [stageValue, setStageValue] = useState(person.stage);
-  const [leaderValue, setLeaderValue] = useState(person.assignedLeader?.contactId ?? "");
   const hasPhone = Boolean(person.phone?.trim());
   const phone = telHref(person.phone);
   const whatsApp = whatsAppHref(person.phone);
   const when = formatWhen(person.submittedAt);
-
-  useEffect(() => {
-    setStageValue(person.stage);
-    setLeaderValue(person.assignedLeader?.contactId ?? "");
-  }, [person.stage, person.assignedLeader?.contactId]);
+  const meta = [person.visitType ? VISIT_LABEL[person.visitType] : null, when].filter(Boolean).join(" · ");
+  const reviewing = person.matchStatus === "pending_confirm";
+  const suggestion = reviewing ? person.suggestedContact : null;
 
   return (
     <li className={styles.card} data-testid="follow-up-card">
       <button type="button" className={styles.name} id={`follow-up-open-${person.key}`} onClick={onOpen}>
         {person.displayName}
       </button>
-      {person.visitType ? <p className={styles.meta}>{VISIT_LABEL[person.visitType]}</p> : null}
-      <div className={styles.badges}>
-        <span className={`${styles.badge} ${styles.badgeQuiet}`}>{STAGE_LABEL[person.stage]}</span>
-        {person.wantsHouseChurch ? <span className={styles.badge}>Wants a house church</span> : null}
-        {person.wantsPrayer ? <span className={styles.badge}>Wants prayer</span> : null}
-      </div>
-      <p className={styles.meta}>{person.assignedLeader ? `Leader · ${person.assignedLeader.displayName}` : "No leader yet"}</p>
-      {when ? <p className={styles.when}>{when}</p> : null}
-      {hasPhone ? (
-        <div className={styles.contactActions}>
-          {phone ? <a href={phone}>Call</a> : null}
-          {whatsApp ? (
-            <a href={whatsApp} target="_blank" rel="noreferrer">
-              WhatsApp
-            </a>
-          ) : null}
-        </div>
-      ) : (
-        <p className={styles.muted}>Phone isn’t shown here yet.</p>
-      )}
-      {canWrite ? (
-        <div className={styles.writes}>
-          <label>
-            Stage
-            <select
-              id={`follow-up-stage-${person.key}`}
-              aria-label={`Stage for ${person.displayName}`}
-              value={stageValue}
-              onChange={(event) => {
-                const next = event.target.value as FollowUpStage;
-                setStageValue(next);
-                void onStage(next).then((ok) => {
-                  if (!ok) setStageValue(person.stage);
-                });
-              }}
-            >
-              {STAGES.map((item) => (
-                <option key={item} value={item}>
-                  {STAGE_LABEL[item]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Leader
-            <select
-              id={`follow-up-leader-${person.key}`}
-              aria-label={`Leader for ${person.displayName}`}
-              value={leaderValue}
-              onChange={(event) => {
-                const next = event.target.value;
-                setLeaderValue(next);
-                void onLeader(next || null).then((ok) => {
-                  if (!ok) setLeaderValue(person.assignedLeader?.contactId ?? "");
-                });
-              }}
-            >
-              <option value="">Unassigned</option>
-              {leaders.map((item) => (
-                <option key={item.contactId} value={item.contactId}>
-                  {item.displayName}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" id={`follow-up-add-${person.key}`} className={styles.primary} onClick={onAdd}>
-            Add to a house
-          </button>
+      {meta ? <p className={styles.meta}>{meta}</p> : null}
+      {person.wantsHouseChurch || person.wantsPrayer ? (
+        <div className={styles.badges}>
+          {person.wantsHouseChurch ? <span className={styles.badge}>Wants a house church</span> : null}
+          {person.wantsPrayer ? <span className={styles.badge}>Wants prayer</span> : null}
         </div>
       ) : null}
+      <p className={styles.meta}>{person.assignedLeader ? `Leader · ${person.assignedLeader.displayName}` : "No leader yet"}</p>
+      {reviewing ? (
+        <div className={styles.confirm} data-testid="needs-review">
+          <p>Needs review</p>
+          {suggestion ? <p>Possible match: {suggestion.displayName}</p> : null}
+          {suggestion && canWrite ? (
+            <div className={styles.actions}>
+              <button type="button" className={styles.secondary} onClick={onConfirm}>
+                Confirm
+              </button>
+              {declineHidden ? null : (
+                <button type="button" className={styles.secondary} onClick={onDecline}>
+                  Not this person
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <div className={styles.actions}>
+        {hasPhone && phone ? <a className={styles.secondary} href={phone}>Call</a> : null}
+        {hasPhone && whatsApp ? (
+          <a className={styles.secondary} href={whatsApp} target="_blank" rel="noreferrer">
+            WhatsApp
+          </a>
+        ) : null}
+        {!hasPhone ? <p className={styles.muted}>Phone isn’t shown here yet.</p> : null}
+        {canWrite ? (
+          <button type="button" id={`follow-up-add-${person.key}`} className={styles.secondary} onClick={onAdd}>
+            Add to a house
+          </button>
+        ) : null}
+      </div>
     </li>
   );
 }

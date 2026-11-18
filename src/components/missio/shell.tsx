@@ -13,6 +13,20 @@ import { OrgSwitcher, OrgTile } from "./org-switcher";
 import type { MissioMe } from "./types-shim";
 import styles from "./shell.module.css";
 
+export function missioSection(pathname: string): "home" | "people" | "houses" | "follow" {
+  if (pathname.includes("/missio/people")) return "people";
+  if (pathname.includes("/missio/house-churches")) return "houses";
+  if (pathname.includes("/missio/follow-up")) return "follow";
+  return "home";
+}
+
+const SECTION_LABEL = {
+  home: "Home",
+  people: "People",
+  houses: "House churches",
+  follow: "Follow-up",
+} as const;
+
 type Gate =
   | { kind: "loading" }
   | { kind: "error" }
@@ -172,10 +186,11 @@ function MissioSidebar({
   const pathname = usePathname();
   const header = missioOrgHeader({ orgs: me.orgs, ffsaRoleNames });
   const missio = me.orgs.find((org) => org.slug === "missio");
-  const home = pathname === "/missio";
-  const people = pathname.startsWith("/missio/people");
-  const houses = pathname.startsWith("/missio/house-churches");
-  const follow = pathname.startsWith("/missio/follow-up");
+  const section = missioSection(pathname);
+  const home = section === "home" && (pathname === "/missio" || pathname.endsWith("/missio"));
+  const people = section === "people";
+  const houses = section === "houses";
+  const follow = section === "follow";
   const pastor = canAccessMissio(me);
 
   const orgNode = <OrgHeader state={header} />;
@@ -266,13 +281,7 @@ function MissioTop({
   navOpen: boolean;
 }) {
   const pathname = usePathname();
-  const section = pathname.startsWith("/missio/people")
-    ? "People"
-    : pathname.startsWith("/missio/house-churches")
-      ? "House churches"
-      : pathname.startsWith("/missio/follow-up")
-        ? "Follow-up"
-        : "Home";
+  const section = SECTION_LABEL[missioSection(pathname)];
   const orgName = me.orgs.find((org) => org.slug === "missio")?.name ?? "Missio";
   const header = missioOrgHeader({ orgs: me.orgs, ffsaRoleNames });
   return (

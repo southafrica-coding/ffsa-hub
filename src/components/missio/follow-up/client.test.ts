@@ -99,6 +99,8 @@ describe("follow-up fetchers", () => {
     });
     expect(page.people[0]).not.toHaveProperty("serverOnly");
     expect(page.people[1]).not.toHaveProperty("debug");
+    expect(page.people[0]?.matchStatus).toBeNull();
+    expect(page.people[0]?.suggestedContact).toBeNull();
   });
 
   it("patches stage and leader, posts a note, and creates a contact for an r_ card", async () => {
@@ -117,6 +119,8 @@ describe("follow-up fetchers", () => {
       stage: "contacted",
       assignedLeader: null,
       submittedAt: cardItem.submittedAt,
+      matchStatus: null,
+      suggestedContact: null,
     };
     const { fetchImpl, calls } = mockFetch((url, init) => {
       if (init?.method === "POST" && url.endsWith("/contact")) {
@@ -156,6 +160,38 @@ describe("follow-up fetchers", () => {
     expect(created.person.email).toBeNull();
   });
 
+  it("reads pending_confirm with a suggestion, with a null suggestion, and posts confirm or decline", async () => {
+    const withMatch = {
+      ...cardItem,
+      matchStatus: "pending_confirm",
+      suggestedContact: { contactId: "contact-lerato", displayName: "Lerato Mokoena", phone: "secret", email: "secret@example.com" },
+    };
+    const withoutMatch = { ...cardItem, key: "r_response-2", displayName: "Johan Botha", matchStatus: "pending_confirm", suggestedContact: null };
+    const ordinary = { ...contactItem, matchStatus: "something_else", suggestedContact: { contactId: "x", displayName: "Ignore me" } };
+    const { fetchImpl, calls } = mockFetch((url, init) => {
+      if (init?.method === "POST" && url.endsWith("/confirm-match")) {
+        return json({ person: { ...withMatch, matchStatus: "confirmed", suggestedContact: null } });
+      }
+      if (init?.method === "POST") return json({ ok: true }, 501, {});
+      return json({ people: [withMatch, withoutMatch, ordinary], canWrite: true });
+    });
+    const client = createFollowUpClient(fetchImpl);
+    const page = await client.list({ stage: "new" });
+    expect(page.people[0]).toMatchObject({
+      matchStatus: "pending_confirm",
+      suggestedContact: { contactId: "contact-lerato", displayName: "Lerato Mokoena" },
+    });
+    expect(page.people[0]?.suggestedContact).not.toHaveProperty("phone");
+    expect(page.people[1]).toMatchObject({ matchStatus: "pending_confirm", suggestedContact: null });
+    expect(page.people[2]?.matchStatus).toBe("something_else");
+    const confirmed = await client.confirmMatch("r_response-1");
+    await expect(client.declineMatch("r_response-1")).rejects.toMatchObject({ status: 501, code: "not_available", message: "" });
+    expect(calls[1]?.url).toBe("/api/missio/followups/r_response-1/confirm-match");
+    expect(calls[1]?.init?.body).toBeUndefined();
+    expect(calls[2]?.url).toBe("/api/missio/followups/r_response-1/decline-match");
+    expect(confirmed.person?.matchStatus).toBe("confirmed");
+  });
+
   it("keeps the code and drops the server sentence", async () => {
     const cases = [
       { status: 400, body: { error: "This person is not in Missio.", code: "not_missio_person" }, code: "not_missio_person" },
@@ -164,6 +200,7 @@ describe("follow-up fetchers", () => {
       { status: 409, body: { error: "dup", code: "already_member" }, code: "already_member" },
       { status: 409, body: { error: "stale", code: "membership_not_current" }, code: "membership_not_current" },
       { status: 409, body: { error: "future", code: "ended_at_in_future" }, code: "ended_at_in_future" },
+      { status: 409, body: { error: "left", code: "member_left_missio" }, code: "member_left_missio" },
       { status: 409, body: { error: "exists", code: "exists_use_search" }, code: "exists_use_search" },
       { status: 401, body: { error: "nope", code: "unauthenticated" }, code: "unauthenticated" },
       { status: 403, body: { error: "nope", code: "forbidden" }, code: "forbidden" },
