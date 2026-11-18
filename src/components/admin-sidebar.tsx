@@ -13,7 +13,7 @@
  * Module data still comes from src/config/modules.ts — unchanged.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -218,6 +218,20 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
     : PORTAL_TABS.some((t) => pathname.startsWith(t.href)) || pathname.startsWith("/account") ? "personal"
     : "operations";
   const [area, setArea] = useState<AreaId>(initialArea);
+
+  // Tailwind `md` is 768px — the same query as `md:hidden` / `hidden md:flex`.
+  // Crossing it shows the desktop rail, so a phone drawer must not stay open.
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(min-width: 768px)");
+    const closeOnDesktop = () => {
+      if (query.matches) setMobileOpen(false);
+    };
+    closeOnDesktop();
+    if (typeof query.addEventListener !== "function") return;
+    query.addEventListener("change", closeOnDesktop);
+    return () => query.removeEventListener("change", closeOnDesktop);
+  }, []);
 
   const modules =
     area === "operations" ? visibleModules

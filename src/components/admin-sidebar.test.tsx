@@ -60,6 +60,7 @@ describe("AdminSidebar mobile menu focus", () => {
   afterEach(() => {
     while (roots.length) act(() => roots.pop()?.unmount());
     while (hosts.length) hosts.pop()?.remove();
+    vi.unstubAllGlobals();
   });
 
   it("returns focus to the menu button after Escape closes the drawer", async () => {
@@ -113,5 +114,50 @@ describe("AdminSidebar mobile menu focus", () => {
     expect(document.body.querySelector("[role='dialog']")).toBeNull();
     expect(document.activeElement).toBe(button);
     expect(button?.getAttribute("aria-label")).toBe("Open menu");
+  });
+
+  it("closes the drawer when a matchMedia change crosses the desktop breakpoint", async () => {
+    const listeners = new Set<(event: { matches: boolean }) => void>();
+    const query = {
+      matches: false,
+      media: "(min-width: 768px)",
+      addEventListener(_type: string, listener: (event: { matches: boolean }) => void) {
+        listeners.add(listener);
+      },
+      removeEventListener(_type: string, listener: (event: { matches: boolean }) => void) {
+        listeners.delete(listener);
+      },
+    };
+    vi.stubGlobal("matchMedia", (media: string) => {
+      if (media === "(min-width: 768px)") return query;
+      return {
+        matches: false,
+        media,
+        addEventListener() {},
+        removeEventListener() {},
+      };
+    });
+
+    const { host, root } = renderSidebar();
+    roots.push(root);
+    hosts.push(host);
+
+    const button = menuButton();
+    expect(button).toBeTruthy();
+    openDrawer(button!);
+    expect(document.body.querySelector("[role='dialog']")).toBeTruthy();
+
+    act(() => {
+      query.matches = true;
+      for (const listener of listeners) listener({ matches: true });
+    });
+    await flush();
+
+    expect(document.body.querySelector("[role='dialog']")).toBeNull();
+    expect(listeners.size).toBe(1);
+
+    act(() => root.unmount());
+    roots.pop();
+    expect(listeners.size).toBe(0);
   });
 });
