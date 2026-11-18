@@ -175,6 +175,7 @@ function MissioSidebar({
   const home = pathname === "/missio";
   const people = pathname.startsWith("/missio/people");
   const houses = pathname.startsWith("/missio/house-churches");
+  const follow = pathname.startsWith("/missio/follow-up");
   const pastor = canAccessMissio(me);
 
   const orgNode = <OrgHeader state={header} />;
@@ -205,6 +206,18 @@ function MissioSidebar({
           >
             <HouseIcon />
             <span>House churches</span>
+          </Link>
+        ) : null}
+        {pastor ? (
+          <Link
+            href="/missio/follow-up"
+            className={`${styles.navLink} ${follow ? styles.navOn : ""}`}
+            aria-current={follow ? "page" : undefined}
+            data-testid="missio-nav-follow-up"
+            onClick={onNavigate}
+          >
+            <FollowIcon />
+            <span>Follow-up</span>
           </Link>
         ) : null}
         <div className={styles.soon} aria-disabled="true">
@@ -257,7 +270,9 @@ function MissioTop({
     ? "People"
     : pathname.startsWith("/missio/house-churches")
       ? "House churches"
-      : "Home";
+      : pathname.startsWith("/missio/follow-up")
+        ? "Follow-up"
+        : "Home";
   const orgName = me.orgs.find((org) => org.slug === "missio")?.name ?? "Missio";
   const header = missioOrgHeader({ orgs: me.orgs, ffsaRoleNames });
   return (
@@ -354,6 +369,15 @@ function HouseIcon() {
       <path d="M4 10.5 12 4l8 6.5" />
       <path d="M7 9.8V20h10V9.8" />
       <path d="M10 20v-5h4v5" />
+    </svg>
+  );
+}
+
+function FollowIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
+      <rect x="5" y="3.5" width="14" height="17" rx="1.5" />
+      <path d="M8.5 8h7M8.5 12h7M8.5 16h4" />
     </svg>
   );
 }

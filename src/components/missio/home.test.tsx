@@ -60,6 +60,10 @@ describe("Missio home cards", () => {
     expect(houses.getAttribute("href")).toBe("/missio/house-churches");
     expect(houses.textContent).toContain("House churches");
     expect(houses.textContent).toContain("membership in this church");
+    const follow = host.querySelector("[data-testid=home-follow-up]") as HTMLAnchorElement;
+    expect(follow.getAttribute("href")).toBe("/missio/follow-up");
+    expect(follow.textContent).toContain("Follow-up");
+    expect(follow.textContent).toContain("not in a house yet");
     expect(host.textContent).not.toMatch(/Soon|Coming soon/);
   });
 
@@ -73,5 +77,6 @@ describe("Missio home cards", () => {
     hosts.push(host);
     expect(host.querySelector("[data-testid=home-people]")).toBeTruthy();
     expect(host.querySelector("[data-testid=home-houses]")).toBeNull();
+    expect(host.querySelector("[data-testid=home-follow-up]")).toBeNull();
   });
 });

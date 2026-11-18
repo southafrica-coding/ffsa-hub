@@ -105,6 +105,10 @@ describe("Missio access state", () => {
     expect(houseLink.textContent).toContain("House churches");
     expect(houseLink.textContent?.toLowerCase()).not.toContain("soon");
     expect(houseLink.getAttribute("data-testid")).toBe("missio-nav-house-churches");
+    const followLink = host.querySelector("[data-testid=missio-nav-follow-up]") as HTMLAnchorElement;
+    expect(followLink.getAttribute("href")).toBe("/missio/follow-up");
+    expect(followLink.textContent).toContain("Follow-up");
+    expect(followLink.textContent?.toLowerCase()).not.toContain("soon");
     const soon = [...host.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
     expect(soon).toHaveLength(1);
     expect(soon[0]?.parentElement?.textContent).toContain("Teams");
@@ -127,6 +131,22 @@ describe("Missio access state", () => {
     const teams = [...host.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
     expect(teams).toHaveLength(1);
     expect(teams[0]?.parentElement?.textContent).toContain("Teams");
+  });
+
+  it("marks Follow-up current and names it in the crumb", async () => {
+    nav.pathname = "/missio/follow-up";
+    const { host, root } = render(
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
+        <p>Follow-up lives here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+    const link = host.querySelector("[data-testid=missio-nav-follow-up]") as HTMLAnchorElement;
+    expect(link.getAttribute("aria-current")).toBe("page");
+    expect(link.textContent?.toLowerCase()).not.toContain("soon");
+    expect(host.textContent).toContain("Missio Church / Follow-up");
   });
 
   it("shows no access for an FFSA admin with no Missio role", async () => {

@@ -40,14 +40,22 @@ export function MissioHome() {
     </Link>
   );
 
+  const follow = (
+    <Link href="/missio/follow-up" className={`${styles.card} ${content.card}`} data-testid="home-follow-up">
+      <div className={`${styles.cardTitle} ${content.cardTitle}`}>Follow-up</div>
+      <p className={`${styles.cardBody} ${content.cardBody}`}>People who connected at a service and are not in a house yet.</p>
+    </Link>
+  );
+
   return (
     <div className={`${content.page} ${content.reveal}`}>
       <p className={`${styles.eyebrow} ${content.eyebrow}`}>{date}</p>
       <h1 className={content.title}>{greeting}</h1>
       {showHouses ? (
-        <div className={content.pair}>
+        <div className={content.cards}>
           {people}
           {houses}
+          {follow}
         </div>
       ) : (
         <div className={content.solo}>{people}</div>
