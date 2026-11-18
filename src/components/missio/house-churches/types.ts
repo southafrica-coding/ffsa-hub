@@ -1,0 +1,119 @@
+/**
+ * UI-side contract for `/api/missio/house-churches`.
+ *
+ * Hub Backend owns the routes. These types follow the contract after Hub
+ * Data's schema landed (contacts, house numbers, pastor-only access). They
+ * are not imported from a server module: that code is not on main yet.
+ * Adjust this file when the routes merge if a field name differs.
+ */
+
+export type HouseCampus = "potch" | "jhb";
+
+export type HouseRole = "leader" | "co_leader" | "member";
+
+/** A contact. `orgPersonId` is set only when they have a Missio people row. */
+export interface PersonRef {
+  contactId: string;
+  displayName: string;
+  firstName: string | null;
+  lastName: string | null;
+  orgPersonId?: string;
+}
+
+export interface HouseSummary {
+  id: string;
+  number: number;
+  name: string | null;
+  campus: HouseCampus;
+  meetingDay: string | null;
+  location: string | null;
+  /** Includes leaders and co-leaders. */
+  memberCount: number;
+  leaders: PersonRef[];
+  coLeaders: PersonRef[];
+}
+
+export interface HouseMember extends PersonRef {
+  role: HouseRole;
+  startedAt: string | null;
+}
+
+export interface HouseDetail extends HouseSummary {
+  leaderNotes: string | null;
+  members: HouseMember[];
+}
+
+export interface HouseListResponse {
+  houses: HouseSummary[];
+  canWrite: boolean;
+}
+
+export interface HouseDetailResponse {
+  house: HouseDetail;
+  canWrite: boolean;
+}
+
+export interface MemberMutationResponse {
+  member: HouseMember;
+}
+
+export type ReviewStatus = "pending" | "matched" | "new" | "skipped";
+
+/** `person` and `family_label` are the known kinds. The route may add more. */
+export type ReviewKind = "person" | "family_label" | (string & {});
+
+export type ReviewMatchType = "none" | "multiple" | "family_label" | "first_only" | "partial";
+
+export interface ReviewHouseRef {
+  id: string;
+  number: number;
+  name: string | null;
+}
+
+export interface ReviewItem {
+  id: string;
+  status: ReviewStatus;
+  sourceLine: string;
+  rawName: string;
+  kind: ReviewKind;
+  matchType: ReviewMatchType;
+  houseNumber: number;
+  house: ReviewHouseRef | null;
+  role: HouseRole | null;
+  /** Up to five possible people. May be empty. */
+  candidates: PersonRef[];
+  notes: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export interface ReviewListResponse {
+  items: ReviewItem[];
+}
+
+export type ResolveBody =
+  | { action: "link"; contactId: string }
+  | { action: "create"; firstName: string; lastName?: string; email?: string; phone?: string }
+  | { action: "skip"; notes?: string };
+
+/** Link and create add the person to the house. Skip does not. */
+export interface ResolvedMember {
+  contactId: string;
+  role: HouseRole;
+}
+
+export interface ResolveResponse {
+  item: ReviewItem;
+  member?: ResolvedMember;
+}
+
+export type HouseErrorCode =
+  | "unauthenticated"
+  | "forbidden"
+  | "invalid_input"
+  | "not_found"
+  | "already_member"
+  | "already_resolved"
+  | "exists_use_search"
+  | "rate_limited"
+  | "server_error";

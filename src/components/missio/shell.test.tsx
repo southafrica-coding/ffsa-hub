@@ -98,6 +98,33 @@ describe("Missio access state", () => {
     expect(host.textContent).toContain("People live here");
     expect(host.textContent).toContain("House churches");
     expect(host.textContent).toContain("Teams");
+    const houseLink = host.querySelector("a[href='/missio/house-churches']") as HTMLAnchorElement;
+    expect(houseLink).toBeTruthy();
+    expect(houseLink.textContent).toContain("House churches");
+    expect(houseLink.textContent?.toLowerCase()).not.toContain("soon");
+    expect(houseLink.getAttribute("data-testid")).toBe("missio-nav-house-churches");
+    const soon = [...host.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
+    expect(soon).toHaveLength(1);
+    expect(soon[0]?.parentElement?.textContent).toContain("Teams");
+  });
+
+  it("marks House churches current and names it in the crumb", async () => {
+    nav.pathname = "/missio/house-churches/review";
+    const { host, root } = render(
+      <MissioFrame client={client(async () => pastor)}>
+        <p>Houses live here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+    const link = host.querySelector("a[href='/missio/house-churches']") as HTMLAnchorElement;
+    expect(link.getAttribute("aria-current")).toBe("page");
+    expect(link.textContent?.toLowerCase()).not.toContain("soon");
+    expect(host.textContent).toContain("Missio Church / House churches");
+    const teams = [...host.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
+    expect(teams).toHaveLength(1);
+    expect(teams[0]?.parentElement?.textContent).toContain("Teams");
   });
 
   it("shows no access for an FFSA admin with no Missio role", async () => {
@@ -110,6 +137,7 @@ describe("Missio access state", () => {
     hosts.push(host);
     await settle();
     expect(host.querySelector("[data-testid=missio-no-access]")?.textContent).toMatch(/Pastors only/);
+    expect(host.querySelector("a[href='/missio/house-churches']")).toBeNull();
     expect(host.querySelector("[data-access]")?.getAttribute("data-access")).toBe("denied");
     expect(host.textContent).not.toContain("People live here");
   });
@@ -151,6 +179,12 @@ describe("Missio access state", () => {
     const dialog = document.body.querySelector("[role='dialog']") as HTMLElement;
     expect(dialog).toBeTruthy();
     expect(dialog.textContent).toContain("House churches");
+    const drawerLink = dialog.querySelector("a[href='/missio/house-churches']");
+    expect(drawerLink?.textContent).toContain("House churches");
+    expect(drawerLink?.textContent?.toLowerCase()).not.toContain("soon");
+    const drawerSoon = [...dialog.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
+    expect(drawerSoon).toHaveLength(1);
+    expect(drawerSoon[0]?.parentElement?.textContent).toContain("Teams");
     expect(openMenu.getAttribute("aria-expanded")).toBe("true");
     expect(document.body.getAttribute("data-scroll-locked")).toBe("1");
     expect(document.activeElement === dialog || dialog.contains(document.activeElement)).toBe(true);
