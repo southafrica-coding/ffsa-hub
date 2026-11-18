@@ -2,6 +2,7 @@
 export const MISSIO_CRUMB_LABELS: ReadonlyArray<{ prefix: string; label: string }> = [
   { prefix: "/missio/house-churches", label: "House churches" },
   { prefix: "/missio/follow-up", label: "Follow-up" },
+  { prefix: "/missio/volunteers", label: "Volunteers" },
   { prefix: "/missio/people", label: "People" },
 ];
 

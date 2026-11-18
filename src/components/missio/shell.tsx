@@ -186,6 +186,7 @@ function MissioSidebar({
   const houses = section === "houses";
   const follow = section === "follow";
   const pastor = canAccessMissio(me);
+  const volunteers = pathname.startsWith("/missio/volunteers");
 
   const orgNode = <OrgHeader state={header} />;
 
@@ -227,6 +228,18 @@ function MissioSidebar({
           >
             <FollowIcon />
             <span>Follow-up</span>
+          </Link>
+        ) : null}
+        {pastor ? (
+          <Link
+            href="/missio/volunteers"
+            className={`${styles.navLink} ${volunteers ? styles.navOn : ""}`}
+            aria-current={volunteers ? "page" : undefined}
+            data-testid="missio-nav-volunteers"
+            onClick={onNavigate}
+          >
+            <CalendarIcon />
+            <span>Volunteers</span>
           </Link>
         ) : null}
         <div className={styles.soon} aria-disabled="true">
@@ -381,6 +394,15 @@ function FollowIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
       <rect x="5" y="3.5" width="14" height="17" rx="1.5" />
       <path d="M8.5 8h7M8.5 12h7M8.5 16h4" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
+      <rect x="3.5" y="5" width="17" height="15" />
+      <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" />
     </svg>
   );
 }
