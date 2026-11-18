@@ -176,3 +176,58 @@ export type ResolveImportReviewResponse = {
   item: ImportReviewItem;
   member?: HouseChurchMemberView;
 };
+
+export type ConnectVisitType = "first_time" | "been_a_while" | "regular";
+
+export type FollowupStage = "new" | "contacted" | "visited_house" | "joined";
+
+export type FollowupSource = "contact" | "connect_response";
+
+/**
+ * One row of GET /api/missio/follow-up.
+ * key is c_<contactId> for a labelled Missio contact and r_<connectResponseId> for a card.
+ * stage is the effective stage. People with no follow-up row yet are "new" and followupId is null.
+ * phone and email follow FOLLOWUP_LIST_INCLUDES_CONTACT_PII in follow-up.ts.
+ */
+export type FollowupPerson = {
+  key: string;
+  source: FollowupSource;
+  contactId: string | null;
+  connectResponseId: string | null;
+  followupId: string | null;
+  displayName: string;
+  phone: string | null;
+  email: string | null;
+  visitType: ConnectVisitType | null;
+  wantsHouseChurch: boolean | null;
+  wantsPrayer: boolean | null;
+  stage: FollowupStage;
+  assignedLeader: PersonRef | null;
+  submittedAt: string | null;
+};
+
+export type FollowupListResponse = {
+  people: FollowupPerson[];
+  canWrite: boolean;
+};
+
+export type FollowupTimelineKind = "submitted" | "stage_change" | "note";
+
+export type FollowupTimelineEntry = {
+  id: string;
+  kind: FollowupTimelineKind;
+  fromStage: FollowupStage | null;
+  toStage: FollowupStage | null;
+  body: string | null;
+  by: { displayName: string } | null;
+  at: string;
+};
+
+export type ConnectFieldErrors = {
+  name?: string;
+  phone?: string;
+  email?: string;
+  visitType?: string;
+  prayerRequest?: string;
+  notes?: string;
+};

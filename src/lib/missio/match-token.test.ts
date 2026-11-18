@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { missioMatchToken, queryHmac } from "./match-token";
+import { connectRateKeyHash, missioMatchToken, queryHmac } from "./match-token";
 
 const KEY = "test-service-role-key";
 
@@ -31,5 +31,14 @@ describe("missio match tokens", () => {
       })
     ).toBeNull();
     expect(queryHmac("jane@gmail.com")).toBeNull();
+    expect(connectRateKeyHash("203.0.113.8")).toBeNull();
+  });
+
+  it("hashes a connect rate key with the service-role secret and not the raw IP", () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = KEY;
+    const hash = connectRateKeyHash("203.0.113.8");
+    expect(hash).toEqual(expect.any(String));
+    expect(hash).not.toContain("203.0.113.8");
+    expect(hash).not.toBe(queryHmac("203.0.113.8"));
   });
 });

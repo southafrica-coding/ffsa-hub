@@ -201,3 +201,103 @@ export type MissioMemberStatusRow = {
   roles: string[];
   is_member: true;
 };
+
+/**
+ * Connect card and follow-up funnel.
+ *
+ * Shapes follow migration 332 (PR 614, head 4a38ddc930f94cb7a0b9ca72b53b32668a387e01),
+ * stacked on 331. That migration is not applied here. Do not add these tables
+ * to src/types/database.ts by hand.
+ *
+ * RLS is has_org_role('missio', ARRAY['pastor']) plus the missio org id.
+ * is_admin(), has_role(), and has_any_role() are not consulted. An FFSA admin
+ * does not pass. Public QR rows are service-role inserts (source qr). Pastors
+ * may insert only source manual. There is no anon policy.
+ *
+ * A connect response does not create a follow-up. Joining a house does not
+ * create one either. record_missio_followup_stage() writes kind stage_change
+ * (including on insert). Pastors insert kind note only. changed_by defaults
+ * to auth.uid(). The app must not insert stage_change rows.
+ *
+ * Partial uniques: (org_id, contact_id) WHERE contact_id IS NOT NULL, and
+ * (connect_response_id) WHERE connect_response_id IS NOT NULL.
+ * A row needs contact_id or connect_response_id (or both).
+ *
+ * missio_followup_effective is security_invoker. effective_stage is joined
+ * while the contact has a current Missio house membership, otherwise stage.
+ * missio_not_in_house is owner-rights with a security barrier, pastor-gated.
+ */
+
+export type ConnectVisitType = "first_time" | "been_a_while" | "regular";
+
+export type ConnectSource = "qr" | "manual" | "pco";
+
+export type FollowupStage = "new" | "contacted" | "visited_house" | "joined";
+
+export type FollowupHistoryKind = "stage_change" | "note";
+
+export type ConnectResponseRow = {
+  id: string;
+  org_id: string;
+  submitted_at: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  visit_type: ConnectVisitType;
+  wants_house_church: boolean;
+  wants_prayer: boolean;
+  prayer_request: string | null;
+  notes: string | null;
+  service_date: string | null;
+  /** DEFAULT 'potch'. CHECK (campus IN ('potch', 'jhb')). */
+  campus: OrgCampus;
+  matched_contact_id: string | null;
+  matched_by: string | null;
+  matched_at: string | null;
+  source: ConnectSource;
+  /** HMAC of an IP or device id. Never a raw IP. */
+  rate_key_hash: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MissioFollowupRow = {
+  id: string;
+  org_id: string;
+  contact_id: string | null;
+  connect_response_id: string | null;
+  stage: FollowupStage;
+  assigned_leader_contact_id: string | null;
+  assigned_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MissioFollowupStageHistoryRow = {
+  id: string;
+  followup_id: string;
+  from_stage: FollowupStage | null;
+  to_stage: FollowupStage | null;
+  /** DEFAULT auth.uid(). */
+  changed_by: string | null;
+  changed_at: string;
+  notes: string | null;
+  kind: FollowupHistoryKind;
+};
+
+export type MissioFollowupEffectiveRow = MissioFollowupRow & {
+  effective_stage: FollowupStage;
+};
+
+/** Pastor-gated owner-rights view. No follow-up id and no visit type. */
+export type MissioNotInHouseRow = {
+  source: "contact" | "connect_response";
+  contact_id: string | null;
+  connect_response_id: string | null;
+  display_name: string | null;
+  phone: string | null;
+  email: string | null;
+  wants_house_church: boolean | null;
+  followup_stage: FollowupStage | null;
+  submitted_at: string | null;
+};
