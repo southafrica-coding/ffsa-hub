@@ -221,6 +221,51 @@ describe("house detail", () => {
     expect(host.textContent).toContain("Amina Kruger");
   });
 
+  it("tells you someone has left Missio and refreshes the house without a loading flash", async () => {
+    const serverText = "contact is no longer an active org_people row";
+    let reads = 0;
+    const refreshed: HouseDetail = {
+      ...house,
+      memberCount: 2,
+      members: [coleader, leader],
+    };
+    const host = mount(
+      <HouseDetailView
+        houseId="house-2"
+        client={client({
+          getHouse: async () => {
+            reads += 1;
+            return { house: reads === 1 ? house : refreshed, canWrite: true };
+          },
+          removeMember: async () => {
+            throw new MissioApiError(409, serverText, null, "member_left_missio");
+          },
+        })}
+      />
+    );
+    await settle();
+    const editAmina = host.querySelector("button[aria-label='Edit Amina Kruger']") as HTMLButtonElement;
+    await act(async () => {
+      editAmina.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const remove = document.body.querySelector("button[aria-label='Remove Amina Kruger from house']") as HTMLButtonElement;
+    await act(async () => {
+      remove.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const confirm = document.body.querySelector("button[aria-label='Confirm remove Amina Kruger']") as HTMLButtonElement;
+    await act(async () => {
+      confirm.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain("They’ve left Missio, so they can’t be changed here.");
+    expect(document.body.textContent).not.toContain(serverText);
+    expect(host.textContent).not.toContain("Loading this house");
+    expect(host.textContent).toContain("Oak Table");
+    expect(host.textContent).not.toContain("Amina Kruger");
+    expect(reads).toBe(2);
+  });
+
   it("says when the house cannot be found", async () => {
     const host = mount(
       <HouseDetailView

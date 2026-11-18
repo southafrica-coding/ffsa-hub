@@ -114,6 +114,7 @@ export type HouseErrorCode =
   | "already_member"
   | "already_resolved"
   | "membership_not_current"
+  | "member_left_missio"
   | "ended_at_in_future"
   | "exists_use_search"
   | "rate_limited"

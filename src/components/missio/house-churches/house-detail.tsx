@@ -36,6 +36,13 @@ function focusElement(id: string) {
   requestAnimationFrame(() => document.getElementById(id)?.focus());
 }
 
+function needsQuietRefresh(error: unknown): boolean {
+  return (
+    error instanceof MissioApiError &&
+    (error.code === "membership_not_current" || error.code === "already_resolved" || error.code === "member_left_missio")
+  );
+}
+
 export function HouseDetailView({
   houseId,
   client = houseChurchesClient,
@@ -82,9 +89,7 @@ export function HouseDetailView({
     } catch (caught) {
       const copy = caught instanceof MissioApiError ? houseErrorCopy(caught) : "That didn’t work. Try again.";
       setNotice(copy);
-      if (caught instanceof MissioApiError && (caught.code === "membership_not_current" || caught.code === "already_resolved")) {
-        await refreshHouse().catch(() => undefined);
-      }
+      if (needsQuietRefresh(caught)) await refreshHouse().catch(() => undefined);
     } finally {
       setPending(false);
     }
@@ -107,9 +112,7 @@ export function HouseDetailView({
     } catch (caught) {
       const copy = caught instanceof MissioApiError ? houseErrorCopy(caught) : "That didn’t work. Try again.";
       setNotice(copy);
-      if (caught instanceof MissioApiError && (caught.code === "membership_not_current" || caught.code === "already_resolved")) {
-        await refreshHouse().catch(() => undefined);
-      }
+      if (needsQuietRefresh(caught)) await refreshHouse().catch(() => undefined);
     } finally {
       setPending(false);
     }
