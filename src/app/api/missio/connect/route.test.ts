@@ -179,6 +179,7 @@ describe("POST /api/missio/connect", () => {
   it("returns only { ok: true } and stores a qr card without creating a person", async () => {
     state.tables.contacts.push({ id: JANE, first_name: "Other", last_name: "Person" });
     state.tables.contact_phones.push({ contact_id: JANE, phone_normalized: "+27821234567" });
+    state.tables.org_people.push({ id: "org-jane", org_id: MISSIO, contact_id: JANE });
 
     const res = await POST(card(valid));
     expect(res.status).toBe(201);
@@ -209,7 +210,7 @@ describe("POST /api/missio/connect", () => {
     expect(rows[0].rate_key_hash).toBe(connectRateKeyHash("203.0.113.8"));
     expect(rows[0].rate_key_hash).not.toBe("203.0.113.8");
     expect(state.writes.filter((write) => write.table === "org_people")).toHaveLength(0);
-    expect(state.tables.org_people).toHaveLength(0);
+    expect(state.tables.org_people).toHaveLength(1);
   });
 
   it("drops a filled honeypot without inserting", async () => {
@@ -301,6 +302,11 @@ describe("POST /api/missio/connect", () => {
     );
     state.tables.contact_phones.push({ contact_id: JANE, phone_normalized: "+27821234567" });
     state.tables.contact_emails.push({ contact_id: JOE, email_normalized: "jane@example.com" });
+    state.tables.org_people.push(
+      { id: "org-jane", org_id: MISSIO, contact_id: JANE },
+      { id: "org-joe", org_id: MISSIO, contact_id: JOE },
+      { id: "org-ann", org_id: MISSIO, contact_id: ANN }
+    );
 
     const byPhone = await POST(card({ ...valid, name: "Ann Other" }, "203.0.113.20"));
     expect(byPhone.status).toBe(201);
@@ -334,7 +340,23 @@ describe("POST /api/missio/connect", () => {
     expect(broken.status).toBe(201);
     expect(await broken.json()).toEqual({ ok: true });
     expect(state.tables.connect_responses.at(-1)?.matched_contact_id).toBeNull();
-    expect(state.tables.org_people).toHaveLength(0);
+    expect(state.writes.filter((write) => write.table === "org_people")).toHaveLength(0);
+  });
+
+  it("does not match an FFSA contact who is not in Missio, and does not create org_people", async () => {
+    state.tables.contacts.push(
+      { id: JANE, first_name: "Jane", last_name: "Doe" },
+      { id: ANN, first_name: "Ann", last_name: "Other" }
+    );
+    state.tables.contact_phones.push({ contact_id: JANE, phone_normalized: "+27821234567" });
+    state.tables.org_people.push({ id: "org-ann", org_id: MISSIO, contact_id: ANN });
+
+    const res = await POST(card({ ...valid, name: "Ann Other" }, "203.0.113.40"));
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(state.tables.connect_responses[0].matched_contact_id).toBeNull();
+    expect(state.writes.filter((write) => write.table === "org_people")).toHaveLength(0);
+    expect(state.tables.org_people.map((row) => row.contact_id)).toEqual([ANN]);
   });
 
   it("does not store the raw IP when the HMAC key is missing", async () => {

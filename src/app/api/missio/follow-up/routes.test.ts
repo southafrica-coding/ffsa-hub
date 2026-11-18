@@ -38,7 +38,16 @@ const state = vi.hoisted(() => {
   const state = {
     userId: null as string | null,
     tableError: null as string | null,
-    writes: [] as { client: "user" | "admin"; table: string; op: string; payload: unknown }[],
+    writes: [] as {
+      client: "user" | "admin";
+      table: string;
+      op: string;
+      payload: unknown;
+      filters?: Filter[];
+    }[],
+    reads: [] as { client: "user" | "admin"; table: string }[],
+    conflictTable: null as string | null,
+    duplicateFollowup: false,
     tables: {} as Record<string, Row[]>,
     hits: new Map<string, number>(),
     seq: 0,
@@ -123,6 +132,7 @@ const state = vi.hoisted(() => {
         return b;
 
         function finish(maybe: boolean, single: boolean) {
+          if (client === "admin") state.reads.push({ client, table });
           if (state.tableError === table) {
             return { data: null, error: { code: "XX000", message: `boom reading ${table}` }, count: null };
           }
@@ -195,6 +205,11 @@ const state = vi.hoisted(() => {
   }
 
   function writeInsert(table: string, client: "user" | "admin", op: Op, single: boolean) {
+    if (table === "missio_followups" && state.duplicateFollowup) {
+      state.duplicateFollowup = false;
+      state.writes.push({ client, table, op: "insert", payload: op.payload, filters: op.filters });
+      return { data: null, error: { code: "23505", message: "duplicate key" }, count: null };
+    }
     const payloads = Array.isArray(op.payload) ? op.payload : [op.payload ?? {}];
     const inserted: Row[] = [];
     for (const payload of payloads) {
@@ -225,17 +240,22 @@ const state = vi.hoisted(() => {
       state.tables[table].push(row);
       inserted.push(row);
     }
-    state.writes.push({ client, table, op: "insert", payload: payloads.length === 1 ? payloads[0] : payloads });
+    state.writes.push({ client, table, op: "insert", payload: payloads.length === 1 ? payloads[0] : payloads, filters: op.filters });
     const data = inserted.map((row) => project(row, op.select));
     if (single || data.length === 1) return { data: data[0] ?? null, error: null, count: null };
     return { data, error: null, count: null };
   }
 
   function writeUpdate(table: string, client: "user" | "admin", op: Op, maybe: boolean) {
-    const hits = (state.tables[table] ?? []).filter((row) => matches(row, op));
     const payload = (op.payload ?? {}) as Row;
-    for (const row of hits) Object.assign(row, payload);
-    state.writes.push({ client, table, op: "update", payload });
+    if (state.conflictTable === table) {
+      state.conflictTable = null;
+      state.writes.push({ client, table, op: "update", payload, filters: op.filters });
+      return { data: null, error: null, count: 0 };
+    }
+    const hits = (state.tables[table] ?? []).filter((row) => matches(row, op));
+    for (const row of hits) Object.assign(row, payload, { updated_at: "2026-11-18T00:00:00.000Z" });
+    state.writes.push({ client, table, op: "update", payload, filters: op.filters });
     const data = hits.map((row) => project(row, op.select));
     if (maybe) return { data: data[0] ?? null, error: null, count: data.length };
     return { data, error: null, count: data.length };
@@ -275,6 +295,9 @@ function reset() {
   state.userId = PASTOR;
   state.tableError = null;
   state.writes = [];
+  state.reads = [];
+  state.conflictTable = null;
+  state.duplicateFollowup = false;
   state.hits = new Map();
   state.seq = 0;
   state.tables = {
@@ -400,6 +423,7 @@ function reset() {
         stage: "contacted",
         assigned_leader_contact_id: ADA,
         created_at: "2026-11-02T11:00:00.000Z",
+        updated_at: "2026-11-02T11:00:00.000Z",
       },
     ],
     missio_followup_stage_history: [
@@ -541,6 +565,12 @@ describe("missio follow-up", () => {
     ]);
     const update = state.writes.find((write) => write.table === "missio_followups" && write.op === "update");
     expect(update).toMatchObject({ client: "user", payload: { stage: "visited_house" } });
+    expect(update?.filters).toEqual(
+      expect.arrayContaining([
+        { type: "eq", col: "stage", val: "contacted" },
+        { type: "eq", col: "updated_at", val: "2026-11-02T11:00:00.000Z" },
+      ])
+    );
     const notes = state.writes.filter((write) => write.table === "missio_followup_stage_history");
     expect(notes).toHaveLength(1);
     expect(notes[0]).toMatchObject({ client: "user", payload: { kind: "note", notes: "She visited", followup_id: FOLLOW } });
@@ -549,6 +579,17 @@ describe("missio follow-up", () => {
   });
 
   it("rejects a leader who is not on the leaders list and accepts one who is", async () => {
+    state.reads = [];
+    const missingId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee9";
+    const missing = await patchLeader(
+      new Request("https://hub.test/api/missio/follow-up", {
+        method: "PATCH",
+        body: JSON.stringify({ leaderContactId: missingId }),
+      }),
+      ctx(`r_${CARD}`)
+    );
+    const missingBody = await missing.json();
+    state.reads = [];
     const bad = await patchLeader(
       new Request("https://hub.test/api/missio/follow-up", {
         method: "PATCH",
@@ -557,6 +598,11 @@ describe("missio follow-up", () => {
       ctx(`r_${CARD}`)
     );
     expect(bad.status).toBe(400);
+    expect(missing.status).toBe(400);
+    expect(missingBody).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+    expect(await bad.json()).toEqual(missingBody);
+    expect(state.reads.filter((read) => read.client === "admin" || read.table === "contacts")).toEqual([]);
+    expect(JSON.stringify(missingBody)).not.toContain("Olivia");
     expect(state.writes.filter((write) => write.table === "missio_followups")).toHaveLength(0);
 
     const member = await patchLeader(
@@ -633,6 +679,15 @@ describe("missio follow-up", () => {
     expect(createdBody.person.email).toBeNull();
     expect(createdBody.person.key).toBe(`c_${createdBody.person.contactId}`);
     expect(state.writes.some((write) => write.table === "contacts" && write.op === "insert")).toBe(true);
+    const orgAt = state.writes.findIndex((write) => write.table === "org_people" && write.op === "insert");
+    const linkAt = state.writes.findIndex(
+      (write) =>
+        write.table === "connect_responses" &&
+        write.op === "update" &&
+        (write.payload as { matched_contact_id?: string }).matched_contact_id
+    );
+    expect(orgAt).toBeGreaterThan(-1);
+    expect(linkAt).toBeGreaterThan(orgAt);
     expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(true);
     const card = state.tables.connect_responses.find((row) => row.id === CARD);
     expect(card).toMatchObject({
@@ -675,6 +730,7 @@ describe("missio follow-up", () => {
     expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
 
     state.writes = [];
+    state.reads = [];
     const refused = await postContact(
       new Request("https://hub.test/api/missio/follow-up", { method: "POST", body: "" }),
       ctx(`r_${CARD_OUT}`)
@@ -689,6 +745,7 @@ describe("missio follow-up", () => {
     expect(JSON.stringify(refusedBody)).not.toContain("Olivia");
     expect(state.writes.some((write) => write.table === "org_people")).toBe(false);
     expect(state.writes.some((write) => write.table === "contacts")).toBe(false);
+    expect(state.reads.filter((read) => read.client === "admin" || read.table === "contacts")).toEqual([]);
 
     const picked = await postContact(
       new Request("https://hub.test/api/missio/follow-up", {
@@ -737,6 +794,38 @@ describe("missio follow-up", () => {
     });
     expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
     expect(state.tables.connect_responses.find((row) => row.id === "dddddddd-dddd-4ddd-8ddd-ddddddddddd5")?.matched_contact_id).toBeNull();
+    expect(state.tables.connect_responses.find((row) => row.id === "dddddddd-dddd-4ddd-8ddd-ddddddddddd5")?.matched_by ?? null).toBeNull();
+    expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
+  });
+
+  it("returns 409 when another pastor already claimed the card or the follow-up", async () => {
+    state.tables.connect_responses.find((row) => row.id === CARD)!.matched_by = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9";
+    const claimed = await postContact(
+      new Request("https://hub.test/api/missio/follow-up", { method: "POST", body: "" }),
+      ctx(`r_${CARD}`)
+    );
+    expect(claimed.status).toBe(409);
+    expect((await claimed.json()).code).toBe("conflict");
+    expect(state.writes.some((write) => write.table === "contacts" || write.table === "org_people")).toBe(false);
+
+    state.conflictTable = "missio_followups";
+    const raced = await patchStage(
+      new Request("https://hub.test", { method: "PATCH", body: JSON.stringify({ stage: "joined", note: "too late" }) }),
+      ctx(`c_${VEE}`)
+    );
+    expect(raced.status).toBe(409);
+    expect((await raced.json()).code).toBe("conflict");
+    expect(state.writes.some((write) => write.table === "missio_followup_stage_history")).toBe(false);
+    expect(state.tables.missio_followups.find((row) => row.id === FOLLOW)?.stage).toBe("contacted");
+
+    state.duplicateFollowup = true;
+    const dup = await patchStage(
+      new Request("https://hub.test", { method: "PATCH", body: JSON.stringify({ stage: "contacted" }) }),
+      ctx(`r_${CARD}`)
+    );
+    expect(dup.status).toBe(409);
+    expect((await dup.json()).code).toBe("conflict");
+    expect(state.tables.missio_followups.filter((row) => row.connect_response_id === CARD && row.id !== FOLLOW)).toHaveLength(0);
   });
 
   it("rejects a bad key, an unknown person, and a database error without leaking it", async () => {

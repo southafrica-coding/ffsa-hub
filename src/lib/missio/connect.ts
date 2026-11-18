@@ -10,8 +10,10 @@ import type { ConnectFieldErrors, ConnectVisitType } from "@/lib/missio/types";
 // migration 332 grants anon nothing and limits authenticated inserts to
 // source = 'manual'. This path only writes source 'qr'.
 //
-// A match sets matched_contact_id and matched_at. matched_by stays null.
-// Matching never creates org_people and never fails the submit.
+// A match sets matched_contact_id only for a contact who already has a
+// Missio org_people row. An FFSA-wide contact is left unmatched.
+// matched_by stays null. Matching never creates org_people and never fails
+// the submit.
 // The response is always { ok: true } — no ids, no contact fields.
 // rate_key_hash is an HMAC of the client IP (connectRateKeyHash). Never the raw IP.
 
@@ -193,26 +195,55 @@ async function contactIds(
   ];
 }
 
+/** Missio org_people ids among candidates. Null when the lookup fails. */
+async function missioContactIds(admin: Client, orgId: string, ids: string[]): Promise<string[] | null> {
+  if (ids.length === 0) return [];
+  const { data, error } = await admin.from("org_people").select("contact_id").eq("org_id", orgId).in("contact_id", ids);
+  if (error) {
+    console.error("[missio] connect org match failed", error.code ?? "org_people");
+    return null;
+  }
+  return [
+    ...new Set(
+      ((data ?? []) as Array<{ contact_id?: string }>)
+        .map((row) => row.contact_id)
+        .filter((id): id is string => typeof id === "string" && ids.includes(id))
+    ),
+  ];
+}
+
 /**
  * Phone, then email, then a unique case-sensitive full name.
- * More than one hit at a step stops the search. A lookup error is "no match".
+ * A step that finds any contact only keeps Missio org_people.
+ * Zero Missio rows, or more than one, stops the search. It does not
+ * fall through to the next step, and it does not keep an FFSA-wide id.
+ * A lookup error is "no match".
  */
 async function matchContact(
   admin: Client,
+  orgId: string,
   phone: string,
   email: string | null,
   name: string
 ): Promise<string | null> {
   const byPhone = await contactIds(admin, "contact_phones", "phone_normalized", phone);
   if (byPhone === null) return null;
-  if (byPhone.length === 1) return byPhone[0];
   if (byPhone.length > 1) return null;
+  if (byPhone.length === 1) {
+    const inOrg = await missioContactIds(admin, orgId, byPhone);
+    if (inOrg === null || inOrg.length !== 1) return null;
+    return inOrg[0];
+  }
 
   if (email) {
     const byEmail = await contactIds(admin, "contact_emails", "email_normalized", email);
     if (byEmail === null) return null;
-    if (byEmail.length === 1) return byEmail[0];
     if (byEmail.length > 1) return null;
+    if (byEmail.length === 1) {
+      const inOrg = await missioContactIds(admin, orgId, byEmail);
+      if (inOrg === null || inOrg.length !== 1) return null;
+      return inOrg[0];
+    }
   }
 
   const { first, last } = splitName(name);
@@ -226,7 +257,10 @@ async function matchContact(
     const ids = ((named.data ?? []) as Array<{ id?: string }>)
       .map((row) => row.id)
       .filter((id): id is string => Boolean(id));
-    return ids.length === 1 ? ids[0] : null;
+    if (ids.length !== 1) return null;
+    const inOrg = await missioContactIds(admin, orgId, ids);
+    if (inOrg === null || inOrg.length !== 1) return null;
+    return inOrg[0];
   }
 
   const [emptyLast, nullLast] = await Promise.all([
@@ -241,7 +275,10 @@ async function matchContact(
         .filter((id): id is string => Boolean(id))
     ),
   ];
-  return ids.length === 1 ? ids[0] : null;
+  if (ids.length !== 1) return null;
+  const inOrg = await missioContactIds(admin, orgId, ids);
+  if (inOrg === null || inOrg.length !== 1) return null;
+  return inOrg[0];
 }
 
 export async function submitConnectCard(args: { body: unknown; ip: string }): Promise<SubmitResult> {
@@ -292,7 +329,7 @@ export async function submitConnectCard(args: { body: unknown; ip: string }): Pr
   let matchedContactId: string | null = null;
   let matchedAt: string | null = null;
   try {
-    matchedContactId = await matchContact(admin.client, phone, email, collapse(parsed.data.name));
+    matchedContactId = await matchContact(admin.client, org.orgId, phone, email, collapse(parsed.data.name));
     if (matchedContactId) matchedAt = new Date().toISOString();
   } catch (error) {
     console.error("[missio] connect match threw", error instanceof Error ? error.name : "error");

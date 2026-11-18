@@ -26,12 +26,13 @@ import type {
 // This module never inserts kind = 'stage_change'. Notes omit changed_by
 // and let the column default fill auth.uid().
 //
-// Linking a card to an existing contact is allowed only when that contact
-// already has a Missio org_people row. A non-Missio FFSA contact returns
-// 409 exists_use_search and is not added. Creating a person from the card
-// uses the Phase 0 create path, which may insert org_people. The public
-// submit's matched_contact_id is left as an internal hint and is not enough
-// to pull someone into Missio.
+// Linking a card or assigning a leader checks Missio org_people on the
+// session client before any service-role read. Unknown and non-Missio
+// contacts get the same response, with no name lookup. A leader must also
+// be a current house leader or co-leader, or a Missio pastor.
+// State changes claim the follow-up or card with a conditional update
+// first. A lost claim is 409 and does not continue into side effects.
+// org_people is inserted before matched_contact_id is written.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -42,9 +43,11 @@ const VIEW = "missio_not_in_house";
 const VIEW_COLUMNS =
   "source, contact_id, connect_response_id, display_name, phone, email, wants_house_church, followup_stage, submitted_at";
 const FOLLOWUP_COLUMNS =
-  "id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, effective_stage, created_at";
+  "id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, effective_stage, created_at, updated_at";
+const FOLLOWUP_WRITE_COLUMNS =
+  "id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, created_at, updated_at";
 const CARD_COLUMNS =
-  "id, org_id, name, phone, email, visit_type, wants_house_church, wants_prayer, submitted_at, matched_contact_id, campus";
+  "id, org_id, name, phone, email, visit_type, wants_house_church, wants_prayer, submitted_at, matched_contact_id, matched_by, campus";
 const HISTORY_COLUMNS = "id, followup_id, from_stage, to_stage, changed_by, changed_at, notes, kind";
 
 /**
@@ -59,6 +62,9 @@ const EXISTS_USE_SEARCH = {
   error: "This person already exists. Search by their email or phone to add them.",
   code: "exists_use_search" as const,
 };
+
+const NOT_MISSIO = fail(400, "not_missio_person", "This person is not in Missio.");
+const CONFLICT = fail(409, "conflict", "Someone else updated this. Refresh and try again.");
 
 type ViewRow = {
   source: string;
@@ -81,6 +87,7 @@ type FollowupRow = {
   assigned_leader_contact_id: string | null;
   effective_stage?: string | null;
   created_at?: string | null;
+  updated_at?: string | null;
 };
 
 type CardRow = {
@@ -94,6 +101,7 @@ type CardRow = {
   wants_prayer: boolean | null;
   submitted_at: string | null;
   matched_contact_id: string | null;
+  matched_by?: string | null;
   campus: string | null;
 };
 
@@ -436,26 +444,50 @@ async function findFollowup(auth: OrgAccess, view: ViewRow): Promise<{ row: Foll
   };
 }
 
-async function insertFollowup(auth: OrgAccess, view: ViewRow, stage: FollowupStage): Promise<{ row: FollowupRow } | Fail> {
+async function insertFollowup(
+  auth: OrgAccess,
+  view: ViewRow,
+  stage: FollowupStage,
+  leaderContactId?: string | null
+): Promise<{ row: FollowupRow } | Fail> {
   if (!view.contact_id && !view.connect_response_id) return serverError("follow-up subject");
-  const inserted = await auth.supabase
-    .from("missio_followups")
-    .insert({
-      org_id: auth.orgId,
-      contact_id: view.contact_id,
-      connect_response_id: view.connect_response_id,
-      stage,
-    })
-    .select("id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, created_at")
-    .maybeSingle();
-  if (inserted.error?.code === "23505") {
-    const again = await findFollowup(auth, view);
-    if (isFail(again)) return again;
-    if (again.row) return { row: again.row };
-  }
+  const payload: Record<string, unknown> = {
+    org_id: auth.orgId,
+    contact_id: view.contact_id,
+    connect_response_id: view.connect_response_id,
+    stage,
+  };
+  if (leaderContactId !== undefined) payload.assigned_leader_contact_id = leaderContactId;
+  const inserted = await auth.supabase.from("missio_followups").insert(payload).select(FOLLOWUP_WRITE_COLUMNS).maybeSingle();
+  // Another pastor inserted the same person. Do not adopt or overwrite their row.
+  if (inserted.error?.code === "23505") return CONFLICT;
   if (inserted.error || !inserted.data?.id) return serverError("follow-up insert", inserted.error?.code ?? "insert");
   const row = inserted.data as FollowupRow;
   return { row: { ...row, effective_stage: row.stage } };
+}
+
+/**
+ * Compare-and-set. The where clause is the row we just read. Zero rows
+ * means another pastor changed it; callers must not continue into side effects.
+ */
+async function claimFollowup(
+  auth: OrgAccess,
+  row: FollowupRow,
+  patch: Record<string, unknown>
+): Promise<{ row: FollowupRow } | Fail> {
+  let query = auth.supabase
+    .from("missio_followups")
+    .update(patch)
+    .eq("id", row.id)
+    .eq("org_id", auth.orgId)
+    .eq("stage", row.stage);
+  if (row.updated_at) query = query.eq("updated_at", row.updated_at);
+  const updated = await query.select(FOLLOWUP_WRITE_COLUMNS).maybeSingle();
+  if (updated.error) return serverError("follow-up claim", updated.error.code ?? "update");
+  if (!updated.data?.id) return CONFLICT;
+  const next = updated.data as FollowupRow;
+  const stage = typeof patch.stage === "string" ? patch.stage : next.stage;
+  return { row: { ...next, effective_stage: stage } };
 }
 
 async function audit(
@@ -548,18 +580,10 @@ export async function setFollowupStage(
     const created = await insertFollowup(auth, view.row, stage);
     if (isFail(created)) return created;
     row = created.row;
-  } else if (row.stage !== stage) {
-    const updated = await auth.supabase
-      .from("missio_followups")
-      .update({ stage })
-      .eq("id", row.id)
-      .eq("org_id", auth.orgId)
-      .select("id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, created_at")
-      .maybeSingle();
-    if (updated.error || !updated.data?.id) return serverError("follow-up stage", updated.error?.code ?? "update");
-    row = { ...(updated.data as FollowupRow), effective_stage: stage };
   } else {
-    row = { ...row, effective_stage: row.effective_stage ?? row.stage };
+    const claimed = await claimFollowup(auth, row, { stage });
+    if (isFail(claimed)) return claimed;
+    row = claimed.row;
   }
 
   let entry: FollowupTimelineEntry | null = null;
@@ -656,11 +680,8 @@ export async function setFollowupLeader(
   }
   const leaderId = typeof leaderContactId === "string" ? leaderContactId.toLowerCase() : null;
   if (leaderId) {
-    const leaders = await listLeaders(auth);
-    if (!leaders.ok) return leaders;
-    if (!leaders.leaders.some((leader) => leader.contactId.toLowerCase() === leaderId)) {
-      return fail(400, "invalid_input", "Choose a leader from the list.");
-    }
+    const allowed = await requireAssignableLeader(auth, leaderId);
+    if (isFail(allowed)) return allowed;
   }
 
   const view = await loadViewRow(auth, key);
@@ -669,19 +690,14 @@ export async function setFollowupLeader(
   if (isFail(existing)) return existing;
   let row = existing.row;
   if (!row) {
-    const created = await insertFollowup(auth, view.row, "new");
+    const created = await insertFollowup(auth, view.row, "new", leaderId);
     if (isFail(created)) return created;
     row = created.row;
+  } else {
+    const claimed = await claimFollowup(auth, row, { assigned_leader_contact_id: leaderId });
+    if (isFail(claimed)) return claimed;
+    row = claimed.row;
   }
-  const updated = await auth.supabase
-    .from("missio_followups")
-    .update({ assigned_leader_contact_id: leaderId })
-    .eq("id", row.id)
-    .eq("org_id", auth.orgId)
-    .select("id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, created_at")
-    .maybeSingle();
-  if (updated.error || !updated.data?.id) return serverError("follow-up leader", updated.error?.code ?? "update");
-  row = { ...(updated.data as FollowupRow), effective_stage: (updated.data as FollowupRow).stage };
 
   await audit(auth.user.id, "missio.followup_leader", row.id, {
     key: keyFor(view.row.source === "contact" ? "contact" : "connect_response", view.row.contact_id, view.row.connect_response_id),
@@ -826,6 +842,10 @@ export async function addFollowupNote(
     const created = await insertFollowup(auth, view.row, "new");
     if (isFail(created)) return created;
     row = created.row;
+  } else {
+    const claimed = await claimFollowup(auth, row, { stage: row.stage });
+    if (isFail(claimed)) return claimed;
+    row = claimed.row;
   }
   const noted = await insertNote(auth, row.id, text);
   if (isFail(noted)) return noted;
@@ -833,7 +853,11 @@ export async function addFollowupNote(
   return { ok: true, entry: noted.entry };
 }
 
-async function missioContact(auth: OrgAccess, contactId: string): Promise<{ inMissio: boolean } | Fail> {
+/**
+ * User client only. A missing contact and an FFSA contact with no Missio
+ * org_people row are the same result. This does not read contacts.
+ */
+async function missioOrgPersonId(auth: OrgAccess, contactId: string): Promise<{ id: string } | Fail> {
   const { data, error } = await auth.supabase
     .from("org_people")
     .select("id")
@@ -841,59 +865,112 @@ async function missioContact(auth: OrgAccess, contactId: string): Promise<{ inMi
     .eq("contact_id", contactId)
     .maybeSingle();
   if (error) return serverError("follow-up contact", error.code ?? error.message);
-  return { inMissio: Boolean(data?.id) };
+  if (!data?.id) return NOT_MISSIO;
+  return { id: data.id as string };
 }
 
-async function identifierContactIds(admin: Client, card: CardRow): Promise<{ ids: string[] } | Fail> {
-  const ids = new Set<string>();
-  if (card.phone) {
-    const phones = await admin.from("contact_phones").select("contact_id").eq("phone_normalized", card.phone).limit(5);
-    if (phones.error) return serverError("follow-up contact", phones.error.code ?? phones.error.message);
-    for (const row of (phones.data ?? []) as Array<{ contact_id?: string }>) {
-      if (row.contact_id) ids.add(row.contact_id);
-    }
+async function isCurrentHouseLeader(auth: OrgAccess, contactId: string): Promise<boolean | Fail> {
+  const houses = await auth.supabase.from("house_churches").select("id").eq("org_id", auth.orgId);
+  if (houses.error) return serverError("follow-up leader", houses.error.code ?? houses.error.message);
+  const houseIds = ((houses.data ?? []) as Array<{ id?: string }>).map((row) => row.id).filter((id): id is string => Boolean(id));
+  if (houseIds.length === 0) return false;
+  const members = await auth.supabase
+    .from("house_church_members")
+    .select("role, started_at, ended_at")
+    .eq("contact_id", contactId)
+    .in("house_church_id", houseIds)
+    .in("role", ["leader", "co_leader"]);
+  if (members.error) return serverError("follow-up leader", members.error.code ?? members.error.message);
+  for (const row of (members.data ?? []) as Array<{ started_at?: string | null; ended_at?: string | null }>) {
+    if (membershipIsCurrent({ startedAt: row.started_at, endedAt: row.ended_at })) return true;
   }
-  if (card.email) {
-    const normalized = card.email.trim().toLowerCase();
-    const emails = await admin.from("contact_emails").select("contact_id").eq("email_normalized", normalized).limit(5);
-    if (emails.error) return serverError("follow-up contact", emails.error.code ?? emails.error.message);
-    for (const row of (emails.data ?? []) as Array<{ contact_id?: string }>) {
-      if (row.contact_id) ids.add(row.contact_id);
-    }
-  }
-  return { ids: [...ids] };
+  return false;
 }
 
-async function linkCard(
-  auth: OrgAccess,
-  card: CardRow,
-  contactId: string,
-  view: ViewRow,
-  outcome: "linked" | "created" = "linked"
-): Promise<{ ok: true; body: { person: FollowupPerson } } | Fail> {
-  const updated = await auth.supabase
+/**
+ * Pastor check runs only after org_people has already matched.
+ * Selects ids, not names. The user client is tried first; service role
+ * is only the fallback for users RLS, and only past that gate.
+ */
+async function isMissioPastorContact(auth: OrgAccess, contactId: string): Promise<boolean | Fail> {
+  const roles = await auth.supabase
+    .from("org_staff_roles")
+    .select("user_id")
+    .eq("org_id", auth.orgId)
+    .eq("role", "pastor");
+  if (roles.error) return serverError("follow-up leader", roles.error.code ?? roles.error.message);
+  const userIds = ((roles.data ?? []) as Array<{ user_id?: string }>)
+    .map((row) => row.user_id)
+    .filter((id): id is string => Boolean(id));
+  if (userIds.length === 0) return false;
+
+  const visible = await auth.supabase.from("users").select("id").in("id", userIds).eq("contact_id", contactId);
+  if (!visible.error && ((visible.data ?? []) as Array<{ id?: string }>).some((row) => row.id)) return true;
+
+  const admin = adminClient();
+  if ("error" in admin) return false;
+  const hidden = await admin.client.from("users").select("id").in("id", userIds).eq("contact_id", contactId);
+  if (hidden.error) return serverError("follow-up leader", hidden.error.code ?? "users");
+  return ((hidden.data ?? []) as Array<{ id?: string }>).some((row) => row.id);
+}
+
+async function requireAssignableLeader(auth: OrgAccess, contactId: string): Promise<{ ok: true } | Fail> {
+  const person = await missioOrgPersonId(auth, contactId);
+  if (isFail(person)) return person;
+  const leading = await isCurrentHouseLeader(auth, contactId);
+  if (typeof leading !== "boolean") return leading;
+  if (leading) return { ok: true };
+  const pastor = await isMissioPastorContact(auth, contactId);
+  if (typeof pastor !== "boolean") return pastor;
+  if (!pastor) return fail(400, "invalid_input", "Choose a leader from the list.");
+  return { ok: true };
+}
+
+/** Claim the card before any create. Zero rows means another pastor took it. */
+async function claimCard(auth: OrgAccess, card: CardRow, expectedContactId: string | null): Promise<{ ok: true } | Fail> {
+  let query = auth.supabase
     .from("connect_responses")
     .update({
-      matched_contact_id: contactId,
       matched_by: auth.user.id,
       matched_at: new Date().toISOString(),
     })
     .eq("id", card.id)
     .eq("org_id", auth.orgId)
-    .select("id")
-    .maybeSingle();
-  if (updated.error || !updated.data?.id) return serverError("follow-up contact link", updated.error?.code ?? "update");
+    .is("matched_by", null);
+  query = expectedContactId ? query.eq("matched_contact_id", expectedContactId) : query.is("matched_contact_id", null);
+  const updated = await query.select("id").maybeSingle();
+  if (updated.error) return serverError("follow-up contact claim", updated.error.code ?? "update");
+  if (!updated.data?.id) return CONFLICT;
+  return { ok: true };
+}
 
+async function releaseCard(auth: OrgAccess, cardId: string) {
+  const released = await auth.supabase
+    .from("connect_responses")
+    .update({ matched_by: null, matched_at: null })
+    .eq("id", cardId)
+    .eq("org_id", auth.orgId)
+    .eq("matched_by", auth.user.id)
+    .is("matched_contact_id", null);
+  if (released.error) console.error("[missio] connect card release failed", released.error.code ?? "update");
+}
+
+async function attachFollowupContact(auth: OrgAccess, view: ViewRow, card: CardRow, contactId: string) {
   const existing = await findFollowup(auth, { ...view, contact_id: contactId, connect_response_id: card.id });
   const followup = isFail(existing) ? null : existing.row;
   if (followup && !followup.contact_id) {
-    await auth.supabase
-      .from("missio_followups")
-      .update({ contact_id: contactId })
-      .eq("id", followup.id)
-      .eq("org_id", auth.orgId);
+    await auth.supabase.from("missio_followups").update({ contact_id: contactId }).eq("id", followup.id).eq("org_id", auth.orgId);
   }
+  return followup;
+}
 
+async function personAfterLink(
+  auth: OrgAccess,
+  card: CardRow,
+  contactId: string,
+  followup: FollowupRow | null,
+  outcome: "linked" | "created"
+): Promise<{ ok: true; body: { person: FollowupPerson } } | Fail> {
   const refs = await loadPersonRefs(auth, [contactId]);
   if (isFail(refs)) return refs;
   const leaders = await loadPersonRefs(auth, followup?.assigned_leader_contact_id ? [followup.assigned_leader_contact_id] : []);
@@ -936,37 +1013,20 @@ export async function linkFollowupContact(
   if (!card) return fail(404, "not_found", "Person not found.");
 
   if (card.matched_contact_id) {
-    const member = await missioContact(auth, card.matched_contact_id);
-    if (isFail(member)) return member;
-    if (!member.inMissio) {
-      await audit(auth.user.id, "missio.followup_contact", card.id, { outcome: "exists_use_search" });
-      return { ok: false, status: 409, ...EXISTS_USE_SEARCH };
+    // Org wall before any service-role read. Unknown and non-Missio look the same.
+    const person = await missioOrgPersonId(auth, card.matched_contact_id);
+    if (isFail(person)) {
+      if (person.code === "not_missio_person") return { ok: false, status: 409, ...EXISTS_USE_SEARCH };
+      return person;
     }
-    return linkCard(auth, card, card.matched_contact_id, view.row);
+    const claimed = await claimCard(auth, card, card.matched_contact_id);
+    if (isFail(claimed)) return claimed;
+    const followup = await attachFollowupContact(auth, view.row, card, card.matched_contact_id);
+    return personAfterLink(auth, card, card.matched_contact_id, followup, "linked");
   }
 
-  const admin = adminClient();
-  if ("error" in admin) return serverError("follow-up contact");
-  const found = await identifierContactIds(admin.client, card);
-  if (isFail(found)) return found;
-  if (found.ids.length > 0) {
-    const members = await auth.supabase
-      .from("org_people")
-      .select("contact_id")
-      .eq("org_id", auth.orgId)
-      .in("contact_id", found.ids);
-    if (members.error) return serverError("follow-up contact", members.error.code ?? members.error.message);
-    const inOrg = new Set(
-      ((members.data ?? []) as Array<{ contact_id?: string }>).map((row) => row.contact_id).filter((id): id is string => Boolean(id))
-    );
-    const outside = found.ids.filter((id) => !inOrg.has(id));
-    if (outside.length > 0 || inOrg.size !== 1) {
-      await audit(auth.user.id, "missio.followup_contact", card.id, { outcome: "exists_use_search" });
-      return { ok: false, status: 409, ...EXISTS_USE_SEARCH };
-    }
-    const [contactId] = [...inOrg];
-    return linkCard(auth, card, contactId, view.row);
-  }
+  const claimed = await claimCard(auth, card, null);
+  if (isFail(claimed)) return claimed;
 
   const created = await createPerson(auth, {
     name: card.name,
@@ -976,15 +1036,26 @@ export async function linkFollowupContact(
     status: "visitor",
   });
   if (!created.ok) {
+    await releaseCard(auth, card.id);
     if (created.code === "exists_use_search" || created.code === "already_in_org") {
-      await audit(auth.user.id, "missio.followup_contact", card.id, { outcome: created.code });
       return fail(created.status, created.code, created.error);
     }
     return fail(created.status === 400 ? 400 : 500, created.status === 400 ? "invalid_input" : "server_error", "Check the fields and try again.");
   }
 
   const contactId = created.body.person.contactId;
-  const linked = await linkCard(auth, card, contactId, view.row, "created");
-  if (!linked.ok) return linked;
-  return linked;
+  const linked = await auth.supabase
+    .from("connect_responses")
+    .update({ matched_contact_id: contactId })
+    .eq("id", card.id)
+    .eq("org_id", auth.orgId)
+    .eq("matched_by", auth.user.id)
+    .is("matched_contact_id", null)
+    .select("id")
+    .maybeSingle();
+  if (linked.error || !linked.data?.id) {
+    return serverError("follow-up contact link", linked.error?.code ?? "update");
+  }
+  const followup = await attachFollowupContact(auth, view.row, card, contactId);
+  return personAfterLink(auth, card, contactId, followup, "created");
 }

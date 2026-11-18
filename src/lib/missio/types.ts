@@ -93,6 +93,7 @@ export type MissioErrorCode =
   | "already_in_org"
   | "already_member"
   | "already_resolved"
+  | "conflict"
   | "not_missio_person"
   | "invalid_token"
   | "invalid_input"
