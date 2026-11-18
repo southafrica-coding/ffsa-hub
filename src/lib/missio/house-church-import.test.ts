@@ -537,6 +537,18 @@ describe("import write gate", () => {
     });
   });
 
+  it("parses --sheet-is-source and refuses it together with --allow-empty-pool", () => {
+    expect(parseImportCli(["houses.csv", "--sheet-is-source"])).toMatchObject({
+      ok: true,
+      sheetIsSource: true,
+      allowEmptyPool: false,
+      apply: false,
+    });
+    expect(parseImportCli(["houses.csv"])).toMatchObject({ ok: true, sheetIsSource: false });
+    const both = parseImportCli(["houses.csv", "--sheet-is-source", "--allow-empty-pool"]);
+    expect(both.ok).toBe(false);
+  });
+
   it("rejects --allow-empty-pool against the production ref", () => {
     const refused = checkEmptyOrgPeoplePool({ count: 0, allowEmptyPool: true, supabaseUrl: url });
     expect(refused.ok).toBe(false);

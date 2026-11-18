@@ -227,6 +227,7 @@ export function parseImportCli(argv: string[]):
       projectRef: string | null;
       approveProd: boolean;
       allowEmptyPool: boolean;
+      sheetIsSource: boolean;
     }
   | { ok: false; error: string } {
   let csvPath: string | null = null;
@@ -234,6 +235,7 @@ export function parseImportCli(argv: string[]):
   let projectRef: string | null = null;
   let approveProd = false;
   let allowEmptyPool = false;
+  let sheetIsSource = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] ?? "";
@@ -247,6 +249,10 @@ export function parseImportCli(argv: string[]):
     }
     if (arg === "--allow-empty-pool") {
       allowEmptyPool = true;
+      continue;
+    }
+    if (arg === "--sheet-is-source") {
+      sheetIsSource = true;
       continue;
     }
     if (arg === "--project-ref") {
@@ -269,7 +275,10 @@ export function parseImportCli(argv: string[]):
   }
 
   if (!csvPath) return { ok: false, error: "CSV path is required." };
-  return { ok: true, csvPath, apply, projectRef, approveProd, allowEmptyPool };
+  if (sheetIsSource && allowEmptyPool) {
+    return { ok: false, error: "Pass --sheet-is-source or --allow-empty-pool, not both." };
+  }
+  return { ok: true, csvPath, apply, projectRef, approveProd, allowEmptyPool, sheetIsSource };
 }
 
 /**

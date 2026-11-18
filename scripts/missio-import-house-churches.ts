@@ -7,6 +7,16 @@
 // The production ref thodakhvkcodfystnkxa also needs --i-have-approval-for-prod.
 // Do not point this at production without that approval.
 //
+// Sheet as the only source (no label backfill first):
+//   npx tsx scripts/missio-import-house-churches.ts ./houses.csv --sheet-is-source
+// The match pool becomes every contact, not Missio org_people. A full name
+// that matches exactly one contact is linked: the script inserts its
+// org_people row (migration 329's trigger then mirrors the Missio label) and
+// then the membership. A full name with no contact, several contacts, a first
+// name only, or a household label is staged for review. No contact is ever
+// created by this script. The empty-pool check does not apply in this mode,
+// because org_people is expected to start empty.
+//
 // Uses NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (already in .env.local).
 // Reads contacts with the service role. Auto-link prefers contacts that
 // already have a Missio org_people row. The Missio contact label is not a
@@ -82,7 +92,7 @@ async function fetchAll(db: Db, table: string, columns: string, apply?: (query: 
   return rows;
 }
 
-async function loadSnapshot(db: Db, orgId: string): Promise<ImportSnapshot> {
+async function loadSnapshot(db: Db, orgId: string, sheetIsSource = false): Promise<ImportSnapshot> {
   const houses = (await fetchAll(db, "house_churches", "id, org_id, number", (query) => query.eq("org_id", orgId))).map(
     (row): HouseRef => ({
       id: String(row.id),
@@ -96,9 +106,22 @@ async function loadSnapshot(db: Db, orgId: string): Promise<ImportSnapshot> {
   ).map((row) => String(row.contact_id));
   // Match pool is Missio org_people only. The Missio label is never the pool.
   // Hub Data backfills org_people from labelled contacts before this import.
-  const matchIds = [...new Set(orgPeopleContactIds)];
+  let matchIds = [...new Set(orgPeopleContactIds)];
   const contacts: ContactName[] = [];
-  for (let index = 0; index < matchIds.length; index += 200) {
+  if (sheetIsSource) {
+    // The sheet decides who is a Missio person, so every contact may match.
+    const named = await fetchAll(db, "contacts", "id, first_name, last_name, preferred_name");
+    for (const row of named) {
+      contacts.push({
+        id: String(row.id),
+        firstName: (row.first_name as string | null) ?? null,
+        lastName: (row.last_name as string | null) ?? null,
+        preferredName: (row.preferred_name as string | null) ?? null,
+      });
+    }
+    matchIds = contacts.map((contact) => contact.id);
+  }
+  for (let index = 0; !sheetIsSource && index < matchIds.length; index += 200) {
     const slice = matchIds.slice(index, index + 200);
     const named = await fetchAll(db, "contacts", "id, first_name, last_name, preferred_name", (query) =>
       query.in("id", slice)
@@ -258,15 +281,19 @@ async function main() {
     process.exit(1);
   }
 
-  const snapshot = await loadSnapshot(db, org.data.id as string);
-  const pool = checkEmptyOrgPeoplePool({
-    count: snapshot.orgPeopleContactIds.length,
-    allowEmptyPool: args.allowEmptyPool,
-    supabaseUrl,
-  });
-  if (!pool.ok) {
-    console.error(pool.error);
-    process.exit(1);
+  const snapshot = await loadSnapshot(db, org.data.id as string, args.sheetIsSource);
+  if (!args.sheetIsSource) {
+    const pool = checkEmptyOrgPeoplePool({
+      count: snapshot.orgPeopleContactIds.length,
+      allowEmptyPool: args.allowEmptyPool,
+      supabaseUrl,
+    });
+    if (!pool.ok) {
+      console.error(pool.error);
+      process.exit(1);
+    }
+  } else {
+    console.log(`Sheet is the source: matching against all ${snapshot.contacts.length} contacts.`);
   }
   const result = await runHouseChurchImport({
     rows: parsed.rows,
