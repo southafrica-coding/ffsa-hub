@@ -1035,18 +1035,43 @@ SELECT pg_temp.expect('service role cannot assign a leader who is not in the org
     FROM public.organisations WHERE slug = 'missio'
   $$),
   '23503 missio_contact_not_in_org');
+SELECT pg_temp.expect('service role qr with a match is rejected',
+  pg_temp.fail('service', $$
+    INSERT INTO public.connect_responses (
+      org_id, name, phone, visit_type, source, matched_contact_id
+    )
+    SELECT id, 'Qr Match', '5550133', 'first_time', 'qr',
+           'c2222222-2222-2222-2222-222222222222'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  '23514 missio_match_requires_pastor');
+SELECT pg_temp.expect('service role manual with a match is rejected',
+  pg_temp.fail('service', $$
+    INSERT INTO public.connect_responses (
+      org_id, name, phone, visit_type, source, matched_contact_id
+    )
+    SELECT id, 'Manual Match', '5550134', 'first_time', 'manual',
+           'c2222222-2222-2222-2222-222222222222'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  '23514 missio_match_requires_pastor');
 SELECT pg_temp.expect('service role keeps the supplied matched_by',
   pg_temp.exec('service', $$
     INSERT INTO public.connect_responses (
-      id, org_id, name, phone, visit_type, source,
-      matched_contact_id, matched_by, matched_at
+      id, org_id, name, phone, visit_type, source
     )
     SELECT 'd8888888-8888-4888-8888-888888888888', id,
-           'Kept By', '5550133', 'first_time', 'qr',
-           'c2222222-2222-2222-2222-222222222222',
-           'a4444444-4444-4444-4444-444444444444',
-           timestamptz '2000-01-01'
+           'Kept By', '5550133', 'first_time', 'qr'
     FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('service role can match the card afterwards',
+  pg_temp.exec('service', $$
+    UPDATE public.connect_responses
+       SET matched_contact_id = 'c2222222-2222-2222-2222-222222222222',
+           matched_by = 'a4444444-4444-4444-4444-444444444444',
+           matched_at = timestamptz '2000-01-01'
+     WHERE id = 'd8888888-8888-4888-8888-888888888888'
   $$),
   'rows=1');
 SELECT pg_temp.expect('matched_by stayed and matched_at is now',
@@ -1225,6 +1250,15 @@ SELECT pg_temp.expect('nine-digit 111111111 is the ZA number phone.ts accepts',
 SELECT pg_temp.expect('ten-digit junk 1111111111 is null',
   (SELECT (public.missio_phone_e164('1111111111') IS NULL)::text),
   'true');
+SELECT pg_temp.expect('a leading 27 drops the extension digit',
+  (SELECT public.missio_phone_e164('27821234567 ext. 9')),
+  '+27821234567');
+SELECT pg_temp.expect('a spaced leading 27 drops the extension digit',
+  (SELECT public.missio_phone_e164('27 82 123 4567 ext. 9')),
+  '+27821234567');
+SELECT pg_temp.expect('anon cannot execute the digit fold',
+  (NOT has_function_privilege('anon', 'public.missio_fold_phone_digits(text)', 'EXECUTE'))::text,
+  'true');
 SELECT pg_temp.expect('phone ext. 9 is ignored',
   (SELECT public.missio_phone_e164('0821234567 ext. 9')),
   '+27821234567');
@@ -1242,7 +1276,7 @@ SELECT pg_temp.expect('devanagari digits do not normalize',
   'true');
 
 SELECT pg_temp.expect('a known contact card is stored',
-  pg_temp.exec('service', $$
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
     INSERT INTO public.connect_responses (
       id, org_id, name, phone, visit_type, source, matched_contact_id
     )
@@ -1318,6 +1352,208 @@ SELECT pg_temp.expect('confirm writes the connect card and keeps one open follow
         WHERE id = 'dbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2')
   $$),
   '1/1/confirmed');
+SELECT pg_temp.expect('a confirmed match cannot be cleared',
+  pg_temp.fail('service', $$
+    UPDATE public.connect_responses
+       SET matched_contact_id = NULL
+     WHERE id = 'dbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
+  $$),
+  '23514 missio_match_locked');
+SELECT pg_temp.expect('a confirmed match cannot be moved',
+  pg_temp.fail('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.connect_responses
+       SET matched_contact_id = 'c3333333-3333-3333-3333-333333333333'
+     WHERE id = 'dbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
+  $$),
+  '23514 missio_match_locked');
+SELECT pg_temp.expect('a caller cannot set the match columns',
+  pg_temp.exec('service', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source,
+      match_status, suggested_contact_id
+    )
+    SELECT
+      'dccccccc-cccc-4ccc-8ccc-ccccccccccc1',
+      id, 'Caller Status', '5550144', 'first_time', 'qr',
+      'confirmed', 'c5555555-5555-5555-5555-555555555555'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('the caller status was ignored',
+  pg_temp.scalar('service', $$
+    SELECT match_status || '/' || coalesce(suggested_contact_id::text, '')
+      || '/' ||
+      (SELECT count(*)::text FROM public.missio_followups
+        WHERE connect_response_id = 'dccccccc-cccc-4ccc-8ccc-ccccccccccc1')
+    FROM public.connect_responses
+    WHERE id = 'dccccccc-cccc-4ccc-8ccc-ccccccccccc1'
+  $$),
+  'unmatched//1');
+SELECT pg_temp.expect('a caller cannot force a phone match to attach',
+  pg_temp.exec('service', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source, match_status
+    )
+    SELECT
+      'dccccccc-cccc-4ccc-8ccc-ccccccccccc2',
+      id, 'Forced', '0831234567', 'first_time', 'qr', 'unmatched'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('the forced card is pending and has no follow-up',
+  pg_temp.scalar('service', $$
+    SELECT match_status || '/' || suggested_contact_id::text || '/' ||
+      (SELECT count(*)::text FROM public.missio_followups
+        WHERE connect_response_id = 'dccccccc-cccc-4ccc-8ccc-ccccccccccc2')
+    FROM public.connect_responses
+    WHERE id = 'dccccccc-cccc-4ccc-8ccc-ccccccccccc2'
+  $$),
+  'pending_confirm/c1111111-1111-1111-1111-111111111111/0');
+SELECT pg_temp.expect('a suggested contact outside the org is rejected',
+  pg_temp.fail('service', $$
+    UPDATE public.connect_responses
+       SET suggested_contact_id = 'c5555555-5555-5555-5555-555555555555'
+     WHERE id = 'dccccccc-cccc-4ccc-8ccc-ccccccccccc2'
+  $$),
+  '23503 missio_contact_not_in_org');
+
+ALTER TABLE public.connect_responses DISABLE TRIGGER trg_connect_response_set_match;
+SELECT pg_temp.expect('pending_confirm requires a suggestion and no match',
+  pg_temp.fail('service', $$
+    INSERT INTO public.connect_responses (
+      org_id, name, phone, visit_type, source, match_status
+    )
+    SELECT id, 'Bad Pending', '5550145', 'first_time', 'qr', 'pending_confirm'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  '23514 new row for relation "connect_responses" violates check constraint "connect_responses_pending_confirm_check"');
+SELECT pg_temp.expect('confirmed requires a match',
+  pg_temp.fail('service', $$
+    INSERT INTO public.connect_responses (
+      org_id, name, phone, visit_type, source, match_status
+    )
+    SELECT id, 'Bad Confirmed', '5550146', 'first_time', 'qr', 'confirmed'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  '23514 new row for relation "connect_responses" violates check constraint "connect_responses_confirmed_check"');
+SELECT pg_temp.expect('unmatched cannot carry a match',
+  pg_temp.fail('service', $$
+    INSERT INTO public.connect_responses (
+      org_id, name, phone, visit_type, source, match_status, matched_contact_id
+    )
+    SELECT id, 'Bad Unmatched', '5550147', 'first_time', 'qr', 'unmatched',
+           'c1111111-1111-1111-1111-111111111111'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  '23514 new row for relation "connect_responses" violates check constraint "connect_responses_unmatched_check"');
+ALTER TABLE public.connect_responses ENABLE TRIGGER trg_connect_response_set_match;
+
+SELECT pg_temp.expect('a family phone known card is stored',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source, matched_contact_id
+    )
+    SELECT
+      'dddddddd-dddd-4ddd-8ddd-ddddddddddd1',
+      id, 'Household', '0841234567', 'regular', 'manual',
+      'c2222222-2222-2222-2222-222222222222'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('the other person on that phone waits',
+  pg_temp.exec('service', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source
+    )
+    SELECT
+      'dddddddd-dddd-4ddd-8ddd-ddddddddddd2',
+      id, 'Family Member', '084 123 4567', 'first_time', 'qr'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('the family card is pending and not on the timeline',
+  pg_temp.scalar('service', $$
+    SELECT match_status || '/' || suggested_contact_id::text || '/' ||
+      (SELECT count(*)::text FROM public.missio_followup_stage_history
+        WHERE kind = 'connect_card'
+          AND connect_response_id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd2')
+    FROM public.connect_responses
+    WHERE id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd2'
+  $$),
+  'pending_confirm/c2222222-2222-2222-2222-222222222222/0');
+SELECT pg_temp.expect('someone who is not a pastor cannot decline',
+  pg_temp.fail('a4444444-4444-4444-4444-444444444444', $$
+    SELECT public.decline_missio_connect_match('dddddddd-dddd-4ddd-8ddd-ddddddddddd2')
+  $$),
+  '42501 missio_pastor_required');
+SELECT pg_temp.expect('the pastor declines the shared phone',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    SELECT public.decline_missio_connect_match('dddddddd-dddd-4ddd-8ddd-ddddddddddd2')
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('decline gives the newcomer their own follow-up',
+  pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
+    SELECT
+      cr.match_status || '/' || coalesce(cr.suggested_contact_id::text, '')
+      || '/' || coalesce(f.contact_id::text, '')
+      || '/' || f.stage
+      || '/' || h.changed_by::text
+      || '/' ||
+      (SELECT count(*)::text FROM public.missio_followup_stage_history hx
+        JOIN public.missio_followups fx ON fx.id = hx.followup_id
+        WHERE fx.contact_id = 'c2222222-2222-2222-2222-222222222222'
+          AND hx.connect_response_id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd2')
+    FROM public.connect_responses cr
+    JOIN public.missio_followups f ON f.connect_response_id = cr.id
+    JOIN public.missio_followup_stage_history h
+      ON h.followup_id = f.id AND h.kind = 'connect_card'
+    WHERE cr.id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd2'
+  $$),
+  'unmatched///new/a1111111-1111-1111-1111-111111111111/0');
+SELECT pg_temp.expect('a confirmed card cannot be declined',
+  pg_temp.fail('a1111111-1111-1111-1111-111111111111', $$
+    SELECT public.decline_missio_connect_match('dddddddd-dddd-4ddd-8ddd-ddddddddddd1')
+  $$),
+  '23514 missio_decline_not_pending');
+
+INSERT INTO public.contacts (id, first_name, last_name)
+VALUES ('c6666666-6666-6666-6666-666666666666', 'Gone', 'Person');
+INSERT INTO public.org_people (org_id, contact_id, campus, status)
+SELECT id, 'c6666666-6666-6666-6666-666666666666', 'potch', 'active'
+FROM public.organisations WHERE slug = 'missio';
+SELECT pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+  INSERT INTO public.connect_responses (
+    id, org_id, name, phone, visit_type, source, matched_contact_id
+  )
+  SELECT
+    'dddddddd-dddd-4ddd-8ddd-ddddddddddd3',
+    id, 'Leaving', '0851234567', 'regular', 'manual',
+    'c6666666-6666-6666-6666-666666666666'
+  FROM public.organisations WHERE slug = 'missio'
+$$);
+DELETE FROM public.org_people
+WHERE contact_id = 'c6666666-6666-6666-6666-666666666666';
+SELECT pg_temp.expect('a phone match to someone who left the org is rejected',
+  pg_temp.fail('service', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source
+    )
+    SELECT
+      'dddddddd-dddd-4ddd-8ddd-ddddddddddd4',
+      id, 'After They Left', '0851234567', 'first_time', 'qr'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  '23503 missio_contact_not_in_org');
+SELECT pg_temp.expect('the rejected phone match created no card and no follow-up',
+  pg_temp.scalar('service', $$
+    SELECT
+      (SELECT count(*) FROM public.connect_responses
+        WHERE id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd4')::text
+      || '/' ||
+      (SELECT count(*) FROM public.missio_followups
+        WHERE connect_response_id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd4')::text
+  $$),
+  '0/0');
 
 -- ── Report ────────────────────────────────────────────────
 DO $$
