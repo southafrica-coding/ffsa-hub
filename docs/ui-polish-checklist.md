@@ -36,7 +36,7 @@ const overflows = shellOverflow || pageOverflow;
 
 A table or a week grid may scroll inside its own box. The shell pane and the page may not. Fix overflow in the screen you are editing. Do not paper over it with `overflow-x: hidden` on `body` or on `[data-shell-main]`.
 
-Missio has no `[data-shell-main]` and no `<main>`. The scrolling column is a hashed CSS-module class, so there is no stable hook yet. A `data-missio-main` attribute on that column is a suggested follow-up. Until then, compare the document and list every element that is wider than its own box. A region that is supposed to scroll (a wide table inside its own overflow box) is not a failure. The content column and the page are.
+Missio has no `[data-shell-main]` and no `<main>`. The scrolling column is a hashed CSS-module class, so there is no stable hook yet. A `data-missio-main` attribute on that column is a suggested follow-up. Until then, compare the document and list every element that is wider than its own box.
 
 ```js
 const doc = document.documentElement;
@@ -45,6 +45,8 @@ const offenders = [...document.querySelectorAll("body *")].filter(
   (el) => el.scrollWidth > el.clientWidth
 );
 ```
+
+Read the hits before treating them as a failure. Text cut off with an ellipsis, or overflow that is deliberately hidden, is fine. The content column or the page wrapper showing up in that list is a failure. A region that is supposed to scroll, such as a wide table inside its own box, is not.
 
 Showcase surfaces are only:
 
@@ -56,7 +58,7 @@ Dense admin tables and widgets are not showcase surfaces. That includes the dash
 
 ## Colour, frame, corners
 
-The org switcher re-skins the Hub per organisation. Each skin has one type system, and a screen should stay inside it. Do not put Archivo on an FFSA screen. Missio’s type system is Archivo and Fraunces. A few global FFSA Roboto Mono rules currently leak in (the org pill, the Add person button, and the Campus label). That leak is known. Do not add more. Fix it with a scoped CSS-module override, not a change to the global rules in `globals.css`.
+The org switcher re-skins the Hub per organisation. Each skin has one type system, and a screen should stay inside it. Do not put Archivo on an FFSA screen. Missio’s type system is Archivo and Fraunces. Global FFSA button and label rules currently leak in, for example the org pill, Add person, the Campus label, Status, Search, Edit, and the drawer M mark. That leak is known. Do not add more. Fix it with a scoped CSS-module override, not a change to the global rules in `globals.css`.
 
 **FFSA** is the black icon rail, bone module panel, and white content. Colour comes from the variables on `:root` in `globals.css`.
 
@@ -175,7 +177,7 @@ Loaded in `src/components/missio/fonts.ts`:
 | Body | `--font-missio-body` | Archivo | Sentences, names, table cells, the shell |
 | Display | `--font-missio-display` | Fraunces | Titles, including the portaled dialog |
 
-Missio’s own rules set Archivo and Fraunces. A few global FFSA Roboto Mono rules currently leak in (the org pill, the Add person button, and the Campus label). That leak is known. Do not add more Roboto, Roboto Condensed, or Roboto Mono on a Missio screen. Fix a leak with a scoped CSS-module override, not by editing `globals.css`. The dialog’s scoped button rule already keeps Archivo so the global FFSA button face does not take the dialog. Do not add a third family.
+Missio’s own rules set Archivo and Fraunces. Global FFSA button and label rules currently leak in, for example the org pill, Add person, the Campus label, Status, Search, Edit, and the drawer M mark. That leak is known. Do not add more Roboto, Roboto Condensed, or Roboto Mono on a Missio screen. Fix a leak with a scoped CSS-module override, not by editing `globals.css`. The dialog’s scoped button rule already keeps Archivo so the global FFSA button face does not take the dialog. Do not add a third family.
 
 ## 6. Type scale
 
@@ -216,6 +218,14 @@ Sizes below are what `src/components/missio/shell.module.css` sets. Titles are F
 | Card title | 14px | 600 | — | 0 | Archivo |
 | Eyebrow | 12px | — | — | 0 | Archivo |
 
+Content-page scale, from `content.module.css` on the Missio polish. These rows override the shell sizes above on the home and people pages. The face stays Fraunces for the title and Archivo for the rest.
+
+| Role | Size | Weight | Line-height | Tracking | Face |
+| --- | --- | --- | --- | --- | --- |
+| Page title | 40px | 600 | 1.15 | -0.01em | Fraunces, sentence case |
+| Intro and body | 14px | 400 | 1.6 (card body 1.5) | 0 | Archivo |
+| Card title | 16px | 600 | 1.25 | 0 | Archivo |
+
 ## 7–10. Showcase only
 
 Do not apply these to a dashboard widget, a people table, or any other dense admin surface.
@@ -235,6 +245,6 @@ Do not apply these to a dashboard widget, a people table, or any other dense adm
 - [ ] The screen stays in one type system: Roboto on FFSA, Archivo and Fraunces on Missio. Do not add another Roboto Mono leak on Missio.
 - [ ] Copy is sentence case, specific, and free of the filler list. A SOON nav tag is the only “coming next” signal. Numbers are real.
 - [ ] The screen has one masthead and at most one needs-you band.
-- [ ] Corners are square. Regions are rules, not shadows.
+- [ ] Corners are square on FFSA. Regions are rules, not shadows.
 - [ ] Passes 7–10 appear only on the org switcher, the Missio landing, or a public page.
 - [ ] A 390px screenshot is in the PR. At 360, 390, and 430px, `[data-shell-main]` does not have `scrollWidth > clientWidth` where that element exists, and the document is not wider than its client width. On Missio, use the document-and-offenders check until `data-missio-main` exists.
