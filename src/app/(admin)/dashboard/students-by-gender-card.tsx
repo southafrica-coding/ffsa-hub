@@ -35,9 +35,11 @@ export function StudentsByGenderCard() {
 
   return (
     <WidgetShell title="Gender by school" href="/schools">
-      <WidgetCaption>
-        {data.overall.total} accepted or enrolled &middot; not the same as a school roster
-      </WidgetCaption>
+      {data.overall.total > 0 ? (
+        <WidgetCaption>
+          {data.overall.total} accepted or enrolled · not the same as a school roster
+        </WidgetCaption>
+      ) : null}
       <div
         className="flex items-center justify-between"
         style={{

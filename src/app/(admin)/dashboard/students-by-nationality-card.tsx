@@ -34,15 +34,16 @@ export function StudentsByNationalityCard() {
 
   return (
     <WidgetShell title="Citizenship" href="/schools">
-      <WidgetCaption>
-        {data.overall.total} accepted or enrolled &middot; not the same as a school roster
-      </WidgetCaption>
+      {data.overall.total > 0 ? (
+        <WidgetCaption>
+          {data.overall.total} accepted or enrolled · not the same as a school roster
+        </WidgetCaption>
+      ) : null}
       <div
-        className="flex items-center justify-between flex-wrap"
+        className="flex min-w-0 items-center justify-between"
         style={{
-          padding: "0.75rem 1.5rem",
+          padding: "12px 24px",
           borderBottom: "1px solid var(--rule)",
-          gap: "0.5rem",
         }}
       >
         <select
@@ -51,6 +52,7 @@ export function StudentsByNationalityCard() {
             setProgramId(e.target.value);
             setExpanded(false);
           }}
+          className="w-full max-w-full min-w-0"
           style={pickerStyle}
           aria-label="Filter by school"
         >

@@ -91,9 +91,6 @@ export function PrayerWeekCard() {
       ) : !hasAny ? (
         <div className="flex flex-col items-center justify-center gap-2 px-6 py-8 text-center">
           <p className="text-sm font-medium text-[color:var(--text-primary)]">No prayer sets scheduled this week.</p>
-          <Link href="/prayer-room" className="text-sm text-ink">
-            Open the prayer room
-          </Link>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7" style={{ gap: 1, background: "var(--surface-2)" }}>
@@ -174,7 +171,7 @@ export function PrayerWeekCard() {
 
 const shell: React.CSSProperties = {
   background: "var(--surface-1)",
-  border: "1px solid var(--rule)",
-  borderRadius: 14,
+  border: "1px solid var(--ink)",
+  borderRadius: 0,
   overflow: "hidden",
 };

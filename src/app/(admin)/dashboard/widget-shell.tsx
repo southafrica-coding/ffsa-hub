@@ -62,7 +62,9 @@ export function Metric({
 // students, which is deliberately a different (larger) set than a school
 // roster — without saying so, the bars read as a wrong headcount.
 export function WidgetCaption({ children }: { children: React.ReactNode }) {
-  return <p className="mono-label border-b border-rule px-6 py-2">{children}</p>;
+  return (
+    <p className="border-b border-rule px-6 py-2 text-sm text-[color:var(--text-secondary)]">{children}</p>
+  );
 }
 
 export function WidgetEmpty({ children }: { children: React.ReactNode }) {
