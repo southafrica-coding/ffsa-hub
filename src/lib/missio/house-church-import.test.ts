@@ -138,9 +138,21 @@ describe("house church import planner", () => {
       classifyHouseChurchRow({ kind: "person", first: "José", last: "O'Brien" }, contacts, missioIds([ADA, GRACE]))
     ).toEqual({
       action: "review",
-      matchType: "non_missio_contact",
+      matchType: "none",
       candidateContactIds: [],
     });
+    const ffsaOnly = "cccccccc-cccc-4ccc-8ccc-ccccccccccc9";
+    const withOutside = [
+      ...contacts,
+      { id: ffsaOnly, firstName: "Pat", lastName: "Only", preferredName: null },
+    ];
+    const outside = classifyHouseChurchRow(
+      { kind: "person", first: "Pat", last: "Only" },
+      withOutside,
+      missioIds([ADA])
+    );
+    expect(outside).toEqual({ action: "review", matchType: "none", candidateContactIds: [] });
+    expect(JSON.stringify(outside)).not.toContain(ffsaOnly);
     expect(
       classifyHouseChurchRow({ kind: "person", first: "Alan", last: "Turing" }, contacts, missioIds([ALAN_A]))
     ).toEqual({
@@ -165,26 +177,24 @@ describe("house church import planner", () => {
       resolvedLeftUntouched: 0,
     });
     expect(planned.plan.summary.toReviewByReason).toEqual({
-      none: 0,
-      multiple: 2,
+      none: 5,
+      multiple: 0,
       family_label: 1,
       first_only: 1,
       partial: 0,
-      non_missio_contact: 3,
+      non_missio_contact: 0,
     });
     expect(planned.plan.orgPeopleToCreate).toEqual([]);
     expect(planned.plan.links.map((link) => [link.rawName, link.houseNumber, link.outcome, link.role])).toEqual([
       ["Ada Lovelace", 1, "insert", "leader"],
     ]);
-    expect(planned.plan.reviews.filter((review) => review.matchType === "non_missio_contact").map((review) => review.rawName)).toEqual([
-      "Grace Hopper",
-      "Grace Hopper",
-      "Jose Obrien",
-    ]);
-    expect(planned.plan.reviews.every((review) => review.candidateContactIds.every((id) => id === ADA))).toBe(true);
+    const outsideIds = new Set([GRACE, ALAN_A, ALAN_B, JOSE]);
+    expect(
+      planned.plan.reviews.every((review) => review.candidateContactIds.every((id) => !outsideIds.has(id)))
+    ).toBe(true);
     const text = formatImportSummary(planned.plan.summary, planned.plan.conflicts);
     expect(text).toContain("org_people to create: 0");
-    expect(text).toContain("non_missio_contact: 3");
+    expect(text).toContain("none: 5");
     expect(text).toContain("auto-linked: 1");
   });
 

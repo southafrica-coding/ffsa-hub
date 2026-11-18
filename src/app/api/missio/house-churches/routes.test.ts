@@ -44,6 +44,7 @@ const state = vi.hoisted(() => {
     rpcError: null as { message: string } | null,
     tableError: null as string | null,
     failInsert: null as string | null,
+    constraintError: null as { table: string; code: string; message: string } | null,
     adminBuilds: 0,
     ops: [] as { client: "user" | "admin"; table: string; op: Op }[],
     writes: [] as Write[],
@@ -248,6 +249,11 @@ const state = vi.hoisted(() => {
       state.failInsert = null;
       return { data: null, error: { code: "XX000", message: "insert failed" }, count: null };
     }
+    if (state.constraintError?.table === table) {
+      const constraint = state.constraintError;
+      state.constraintError = null;
+      return { data: null, error: { code: constraint.code, message: constraint.message }, count: null };
+    }
     const payloads = Array.isArray(op.payload) ? op.payload : [op.payload ?? {}];
     const inserted: Row[] = [];
     for (const payload of payloads) {
@@ -298,6 +304,11 @@ const state = vi.hoisted(() => {
   }
 
   function doUpdate(table: string, client: "user" | "admin", op: Op, maybe: boolean, single: boolean) {
+    if (state.constraintError?.table === table) {
+      const constraint = state.constraintError;
+      state.constraintError = null;
+      return { data: null, error: { code: constraint.code, message: constraint.message }, count: null };
+    }
     const hits = state.tables[table].filter((row) => matches(row, op));
     const payload = (op.payload ?? {}) as Row;
     for (const row of hits) Object.assign(row, payload, { updated_at: "2026-04-02T00:00:00.000Z" });
@@ -350,6 +361,7 @@ function reset() {
   state.rpcError = null;
   state.tableError = null;
   state.failInsert = null;
+  state.constraintError = null;
   state.adminBuilds = 0;
   state.ops = [];
   state.writes = [];
@@ -788,9 +800,30 @@ describe("membership writes", () => {
     expect((await post(HOUSE_1, { contactId: ADA, role: "boss" })).status).toBe(400);
     expect((await post(HOUSE_1, { contactId: "nope", role: "member" })).status).toBe(400);
     expect((await post(HOUSE_1, { contactId: ADA, role: "member", extra: true })).status).toBe(400);
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
     expect((await post("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee9", { contactId: ADA, role: "member" })).status).toBe(404);
     expect(state.tables.house_church_members).toEqual([]);
-    expect(state.tables.org_people).toEqual([]);
+  });
+
+  it("returns the same not_missio_person response for a missing contact and an FFSA-only contact", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: OUTSIDE, first: "Outside", last: "Person", inOrg: false });
+    const missingId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee9";
+    state.ops = [];
+    state.writes = [];
+    const missing = await post(HOUSE_1, { contactId: missingId, role: "member" });
+    const missingBody = await missing.json();
+    state.ops = [];
+    state.writes = [];
+    const outside = await post(HOUSE_1, { contactId: OUTSIDE, role: "member" });
+    const outsideBody = await outside.json();
+    expect(missing.status).toBe(400);
+    expect(outside.status).toBe(400);
+    expect(missingBody).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+    expect(outsideBody).toEqual(missingBody);
+    expect(state.ops.some((op) => op.table === "contacts")).toBe(false);
+    expect(state.writes.some((write) => write.table === "org_people" || write.table === "house_church_members")).toBe(false);
+    expect(state.tables.house_church_members).toEqual([]);
   });
 
   it("changes a role and ends a membership without touching org_people", async () => {
@@ -854,6 +887,23 @@ describe("membership writes", () => {
     expect(await res.json()).toEqual({ error: "Something went wrong.", code: "server_error" });
     expect(state.tables.house_church_members).toEqual([]);
     expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
+  });
+
+  it("maps a future end date from the database to 409 and hides the database text", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    addMember({ houseId: HOUSE_1, contactId: ADA, role: "member" });
+    state.constraintError = {
+      table: "house_church_members",
+      code: "23514",
+      message: "missio_ended_at_in_future",
+    };
+    const res = await remove(HOUSE_1, ADA);
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("invalid_input");
+    expect(JSON.stringify(body)).not.toContain("missio_ended_at_in_future");
+    expect(state.tables.house_church_members[0].ended_at).toBeNull();
   });
 });
 
@@ -1035,6 +1085,14 @@ describe("import review", () => {
     expect(again.status).toBe(409);
     expect((await again.json()).code).toBe("already_resolved");
     expect(state.tables.missio_import_review[0].status).toBe("skipped");
+    const writesBefore = state.writes.length;
+    const raced = await resolve(REVIEW, { action: "link", contactId: OUTSIDE });
+    expect(raced.status).toBe(409);
+    expect((await raced.json()).code).toBe("already_resolved");
+    expect(state.writes.length).toBe(writesBefore);
+    expect(state.tables.house_church_members).toEqual([]);
+    expect(state.tables.org_people).toEqual([]);
+    expect(state.ops.filter((op) => op.table === "contacts")).toEqual([]);
 
     expect((await resolve(REVIEW, { action: "link" })).status).toBe(400);
     expect((await resolve(REVIEW, { action: "link", contactId: OUTSIDE })).status).toBe(409);

@@ -122,6 +122,11 @@ export type ImportSnapshot = {
   members: ExistingMember[];
   reviews: ExistingReview[];
   orgPeopleContactIds: string[];
+  /**
+   * Contacts the matcher may use. Defaults to orgPeopleContactIds.
+   * The script sets this to Missio org_people plus contacts carrying the Missio label.
+   */
+  matchContactIds?: string[];
 };
 
 export type PlannedLink = {
@@ -361,37 +366,34 @@ export function classifyHouseChurchRow(
   const first = row.first.trim();
   const last = row.last.trim();
   const bothNames = Boolean(first && last);
-  const exact = bothNames ? exactContactIds(contacts, first, last) : [];
-  const suggest = (ids: string[]) => ids.filter((id) => missioContactIds.has(id)).slice(0, 5);
+  const pool = contacts.filter((contact) => missioContactIds.has(contact.id));
+  const exact = bothNames ? exactContactIds(pool, first, last) : [];
+  const suggest = (ids: string[]) => ids.slice(0, 5);
 
   if (kind === "family_label") {
     return {
       action: "review",
       matchType: "family_label",
-      candidateContactIds: suggest(bothNames ? exact : candidatesByGivenName(contacts, first)),
+      candidateContactIds: suggest(bothNames ? exact : candidatesByGivenName(pool, first)),
     };
   }
   if (kind === "first_only") {
     return {
       action: "review",
       matchType: "first_only",
-      candidateContactIds: suggest(bothNames ? exact : candidatesByGivenName(contacts, first)),
+      candidateContactIds: suggest(bothNames ? exact : candidatesByGivenName(pool, first)),
     };
   }
   if (!bothNames || !AUTO_KINDS.has(kind)) {
     const candidates = bothNames
       ? exact
       : first
-        ? candidatesByGivenName(contacts, first)
-        : candidatesByLastName(contacts, last);
+        ? candidatesByGivenName(pool, first)
+        : candidatesByLastName(pool, last);
     return { action: "review", matchType: "partial", candidateContactIds: suggest(candidates) };
   }
 
-  const inMissio = exact.filter((id) => missioContactIds.has(id));
-  if (inMissio.length === 1) return { action: "link", contactId: inMissio[0] };
-  if (exact.length === 1) {
-    return { action: "review", matchType: "non_missio_contact", candidateContactIds: [] };
-  }
+  if (exact.length === 1) return { action: "link", contactId: exact[0] };
   if (exact.length === 0) return { action: "review", matchType: "none", candidateContactIds: [] };
   return { action: "review", matchType: "multiple", candidateContactIds: suggest(exact) };
 }
@@ -424,7 +426,11 @@ export function planHouseChurchImport(
   for (const row of rows) {
     const house = houses.get(row.houseNumber);
     if (!house) continue;
-    const classified = classifyHouseChurchRow(row, snapshot.contacts, new Set(snapshot.orgPeopleContactIds));
+    const classified = classifyHouseChurchRow(
+      row,
+      snapshot.contacts,
+      new Set(snapshot.matchContactIds ?? snapshot.orgPeopleContactIds)
+    );
     if (classified.action === "link") {
       const existing = active.get(`${house.id}\0${classified.contactId}`);
       let outcome: PlannedLink["outcome"] = "insert";
