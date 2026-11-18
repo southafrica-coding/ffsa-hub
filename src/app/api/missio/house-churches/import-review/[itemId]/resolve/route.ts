@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { invalidInput } from "@/lib/missio/db-errors";
 import { isUuid, pastorHouseAccess, publicError, resolveImportReview } from "@/lib/missio/house-churches";
 import { missioRateLimit } from "@/lib/missio/limit";
 
@@ -28,7 +29,8 @@ export async function POST(request: Request, context: Ctx) {
   try {
     body = await request.json();
   } catch {
-    return json({ error: "Check the fields and try again.", code: "invalid_input" }, 400);
+    const input = invalidInput();
+    return json({ error: input.error, code: input.code, fieldErrors: input.fieldErrors }, input.status);
   }
 
   const result = await resolveImportReview(access.auth, access.scope, itemId, body);

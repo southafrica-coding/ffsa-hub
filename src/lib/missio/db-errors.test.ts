@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { invalidInput, mapMissioDbError } from "@/lib/missio/db-errors";
+import { HOUSE_CHURCH_ERROR_CODES, invalidInput, mapMissioDbError, type HouseChurchErrorCode } from "@/lib/missio/db-errors";
 
 const SECRET = "relation secret_table detail hint Ada Lovelace note";
 
@@ -84,16 +84,42 @@ describe("mapMissioDbError", () => {
   });
 });
 
+describe("HOUSE_CHURCH_ERROR_CODES", () => {
+  it("pins the Hub UI list", () => {
+    expect([...HOUSE_CHURCH_ERROR_CODES]).toEqual([
+      "invalid_input",
+      "not_missio_person",
+      "not_found",
+      "already_member",
+      "already_resolved",
+      "membership_not_current",
+      "ended_at_in_future",
+      "unauthenticated",
+      "forbidden",
+      "rate_limited",
+      "server_error",
+    ]);
+    const sample: HouseChurchErrorCode = "membership_not_current";
+    expect(HOUSE_CHURCH_ERROR_CODES).toContain(sample);
+  });
+});
+
 describe("invalidInput", () => {
-  it("returns our message and field paths, not the submitted value", () => {
-    const body = invalidInput(["contactId", "role"]);
+  it("returns our message and fieldErrors, not the submitted value", () => {
+    const body = invalidInput({
+      contactId: "Check this field and try again.",
+      role: "Check this field and try again.",
+    });
     expect(body).toEqual({
       status: 400,
       code: "invalid_input",
       error: "Check the fields and try again.",
-      fields: ["contactId", "role"],
+      fieldErrors: {
+        contactId: "Check this field and try again.",
+        role: "Check this field and try again.",
+      },
     });
     expect(JSON.stringify(body)).not.toContain("Ada Lovelace");
-    expect(invalidInput().fields).toBeUndefined();
+    expect(invalidInput().fieldErrors).toEqual({});
   });
 });

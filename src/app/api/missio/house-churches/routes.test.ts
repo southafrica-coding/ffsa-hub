@@ -864,8 +864,15 @@ describe("membership writes", () => {
     expect(state.writes.some((write) => write.table === "org_people")).toBe(false);
     expect(state.tables.org_people[0]).toMatchObject({ status: "active" });
 
-    expect((await remove(HOUSE_1, ADA)).status).toBe(404);
-    expect((await patch(HOUSE_1, ADA, { role: "member" })).status).toBe(404);
+    const endedAgain = await remove(HOUSE_1, ADA);
+    expect(endedAgain.status).toBe(409);
+    expect(await endedAgain.json()).toEqual({
+      error: "This membership has already ended.",
+      code: "membership_not_current",
+    });
+    const endedPatch = await patch(HOUSE_1, ADA, { role: "member" });
+    expect(endedPatch.status).toBe(409);
+    expect((await endedPatch.json()).code).toBe("membership_not_current");
     expect((await patch(HOUSE_1, "not-a-uuid", { role: "member" })).status).toBe(404);
     expect((await patch(HOUSE_1, OUTSIDE, { role: "nope" })).status).toBe(400);
 
@@ -1020,7 +1027,10 @@ describe("membership writes", () => {
     const body = await res.json();
     expect(body.code).toBe("invalid_input");
     expect(body.error).toBe("Check the fields and try again.");
-    expect(body.fields).toEqual(expect.arrayContaining(["contactId", "role"]));
+    expect(body.fieldErrors).toEqual({
+      contactId: "Check this field and try again.",
+      role: "Check this field and try again.",
+    });
     const text = JSON.stringify(body);
     expect(text).not.toContain(secret);
     expect(text).not.toContain("Invalid");
@@ -1052,7 +1062,7 @@ describe("import review", () => {
       kind: "person",
       match_type: "multiple",
       candidate_contact_ids: ids,
-      notes: "check spelling — Grace Hopper lives next door",
+      notes: "see house 4",
     });
     addReview({
       rawName: "Done",
@@ -1080,6 +1090,8 @@ describe("import review", () => {
       status: "pending",
       sourceLine: 2,
       rawName: "Someone",
+      kind: "person",
+      note: "see house 4",
       matchType: "multiple",
       houseNumber: 3,
       house: { id: HOUSE_1, number: 3, name: "Riverside" },
@@ -1087,10 +1099,10 @@ describe("import review", () => {
       candidates: body.items[0].candidates,
     });
     const listed = JSON.stringify(body);
-    expect(listed).not.toContain("check spelling");
+    expect(listed).not.toContain("2,Riverside,Leader,Someone,Grace Hopper");
     expect(listed).not.toContain("Grace Hopper");
-    expect(listed).not.toContain("kind");
     expect(listed).not.toContain("notes");
+    expect(body.items[1]).toMatchObject({ kind: "family_label", note: null });
     expect(body.items[0].candidates.map((candidate: { orgPersonId: string; lastName: string }) => [candidate.orgPersonId, candidate.lastName])).toEqual([
       ["person-0", "0"],
       ["person-1", "1"],
@@ -1157,7 +1169,7 @@ describe("import review", () => {
     expect(state.tables.house_church_members[0].role).toBe("member");
   });
 
-  it("creates a contact through the people path, and returns exists_use_search without resolving", async () => {
+  it("creates a contact through the people path, and returns not_missio_person when the email is already a contact", async () => {
     addHouse({ id: HOUSE_1, number: 3, campus: "jhb" });
     addContact({ id: OUTSIDE, first: "Taken", last: "Person", email: "taken@example.com", inOrg: false });
     addReview({ id: REVIEW, rawName: "New Person", sourceLine: 8, houseNumber: 3, role: "member" });
@@ -1168,10 +1180,10 @@ describe("import review", () => {
       lastName: "Person",
       email: "taken@example.com",
     });
-    expect(clash.status).toBe(409);
+    expect(clash.status).toBe(400);
     expect(await clash.json()).toEqual({
-      error: "This person already exists. Search by their email or phone to add them.",
-      code: "exists_use_search",
+      error: "This person is not in Missio.",
+      code: "not_missio_person",
     });
     expect(state.tables.missio_import_review[0].status).toBe("pending");
     expect(state.tables.house_church_members).toEqual([]);
@@ -1224,8 +1236,14 @@ describe("import review", () => {
     const skipped = await resolve(REVIEW, { action: "skip", notes: "not a person" });
     expect(skipped.status).toBe(200);
     const body = await skipped.json();
-    expect(body.item).toMatchObject({ status: "skipped", rawName: "Skip me", sourceLine: 2, role: "member" });
-    expect(JSON.stringify(body)).not.toContain("not a person");
+    expect(body.item).toMatchObject({
+      status: "skipped",
+      rawName: "Skip me",
+      sourceLine: 2,
+      role: "member",
+      note: "not a person",
+    });
+    expect(JSON.stringify(body)).not.toContain("notes");
     expect(state.tables.missio_import_review[0].notes).toBe("not a person");
     expect(body.member).toBeUndefined();
     expect(state.tables.house_church_members).toEqual([]);

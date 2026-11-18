@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fieldError, invalidInput } from "@/lib/missio/db-errors";
 import { listImportReview, parseReviewStatus, pastorHouseAccess, publicError } from "@/lib/missio/house-churches";
 
 // GET /api/missio/house-churches/import-review?status=pending
@@ -16,7 +17,10 @@ export async function GET(request: Request) {
   if ("response" in access) return access.response;
 
   const status = parseReviewStatus(new URL(request.url).searchParams.get("status"));
-  if (!status) return json({ error: "Check the fields and try again.", code: "invalid_input" }, 400);
+  if (!status) {
+    const input = invalidInput(fieldError("status"));
+    return json({ error: input.error, code: input.code, fieldErrors: input.fieldErrors }, input.status);
+  }
 
   const result = await listImportReview(access.auth, access.scope, status);
   if (!result.ok) return json(publicError(result), result.status);

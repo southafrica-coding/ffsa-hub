@@ -156,14 +156,17 @@ export type ImportReviewStatus = "pending" | "matched" | "new" | "skipped";
 
 /**
  * A review row a pastor can act on. sourceLine is the sheet line number.
- * rawName is that one person's name. The rest of the sheet line (notes,
- * other names, the raw CSV) is not returned.
+ * rawName is that one person's name. kind is the importer's classifier.
+ * note is the parser annotation stored in missio_import_review.notes
+ * (for example "see house 4"). The rest of the sheet line is not returned.
  */
 export type ImportReviewItem = {
   id: string;
   status: ImportReviewStatus;
   sourceLine: number;
   rawName: string;
+  kind: string | null;
+  note: string | null;
   matchType: string | null;
   houseNumber: number;
   house: { id: string; number: number; name: string | null } | null;
