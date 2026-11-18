@@ -276,7 +276,7 @@ describe("house church import planner", () => {
   it("treats a past end as a new link, and a future end as still current", async () => {
     expect(membershipIsOpen({ endedAt: null })).toBe(true);
     expect(membershipIsCurrent({ startedAt: "2026-01-01", endedAt: null }, "2026-11-18")).toBe(true);
-    expect(membershipIsCurrent({ startedAt: "2026-01-01", endedAt: "2099-01-01" }, "2026-11-18")).toBe(true);
+    expect(membershipIsCurrent({ startedAt: "2026-01-01", endedAt: "2099-01-01" }, "2026-11-18")).toBe(false);
     expect(membershipIsCurrent({ startedAt: "2026-01-01", endedAt: "2026-11-18" }, "2026-11-18")).toBe(false);
     expect(membershipIsCurrent({ startedAt: "2099-01-01", endedAt: null }, "2026-11-18")).toBe(false);
 
@@ -304,8 +304,8 @@ describe("house church import planner", () => {
     );
     expect(blocked.ok).toBe(true);
     if (!blocked.ok) return;
-    expect(blocked.plan.links[0].outcome).toBe("role_conflict");
-    expect(blocked.plan.summary.autoLinked).toBe(0);
+    expect(blocked.plan.links[0].outcome).toBe("insert");
+    expect(blocked.plan.summary.autoLinked).toBe(1);
   });
 
   it("treats an ended membership as a new link and refuses a missing house before any write", async () => {

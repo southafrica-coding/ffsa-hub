@@ -29,13 +29,13 @@ import type {
 // Names come from a service-role read of contacts after the pastor check.
 // Pastors cannot read contacts. These routes do not create org_people.
 // POST members and import-review link accept only a contact who already has
-// an org_people row in Missio with status active. Anyone else is
-// not_missio_person, and nothing is inserted. import-review create still
-// uses the Phase 0 create-person path, which is the approved intake.
-// Candidates are limited to those active Missio people. Ending a membership
-// never deletes or updates org_people. A current house membership is
-// started_at <= today and ended_at null or after today. The open row the
-// partial unique index guards is ended_at IS NULL.
+// an org_people row in Missio. Status is not filtered: migration 331 allows
+// a visitor. Anyone with no row is not_missio_person, and nothing is inserted.
+// import-review create still uses the Phase 0 create-person path.
+// Candidate suggestions are limited to people who have that row. Ending a
+// membership sets ended_at to today and never changes org_people. A current
+// membership is an open row (ended_at IS NULL) whose started_at is on or
+// before today. ended_at after today is rejected by the database.
 //
 // Pastors may UPDATE missio_import_review only on status, resolved_contact_id,
 // notes, resolved_by, and resolved_at. Insert and delete stay on the service role.
@@ -253,9 +253,8 @@ async function audit(
 }
 
 /**
- * An active Missio person is an org_people row in this org with status
- * active. Visitor, inactive, and a contact with no row are refused.
- * This does not insert or update org_people.
+ * Someone already in Missio: any org_people row for this org.
+ * Does not insert or update the row, and does not look at status.
  */
 async function requireMissioPerson(
   auth: OrgAccess,
@@ -263,7 +262,7 @@ async function requireMissioPerson(
 ): Promise<{ ok: true; orgPersonId: string } | Fail> {
   const existing = await auth.supabase
     .from("org_people")
-    .select("id, status")
+    .select("id")
     .eq("org_id", auth.orgId)
     .eq("contact_id", contactId)
     .maybeSingle();
@@ -271,7 +270,7 @@ async function requireMissioPerson(
     console.error("[missio] org person lookup failed", existing.error.message);
     return fail(500, "server_error", "Something went wrong.");
   }
-  if (!existing.data?.id || existing.data.status !== "active") {
+  if (!existing.data?.id) {
     return fail(400, "not_missio_person", "This person is not in Missio.");
   }
   return { ok: true, orgPersonId: existing.data.id as string };
@@ -297,8 +296,8 @@ async function loadRefs(
       return fail(500, "server_error", "Something went wrong.");
     }
     const orgByContact = new Map<string, string>();
-    for (const row of (people.data ?? []) as Array<{ id?: string; contact_id?: string; status?: string }>) {
-      if (!row.contact_id || !row.id || row.status !== "active" || orgByContact.has(row.contact_id)) continue;
+    for (const row of (people.data ?? []) as Array<{ id?: string; contact_id?: string }>) {
+      if (!row.contact_id || !row.id || orgByContact.has(row.contact_id)) continue;
       orgByContact.set(row.contact_id, row.id);
     }
     const nameIds = options?.missioOnly ? slice.filter((id) => orgByContact.has(id)) : slice;
@@ -426,22 +425,42 @@ function asMembership(row: MemberRow) {
   return { startedAt: row.started_at, endedAt: row.ended_at };
 }
 
-function currentMembers(rows: MemberRow[], today = todayIsoDate()): MemberRow[] {
-  return rows.filter((row) => membershipIsCurrent(asMembership(row), today));
+async function missioContactIds(auth: OrgAccess, contactIds: string[]): Promise<{ ok: true; ids: Set<string> } | Fail> {
+  const ids = [...new Set(contactIds)];
+  const found = new Set<string>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const slice = ids.slice(i, i + 100);
+    const people = await auth.supabase
+      .from("org_people")
+      .select("contact_id")
+      .eq("org_id", auth.orgId)
+      .in("contact_id", slice);
+    if (people.error) {
+      console.error("[missio] org person lookup failed", people.error.message);
+      return fail(500, "server_error", "Something went wrong.");
+    }
+    for (const row of (people.data ?? []) as Array<{ contact_id?: string }>) {
+      if (row.contact_id) found.add(row.contact_id);
+    }
+  }
+  return { ok: true, ids: found };
 }
 
-/**
- * The row a write must not duplicate: the open row if there is one, otherwise
- * a current membership whose ended_at is still in the future.
- */
-function blockingMember(rows: MemberRow[], today = todayIsoDate()): MemberRow | null {
-  const blocking = rows.filter((row) => membershipBlocksInsert(asMembership(row), today));
-  return blocking.find((row) => membershipIsOpen(asMembership(row))) ?? blocking[0] ?? null;
+function currentMembers(rows: MemberRow[], inMissio: ReadonlySet<string>, today = todayIsoDate()): MemberRow[] {
+  return rows.filter(
+    (row) => inMissio.has(row.contact_id) && membershipIsCurrent(asMembership(row), today)
+  );
 }
 
-function endDateFor(row: MemberRow, today = todayIsoDate()): string {
+/** The open row (ended_at IS NULL). A second open row is what the unique index rejects. */
+function blockingMember(rows: MemberRow[]): MemberRow | null {
+  return rows.find((row) => membershipBlocksInsert(asMembership(row))) ?? null;
+}
+
+function endDateFor(row: MemberRow, today = todayIsoDate()): string | null {
   const started = (row.started_at ?? today).slice(0, 10);
-  return started > today ? started : today;
+  if (started > today) return null;
+  return today;
 }
 
 async function memberRowsFor(
@@ -561,7 +580,10 @@ export async function listHouses(
     console.error("[missio] member list failed", memberRes.error.message);
     return fail(500, "server_error", "Something went wrong.");
   }
-  const memberRows = currentMembers((memberRes.data ?? []) as MemberRow[]);
+  const rawMembers = (memberRes.data ?? []) as MemberRow[];
+  const inMissio = await missioContactIds(auth, rawMembers.map((row) => row.contact_id));
+  if (!inMissio.ok) return inMissio;
+  const memberRows = currentMembers(rawMembers, inMissio.ids);
   const contactIds = memberRows.map((row) => row.contact_id);
   let refs = new Map<string, PersonRef>();
   if (contactIds.length > 0) {
@@ -603,7 +625,10 @@ export async function getHouse(
     console.error("[missio] member list failed", memberRes.error.message);
     return fail(500, "server_error", "Something went wrong.");
   }
-  const memberRows = currentMembers((memberRes.data ?? []) as MemberRow[]);
+  const rawMembers = (memberRes.data ?? []) as MemberRow[];
+  const inMissio = await missioContactIds(auth, rawMembers.map((row) => row.contact_id));
+  if (!inMissio.ok) return inMissio;
+  const memberRows = currentMembers(rawMembers, inMissio.ids);
   let refs = new Map<string, PersonRef>();
   if (memberRows.length > 0) {
     const admin = adminClient();
@@ -728,6 +753,7 @@ export async function endMember(
   if (!target) return fail(404, "not_found", "Member not found.");
 
   const endedAt = endDateFor(target);
+  if (!endedAt) return fail(400, "invalid_input", "Check the fields and try again.");
   const updated = await auth.supabase
     .from("house_church_members")
     .update({ ended_at: endedAt })

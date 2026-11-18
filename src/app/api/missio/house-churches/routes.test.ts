@@ -667,16 +667,18 @@ describe("GET /api/missio/house-churches", () => {
     const res = await detail(HOUSE_1);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.house.memberCount).toBe(1);
-    expect(body.house.members.map((member: { contactId: string }) => member.contactId)).toEqual([ADA]);
-    expect(body.house.leaders).toEqual([]);
+    expect(body.house.memberCount).toBe(0);
+    expect(body.house.members).toEqual([]);
 
-    expect((await post(HOUSE_1, { contactId: ADA, role: "leader" })).status).toBe(409);
+    expect((await post(HOUSE_1, { contactId: ADA, role: "leader" })).status).toBe(201);
     expect((await post(HOUSE_1, { contactId: GRACE, role: "member" })).status).toBe(409);
 
     const ended = await remove(HOUSE_1, ADA);
     expect(ended.status).toBe(200);
-    expect(state.tables.house_church_members.find((row) => row.contact_id === ADA)?.ended_at).toBe(todayIsoDate());
+    expect(state.tables.house_church_members.filter((row) => row.contact_id === ADA && row.ended_at == null)).toHaveLength(0);
+    expect(state.tables.house_church_members.find((row) => row.contact_id === ADA && row.role === "leader")?.ended_at).toBe(
+      todayIsoDate()
+    );
     expect(state.tables.org_people[0]).toMatchObject({ id: "person-ada", status: "active" });
   });
 
@@ -705,14 +707,14 @@ describe("GET /api/missio/house-churches/:id", () => {
     const body = await res.json();
     expect(body.canWrite).toBe(true);
     expect(body.house.leaderNotes).toBe("Bring a chair");
-    expect(body.house.memberCount).toBe(3);
+    expect(body.house.memberCount).toBe(2);
     expect(body.house.members.map((member: { contactId: string; role: string }) => [member.role, member.contactId])).toEqual([
       ["leader", ADA],
-      ["co_leader", GRACE],
       ["member", ALAN],
     ]);
-    expect(body.house.members[1].orgPersonId).toBeUndefined();
-    expect(body.house.members[2].orgPersonId).toBe("person-alan");
+    expect(body.house.members[0].orgPersonId).toBe("person-ada");
+    expect(body.house.members[1].orgPersonId).toBe("person-alan");
+    expect(JSON.stringify(body)).not.toContain("Amy");
 
     const missing = await detail("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1");
     expect(missing.status).toBe(404);
@@ -758,29 +760,24 @@ describe("membership writes", () => {
 
     state.writes = [];
     const visitor = await post(HOUSE_2, { contactId: GRACE, role: "co_leader" });
-    expect(visitor.status).toBe(400);
-    expect(await visitor.json()).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
+    expect(visitor.status).toBe(201);
     expect(state.tables.org_people.find((row) => row.id === "person-grace")).toMatchObject({ status: "visitor", campus: "potch" });
-    expect(state.writes.some((write) => write.table === "house_church_members" || write.table === "org_people")).toBe(false);
+    expect(state.writes.some((write) => write.table === "org_people")).toBe(false);
+    expect(state.writes.some((write) => write.table === "house_church_members" && write.op === "insert")).toBe(true);
   });
 
-  it("refuses a contact who is not an active Missio person and inserts nothing", async () => {
+  it("refuses a contact who is not in Missio and inserts nothing", async () => {
     addHouse({ id: HOUSE_1, number: 3 });
     addContact({ id: OUTSIDE, first: "Outside", last: "Person", inOrg: false });
-    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada", status: "inactive" });
     const before = state.tables.org_people.map((row) => ({ ...row }));
 
     const missing = await post(HOUSE_1, { contactId: OUTSIDE, role: "member" });
     expect(missing.status).toBe(400);
     expect(await missing.json()).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
 
-    const inactive = await post(HOUSE_1, { contactId: ADA, role: "leader" });
-    expect(inactive.status).toBe(400);
-    expect((await inactive.json()).code).toBe("not_missio_person");
-
     expect(state.tables.house_church_members).toEqual([]);
     expect(state.tables.org_people).toEqual(before);
-    expect(state.writes.some((write) => write.op === "insert" && write.table !== "audit_logs")).toBe(false);
+    expect(state.writes.some((write) => write.op === "insert")).toBe(false);
     expect(state.ops.some((op) => op.table === "contacts")).toBe(false);
   });
 
@@ -830,9 +827,9 @@ describe("membership writes", () => {
 
     state.tables.org_people[0].status = "visitor";
     const visitorRole = await patch(HOUSE_1, ADA, { role: "leader" });
-    expect(visitorRole.status).toBe(400);
-    expect((await visitorRole.json()).code).toBe("not_missio_person");
-    expect(state.tables.house_church_members.find((row) => row.ended_at == null)?.role).toBe("member");
+    expect(visitorRole.status).toBe(200);
+    expect(state.tables.org_people[0].status).toBe("visitor");
+    expect(state.tables.house_church_members.find((row) => row.ended_at == null)?.role).toBe("leader");
   });
 
   it("returns 429 after 20 writes in a minute", async () => {
@@ -869,8 +866,8 @@ describe("import review", () => {
         id,
         first: "Cand",
         last: String(index),
-        inOrg: index < 5,
-        personId: index < 5 ? `person-${index}` : undefined,
+        inOrg: index < 4,
+        personId: index < 4 ? `person-${index}` : undefined,
         status: index === 3 ? "visitor" : "active",
       })
     );
@@ -920,11 +917,11 @@ describe("import review", () => {
       notes: "check spelling",
       resolvedAt: null,
     });
-    expect(body.items[0].candidates.map((candidate: { orgPersonId: string }) => candidate.orgPersonId)).toEqual([
-      "person-0",
-      "person-1",
-      "person-2",
-      "person-4",
+    expect(body.items[0].candidates.map((candidate: { orgPersonId: string; lastName: string }) => [candidate.orgPersonId, candidate.lastName])).toEqual([
+      ["person-0", "0"],
+      ["person-1", "1"],
+      ["person-2", "2"],
+      ["person-3", "3"],
     ]);
     expect(body.items[1].house).toBeNull();
     expect(state.ops.filter((op) => op.table === "contacts").every((op) => op.client === "admin")).toBe(true);

@@ -86,8 +86,10 @@ export function membershipIsOpen(row: { endedAt?: string | null }): boolean {
 }
 
 /**
- * Current membership, matching missio_member_status:
- * started_at <= today AND (ended_at IS NULL OR ended_at > today).
+ * Current membership, matching missio_member_status in migration 331
+ * (head a3607d69): the row is open (ended_at IS NULL) and started_at is
+ * on or before today. ended_at after today cannot be stored.
+ * The view also requires an org_people row; callers apply that separately.
  */
 export function membershipIsCurrent(
   row: { startedAt?: string | null; endedAt?: string | null },
@@ -95,16 +97,12 @@ export function membershipIsCurrent(
 ): boolean {
   const started = (row.startedAt ?? "0001-01-01").slice(0, 10);
   if (!started || started > today) return false;
-  if (membershipIsOpen(row)) return true;
-  return (row.endedAt ?? "").slice(0, 10) > today;
+  return membershipIsOpen(row);
 }
 
-/** A new open row is blocked by an open row or by a current membership. */
-export function membershipBlocksInsert(
-  row: { startedAt?: string | null; endedAt?: string | null },
-  today = new Date().toISOString().slice(0, 10)
-): boolean {
-  return membershipIsOpen(row) || membershipIsCurrent(row, today);
+/** The partial unique index blocks a second open row (ended_at IS NULL). */
+export function membershipBlocksInsert(row: { endedAt?: string | null }): boolean {
+  return membershipIsOpen(row);
 }
 
 export type ExistingReview = {
