@@ -84,3 +84,133 @@ export type OrgPeopleDirectoryRow = {
   last_name: string | null;
   preferred_name: string | null;
 };
+
+/**
+ * House churches, membership, and the import-review queue.
+ *
+ * Shapes follow migration 331 (PR 612, head c587e497a356c920bef862866735db3a81c7ee6a).
+ * That migration is not on main and is not applied here. Do not add these
+ * tables to src/types/database.ts by hand.
+ *
+ * RLS on house_churches, house_church_members, and missio_import_review is
+ * has_org_role('missio', ARRAY['pastor']) plus the missio org id. is_admin(),
+ * has_role(), and has_any_role() are not consulted. Pastors may select,
+ * insert, and update houses. They may select and insert members, and update
+ * only role and ended_at. They cannot delete a house or a membership.
+ * On missio_import_review they
+ * may SELECT and UPDATE only status, resolved_contact_id, notes,
+ * resolved_by, and resolved_at. There is no note column. INSERT and DELETE
+ * on that table are service-role only. updated_at is maintained by handle_updated_at().
+ *
+ * An open membership is ended_at IS NULL (partial unique index
+ * house_church_members_active_house_contact_uidx). A current membership,
+ * which is what missio_member_status and is_missio_member count, is an
+ * open row with started_at <= today and an org_people row in that org.
+ * ended_at after today raises 23514 missio_ended_at_in_future from
+ * guard_house_church_member. started_at after today raises 23514
+ * missio_started_at_in_future for every role, including the service role.
+ * A contact who is not in org_people for the house org raises 23503
+ * missio_member_not_in_org, including for the service role. Ending a current
+ * row sets ended_at to the UTC database date,
+ * which is never after current_date. An already-ended row is
+ * membership_not_current. Ending a membership or changing its role does
+ * not re-check org_people. member_left_missio remains a defensive mapping
+ * if 23503 missio_member_not_in_org still arrives. org_people is not written
+ * by the database. There is no member-status column on org_people.
+ * Authenticated inserts pin created_by to auth.uid(). An authenticated
+ * review resolve may only point resolved_contact_id at a candidate or at
+ * someone in org_people for that org, and resolved_by is pinned to auth.uid().
+ */
+
+export type HouseChurchMemberRole = "leader" | "co_leader" | "member";
+
+export type HouseMeetingDay =
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday"
+  | "sunday";
+
+export type HouseChurchRow = {
+  id: string;
+  org_id: string;
+  /** CHECK (number > 0). UNIQUE (org_id, number). Seeded 1..20, campus potch. */
+  number: number;
+  name: string | null;
+  /** NOT NULL. DEFAULT 'potch'. CHECK (campus IN ('potch', 'jhb')). */
+  campus: OrgCampus;
+  /** CHECK (meeting_day IS NULL OR meeting_day IN the seven weekday names). */
+  meeting_day: HouseMeetingDay | null;
+  location: string | null;
+  leader_notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HouseChurchMemberRow = {
+  id: string;
+  house_church_id: string;
+  contact_id: string;
+  /** CHECK (role IN ('leader', 'co_leader', 'member')). */
+  role: HouseChurchMemberRole;
+  /** NOT NULL. DEFAULT current_date. */
+  started_at: string;
+  /**
+   * CHECK (ended_at IS NULL OR ended_at >= started_at).
+   * Null is the open, current row. A date on or before today has ended.
+   * A date after today raises 23514 missio_ended_at_in_future.
+   */
+  ended_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MissioImportReviewStatus = "pending" | "matched" | "new" | "skipped";
+
+export type MissioImportReviewRow = {
+  id: string;
+  org_id: string;
+  /** NOT NULL. 1-based sheet line. Not unique by itself. */
+  source_line: number;
+  raw_name: string;
+  /** NOT NULL. No check that the number exists; the importer looks the house up. */
+  house_number: number;
+  role: HouseChurchMemberRole;
+  /** Free text. No check constraint. */
+  kind: string | null;
+  /** Free text. No check constraint. The importer uses none, multiple, family_label, first_only, partial, non_missio_contact. */
+  match_type: string | null;
+  /** NOT NULL. DEFAULT '{}'. */
+  candidate_contact_ids: string[];
+  /**
+   * NOT NULL. DEFAULT 'pending'.
+   * CHECK (status IN ('pending', 'matched', 'new', 'skipped')).
+   * CONSTRAINT missio_import_review_matched_contact_check:
+   * status <> 'matched' OR resolved_contact_id IS NOT NULL.
+   * CONSTRAINT missio_import_review_source_name_key:
+   * UNIQUE (org_id, source_line, raw_name).
+   */
+  status: MissioImportReviewStatus;
+  resolved_contact_id: string | null;
+  notes: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * public.missio_member_status. security_invoker view. No name columns.
+ * is_member is always true. One row per contact with a current membership.
+ */
+export type MissioMemberStatusRow = {
+  org_id: string;
+  contact_id: string;
+  active_house_count: number;
+  house_numbers: number[];
+  roles: string[];
+  is_member: true;
+};

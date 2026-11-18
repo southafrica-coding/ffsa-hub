@@ -91,11 +91,98 @@ export type UpdateMissioPersonInput = {
 export type MissioErrorCode =
   | "exists_use_search"
   | "already_in_org"
+  | "already_member"
+  | "already_resolved"
+  | "not_missio_person"
   | "invalid_token"
   | "invalid_input"
   | "rate_limited"
   | "unauthenticated"
   | "forbidden"
   | "not_found"
+  | "ended_at_in_future"
   | "server_error"
   | "method_not_allowed";
+
+export type HouseChurchRole = "leader" | "co_leader" | "member";
+
+/**
+ * A contact as a house-church screen may show them.
+ * displayName is the preferred name when there is one, otherwise the first name, plus the last name.
+ * orgPersonId is set only when this contact has an org_people row in Missio.
+ * House membership is not a status on that row: a member is someone with an active house_church_members row.
+ */
+export type PersonRef = {
+  contactId: string;
+  displayName: string;
+  firstName: string | null;
+  lastName: string | null;
+  orgPersonId?: string;
+};
+
+export type HouseChurchMemberView = Omit<PersonRef, "displayName"> & {
+  /** Null when leftMissio is true. The contact row is not read. */
+  displayName: string | null;
+  role: HouseChurchRole;
+  startedAt: string;
+  /** True for an open membership whose contact is no longer in Missio org_people. */
+  leftMissio: boolean;
+};
+
+export type HouseChurchSummary = {
+  id: string;
+  number: number;
+  name: string | null;
+  campus: MissioCampus;
+  meetingDay: string | null;
+  location: string | null;
+  memberCount: number;
+  leaders: PersonRef[];
+  coLeaders: PersonRef[];
+};
+
+export type HouseChurchDetail = HouseChurchSummary & {
+  leaderNotes: string | null;
+  members: HouseChurchMemberView[];
+};
+
+export type HouseChurchListResponse = {
+  houses: HouseChurchSummary[];
+  canWrite: true;
+};
+
+export type HouseChurchDetailResponse = {
+  house: HouseChurchDetail;
+  canWrite: true;
+};
+
+export type ImportReviewStatus = "pending" | "matched" | "new" | "skipped";
+
+/**
+ * A review row a pastor can act on. sourceLine is the sheet line number.
+ * rawName is that one person's name. kind is the importer's classifier.
+ * note is the parser annotation. The table column is notes, not note
+ * (for example "see house 4"). The rest of the sheet line is not returned.
+ */
+export type ImportReviewItem = {
+  id: string;
+  status: ImportReviewStatus;
+  sourceLine: number;
+  rawName: string;
+  kind: string | null;
+  note: string | null;
+  matchType: string | null;
+  houseNumber: number;
+  house: { id: string; number: number; name: string | null } | null;
+  role: HouseChurchRole;
+  candidates: PersonRef[];
+};
+
+export type ImportReviewListResponse = {
+  items: ImportReviewItem[];
+};
+
+export type ResolveImportReviewResponse = {
+  item: ImportReviewItem;
+  member?: HouseChurchMemberView;
+};
