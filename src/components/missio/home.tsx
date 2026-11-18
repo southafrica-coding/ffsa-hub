@@ -46,16 +46,6 @@ export function MissioHome() {
           </p>
         </div>
       </div>
-      <div className={`${styles.grid} ${content.grid}`}>
-        <div className={`${styles.card} ${content.card}`}>
-          <div className={`${styles.cardTitle} ${content.cardTitle}`}>House churches</div>
-          <p className={`${styles.cardBody} ${content.cardBody}`}>No house-church list in this release.</p>
-        </div>
-        <div className={`${styles.card} ${content.card}`}>
-          <div className={`${styles.cardTitle} ${content.cardTitle}`}>Teams</div>
-          <p className={`${styles.cardBody} ${content.cardBody}`}>No team list in this release.</p>
-        </div>
-      </div>
     </div>
   );
 }

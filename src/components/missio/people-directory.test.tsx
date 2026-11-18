@@ -159,14 +159,15 @@ describe("people directory", () => {
 
     const dateOnly = card("Hugo Steyn");
     const joined = dateOnly?.querySelector("[class*=joined]");
-    expect(joined?.textContent).toBe("2 Jan 2020");
+    expect(joined?.textContent).toBe("Joined 2 Jan 2020");
     expect(joined?.className).not.toMatch(/campusMain/);
     expect(dateOnly?.textContent).not.toContain("—");
 
     const neitherCells = row("Lerato Dlamini")?.querySelectorAll("td");
-    expect(neitherCells?.[3]?.textContent).toBe("");
+    expect(neitherCells?.[3]?.textContent).toBe("—");
+    expect(neitherCells?.[4]?.textContent).toBe("—");
     const dateOnlyCells = row("Hugo Steyn")?.querySelectorAll("td");
-    expect(dateOnlyCells?.[3]?.textContent).toBe("");
+    expect(dateOnlyCells?.[3]?.textContent).toBe("—");
     expect(dateOnlyCells?.[4]?.textContent).toBe("2 Jan 2020");
 
     for (const name of ["Mina Osei", "Lerato Dlamini", "Hugo Steyn"]) {

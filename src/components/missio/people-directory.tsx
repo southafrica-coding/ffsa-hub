@@ -181,7 +181,7 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
                   {personStage(person) || personJoined(person) ? (
                     <div className={styles.muted}>
                       {personStage(person) ? <span>{personStage(person)}</span> : null}
-                      {personJoined(person) ? <span className={styles.joined}>{personJoined(person)}</span> : null}
+                      {personJoined(person) ? <span className={styles.joined}>Joined {personJoined(person)}</span> : null}
                     </div>
                   ) : null}
                   <button type="button" className={styles.textButton} aria-label={`Edit ${person.name}`} onClick={() => setEditing(person)}>
@@ -214,8 +214,8 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
                       {STATUS_LABEL[person.status]}
                     </span>
                   </td>
-                  <td className={styles.muted}>{personStage(person)}</td>
-                  <td>{formatJoined(person.joinedAt)}</td>
+                  <td className={styles.muted}>{personStage(person) || "—"}</td>
+                  <td className={styles.muted}>{person.joinedAt ? formatJoined(person.joinedAt) : "—"}</td>
                   <td>
                     <button type="button" className={styles.textButton} aria-label={`Edit ${person.name}`} onClick={() => setEditing(person)}>
                       Edit
