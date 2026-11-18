@@ -103,6 +103,7 @@ export type MissioErrorCode =
   | "not_found"
   | "ended_at_in_future"
   | "membership_not_current"
+  | "member_left_missio"
   | "server_error"
   | "method_not_allowed";
 

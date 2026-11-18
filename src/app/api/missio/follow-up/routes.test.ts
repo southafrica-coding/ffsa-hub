@@ -861,7 +861,10 @@ describe("missio follow-up", () => {
       ctx(`r_${CARD}`)
     );
     expect(dup.status).toBe(409);
-    expect((await dup.json()).code).toBe("conflict");
+    const dupBody = await dup.json();
+    expect(dupBody).toEqual({ error: "This row is already resolved.", code: "already_resolved" });
+    expect(JSON.stringify(dupBody)).not.toContain("duplicate");
+    expect(JSON.stringify(dupBody)).not.toContain("23505");
     expect(state.tables.missio_followups.filter((row) => row.connect_response_id === CARD && row.id !== FOLLOW)).toHaveLength(0);
   });
 
@@ -950,6 +953,53 @@ describe("missio follow-up", () => {
     expect(await unknown.json()).toEqual({ error: "This person is not in Missio.", code: "not_missio_person" });
     expect(state.reads.filter((read) => read.client === "admin" || read.table === "contacts")).toEqual([]);
     expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
+  });
+
+  it("maps a card unique conflict to already_resolved with no database text", async () => {
+    const secret = "duplicate key value violates unique constraint secret_table Ada Lovelace";
+    state.tables.connect_responses.push({
+      id: "dddddddd-dddd-4ddd-8ddd-ddddddddddd7",
+      org_id: MISSIO,
+      name: "Grace Pastor",
+      phone: "+27829876543",
+      email: null,
+      visit_type: "regular",
+      wants_house_church: true,
+      wants_prayer: false,
+      submitted_at: "2026-09-01T10:00:00.000Z",
+      matched_contact_id: GRACE,
+      campus: "potch",
+    });
+    state.tables.missio_not_in_house.push({
+      source: "connect_response",
+      contact_id: GRACE,
+      connect_response_id: "dddddddd-dddd-4ddd-8ddd-ddddddddddd7",
+      display_name: "Grace Pastor",
+      phone: "+27829876543",
+      phone_e164: "+27829876543",
+      wants_house_church: true,
+      followup_stage: null,
+      submitted_at: "2026-09-01T10:00:00.000Z",
+    });
+    state.dbError = {
+      table: "connect_responses",
+      code: "23505",
+      message: secret,
+      details: "Key (matched_contact_id) already exists",
+      hint: secret,
+    };
+    const res = await postContact(
+      new Request("https://hub.test/api/missio/follow-up", { method: "POST", body: "" }),
+      ctx("r_dddddddd-dddd-4ddd-8ddd-ddddddddddd7")
+    );
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body).toEqual({ error: "This row is already resolved.", code: "already_resolved" });
+    const text = JSON.stringify(body);
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain("duplicate");
+    expect(text).not.toContain("23505");
+    expect(text).not.toContain("matched_contact_id");
   });
 
   it("rejects a bad key, an unknown person, and a database error without leaking it", async () => {

@@ -78,6 +78,25 @@ describe("mapMissioDbError", () => {
     expect(body).not.toContain("current_date");
   });
 
+  it("maps 23505 to already_resolved and drops the constraint text", () => {
+    const mapped = mapMissioDbError({
+      code: "23505",
+      message: "duplicate key value violates unique constraint secret_table",
+      details: SECRET,
+      hint: "Key (phone_e164) already exists",
+    });
+    expect(mapped).toEqual({
+      status: 409,
+      code: "already_resolved",
+      error: "This row is already resolved.",
+    });
+    const body = JSON.stringify(mapped);
+    expect(body).not.toContain(SECRET);
+    expect(body).not.toContain("duplicate key");
+    expect(body).not.toContain("23505");
+    expect(body).not.toContain("phone_e164");
+  });
+
   it("maps an unrecognised database error to server_error and drops the text", () => {
     const mapped = mapMissioDbError({
       code: "XX000",

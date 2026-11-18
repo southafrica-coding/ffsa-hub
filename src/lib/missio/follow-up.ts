@@ -478,7 +478,6 @@ async function insertFollowup(
   if (leader) payload.assigned_leader_contact_id = leader.id;
   const inserted = await auth.supabase.from("missio_followups").insert(payload).select(FOLLOWUP_WRITE_COLUMNS).maybeSingle();
   // Another pastor inserted the same person. Do not adopt or overwrite their row.
-  if (inserted.error?.code === "23505") return CONFLICT;
   if (inserted.error) return fromDb(inserted.error, "follow-up insert");
   if (!inserted.data?.id) return serverError("follow-up insert");
   const row = inserted.data as FollowupRow;

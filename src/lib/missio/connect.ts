@@ -357,14 +357,36 @@ export async function submitConnectCard(args: { body: unknown; ip: string }): Pr
     matched_contact_id: matchedContactId,
     matched_by: null,
   };
-  const inserted = await admin.client.from("connect_responses").insert(row);
-  if (inserted.error && mapMissioDbError(inserted.error).code === "not_missio_person" && matchedContactId) {
-    const again = await admin.client.from("connect_responses").insert({ ...row, matched_contact_id: null });
-    if (again.error) return dbFailure(again.error, "connect insert");
-    return { ok: true };
+  const inserted = await insertConnectCard(admin.client, row);
+  if (inserted.error) {
+    if (isUniqueViolation(inserted.error)) return serverError("connect insert", "23505");
+    return dbFailure(inserted.error, "connect insert");
   }
-  if (inserted.error) return dbFailure(inserted.error, "connect insert");
   return { ok: true };
+}
+
+function isUniqueViolation(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "23505";
+}
+
+/**
+ * A matched insert can raise 23505 when two cards attach at once.
+ * Retry that insert once. If it conflicts again, store the card with
+ * no match so the submission is kept. The conflict is never returned.
+ */
+async function insertConnectCard(admin: Client, row: Record<string, unknown>) {
+  let payload = row;
+  let inserted = await admin.from("connect_responses").insert(payload);
+  if (isUniqueViolation(inserted.error) && payload.matched_contact_id) {
+    inserted = await admin.from("connect_responses").insert(payload);
+    if (isUniqueViolation(inserted.error)) {
+      payload = { ...payload, matched_contact_id: null };
+      inserted = await admin.from("connect_responses").insert(payload);
+    }
+  } else if (inserted.error && mapMissioDbError(inserted.error).code === "not_missio_person" && payload.matched_contact_id) {
+    inserted = await admin.from("connect_responses").insert({ ...payload, matched_contact_id: null });
+  }
+  return inserted;
 }
 
 export function connectClientIp(request: Request): string {

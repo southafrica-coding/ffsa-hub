@@ -32,6 +32,7 @@ const state = vi.hoisted(() => {
     tables: {} as Record<string, Row[]>,
     hits: new Map<string, number>(),
     seq: 0,
+    uniqueFailures: 0,
     adminClient() {
       return makeClient();
     },
@@ -92,6 +93,19 @@ const state = vi.hoisted(() => {
             };
           }
           if (op.action === "insert") {
+            if (table === "connect_responses" && state.uniqueFailures > 0) {
+              state.uniqueFailures -= 1;
+              state.writes.push({ client: "admin", table, op: "insert", payload: op.payload });
+              return {
+                data: null,
+                error: {
+                  code: "23505",
+                  message: "duplicate key value violates unique constraint secret_table",
+                  details: "Key (phone_e164) already exists",
+                  hint: "Ada Lovelace",
+                },
+              };
+            }
             const payloads = Array.isArray(op.payload) ? op.payload : [op.payload ?? {}];
             const inserted = payloads.map((payload) => {
               const row: Row = { id: payload.id ?? `${table}-${++state.seq}`, submitted_at: new Date().toISOString(), ...payload };
@@ -164,6 +178,7 @@ function reset() {
   state.writes = [];
   state.hits = new Map();
   state.seq = 0;
+  state.uniqueFailures = 0;
   state.tables = {
     organisations: [{ id: MISSIO, slug: "missio" }],
     contacts: [],
@@ -428,6 +443,39 @@ describe("POST /api/missio/connect", () => {
     expect(otherBody).not.toContain(secret);
     expect(otherBody).not.toContain("contact_id");
     expect(otherBody).not.toContain("XX000");
+  });
+
+  it("retries a matched insert once, then stores the card unmatched", async () => {
+    state.tables.contacts.push({ id: JANE, first_name: "Jane", last_name: "Doe" });
+    state.tables.contact_phones.push({ contact_id: JANE, phone_normalized: "+27821234567" });
+    state.tables.org_people.push({ id: "org-jane", org_id: MISSIO, contact_id: JANE });
+
+    state.uniqueFailures = 1;
+    const retried = await POST(card(valid, "203.0.113.60"));
+    expect(retried.status).toBe(201);
+    const retriedBody = await retried.json();
+    expect(retriedBody).toEqual({ ok: true });
+    expect(JSON.stringify(retriedBody)).not.toContain("23505");
+    expect(JSON.stringify(retriedBody)).not.toContain("duplicate");
+    expect(state.tables.connect_responses).toHaveLength(1);
+    expect(state.tables.connect_responses[0].matched_contact_id).toBe(JANE);
+    expect(state.writes.filter((write) => write.table === "connect_responses" && write.op === "insert")).toHaveLength(2);
+
+    state.tables.connect_responses = [];
+    state.writes = [];
+    state.uniqueFailures = 2;
+    const fallback = await POST(card({ ...valid, phone: "0831234567" }, "203.0.113.61"));
+    expect(fallback.status).toBe(201);
+    const fallbackBody = await fallback.json();
+    expect(fallbackBody).toEqual({ ok: true });
+    expect(JSON.stringify(fallbackBody)).not.toContain("23505");
+    expect(JSON.stringify(fallbackBody)).not.toContain("duplicate");
+    expect(JSON.stringify(fallbackBody)).not.toContain("Ada Lovelace");
+    expect(state.tables.connect_responses).toHaveLength(1);
+    expect(state.tables.connect_responses[0].matched_contact_id).toBeNull();
+    const inserts = state.writes.filter((write) => write.table === "connect_responses" && write.op === "insert");
+    expect(inserts).toHaveLength(3);
+    expect((inserts[2].payload as Row[])[0].matched_contact_id).toBeNull();
   });
 
   it("does not store the raw IP when the HMAC key is missing", async () => {
