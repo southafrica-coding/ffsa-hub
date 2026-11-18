@@ -3,6 +3,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { orgHref, shouldShowOrgSwitcher, canAccessMissio, missioSkinVars } from "./access";
 import { MissioApiError, missioClient, type MissioClient } from "./api";
 import { OrgSwitcher, OrgTile } from "./org-switcher";
@@ -78,49 +79,95 @@ export function MissioFrame({
     );
   }
 
+  return <MissioReady me={gate.me}>{children}</MissioReady>;
+}
+
+function orgOptions(me: MissioMe) {
+  return me.orgs.map((org) => ({
+    id: org.id,
+    slug: org.slug,
+    name: org.name,
+    href: orgHref(org.slug),
+  }));
+}
+
+function MissioReady({ me, children }: { me: MissioMe; children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [navOpen, setNavOpen] = useState(false);
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(min-width: 768px)");
+    const closeOnDesktop = () => {
+      if (query.matches) setNavOpen(false);
+    };
+    closeOnDesktop();
+    if (typeof query.addEventListener !== "function") return;
+    query.addEventListener("change", closeOnDesktop);
+    return () => query.removeEventListener("change", closeOnDesktop);
+  }, []);
+
   return (
     <div data-missio-shell="" data-skin="missio" data-access="ready" className={styles.shell} style={skinStyle}>
-      <MissioSidebar me={gate.me} />
+      <div className={styles.sideSlot}>
+        <MissioSidebar me={me} />
+      </div>
+      <Sheet open={navOpen} onOpenChange={setNavOpen}>
+        <SheetContent side="left" id="missio-nav" className={styles.drawer} style={skinStyle}>
+          <SheetTitle className={styles.visuallyHidden}>Missio navigation</SheetTitle>
+          <SheetDescription className={styles.visuallyHidden}>Sections in this church</SheetDescription>
+          <MissioSidebar me={me} inDrawer onNavigate={() => setNavOpen(false)} />
+        </SheetContent>
+      </Sheet>
       <div className={styles.main}>
-        <MissioTop orgName={gate.me.orgs.find((org) => org.slug === "missio")?.name ?? "Missio"} />
+        <MissioTop me={me} navOpen={navOpen} onOpenNav={() => setNavOpen(true)} />
         <div className={styles.content}>{children}</div>
       </div>
     </div>
   );
 }
 
-function MissioSidebar({ me }: { me: MissioMe }) {
+function MissioSidebar({
+  me,
+  inDrawer = false,
+  onNavigate,
+}: {
+  me: MissioMe;
+  inDrawer?: boolean;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
-  const orgs = me.orgs.map((org) => ({
-    id: org.id,
-    slug: org.slug,
-    name: org.name,
-    href: orgHref(org.slug),
-  }));
+  const orgs = orgOptions(me);
   const missio = me.orgs.find((org) => org.slug === "missio");
   const home = pathname === "/missio";
   const people = pathname.startsWith("/missio/people");
 
+  const orgNode = shouldShowOrgSwitcher(me.orgs.length) ? (
+    <OrgSwitcher orgs={orgs} currentOrg="missio" />
+  ) : (
+    <div className={styles.orgStatic}>
+      <OrgTile slug="missio" />
+      <span>{missio?.name ?? "Missio"}</span>
+    </div>
+  );
+
   return (
-    <aside className={styles.side}>
-      {shouldShowOrgSwitcher(me.orgs.length) ? (
-        <OrgSwitcher orgs={orgs} currentOrg="missio" />
-      ) : (
-        <div className={styles.orgStatic}>
-          <OrgTile slug="missio" />
-          <span>{missio?.name ?? "Missio"}</span>
-        </div>
-      )}
-      <form className={styles.search} action="/missio/people">
+    <aside className={`${styles.side} ${inDrawer ? styles.sideDrawer : ""}`}>
+      {inDrawer ? <div className={styles.drawerOrg}>{orgNode}</div> : orgNode}
+      <form className={styles.search} action="/missio/people" onSubmit={() => onNavigate?.()}>
         <SearchIcon />
         <input name="q" placeholder="Search" aria-label="Search Missio" />
       </form>
       <nav className={styles.nav} aria-label="Missio">
-        <Link href="/missio" className={`${styles.navLink} ${home ? styles.navOn : ""}`} aria-current={home ? "page" : undefined}>
+        <Link href="/missio" className={`${styles.navLink} ${home ? styles.navOn : ""}`} aria-current={home ? "page" : undefined} onClick={onNavigate}>
           <HomeIcon />
           <span>Home</span>
         </Link>
-        <Link href="/missio/people" className={`${styles.navLink} ${people ? styles.navOn : ""}`} aria-current={people ? "page" : undefined}>
+        <Link href="/missio/people" className={`${styles.navLink} ${people ? styles.navOn : ""}`} aria-current={people ? "page" : undefined} onClick={onNavigate}>
           <PeopleIcon />
           <span>People</span>
         </Link>
@@ -146,18 +193,42 @@ function MissioSidebar({ me }: { me: MissioMe }) {
   );
 }
 
-function MissioTop({ orgName }: { orgName: string }) {
+function MissioTop({
+  me,
+  navOpen,
+  onOpenNav,
+}: {
+  me: MissioMe;
+  navOpen: boolean;
+  onOpenNav: () => void;
+}) {
   const pathname = usePathname();
   const section = pathname.startsWith("/missio/people") ? "People" : "Home";
+  const orgName = me.orgs.find((org) => org.slug === "missio")?.name ?? "Missio";
   return (
     <div className={styles.top}>
+      <button
+        type="button"
+        className={styles.menuButton}
+        aria-label="Open menu"
+        aria-expanded={navOpen}
+        aria-controls={navOpen ? "missio-nav" : undefined}
+        onClick={onOpenNav}
+      >
+        <MenuIcon />
+      </button>
+      {shouldShowOrgSwitcher(me.orgs.length) ? (
+        <div className={styles.topOrg}>
+          <OrgSwitcher orgs={orgOptions(me)} currentOrg="missio" compact />
+        </div>
+      ) : null}
       <span className={styles.crumb}>
         {orgName} / <b>{section}</b>
       </span>
       <span className={styles.spacer} />
       <span className={styles.ent}>
         <span className={styles.dot} />
-        {orgName}
+        <span className={styles.entName}>{orgName}</span>
       </span>
     </div>
   );
@@ -192,6 +263,14 @@ export function NoAccess({ status }: { status: 401 | 403 }) {
         Back to the FFSA Hub
       </Link>
     </section>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
   );
 }
 

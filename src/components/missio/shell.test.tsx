@@ -1,4 +1,6 @@
 /** @vitest-environment happy-dom */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -16,8 +18,10 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+const nav = vi.hoisted(() => ({ pathname: "/missio" }));
+
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/missio",
+  usePathname: () => nav.pathname,
   useRouter: () => ({ refresh: () => {} }),
 }));
 
@@ -61,8 +65,10 @@ describe("Missio access state", () => {
   const hosts: HTMLElement[] = [];
 
   afterEach(() => {
+    nav.pathname = "/missio";
     while (roots.length) act(() => roots.pop()?.unmount());
     while (hosts.length) hosts.pop()?.remove();
+    document.body.innerHTML = "";
   });
 
   async function settle() {
@@ -122,5 +128,76 @@ describe("Missio access state", () => {
     expect(host.querySelector("[data-testid=missio-no-access]")?.getAttribute("data-status")).toBe("403");
     expect(host.textContent).toMatch(/FFSA admin role/);
     expect(host.textContent).not.toContain("People live here");
+  });
+
+  it("opens the phone menu and closes it from Escape, the overlay, and a route change", async () => {
+    const { host, root } = render(
+      <MissioFrame client={client(async () => pastor)}>
+        <p>People live here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+
+    const openMenu = host.querySelector("button[aria-label='Open menu']") as HTMLButtonElement;
+    expect(openMenu.getAttribute("aria-expanded")).toBe("false");
+    act(() => {
+      openMenu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = document.body.querySelector("[role='dialog']") as HTMLElement;
+    expect(dialog).toBeTruthy();
+    expect(dialog.textContent).toContain("House churches");
+    expect(openMenu.getAttribute("aria-expanded")).toBe("true");
+    expect(document.body.getAttribute("data-scroll-locked")).toBe("1");
+    expect(document.activeElement === dialog || dialog.contains(document.activeElement)).toBe(true);
+
+    act(() => {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(document.body.querySelector("[role='dialog']")).toBeNull();
+    expect(openMenu.getAttribute("aria-expanded")).toBe("false");
+
+    act(() => {
+      openMenu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const overlay = document.body.querySelector("[data-slot='sheet-overlay']") as HTMLElement;
+    act(() => {
+      overlay.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 1 }));
+    });
+    expect(document.body.querySelector("[role='dialog']")).toBeNull();
+
+    act(() => {
+      openMenu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(document.body.querySelector("[role='dialog']")).toBeTruthy();
+    nav.pathname = "/missio/people";
+    act(() => {
+      root.render(
+        <MissioFrame client={client(async () => pastor)}>
+          <p>People live here</p>
+        </MissioFrame>
+      );
+    });
+    await settle();
+    expect(document.body.querySelector("[role='dialog']")).toBeNull();
+  });
+});
+
+describe("Missio mobile layout rules", () => {
+  it("keeps the in-flow sidebar off phones and stacks the home cards", () => {
+    const css = readFileSync(path.join(process.cwd(), "src/components/missio/shell.module.css"), "utf8");
+    const mobile = css.slice(css.lastIndexOf("@media (max-width: 767px)"));
+    expect(mobile).toMatch(/\.sideSlot\s*\{[^}]*display:\s*none/);
+    expect(mobile).toMatch(/\.grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+    expect(mobile).toMatch(/\.toolbar\s*\{[^}]*flex-direction:\s*column/);
+    expect(mobile).toMatch(/\.peopleCards\s*\{[^}]*display:\s*flex/);
+    expect(mobile).toMatch(/\.table\s*\{[^}]*display:\s*none/);
+    expect(mobile).toMatch(/\.crumb\s*\{[^}]*text-overflow:\s*ellipsis/);
+    expect(css).toMatch(/\.menuButton,\s*\.topOrg\s*\{[^}]*display:\s*none/);
   });
 });
