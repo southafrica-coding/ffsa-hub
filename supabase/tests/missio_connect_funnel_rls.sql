@@ -1180,14 +1180,20 @@ SELECT pg_temp.expect('service role cannot move a matched card to an org the con
      WHERE id = 'd1111111-1111-4111-8111-111111111111'
   $$),
   '23503 missio_contact_not_in_org');
-SELECT pg_temp.expect('attach locks on org plus contact, else org plus phone',
+SELECT pg_temp.expect('attach and confirm take the same namespaced lock',
   (SELECT (
-      pg_get_functiondef('public.attach_missio_connect_response()'::regprocedure)
+      pg_get_functiondef('public.missio_followup_lock(uuid,uuid,text)'::regprocedure)
         LIKE '%pg_advisory_xact_lock%'
-      AND pg_get_functiondef('public.attach_missio_connect_response()'::regprocedure)
+      AND pg_get_functiondef('public.missio_followup_lock(uuid,uuid,text)'::regprocedure)
+        LIKE '%missio_followup:%'
+      AND pg_get_functiondef('public.missio_followup_lock(uuid,uuid,text)'::regprocedure)
         LIKE '%:contact:%'
-      AND pg_get_functiondef('public.attach_missio_connect_response()'::regprocedure)
+      AND pg_get_functiondef('public.missio_followup_lock(uuid,uuid,text)'::regprocedure)
         LIKE '%:phone:%'
+      AND pg_get_functiondef('public.attach_missio_connect_response()'::regprocedure)
+        LIKE '%missio_followup_lock%'
+      AND pg_get_functiondef('public.link_missio_connect_match()'::regprocedure)
+        LIKE '%missio_followup_lock%'
     )::text),
   'true');
 SELECT pg_temp.expect('service role cannot assign a hub user with no Missio role',
@@ -1219,6 +1225,99 @@ SELECT pg_temp.expect('nine-digit 111111111 is the ZA number phone.ts accepts',
 SELECT pg_temp.expect('ten-digit junk 1111111111 is null',
   (SELECT (public.missio_phone_e164('1111111111') IS NULL)::text),
   'true');
+SELECT pg_temp.expect('phone ext. 9 is ignored',
+  (SELECT public.missio_phone_e164('0821234567 ext. 9')),
+  '+27821234567');
+SELECT pg_temp.expect('phone x9 is ignored',
+  (SELECT public.missio_phone_e164('082 123 4567 x9')),
+  '+27821234567');
+SELECT pg_temp.expect('phone ;ext=9 is ignored',
+  (SELECT public.missio_phone_e164('0821234567;ext=9')),
+  '+27821234567');
+SELECT pg_temp.expect('arabic-indic digits normalize',
+  (SELECT public.missio_phone_e164(convert_from(decode('d9a0d9a8d9a2d9a1d9a2d9a3d9a4d9a5d9a6d9a7', 'hex'), 'UTF8'))),
+  '+27821234567');
+SELECT pg_temp.expect('devanagari digits do not normalize',
+  (SELECT (public.missio_phone_e164(convert_from(decode('e0a5a6e0a5aee0a5a8e0a5a7e0a5a8e0a5a9e0a5aae0a5abe0a5ace0a5ad', 'hex'), 'UTF8')) IS NULL)::text),
+  'true');
+
+SELECT pg_temp.expect('a known contact card is stored',
+  pg_temp.exec('service', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source, matched_contact_id
+    )
+    SELECT
+      'dbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+      id,
+      'Known Phone',
+      '0831234567',
+      'regular',
+      'manual',
+      'c1111111-1111-1111-1111-111111111111'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('a public card with that phone does not write a timeline row',
+  pg_temp.exec('service', $$
+    INSERT INTO public.connect_responses (
+      id, org_id, name, phone, visit_type, source
+    )
+    SELECT
+      'dbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
+      id,
+      'Someone Else',
+      '083 123 4567',
+      'first_time',
+      'qr'
+    FROM public.organisations WHERE slug = 'missio'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('the public card is pending confirmation',
+  pg_temp.scalar('service', $$
+    SELECT match_status || '/' || suggested_contact_id::text
+    FROM public.connect_responses
+    WHERE id = 'dbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
+  $$),
+  'pending_confirm/c1111111-1111-1111-1111-111111111111');
+SELECT pg_temp.expect('the known contact still has one connect card on the timeline',
+  pg_temp.scalar('service', $$
+    SELECT count(*)::text
+    FROM public.missio_followup_stage_history h
+    JOIN public.missio_followups f ON f.id = h.followup_id
+    WHERE f.contact_id = 'c1111111-1111-1111-1111-111111111111'
+      AND h.kind = 'connect_card'
+      AND h.connect_response_id = 'dbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
+  $$),
+  '0');
+SELECT pg_temp.expect('the public card has no follow-up yet',
+  pg_temp.scalar('service', $$
+    SELECT count(*)::text
+    FROM public.missio_followups
+    WHERE connect_response_id = 'dbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
+  $$),
+  '0');
+SELECT pg_temp.expect('a pastor confirming the card attaches it',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.connect_responses
+       SET matched_contact_id = 'c1111111-1111-1111-1111-111111111111'
+     WHERE id = 'dbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('confirm writes the connect card and keeps one open follow-up',
+  pg_temp.scalar('a1111111-1111-1111-1111-111111111111', $$
+    SELECT
+      (SELECT count(*) FROM public.missio_followups
+        WHERE contact_id = 'c1111111-1111-1111-1111-111111111111'
+          AND stage <> 'joined')::text
+      || '/' ||
+      (SELECT count(*) FROM public.missio_followup_stage_history
+        WHERE kind = 'connect_card'
+          AND connect_response_id = 'dbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2')::text
+      || '/' ||
+      (SELECT match_status FROM public.connect_responses
+        WHERE id = 'dbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2')
+  $$),
+  '1/1/confirmed');
 
 -- ── Report ────────────────────────────────────────────────
 DO $$

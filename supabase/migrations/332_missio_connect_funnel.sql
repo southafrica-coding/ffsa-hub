@@ -66,6 +66,34 @@ CREATE TABLE IF NOT EXISTS public.connect_responses (
 ALTER TABLE public.connect_responses
   ADD COLUMN IF NOT EXISTS phone_e164 text;
 
+-- match_status
+--   unmatched        no existing contact. A new follow-up is created.
+--   pending_confirm  the phone matches an existing contact, stored in
+--                    suggested_contact_id. Nothing is written to that
+--                    person's follow-up or timeline until a pastor
+--                    confirms by setting matched_contact_id.
+--   confirmed        matched_contact_id is set. The follow-up and the
+--                    connect_card timeline row exist.
+ALTER TABLE public.connect_responses
+  ADD COLUMN IF NOT EXISTS match_status text NOT NULL DEFAULT 'unmatched';
+
+ALTER TABLE public.connect_responses
+  DROP CONSTRAINT IF EXISTS connect_responses_match_status_check;
+
+ALTER TABLE public.connect_responses
+  ADD CONSTRAINT connect_responses_match_status_check
+  CHECK (match_status IN ('unmatched', 'pending_confirm', 'confirmed'));
+
+ALTER TABLE public.connect_responses
+  ADD COLUMN IF NOT EXISTS suggested_contact_id uuid
+    REFERENCES public.contacts (id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN public.connect_responses.match_status IS
+  'unmatched: no contact, a new follow-up is created. pending_confirm: phone matched an existing contact (suggested_contact_id) and nothing was attached. confirmed: a pastor set matched_contact_id and the follow-up plus connect_card timeline row exist.';
+
+COMMENT ON COLUMN public.connect_responses.suggested_contact_id IS
+  'The contact a phone match points at. Set only for pending_confirm. Confirming copies the pastor''s choice into matched_contact_id; this column is the suggestion, not the link.';
+
 CREATE INDEX IF NOT EXISTS connect_responses_org_submitted_idx
   ON public.connect_responses (org_id, submitted_at DESC);
 
@@ -108,6 +136,30 @@ COMMENT ON COLUMN public.connect_responses.phone_e164 IS
 -- (ext, extension, x, #) is dropped first. A leading 00 is the
 -- ZA international prefix. Unknown codes such as +999 are null.
 -- Private: revoked from anon and authenticated.
+-- The same three digit ranges libphonenumber-js folds: fullwidth,
+-- Arabic-Indic, and Eastern Arabic. Devanagari and other digits
+-- are left alone, so a number made of them parses as null.
+CREATE OR REPLACE FUNCTION public.missio_fold_phone_digits(input text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path = ''
+AS $fn$
+  SELECT translate(
+    input,
+    chr(1632) || chr(1633) || chr(1634) || chr(1635) || chr(1636)
+      || chr(1637) || chr(1638) || chr(1639) || chr(1640) || chr(1641)
+      || chr(1776) || chr(1777) || chr(1778) || chr(1779) || chr(1780)
+      || chr(1781) || chr(1782) || chr(1783) || chr(1784) || chr(1785)
+      || chr(65296) || chr(65297) || chr(65298) || chr(65299) || chr(65300)
+      || chr(65301) || chr(65302) || chr(65303) || chr(65304) || chr(65305),
+    '012345678901234567890123456789'
+  );
+$fn$;
+
+REVOKE ALL ON FUNCTION public.missio_fold_phone_digits(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.missio_fold_phone_digits(text) TO anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION public.missio_phone_e164_try(input text)
 RETURNS text
 LANGUAGE plpgsql
@@ -125,10 +177,17 @@ BEGIN
   IF input IS NULL OR btrim(input) = '' THEN
     RETURN NULL;
   END IF;
-  compact := btrim(input);
+  compact := public.missio_fold_phone_digits(btrim(input));
+  -- ";ext=9" is the RFC 3966 form. "ext. 9" and "x9" are the text form.
   compact := regexp_replace(
     compact,
-    '[[:space:]]*(ext(ension)?\.?|x|#)[[:space:]]*[0-9]+[[:space:]]*$',
+    ';[[:space:]]*ext[[:space:]]*=[[:space:]]*[0-9]+;?',
+    '',
+    'gi'
+  );
+  compact := regexp_replace(
+    compact,
+    '[[:space:]]*(ext(ension)?\.?|x|#)[[:space:]]*=?[[:space:]]*[0-9]+[[:space:]]*$',
     '',
     'i'
   );
@@ -832,6 +891,31 @@ CREATE TRIGGER trg_missio_followup_history_pin_changed_by
 -- card with the same phone_e164. A null phone_e164 does not match.
 -- Creating the follow-up runs the stage trigger, then a connect_card
 -- timeline row is written. The contact guard above still applies.
+CREATE OR REPLACE FUNCTION public.missio_followup_lock(
+  p_org uuid,
+  p_contact uuid,
+  p_phone text
+)
+RETURNS void
+LANGUAGE plpgsql
+SET search_path = ''
+AS $fn$
+DECLARE
+  v_key text;
+BEGIN
+  IF p_contact IS NOT NULL THEN
+    v_key := 'missio_followup:' || p_org::text || ':contact:' || p_contact::text;
+  ELSIF p_phone IS NOT NULL THEN
+    v_key := 'missio_followup:' || p_org::text || ':phone:' || p_phone;
+  ELSE
+    RETURN;
+  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_key, 0));
+END;
+$fn$;
+
+REVOKE ALL ON FUNCTION public.missio_followup_lock(uuid, uuid, text) FROM PUBLIC;
+
 CREATE OR REPLACE FUNCTION public.attach_missio_connect_response()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -840,18 +924,15 @@ SET search_path = ''
 AS $$
 DECLARE
   v_followup uuid;
-  v_lock_key text;
+  v_suggested uuid;
 BEGIN
   -- Serialize cards for the same person so two concurrent inserts
   -- attach to one open follow-up instead of both inserting.
-  IF NEW.matched_contact_id IS NOT NULL THEN
-    v_lock_key := NEW.org_id::text || ':contact:' || NEW.matched_contact_id::text;
-  ELSIF NEW.phone_e164 IS NOT NULL THEN
-    v_lock_key := NEW.org_id::text || ':phone:' || NEW.phone_e164;
-  END IF;
-  IF v_lock_key IS NOT NULL THEN
-    PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_lock_key, 0));
-  END IF;
+  PERFORM public.missio_followup_lock(
+    NEW.org_id,
+    NEW.matched_contact_id,
+    NEW.phone_e164
+  );
 
   IF NEW.matched_contact_id IS NOT NULL THEN
     SELECT f.id INTO v_followup
@@ -862,10 +943,55 @@ BEGIN
     ORDER BY f.created_at, f.id
     LIMIT 1;
   ELSIF NEW.phone_e164 IS NOT NULL THEN
+    SELECT cr.matched_contact_id INTO v_suggested
+    FROM public.connect_responses cr
+    WHERE cr.org_id = NEW.org_id
+      AND cr.id <> NEW.id
+      AND cr.phone_e164 = NEW.phone_e164
+      AND cr.matched_contact_id IS NOT NULL
+    ORDER BY cr.submitted_at, cr.id
+    LIMIT 1;
+
+    IF v_suggested IS NULL THEN
+      SELECT f.contact_id INTO v_suggested
+      FROM public.missio_followups f
+      WHERE f.org_id = NEW.org_id
+        AND f.contact_id IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM public.connect_responses cr
+          WHERE cr.org_id = NEW.org_id
+            AND cr.phone_e164 = NEW.phone_e164
+            AND (
+              cr.id = f.connect_response_id
+              OR EXISTS (
+                SELECT 1
+                FROM public.missio_followup_stage_history h
+                WHERE h.followup_id = f.id
+                  AND h.kind = 'connect_card'
+                  AND h.connect_response_id = cr.id
+              )
+            )
+        )
+      ORDER BY f.created_at, f.id
+      LIMIT 1;
+    END IF;
+
+    -- A phone match to a known contact waits for a pastor. It does
+    -- not touch that person's follow-up or timeline.
+    IF v_suggested IS NOT NULL THEN
+      UPDATE public.connect_responses
+         SET match_status = 'pending_confirm',
+             suggested_contact_id = v_suggested
+       WHERE id = NEW.id;
+      RETURN NEW;
+    END IF;
+
     SELECT f.id INTO v_followup
     FROM public.missio_followups f
     WHERE f.org_id = NEW.org_id
       AND f.stage <> 'joined'
+      AND f.contact_id IS NULL
       AND EXISTS (
         SELECT 1
         FROM public.connect_responses cr
@@ -904,6 +1030,12 @@ BEGIN
     v_followup, 'connect_card', NEW.id, auth.uid()
   );
 
+  IF NEW.matched_contact_id IS NOT NULL THEN
+    UPDATE public.connect_responses
+       SET match_status = 'confirmed'
+     WHERE id = NEW.id;
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -911,7 +1043,7 @@ $$;
 REVOKE ALL ON FUNCTION public.attach_missio_connect_response() FROM PUBLIC, anon, authenticated;
 
 COMMENT ON FUNCTION public.attach_missio_connect_response() IS
-  'AFTER INSERT of a connect card, every source. Attaches the card to the open follow-up for that contact or phone, or creates a stage-new follow-up. Does not create a follow-up that the contact guard would reject. Writes a connect_card timeline row.';
+  'AFTER INSERT of a connect card. An explicit matched_contact_id attaches or creates the follow-up and writes connect_card. A phone that matches an existing contact is pending_confirm and writes nothing to that person. No match creates a new follow-up, and a phone match to a follow-up with no contact still attaches to it.';
 
 DROP TRIGGER IF EXISTS trg_connect_response_attach_followup ON public.connect_responses;
 CREATE TRIGGER trg_connect_response_attach_followup
@@ -938,6 +1070,12 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  PERFORM public.missio_followup_lock(NEW.org_id, NEW.matched_contact_id, NULL);
+
+  UPDATE public.connect_responses
+     SET match_status = 'confirmed'
+   WHERE id = NEW.id;
+
   SELECT f.id, f.contact_id
     INTO v_followup, v_contact
   FROM public.missio_followups f
@@ -955,7 +1093,37 @@ BEGIN
   ORDER BY (f.connect_response_id = NEW.id) DESC, f.created_at
   LIMIT 1;
 
-  IF v_followup IS NULL OR v_contact IS NOT NULL THEN
+  -- A phone match that was waiting has no follow-up yet.
+  IF v_followup IS NULL THEN
+    SELECT f.id INTO v_other
+    FROM public.missio_followups f
+    WHERE f.org_id = NEW.org_id
+      AND f.contact_id = NEW.matched_contact_id
+      AND f.stage <> 'joined'
+    ORDER BY f.created_at, f.id
+    LIMIT 1;
+
+    IF v_other IS NULL THEN
+      INSERT INTO public.missio_followups (org_id, contact_id, connect_response_id, stage)
+      VALUES (NEW.org_id, NEW.matched_contact_id, NEW.id, 'new')
+      RETURNING id INTO v_followup;
+    ELSE
+      v_followup := v_other;
+      UPDATE public.missio_followups
+         SET connect_response_id = NEW.id
+       WHERE id = v_followup
+         AND connect_response_id IS NULL;
+    END IF;
+
+    INSERT INTO public.missio_followup_stage_history (
+      followup_id, kind, connect_response_id, changed_by
+    ) VALUES (
+      v_followup, 'connect_card', NEW.id, auth.uid()
+    );
+    RETURN NEW;
+  END IF;
+
+  IF v_contact IS NOT NULL THEN
     RETURN NEW;
   END IF;
 
@@ -987,7 +1155,7 @@ $$;
 REVOKE ALL ON FUNCTION public.link_missio_connect_match() FROM PUBLIC, anon, authenticated;
 
 COMMENT ON FUNCTION public.link_missio_connect_match() IS
-  'AFTER UPDATE of matched_contact_id. Sets the card follow-up contact when it is empty and the contact has no other open follow-up. Otherwise writes a note on both follow-ups and leaves the rows unmerged.';
+  'AFTER UPDATE of matched_contact_id. Takes the missio_followup lock, marks the card confirmed, and creates or attaches the follow-up plus the connect_card timeline row. A card that already has an empty follow-up gets the contact when no other open follow-up has it. A clash writes a note on both and leaves them unmerged. changed_by is auth.uid() when that is set.';
 
 DROP TRIGGER IF EXISTS trg_connect_response_link_match ON public.connect_responses;
 CREATE TRIGGER trg_connect_response_link_match
