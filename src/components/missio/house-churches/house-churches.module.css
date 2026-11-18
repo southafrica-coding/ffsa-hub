@@ -161,20 +161,19 @@
   min-width: 0;
 }
 
-.choice {
+.root .choice {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   width: 100%;
-  min-width: 0;
+  height: auto !important;
   min-height: 44px;
+  padding: 8px 12px !important;
+  line-height: 1.4;
   text-align: left;
-}
-
-.choice span {
-  min-width: 0;
-  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .form {
@@ -302,11 +301,22 @@
   display: grid;
   gap: 4px;
   min-width: 0;
+  width: 100%;
+}
+
+.choiceName,
+.choiceMeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .choiceMeta {
   font-weight: 400;
-  color: var(--sub, #5b574d);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--quiet, #7a7466);
 }
 
 .memberList {
@@ -317,19 +327,37 @@
 }
 
 .memberRow {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  row-gap: 8px;
   align-items: center;
-  gap: 8px 12px;
   min-width: 0;
   padding: 12px 0;
   border-top: 1px solid var(--rule, #ddd7c8);
 }
 
 .memberName {
-  flex: 1 1 10rem;
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.memberEdit {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.memberMeta {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
 }
 
 .menu {

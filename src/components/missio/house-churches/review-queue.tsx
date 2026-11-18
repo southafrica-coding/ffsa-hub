@@ -200,6 +200,8 @@ function ReviewCard({
 }) {
   const [creating, setCreating] = useState(false);
   const houseLabel = item.house ? houseTitle(item.house) : `House ${item.houseNumber}`;
+  const houseNumber = item.house?.number ?? item.houseNumber;
+  const housePlace = item.role ? `House ${houseNumber} · ${ROLE_LABEL[item.role]}` : `House ${houseNumber}`;
   const showName = item.sourceLine.trim() !== item.rawName.trim();
   const reasons = reviewReasons(item);
 
@@ -209,9 +211,8 @@ function ReviewCard({
         <p className={`${shell.eyebrow} ${content.eyebrow}`}>Original line</p>
         <p className={styles.quoteBox}>{item.sourceLine}</p>
         {showName ? <h2>{item.rawName}</h2> : null}
-        <p className={styles.line}>{houseLabel}</p>
-        {item.house && item.house.name?.trim() ? <p className={styles.number}>House {item.house.number}</p> : null}
-        {item.role ? <p className={styles.line}>Role: {ROLE_LABEL[item.role]}</p> : null}
+        {item.house?.name?.trim() ? <p className={styles.line}>{houseLabel}</p> : null}
+        <p className={item.house?.name?.trim() ? styles.number : styles.line}>{housePlace}</p>
         <ul className={styles.reasons}>
           {reasons.map((reason) => (
             <li key={reason}>{reason}</li>
@@ -240,7 +241,7 @@ function ReviewCard({
                     onClick={() => onLink(candidate.contactId)}
                   >
                     <span className={styles.choiceBody}>
-                      <span>Use {candidate.displayName}</span>
+                      <span className={styles.choiceName}>Use {candidate.displayName}</span>
                       {context ? <span className={styles.choiceMeta}>{context}</span> : null}
                     </span>
                   </button>

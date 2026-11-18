@@ -113,7 +113,7 @@ describe("Missio access state", () => {
   it("marks House churches current and names it in the crumb", async () => {
     nav.pathname = "/missio/house-churches/review";
     const { host, root } = render(
-      <MissioFrame client={client(async () => pastor)}>
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
         <p>Houses live here</p>
       </MissioFrame>
     );

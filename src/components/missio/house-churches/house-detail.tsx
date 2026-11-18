@@ -199,9 +199,8 @@ function MemberRow({
       <div className={styles.memberName}>
         <PersonName member={member} />
       </div>
-      <span className={member.role === "member" ? shell.tagQuiet : shell.tag}>{ROLE_LABEL[member.role]}</span>
-      {member.startedAt ? <span className={shell.muted}>Since {formatJoined(member.startedAt)}</span> : null}
       {canWrite ? (
+        <div className={styles.memberEdit}>
         <Popover
           onOpenChange={(open) => {
             if (!open) setConfirming(false);
@@ -249,7 +248,12 @@ function MemberRow({
             )}
           </PopoverContent>
         </Popover>
+        </div>
       ) : null}
+      <div className={styles.memberMeta}>
+        <span className={`${shell.tag} ${member.role === "member" ? shell.tagQuiet : ""}`}>{ROLE_LABEL[member.role]}</span>
+        {member.startedAt ? <span className={styles.quiet}>Since {formatJoined(member.startedAt)}</span> : null}
+      </div>
     </li>
   );
 }

@@ -145,6 +145,7 @@ describe("review queue", () => {
     expect(host.textContent).toContain("Jonah");
     expect(host.textContent).toContain("First name only");
     expect(host.textContent).toContain("River Room");
+    expect(host.textContent).toContain("House 7 · Member");
 
     (host.querySelector("[data-testid=review-skip]") as HTMLFormElement).requestSubmit();
     await settle();
