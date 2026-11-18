@@ -217,7 +217,7 @@ export type MissioMemberStatusRow = {
 /**
  * Connect card and follow-up funnel.
  *
- * Shapes follow migration 332 (PR 614, head 28d61f9c03e6363a1e6c1316614e4acb45ee5481),
+ * Shapes follow migration 332 (PR 614, head ad3f3f8aa5adb576d4762a575810f018ffac4216),
  * stacked on 331. That migration is not applied here. Do not add these tables
  * to src/types/database.ts by hand.
  *
@@ -234,6 +234,11 @@ export type MissioMemberStatusRow = {
  * phone_e164 and matched_at are trigger-owned. matched_contact_id,
  * contact_id, and assigned_leader_contact_id must be null or already
  * in org_people, or the guard raises 23503 missio_contact_not_in_org.
+ * Pastor UPDATE grants: connect_responses (matched_contact_id, notes,
+ * wants_house_church, wants_prayer, prayer_request, service_date) and
+ * missio_followups (stage, assigned_leader_contact_id, assigned_user_id).
+ * These routes do not update any other column, including as service role.
+ * The views have no email column.
  *
  * Partial uniques: (org_id, contact_id) WHERE contact_id IS NOT NULL, and
  * (connect_response_id) WHERE connect_response_id IS NOT NULL.

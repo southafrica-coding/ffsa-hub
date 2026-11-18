@@ -43,6 +43,9 @@ type Fail = { ok: false; status: number; error: string; code: MissioErrorCode };
 const VIEW = "missio_not_in_house";
 const VIEW_COLUMNS =
   "source, contact_id, connect_response_id, display_name, phone, phone_e164, wants_house_church, followup_stage, submitted_at";
+/** Columns authenticated pastors may UPDATE. Service-role writes from these routes stay inside this list. */
+const FOLLOWUP_UPDATE_COLUMNS = new Set(["stage", "assigned_leader_contact_id", "assigned_user_id"]);
+
 const FOLLOWUP_COLUMNS =
   "id, org_id, contact_id, connect_response_id, stage, assigned_leader_contact_id, effective_stage, created_at, updated_at";
 const FOLLOWUP_WRITE_COLUMNS =
@@ -491,9 +494,13 @@ async function claimFollowup(
   row: FollowupRow,
   patch: Record<string, unknown>
 ): Promise<{ row: FollowupRow } | Fail> {
+  const set: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (FOLLOWUP_UPDATE_COLUMNS.has(key)) set[key] = value;
+  }
   let query = auth.supabase
     .from("missio_followups")
-    .update(patch)
+    .update(set)
     .eq("id", row.id)
     .eq("org_id", auth.orgId)
     .eq("stage", row.stage);
@@ -944,45 +951,29 @@ async function requireAssignableLeader(auth: OrgAccess, contactId: string): Prom
   return { ok: true };
 }
 
-/** Claim the card before any create. Zero rows means another pastor took it. */
-async function claimCard(auth: OrgAccess, card: CardRow, expectedContactId: string | null): Promise<{ ok: true } | Fail> {
+/**
+ * Pastors may UPDATE only matched_contact_id (plus notes and prayer fields).
+ * matched_by is not in that grant. The session trigger sets it from auth.uid()
+ * when the match changes. A service-role write must not set it here either.
+ * Zero rows means another pastor already set the match.
+ */
+async function setCardMatch(auth: OrgAccess, card: CardRow, contactId: string): Promise<{ ok: true } | Fail> {
   let query = auth.supabase
     .from("connect_responses")
-    .update({ matched_by: auth.user.id })
+    .update({ matched_contact_id: contactId })
     .eq("id", card.id)
-    .eq("org_id", auth.orgId)
-    .is("matched_by", null);
-  query = expectedContactId ? query.eq("matched_contact_id", expectedContactId) : query.is("matched_contact_id", null);
+    .eq("org_id", auth.orgId);
+  query = card.matched_contact_id ? query.eq("matched_contact_id", card.matched_contact_id) : query.is("matched_contact_id", null);
   const updated = await query.select("id").maybeSingle();
-  if (updated.error) return fromDb(updated.error, "follow-up contact claim");
+  if (updated.error) return fromDb(updated.error, "follow-up contact link");
   if (!updated.data?.id) return CONFLICT;
   return { ok: true };
-}
-
-async function releaseCard(auth: OrgAccess, cardId: string) {
-  const released = await auth.supabase
-    .from("connect_responses")
-    .update({ matched_by: null })
-    .eq("id", cardId)
-    .eq("org_id", auth.orgId)
-    .eq("matched_by", auth.user.id)
-    .is("matched_contact_id", null);
-  if (released.error) console.error("[missio] connect card release failed", released.error.code ?? "update");
 }
 
 async function attachFollowupContact(auth: OrgAccess, view: ViewRow, card: CardRow, contactId: string) {
   const existing = await findFollowup(auth, { ...view, contact_id: contactId, connect_response_id: card.id });
   if (isFail(existing)) return existing;
-  const followup = existing.row;
-  if (followup && !followup.contact_id) {
-    const updated = await auth.supabase
-      .from("missio_followups")
-      .update({ contact_id: contactId })
-      .eq("id", followup.id)
-      .eq("org_id", auth.orgId);
-    if (updated.error) return fromDb(updated.error, "follow-up contact");
-  }
-  return { row: followup };
+  return { row: existing.row };
 }
 
 async function personAfterLink(
@@ -1039,15 +1030,12 @@ export async function linkFollowupContact(
       if (person.code === "not_missio_person") return NOT_MISSIO;
       return person;
     }
-    const claimed = await claimCard(auth, card, card.matched_contact_id);
+    const claimed = await setCardMatch(auth, card, card.matched_contact_id);
     if (isFail(claimed)) return claimed;
     const followup = await attachFollowupContact(auth, view.row, card, card.matched_contact_id);
     if (isFail(followup)) return followup;
     return personAfterLink(auth, card, card.matched_contact_id, followup.row, "linked");
   }
-
-  const claimed = await claimCard(auth, card, null);
-  if (isFail(claimed)) return claimed;
 
   const created = await createPerson(auth, {
     name: card.name,
@@ -1057,7 +1045,6 @@ export async function linkFollowupContact(
     status: "visitor",
   });
   if (!created.ok) {
-    await releaseCard(auth, card.id);
     if (created.code === "exists_use_search") return { ok: false, status: 409, ...EXISTS_USE_SEARCH };
     if (created.code === "already_in_org") return fail(409, "already_in_org", "This person is already in Missio.");
     if (created.code === "not_missio_person") return NOT_MISSIO;
@@ -1066,17 +1053,8 @@ export async function linkFollowupContact(
   }
 
   const contactId = created.body.person.contactId;
-  const linked = await auth.supabase
-    .from("connect_responses")
-    .update({ matched_contact_id: contactId })
-    .eq("id", card.id)
-    .eq("org_id", auth.orgId)
-    .eq("matched_by", auth.user.id)
-    .is("matched_contact_id", null)
-    .select("id")
-    .maybeSingle();
-  if (linked.error) return fromDb(linked.error, "follow-up contact link");
-  if (!linked.data?.id) return CONFLICT;
+  const linked = await setCardMatch(auth, card, contactId);
+  if (isFail(linked)) return linked;
   const followup = await attachFollowupContact(auth, view.row, card, contactId);
   if (isFail(followup)) return followup;
   return personAfterLink(auth, card, contactId, followup.row, "created");

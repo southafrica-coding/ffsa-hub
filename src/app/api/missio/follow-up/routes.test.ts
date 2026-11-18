@@ -704,10 +704,28 @@ describe("missio follow-up", () => {
     expect(linkAt).toBeGreaterThan(orgAt);
     expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(true);
     const card = state.tables.connect_responses.find((row) => row.id === CARD);
-    expect(card).toMatchObject({
-      matched_contact_id: createdBody.person.contactId,
-      matched_by: PASTOR,
+    expect(card?.matched_contact_id).toBe(createdBody.person.contactId);
+    const linkWrite = state.writes[linkAt];
+    expect(linkWrite.payload).toEqual({ matched_contact_id: createdBody.person.contactId });
+    expect(state.writes.find((write) => write.table === "org_people" && write.op === "insert")?.payload).toMatchObject({
+      created_by: PASTOR,
     });
+    expect(
+      state.writes
+        .filter((write) => write.op === "update")
+        .every((write) => {
+          const keys = Object.keys((write.payload ?? {}) as object);
+          if (write.table === "connect_responses") {
+            return keys.every((key) =>
+              ["matched_contact_id", "notes", "wants_house_church", "wants_prayer", "prayer_request", "service_date"].includes(key)
+            );
+          }
+          if (write.table === "missio_followups") {
+            return keys.every((key) => ["stage", "assigned_leader_contact_id", "assigned_user_id"].includes(key));
+          }
+          return true;
+        })
+    ).toBe(true);
 
     state.writes = [];
     state.tables.missio_not_in_house.push({
@@ -813,14 +831,19 @@ describe("missio follow-up", () => {
   });
 
   it("returns 409 when another pastor already claimed the card or the follow-up", async () => {
-    state.tables.connect_responses.find((row) => row.id === CARD)!.matched_by = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9";
+    state.conflictTable = "connect_responses";
     const claimed = await postContact(
       new Request("https://hub.test/api/missio/follow-up", { method: "POST", body: "" }),
       ctx(`r_${CARD}`)
     );
     expect(claimed.status).toBe(409);
     expect((await claimed.json()).code).toBe("conflict");
-    expect(state.writes.some((write) => write.table === "contacts" || write.table === "org_people")).toBe(false);
+    const orgAt = state.writes.findIndex((write) => write.table === "org_people" && write.op === "insert");
+    const linkAt = state.writes.findIndex((write) => write.table === "connect_responses" && write.op === "update");
+    expect(orgAt).toBeGreaterThan(-1);
+    expect(linkAt).toBeGreaterThan(orgAt);
+    expect(state.tables.connect_responses.find((row) => row.id === CARD)?.matched_contact_id).toBeNull();
+    state.writes = [];
 
     state.conflictTable = "missio_followups";
     const raced = await patchStage(
