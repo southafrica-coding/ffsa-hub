@@ -793,6 +793,10 @@
   background: var(--side, #1d2520) !important;
   color: var(--side-ink, #f3efe4) !important;
   box-shadow: none !important;
+  /* The sheet's slide-in translate parks the panel a few pixels off the
+     left edge while it runs, which eats this sidebar's inset. */
+  animation: none !important;
+  transform: none !important;
 }
 
 .drawer > button {
@@ -805,6 +809,9 @@
   height: 100%;
   min-height: 0;
   overflow: auto;
+  box-sizing: border-box;
+  /* Same inset as .side on the desktop rail: 8px either side. */
+  padding: 10px 8px 8px;
 }
 
 .drawerOrg {

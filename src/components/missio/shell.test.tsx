@@ -199,5 +199,6 @@ describe("Missio mobile layout rules", () => {
     expect(mobile).toMatch(/\.table\s*\{[^}]*display:\s*none/);
     expect(mobile).toMatch(/\.crumb\s*\{[^}]*text-overflow:\s*ellipsis/);
     expect(css).toMatch(/\.menuButton,\s*\.topOrg\s*\{[^}]*display:\s*none/);
+    expect(css).toMatch(/\.sideDrawer\s*\{[^}]*padding:\s*10px 8px 8px/);
   });
 });
