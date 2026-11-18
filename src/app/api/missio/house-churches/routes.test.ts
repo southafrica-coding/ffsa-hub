@@ -319,6 +319,21 @@ const state = vi.hoisted(() => {
     }
     const hits = state.tables[table].filter((row) => matches(row, op));
     const payload = (op.payload ?? {}) as Row;
+    if (table === "house_church_members" && payload.ended_at != null) {
+      const inOrg = new Set(state.tables.org_people.map((person) => person.contact_id));
+      if (hits.some((row) => !inOrg.has(row.contact_id))) {
+        return {
+          data: null,
+          error: {
+            code: "23503",
+            message: "missio_member_not_in_org",
+            details: "sheet line with Grace Hopper",
+            hint: "org_people missing",
+          },
+          count: null,
+        };
+      }
+    }
     for (const row of hits) {
       Object.assign(row, payload, { updated_at: "2026-04-02T00:00:00.000Z" });
       if (
@@ -967,19 +982,23 @@ describe("membership writes", () => {
     expect(state.tables.house_church_members).toEqual([]);
   });
 
-  it("refuses to end a membership that starts after today and writes nothing", async () => {
+  it("maps ending someone who left Missio to member_left_missio and writes nothing", async () => {
     addHouse({ id: HOUSE_1, number: 3 });
-    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
-    addMember({ id: "member-future", houseId: HOUSE_1, contactId: ADA, role: "member", startedAt: "2099-01-01" });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: false });
+    addMember({ id: "member-ada", houseId: HOUSE_1, contactId: ADA, role: "member", startedAt: "2026-01-01" });
     const orgBefore = JSON.stringify(state.tables.org_people);
-    const before = JSON.stringify(state.tables.house_church_members);
     const res = await remove(HOUSE_1, ADA);
     expect(res.status).toBe(409);
-    expect(await res.json()).toEqual({
-      error: "This membership is not current.",
-      code: "membership_not_current",
+    const body = await res.json();
+    expect(body).toEqual({
+      error: "This person is no longer in Missio; membership can't be changed here.",
+      code: "member_left_missio",
     });
-    expect(JSON.stringify(state.tables.house_church_members)).toBe(before);
+    const text = JSON.stringify(body);
+    expect(text).not.toContain("missio_member_not_in_org");
+    expect(text).not.toContain("Grace Hopper");
+    expect(text).not.toContain("org_people");
+    expect(state.tables.house_church_members[0].ended_at).toBeNull();
     expect(state.writes.some((write) => write.table === "house_church_members")).toBe(false);
     expect(JSON.stringify(state.tables.org_people)).toBe(orgBefore);
   });

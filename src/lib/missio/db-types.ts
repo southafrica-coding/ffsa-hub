@@ -112,9 +112,10 @@ export type OrgPeopleDirectoryRow = {
  * A contact who is not in org_people for the house org raises 23503
  * missio_member_not_in_org, including for the service role. Ending a current
  * row sets ended_at to the UTC database date,
- * which is never after current_date. A row whose start is already in the
- * future is left in place: DELETE returns membership_not_current and does
- * not write. org_people is not written
+ * which is never after current_date. An already-ended row is
+ * membership_not_current. Ending someone who has left org_people raises
+ * 23503 missio_member_not_in_org until the follow-up, and DELETE maps that
+ * to member_left_missio. org_people is not written
  * by the database. There is no member-status column on org_people.
  * Authenticated inserts pin created_by to auth.uid(). An authenticated
  * review resolve may only point resolved_contact_id at a candidate or at

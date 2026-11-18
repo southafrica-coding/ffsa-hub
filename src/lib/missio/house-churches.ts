@@ -6,10 +6,11 @@ import {
   fieldError,
   invalidInput,
   isHouseChurchErrorCode,
+  mapMembershipEndError,
   mapMissioDbError,
   type HouseChurchErrorCode,
 } from "@/lib/missio/db-errors";
-import { isAfterDatabaseToday, todayIsoDate } from "@/lib/missio/dates";
+import { endDateFor, isAfterDatabaseToday, todayIsoDate } from "@/lib/missio/dates";
 import { membershipBlocksInsert, membershipIsCurrent, membershipIsOpen } from "@/lib/missio/house-church-import";
 import { createPerson } from "@/lib/missio/people";
 import type {
@@ -41,8 +42,8 @@ import type {
 // import-review create still uses the Phase 0 create-person path.
 // Candidate suggestions are limited to people who have that row. DELETE only
 // sets ended_at to the UTC database date and never changes org_people.
-// A start after that date is invalid_input on POST and PATCH. A row that
-// already starts in the future is membership_not_current and is not written.
+// A start after that date is invalid_input on POST. PATCH changes role only.
+// An already-ended membership is membership_not_current.
 // A current membership is an open row (ended_at IS NULL) whose started_at is
 // on or before that date. ended_at after today is rejected by the database.
 //
@@ -818,10 +819,9 @@ export async function endMember(
   contactId: string
 ): Promise<{ ok: true } | Fail> {
   if (!isUuid(contactId)) return fail(404, "not_found", "Member not found.");
-  // Pastor access is already required by the route. The Missio-person
-  // check is next, before the membership is read for update or delete.
-  const person = await requireMissioPerson(auth, contactId);
-  if (!person.ok) return person;
+  // Pastor access is already required by the route. The membership is
+  // closed with the UTC date. Someone who has left Missio is rejected by
+  // the trigger (23503 missio_member_not_in_org) until that follow-up lands.
   const house = await loadHouse(auth, scope, houseId);
   if (!house.ok) return house;
 
@@ -830,20 +830,19 @@ export async function endMember(
   const target = blockingMember(existing.rows);
   if (!target) return closedMembership(existing.rows);
 
-  const startedOn = (target.started_at ?? todayIsoDate()).slice(0, 10);
-  if (isAfterDatabaseToday(startedOn)) {
-    // ended_at = today would be before started_at. Do not write.
-    return fail(409, "membership_not_current", "This membership is not current.");
-  }
-
+  const endedAt = endDateFor();
   const updated = await auth.supabase
     .from("house_church_members")
-    .update({ ended_at: todayIsoDate() })
+    .update({ ended_at: endedAt })
     .eq("id", target.id)
     .eq("house_church_id", house.house.id)
     .select("id")
     .maybeSingle();
-  if (updated.error) return dbWriteError(updated.error, "membership write");
+  if (updated.error) {
+    const mapped = mapMembershipEndError(updated.error);
+    console.error("[missio] membership end failed", updated.error.code ?? "write failed");
+    return fail(mapped.status, mapped.code, mapped.error, mapped.fieldErrors);
+  }
   if (!updated.data?.id) return fail(404, "not_found", "Member not found.");
 
   const admin = adminClient();
@@ -853,7 +852,7 @@ export async function endMember(
     action: "missio.house_member_end",
     resourceType: "house_church_member",
     resourceId: updated.data.id as string,
-    changes: { houseChurchId: house.house.id, contactId, endedAt: todayIsoDate() },
+    changes: { houseChurchId: house.house.id, contactId, endedAt },
   });
   return { ok: true };
 }

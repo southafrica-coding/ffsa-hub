@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { HOUSE_CHURCH_ERROR_CODES, invalidInput, mapMissioDbError, type HouseChurchErrorCode } from "@/lib/missio/db-errors";
+import {
+  HOUSE_CHURCH_ERROR_CODES,
+  invalidInput,
+  mapMembershipEndError,
+  mapMissioDbError,
+  type HouseChurchErrorCode,
+} from "@/lib/missio/db-errors";
 
 const SECRET = "relation secret_table detail hint Ada Lovelace note";
 
@@ -104,6 +110,26 @@ describe("mapMissioDbError", () => {
   });
 });
 
+describe("mapMembershipEndError", () => {
+  it("maps missio_member_not_in_org to member_left_missio without database text", () => {
+    const mapped = mapMembershipEndError({
+      code: "23503",
+      message: "missio_member_not_in_org",
+      details: SECRET,
+      hint: "org_people missing",
+    });
+    expect(mapped).toEqual({
+      status: 409,
+      code: "member_left_missio",
+      error: "This person is no longer in Missio; membership can't be changed here.",
+    });
+    const body = JSON.stringify(mapped);
+    expect(body).not.toContain("missio_member_not_in_org");
+    expect(body).not.toContain(SECRET);
+    expect(body).not.toContain("org_people");
+  });
+});
+
 describe("HOUSE_CHURCH_ERROR_CODES", () => {
   it("pins the Hub UI list", () => {
     expect([...HOUSE_CHURCH_ERROR_CODES]).toEqual([
@@ -113,6 +139,7 @@ describe("HOUSE_CHURCH_ERROR_CODES", () => {
       "already_member",
       "already_resolved",
       "membership_not_current",
+      "member_left_missio",
       "ended_at_in_future",
       "unauthenticated",
       "forbidden",
