@@ -1105,6 +1105,22 @@ SELECT pg_temp.expect('authenticated resolves import review and cannot rewrite t
     )::text),
   'true');
 
+SELECT pg_temp.expect('service role can remove the org_people row',
+  pg_temp.exec('service', $$
+    DELETE FROM public.org_people
+    WHERE contact_id = 'c2222222-2222-2222-2222-222222222222'
+  $$),
+  'rows=1');
+SELECT pg_temp.expect('an open membership can still be ended after org_people is gone',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.house_church_members
+       SET ended_at = current_date
+     WHERE contact_id = 'c2222222-2222-2222-2222-222222222222'
+       AND house_church_id = '00000000-0000-4000-8000-000000000002'
+       AND ended_at IS NULL
+  $$),
+  'rows=1');
+
 -- ── Report ────────────────────────────────────────────────
 DO $$
 DECLARE
