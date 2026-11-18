@@ -518,13 +518,15 @@ export async function applyHouseChurchImport(
 ): Promise<{ wrote: number }> {
   if (!options.apply) return { wrote: 0 };
   let wrote = 0;
+  // guard_house_church_member rejects a membership whose contact is not
+  // already in org_people, including for the service role.
+  for (const contactId of plan.orgPeopleToCreate) {
+    await writer.insertOrgPerson(contactId);
+    wrote += 1;
+  }
   for (const link of plan.links) {
     if (link.outcome !== "insert") continue;
     await writer.insertMember(link);
-    wrote += 1;
-  }
-  for (const contactId of plan.orgPeopleToCreate) {
-    await writer.insertOrgPerson(contactId);
     wrote += 1;
   }
   for (const review of plan.reviews) {

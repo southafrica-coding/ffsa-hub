@@ -248,6 +248,46 @@ describe("house church import planner", () => {
     expect(second.plan.reviews.every((review) => review.outcome === "unchanged")).toBe(true);
   });
 
+  it("writes an org_people row before the membership that depends on it", async () => {
+    const writer = recordingWriter();
+    await applyHouseChurchImport(
+      {
+        links: [
+          {
+            sourceLine: 1,
+            rawName: "Ada Lovelace",
+            houseId: HOUSE_1,
+            houseNumber: 1,
+            contactId: ADA,
+            role: "member",
+            outcome: "insert",
+          },
+        ],
+        reviews: [],
+        orgPeopleToCreate: [ADA],
+        conflicts: [],
+        summary: {
+          autoLinked: 1,
+          alreadyLinked: 0,
+          roleConflicts: 0,
+          orgPeopleToCreate: 1,
+          toReviewByReason: {
+            none: 0,
+            multiple: 0,
+            family_label: 0,
+            first_only: 0,
+            partial: 0,
+            non_missio_contact: 0,
+          },
+          resolvedLeftUntouched: 0,
+        },
+      },
+      writer.writer,
+      { apply: true }
+    );
+    expect(writer.calls).toEqual([`org:${ADA}`, `member:${ADA}`]);
+  });
+
   it("reports a role conflict and does not change the active role", async () => {
     const rows = parseHouseChurchCsv(
       [

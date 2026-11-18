@@ -11,10 +11,12 @@
 // Reads contacts with the service role. Auto-link prefers contacts that
 // already have a Missio org_people row. A unique full-name match who is not
 // in Missio is staged for review (match_type non_missio_contact) and is not
-// linked. org_people inserts happen only for linked contacts who are missing
-// one, and only when --apply passes the project-ref gate. An existing
-// org_people row is not changed, and an active membership with a different
-// role is left as it is.
+// linked. org_people inserts for those linked contacts happen before the
+// membership row, and only when --apply passes the project-ref gate.
+// guard_house_church_member rejects a member whose contact is not already
+// in org_people (23503 missio_member_not_in_org), including the service role.
+// An existing org_people row is not changed, and an open membership with a
+// different role is left as it is.
 
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
