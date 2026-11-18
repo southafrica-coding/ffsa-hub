@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { canAccessMissio } from "./access";
 import content from "./content.module.css";
 import styles from "./shell.module.css";
+import { useMissioViewer } from "./viewer";
 
 function johannesburgNow(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -21,14 +25,33 @@ function johannesburgNow(now = new Date()) {
 
 export function MissioHome() {
   const { greeting, date } = johannesburgNow();
+  const viewer = useMissioViewer();
+  const showHouses = viewer != null && canAccessMissio(viewer);
+  const people = (
+    <Link href="/missio/people" className={`${styles.card} ${content.card}`} data-testid="home-people">
+      <div className={`${styles.cardTitle} ${content.cardTitle}`}>People</div>
+      <p className={`${styles.cardBody} ${content.cardBody}`}>Names and where someone is in the life of the church.</p>
+    </Link>
+  );
+  const houses = (
+    <Link href="/missio/house-churches" className={`${styles.card} ${content.card}`} data-testid="home-houses">
+      <div className={`${styles.cardTitle} ${content.cardTitle}`}>House churches</div>
+      <p className={`${styles.cardBody} ${content.cardBody}`}>The house someone belongs to. That is membership in this church.</p>
+    </Link>
+  );
+
   return (
     <div className={`${content.page} ${content.reveal}`}>
       <p className={`${styles.eyebrow} ${content.eyebrow}`}>{date}</p>
       <h1 className={content.title}>{greeting}</h1>
-      <Link href="/missio/people" className={`${styles.card} ${content.card} ${content.solo}`}>
-        <div className={`${styles.cardTitle} ${content.cardTitle}`}>People</div>
-        <p className={`${styles.cardBody} ${content.cardBody}`}>Names and where someone is in the life of the church.</p>
-      </Link>
+      {showHouses ? (
+        <div className={content.pair}>
+          {people}
+          {houses}
+        </div>
+      ) : (
+        <div className={content.solo}>{people}</div>
+      )}
     </div>
   );
 }

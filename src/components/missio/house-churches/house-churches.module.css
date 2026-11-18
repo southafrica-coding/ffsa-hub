@@ -1,0 +1,448 @@
+/* House churches only. Spacing follows the Missio content page.
+   Buttons and fields opt out of the global FFSA mono / Roboto leak. */
+
+.root {
+  min-width: 0;
+}
+
+.root label {
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--sub, #5b574d) !important;
+}
+
+.root button,
+.root button:hover,
+.root button:focus,
+.root button:focus-visible {
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  border-radius: 6px !important;
+}
+
+.root input:not([type="checkbox"]):not([type="radio"]),
+.root select,
+.root textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0 !important;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  line-height: 1.5 !important;
+  border-radius: 6px !important;
+  padding: 8px 12px !important;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  height: 100%;
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--ink, #1c1b17);
+  outline-offset: 2px;
+}
+
+.top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.top > :first-child {
+  min-width: 0;
+}
+
+.count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.line {
+  margin: 8px 0 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.number {
+  margin: 8px 0 0;
+  color: var(--sub, #5b574d);
+}
+
+.block {
+  min-width: 0;
+  margin-top: 24px;
+}
+
+.block h2 {
+  margin-bottom: 8px;
+}
+
+.members {
+  min-width: 0;
+}
+
+.members ul {
+  min-width: 0;
+}
+
+.personLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+.reviewHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.progress {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.quote {
+  margin: 12px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.reasons {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.reasons li + li {
+  margin-top: 4px;
+}
+
+.choices {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.root .choice {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  height: auto !important;
+  min-height: 44px;
+  padding: 8px 12px !important;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  min-width: 0;
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.formActions > * {
+  min-width: 0;
+}
+
+.root .searchButton {
+  box-sizing: border-box;
+  height: auto !important;
+  min-height: 44px;
+  padding: 8px 12px !important;
+}
+
+.note {
+  min-height: 64px;
+  resize: vertical;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.back svg {
+  flex: none;
+}
+
+.reviewButton {
+  margin-top: 16px;
+  min-height: 44px;
+  width: auto;
+  max-width: 100%;
+  text-decoration: none;
+}
+
+.roleBlock {
+  margin-top: 12px;
+  min-width: 0;
+}
+
+.roleLabel {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--quiet, #7a7466);
+}
+
+.quiet {
+  color: var(--quiet, #7a7466);
+}
+
+.metaLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 12px 0 0;
+  color: var(--sub, #5b574d);
+  min-width: 0;
+}
+
+.metaLine span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.metaLine svg {
+  flex: none;
+}
+
+.root .doneTitle {
+  margin: 40px 0 0;
+  font-size: 19px;
+  font-weight: 560;
+  line-height: 1.25;
+  letter-spacing: -0.4px;
+}
+
+.summary {
+  margin-top: 24px;
+  min-width: 0;
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.root .summary h2 {
+  margin: 0;
+}
+
+.quoteBox {
+  margin: 8px 0 0;
+  padding: 12px;
+  background: var(--subtle, #eeeadf);
+  border-radius: 6px;
+  color: var(--sub, #5b574d);
+  overflow-wrap: anywhere;
+}
+
+.section {
+  margin-top: 24px;
+  min-width: 0;
+}
+
+.root .section h2 {
+  margin: 0 0 8px;
+}
+
+.section .form,
+.section .choices {
+  margin-top: 0;
+}
+
+.section button + .form {
+  margin-top: 12px;
+}
+
+.choiceBody {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+}
+
+.choiceName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.choiceMeta {
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--quiet, #7a7466);
+}
+
+.memberList {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.memberRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--rule, #ddd7c8);
+}
+
+.memberName {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.memberEdit {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.memberMeta {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.menu {
+  width: min(280px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  background: var(--panel, #fbf9f4) !important;
+  color: var(--ink, #1c1b17);
+  border: 1px solid var(--rule, #ddd7c8) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  padding: 16px !important;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+}
+
+.menu,
+.menu * {
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
+}
+
+.menuTitle {
+  margin: 0 0 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.menu label,
+.menu button,
+.menu button:hover,
+.menu button:focus,
+.menu button:focus-visible {
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.menu label {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--sub, #5b574d) !important;
+}
+
+.menu button,
+.menu button:hover,
+.menu button:focus,
+.menu button:focus-visible {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+}
+
+.menu select {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 8px;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  border-radius: 6px !important;
+}
+
+.menuActions {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.confirmCopy {
+  margin: 16px 0 0;
+}

@@ -5,8 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { canAccessMissio, missioSkinVars } from "./access";
+import { MissioViewerProvider } from "./viewer";
 import { MissioApiError, missioClient, type MissioClient } from "./api";
 import { loadFfsaRoleNames } from "./ffsa-roles";
+import { missioCrumbLabel } from "./crumb";
 import { BACK_TO_FFSA_HUB, missioOrgHeader, needsPlatformRoleLookup, type OrgHeaderState } from "./org-header";
 import { OrgSwitcher, OrgTile } from "./org-switcher";
 import type { MissioMe } from "./types-shim";
@@ -144,7 +146,7 @@ function MissioReady({
         <div className={styles.main}>
           <MissioTop me={me} ffsaRoleNames={ffsaRoleNames} navOpen={navOpen} />
           <div className={styles.content} data-missio-content="">
-            {children}
+            <MissioViewerProvider me={me}>{children}</MissioViewerProvider>
           </div>
         </div>
       </div>
@@ -173,6 +175,8 @@ function MissioSidebar({
   const missio = me.orgs.find((org) => org.slug === "missio");
   const home = pathname === "/missio";
   const people = pathname.startsWith("/missio/people");
+  const houses = pathname.startsWith("/missio/house-churches");
+  const pastor = canAccessMissio(me);
 
   const orgNode = <OrgHeader state={header} />;
 
@@ -192,11 +196,18 @@ function MissioSidebar({
           <PeopleIcon />
           <span>People</span>
         </Link>
-        <div className={styles.soon} aria-disabled="true">
-          <HomeIcon />
-          <span>House churches</span>
-          <span className={styles.soonTag}>Soon</span>
-        </div>
+        {pastor ? (
+          <Link
+            href="/missio/house-churches"
+            className={`${styles.navLink} ${houses ? styles.navOn : ""}`}
+            aria-current={houses ? "page" : undefined}
+            data-testid="missio-nav-house-churches"
+            onClick={onNavigate}
+          >
+            <HouseIcon />
+            <span>House churches</span>
+          </Link>
+        ) : null}
         <div className={styles.soon} aria-disabled="true">
           <PeopleIcon />
           <span>Teams</span>
@@ -243,7 +254,7 @@ function MissioTop({
   navOpen: boolean;
 }) {
   const pathname = usePathname();
-  const section = pathname.startsWith("/missio/people") ? "People" : "Home";
+  const section = missioCrumbLabel(pathname);
   const orgName = me.orgs.find((org) => org.slug === "missio")?.name ?? "Missio";
   const header = missioOrgHeader({ orgs: me.orgs, ffsaRoleNames });
   return (
@@ -330,6 +341,16 @@ function HomeIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
       <path d="M3 10.5 12 3l9 7.5" />
       <path d="M5 9.5V21h14V9.5" />
+    </svg>
+  );
+}
+
+function HouseIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
+      <path d="M4 10.5 12 4l8 6.5" />
+      <path d="M7 9.8V20h10V9.8" />
+      <path d="M10 20v-5h4v5" />
     </svg>
   );
 }
