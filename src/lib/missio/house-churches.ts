@@ -294,11 +294,28 @@ async function requireMissioPerson(
   };
 }
 
-/** 23514 missio_ended_at_in_future (migration 331) is a conflict, not a 500. */
+/**
+ * Migration 331 raises these for every role, including the service role.
+ * Match SQLSTATE and the exception text. Anything else stays a server error.
+ */
+function constraintFailure(error: { code?: string; message?: string }): Fail | null {
+  const message = error.message ?? "";
+  if (error.code === "23514" && message.includes("missio_ended_at_in_future")) {
+    return fail(409, "invalid_input", "Check the fields and try again.");
+  }
+  if (
+    error.code === "23503" &&
+    (message.includes("missio_member_not_in_org") || message.includes("missio_resolve_not_allowed"))
+  ) {
+    return NOT_MISSIO;
+  }
+  return null;
+}
+
 function membershipWriteError(error: { code?: string; message?: string }): Fail {
+  const constraint = constraintFailure(error);
+  if (constraint) return constraint;
   if (error.code === "23505") return fail(409, "already_member", "This person is already in this house.");
-  if (error.code === "23514") return fail(409, "invalid_input", "Check the fields and try again.");
-  if (error.code === "23503") return NOT_MISSIO;
   console.error("[missio] membership write failed", error.message ?? error.code ?? "write failed");
   return fail(500, "server_error", "Something went wrong.");
 }
@@ -486,12 +503,6 @@ function blockingMember(rows: MemberRow[]): MemberRow | null {
   return rows.find((row) => membershipBlocksInsert(asMembership(row))) ?? null;
 }
 
-function endDateFor(row: MemberRow, today = todayIsoDate()): string | null {
-  const started = (row.started_at ?? today).slice(0, 10);
-  if (started > today) return null;
-  return today;
-}
-
 async function memberRowsFor(
   auth: OrgAccess,
   houseId: string,
@@ -525,6 +536,9 @@ async function insertMember(
       role,
       started_at: todayIsoDate(),
       ended_at: null,
+      // Pastor routes set created_by to the signed-in user. Migration 331
+      // keeps that value for a service-role write (auth.uid() is null) and
+      // overwrites it with auth.uid() when the caller is signed in.
       created_by: auth.user.id,
     })
     .select(MEMBER_COLUMNS)
@@ -748,11 +762,32 @@ export async function endMember(
   const target = blockingMember(existing.rows);
   if (!target) return fail(404, "not_found", "Member not found.");
 
-  const endedAt = endDateFor(target);
-  if (!endedAt) return fail(400, "invalid_input", "Check the fields and try again.");
+  const started = (target.started_at ?? todayIsoDate()).slice(0, 10);
+  if (started > todayIsoDate()) {
+    // It never began. ended_at = started_at would be after today and 331
+    // raises 23514. DELETE is granted, and the guard trigger does not run
+    // on DELETE, including for the service role.
+    const removed = await auth.supabase
+      .from("house_church_members")
+      .delete()
+      .eq("id", target.id)
+      .eq("house_church_id", house.house.id);
+    if (removed.error) return membershipWriteError(removed.error);
+    const admin = adminClient();
+    if ("error" in admin) return fail(500, "server_error", admin.error);
+    await audit(admin.client, {
+      userId: auth.user.id,
+      action: "missio.house_member_end",
+      resourceType: "house_church_member",
+      resourceId: target.id,
+      changes: { houseChurchId: house.house.id, contactId, deleted: true },
+    });
+    return { ok: true };
+  }
+
   const updated = await auth.supabase
     .from("house_church_members")
-    .update({ ended_at: endedAt })
+    .update({ ended_at: todayIsoDate() })
     .eq("id", target.id)
     .eq("house_church_id", house.house.id)
     .select("id")
@@ -767,7 +802,7 @@ export async function endMember(
     action: "missio.house_member_end",
     resourceType: "house_church_member",
     resourceId: updated.data.id as string,
-    changes: { houseChurchId: house.house.id, contactId, endedAt },
+    changes: { houseChurchId: house.house.id, contactId, endedAt: todayIsoDate() },
   });
   return { ok: true };
 }
@@ -889,11 +924,14 @@ async function claimReview(
   itemId: string,
   patch: { status: "matched" | "new" | "skipped"; contactId: string | null; notes?: string | null }
 ): Promise<{ ok: true; row: ReviewRow } | Fail> {
+  // resolved_at is not sent. Migration 331 sets it to now() when a contact
+  // is resolved. resolved_by is the signed-in pastor; the trigger pins it
+  // to auth.uid() when that is set, and a service-role write would keep
+  // whatever value was passed.
   const update: Partial<Record<(typeof REVIEW_RESOLVE_COLUMNS)[number], unknown>> = {
     status: patch.status,
     resolved_contact_id: patch.contactId,
     resolved_by: auth.user.id,
-    resolved_at: new Date().toISOString(),
   };
   if (patch.notes !== undefined) update.notes = patch.notes;
   const updated = await auth.supabase
@@ -905,6 +943,8 @@ async function claimReview(
     .select(REVIEW_COLUMNS)
     .maybeSingle();
   if (updated.error) {
+    const constraint = constraintFailure(updated.error);
+    if (constraint) return constraint;
     console.error("[missio] import review update failed", updated.error.message);
     return fail(500, "server_error", "Something went wrong.");
   }

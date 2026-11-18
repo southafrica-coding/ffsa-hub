@@ -311,7 +311,16 @@ const state = vi.hoisted(() => {
     }
     const hits = state.tables[table].filter((row) => matches(row, op));
     const payload = (op.payload ?? {}) as Row;
-    for (const row of hits) Object.assign(row, payload, { updated_at: "2026-04-02T00:00:00.000Z" });
+    for (const row of hits) {
+      Object.assign(row, payload, { updated_at: "2026-04-02T00:00:00.000Z" });
+      if (
+        table === "missio_import_review" &&
+        payload.resolved_contact_id &&
+        payload.resolved_at === undefined
+      ) {
+        row.resolved_at = "2026-11-18T08:00:00.000Z";
+      }
+    }
     state.writes.push({ client, table, op: "update", payload });
     const data = hits.map((row) => project(row, op.select));
     if (maybe) return { data: data[0] ?? null, error: null, count: data.length };
@@ -889,6 +898,19 @@ describe("membership writes", () => {
     expect(state.writes.some((write) => write.table === "org_people" && write.op === "insert")).toBe(false);
   });
 
+  it("hard-deletes a membership that has not started", async () => {
+    addHouse({ id: HOUSE_1, number: 3 });
+    addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
+    addMember({ id: "member-future", houseId: HOUSE_1, contactId: ADA, role: "member", startedAt: "2099-01-01" });
+    const res = await remove(HOUSE_1, ADA);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(state.tables.house_church_members).toEqual([]);
+    expect(state.writes.some((write) => write.table === "house_church_members" && write.op === "delete")).toBe(true);
+    expect(state.writes.some((write) => write.table === "house_church_members" && write.op === "update")).toBe(false);
+    expect(state.tables.org_people[0]).toMatchObject({ id: "person-ada", status: "active" });
+  });
+
   it("maps a future end date from the database to 409 and hides the database text", async () => {
     addHouse({ id: HOUSE_1, number: 3 });
     addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: true, personId: "person-ada" });
@@ -1013,11 +1035,12 @@ describe("import review", () => {
     const reviewUpdate = state.writes.find((write) => write.table === "missio_import_review" && write.op === "update");
     expect(reviewUpdate?.client).toBe("user");
     expect(Object.keys((reviewUpdate?.payload ?? {}) as object).sort()).toEqual([
-      "resolved_at",
       "resolved_by",
       "resolved_contact_id",
       "status",
     ]);
+    expect(reviewUpdate?.payload).not.toHaveProperty("resolved_at");
+    expect((reviewUpdate?.payload as { resolved_by?: string })?.resolved_by).toBe(PASTOR);
     expect(state.writes.some((write) => write.table === "audit_logs")).toBe(true);
 
     state.tables.missio_import_review[0].status = "pending";

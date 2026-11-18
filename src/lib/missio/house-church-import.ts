@@ -86,10 +86,10 @@ export function membershipIsOpen(row: { endedAt?: string | null }): boolean {
 }
 
 /**
- * Current membership, matching missio_member_status in migration 331
- * (head a3607d69): the row is open (ended_at IS NULL) and started_at is
- * on or before today. ended_at after today cannot be stored.
- * The view also requires an org_people row; callers apply that separately.
+ * Current membership, matching missio_member_status at #612 head 571555e9:
+ * ended_at IS NULL and started_at <= today. The view also requires an
+ * org_people row; callers apply that separately. A future ended_at cannot
+ * be stored (23514 missio_ended_at_in_future).
  */
 export function membershipIsCurrent(
   row: { startedAt?: string | null; endedAt?: string | null },
