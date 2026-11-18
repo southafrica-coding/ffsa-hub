@@ -118,6 +118,7 @@ export function FollowUpBoard({
   }, [load]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || window.location.pathname !== "/missio/follow-up") return;
     const query = new URLSearchParams();
     if (stage !== "new") query.set("stage", stage);
     if (leader) query.set("leader", leader);

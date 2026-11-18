@@ -1,16 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { displayEnum, entryText, formatWhen, newestFirst } from "./format";
+import { entryText, formatWhen, newestFirst } from "./format";
 import type { TimelineEntry } from "./types";
 
 describe("follow-up display", () => {
-  it("capitalises weekday tokens and leaves other words alone", () => {
-    expect(displayEnum("thursday")).toBe("Thursday");
-    expect(displayEnum("THURSDAY")).toBe("Thursday");
-    expect(displayEnum(" Thursday ")).toBe("Thursday");
-    expect(displayEnum("Thursday evening")).toBe("Thursday evening");
-    expect(displayEnum(null)).toBe("");
-  });
-
   it("formats a submitted date in Johannesburg and sorts the timeline newest first", () => {
     expect(formatWhen("2026-11-16T08:30:00.000Z")).toBe("16 Nov 2026");
     expect(formatWhen("2026-11-16T08:30:00.000Z", true)).toContain("16 Nov 2026");

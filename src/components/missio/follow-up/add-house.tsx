@@ -4,11 +4,10 @@ import { useState } from "react";
 import { MissioApiError, missioClient, type MissioClient } from "../api";
 import { missioFixedCopy, isStaleWrite } from "../errors";
 import { houseChurchesClient, type HouseChurchesClient } from "../house-churches/client";
-import { houseTitle, sortHouses } from "../house-churches/format";
+import { houseTitle, meetingDayLabel, sortHouses } from "../house-churches/format";
 import { useMissioLoad } from "../house-churches/load";
 import { PeoplePicker } from "../house-churches/people-picker";
 import { MissioDialog } from "../missio-dialog";
-import { displayEnum } from "./format";
 import type { FollowUpClient } from "./client";
 import type { FollowUpItem } from "./types";
 import styles from "./follow-up.module.css";
@@ -104,7 +103,7 @@ export function AddHouseDialog({
         {list.length > 0 ? (
           <ul className={styles.choices}>
             {list.map((house) => {
-              const day = displayEnum(house.meetingDay);
+              const day = meetingDayLabel(house.meetingDay);
               const selected = houseId === house.id;
               return (
                 <li key={house.id}>

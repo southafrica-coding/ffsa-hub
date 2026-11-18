@@ -1,7 +1,5 @@
 import type { FollowUpStage, TimelineEntry, VisitType } from "./types";
 
-const WEEKDAYS = new Set(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]);
-
 export const STAGE_LABEL: Record<FollowUpStage, string> = {
   new: "New",
   contacted: "Contacted",
@@ -20,15 +18,6 @@ export const STAGES: FollowUpStage[] = ["new", "contacted", "visited_house", "jo
 export function readStage(value: string | null | undefined): FollowUpStage {
   if (value === "contacted" || value === "visited_house" || value === "joined" || value === "new") return value;
   return "new";
-}
-
-/** Weekday tokens from the API are stored in lowercase. Show them as a name. */
-export function displayEnum(value: string | null | undefined): string {
-  const text = value?.trim() ?? "";
-  if (!text) return "";
-  const lower = text.toLowerCase();
-  if (!WEEKDAYS.has(lower)) return text;
-  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
 export function formatWhen(value: string | null | undefined, withTime = false): string | null {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { missioSkinVars } from "../access";
 import { MissioApiError } from "../api";
 import { missioFixedCopy } from "../errors";
@@ -70,7 +71,7 @@ export function ConnectForm({ client = connectClient }: { client?: ConnectClient
     return (
       <main className={styles.page} data-skin="missio" data-connect="thanks" style={missioSkinVars()}>
         <div className={styles.column}>
-          <img src="/brands/missio/missio-wordmark.png" alt="Missio" className={styles.mark} />
+          <Image src="/brands/missio/missio-wordmark.png" alt="Missio" width={677} height={188} className={styles.mark} priority />
           <h1>Thanks for connecting with us</h1>
           <p className={styles.thanksBody}>Someone from Missio will be in touch this week.</p>
           <button
@@ -94,7 +95,7 @@ export function ConnectForm({ client = connectClient }: { client?: ConnectClient
     <main className={styles.page} data-skin="missio" data-connect="form" style={missioSkinVars()}>
       <div className={styles.column}>
         <header>
-          <img src="/brands/missio/missio-wordmark.png" alt="Missio" className={styles.mark} />
+          <Image src="/brands/missio/missio-wordmark.png" alt="Missio" width={677} height={188} className={styles.mark} priority />
           <h1>Good to see you</h1>
           <p className={styles.lede}>Leave your name and number. Someone from Missio will be in touch this week.</p>
         </header>
