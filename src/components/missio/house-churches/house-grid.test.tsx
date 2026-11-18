@@ -147,7 +147,7 @@ describe("house church grid", () => {
       />
     );
     await settle();
-    expect(host.querySelector("[data-state=error]")?.textContent).toContain("House churches didn’t load.");
+    expect(host.querySelector("[data-state=error]")?.textContent).toContain("Something went wrong on our side. Try again.");
     await act(async () => {
       host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();

@@ -3,7 +3,6 @@ import type {
   HouseCampus,
   HouseDetail,
   HouseDetailResponse,
-  HouseErrorCode,
   HouseListResponse,
   HouseMember,
   HouseRole,
@@ -14,9 +13,7 @@ import type {
   ResolveResponse,
   ReviewHouseRef,
   ReviewItem,
-  ReviewKind,
   ReviewListResponse,
-  ReviewMatchType,
   ReviewStatus,
 } from "./types";
 
@@ -35,17 +32,43 @@ export const houseChurchesApi = {
     `/api/missio/house-churches/import-review/${encodeURIComponent(itemId)}/resolve`,
 } as const;
 
-const HOUSE_CODES = new Set<HouseErrorCode>([
-  "unauthenticated",
-  "forbidden",
-  "invalid_input",
-  "not_found",
-  "already_member",
-  "already_resolved",
-  "exists_use_search",
-  "rate_limited",
-  "server_error",
-]);
+const fieldErrorLines = new WeakMap<MissioApiError, string[]>();
+
+export const GENERIC_HOUSE_ERROR = "That didn’t work. Try again.";
+
+/** Fixed copy for a house-church error. Never reads the server's message string. */
+export function houseErrorCopy(error: MissioApiError): string {
+  const seconds = capRetryAfterSeconds(error.retryAfterSeconds);
+  const fields = fieldErrorLines.get(error) ?? [];
+  switch (error.code) {
+    case "invalid_input":
+      return fields.length > 0 ? fields.join(" ") : "Check the details and try again.";
+    case "not_missio_person":
+      return "This person isn’t in Missio yet. Add them in Missio People first.";
+    case "not_found":
+      return "That couldn’t be found.";
+    case "already_member":
+      return "They’re already in this house.";
+    case "already_resolved":
+      return "Someone else already sorted this one.";
+    case "membership_not_current":
+      return "They’re no longer in this house.";
+    case "ended_at_in_future":
+      return "That end date is still in the future.";
+    case "exists_use_search":
+      return "This person already exists. Open Missio People, then Add person.";
+    case "rate_limited":
+      return `Too many attempts, try again in ${seconds} seconds`;
+    case "server_error":
+      return "Something went wrong on our side. Try again.";
+    case "unauthenticated":
+      return "Not signed in";
+    case "forbidden":
+      return "Pastors only";
+    default:
+      return GENERIC_HOUSE_ERROR;
+  }
+}
 
 export interface HouseChurchesClient {
   listHouses(): Promise<HouseListResponse>;
@@ -61,33 +84,9 @@ type FetchLike = typeof fetch;
 
 const UNEXPECTED = "House churches came back in an unexpected shape.";
 
-export function houseErrorCopy(error: MissioApiError, fallback: string): string {
-  const seconds = capRetryAfterSeconds(error.retryAfterSeconds);
-  switch (error.code) {
-    case "unauthenticated":
-      return "Not signed in";
-    case "forbidden":
-      return "Pastors only";
-    case "not_found":
-      return "That couldn’t be found";
-    case "already_member":
-      return "Already in this house";
-    case "already_resolved":
-      return "This name was already resolved";
-    case "exists_use_search":
-      return "This person is already in FFSA’s contacts. Search for them and link them.";
-    case "invalid_input":
-      return error.message || "Check the details and try again.";
-    case "rate_limited":
-      return `Too many attempts, try again in ${seconds} seconds`;
-    default:
-      return fallback;
-  }
-}
-
-function codeFor(body: Record<string, unknown>, status: number): HouseErrorCode {
+function codeFor(body: Record<string, unknown>, status: number): string {
   const raw = body.code;
-  if (typeof raw === "string" && HOUSE_CODES.has(raw as HouseErrorCode)) return raw as HouseErrorCode;
+  if (typeof raw === "string" && raw.trim()) return raw.trim();
   if (status === 401) return "unauthenticated";
   if (status === 403) return "forbidden";
   if (status === 404) return "not_found";
@@ -96,12 +95,16 @@ function codeFor(body: Record<string, unknown>, status: number): HouseErrorCode 
   return "server_error";
 }
 
-function messageFor(code: HouseErrorCode, body: Record<string, unknown>, seconds: number | null): string {
-  if (code === "invalid_input") {
-    if (typeof body.error === "string" && body.error.trim()) return body.error;
-    if (typeof body.message === "string" && body.message.trim()) return body.message;
+function readFieldErrors(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const lines: string[] = [];
+  for (const item of Object.values(value as Record<string, unknown>)) {
+    const parts = Array.isArray(item) ? item : [item];
+    for (const part of parts) {
+      if (typeof part === "string" && part.trim()) lines.push(part.trim());
+    }
   }
-  return houseErrorCopy(new MissioApiError(0, "", seconds, code), "House churches didn’t load.");
+  return lines;
 }
 
 function retryAfterSeconds(header: string | null): number {
@@ -129,7 +132,11 @@ async function parseResponse(res: Response): Promise<Record<string, unknown>> {
   if (res.ok) return body;
   const code = codeFor(body, res.status);
   const seconds = code === "rate_limited" ? retryAfterSeconds(res.headers.get("retry-after")) : null;
-  throw new MissioApiError(res.status, messageFor(code, body, seconds), seconds, code);
+  const fields = code === "invalid_input" ? readFieldErrors(body.fieldErrors) : [];
+  const error = new MissioApiError(res.status, "", seconds, code);
+  fieldErrorLines.set(error, fields);
+  error.message = houseErrorCopy(error);
+  throw error;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -166,6 +173,7 @@ function personRef(value: unknown): PersonRef {
 }
 
 function people(value: unknown): PersonRef[] {
+  if (value == null) return [];
   if (!Array.isArray(value)) throw new MissioApiError(500, UNEXPECTED, null, "server_error");
   return value.map(personRef);
 }
@@ -209,7 +217,6 @@ function detailOf(value: unknown): HouseDetail {
 }
 
 const REVIEW_STATUS = new Set<ReviewStatus>(["pending", "matched", "new", "skipped"]);
-const MATCH_TYPES = new Set<ReviewMatchType>(["none", "multiple", "family_label", "first_only", "partial"]);
 
 function reviewHouse(value: unknown): ReviewHouseRef | null {
   if (value == null) return null;
@@ -220,34 +227,47 @@ function reviewHouse(value: unknown): ReviewHouseRef | null {
   return { id: row.id, number: row.number, name: optionalString(row.name) };
 }
 
+function sourceLineOf(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) return Number(value);
+  return null;
+}
+
+function nullableText(value: unknown): string | null {
+  if (value == null) return null;
+  return typeof value === "string" ? value : null;
+}
+
+function optionalRole(value: unknown): HouseRole | null {
+  if (value == null) return null;
+  return value === "leader" || value === "co_leader" || value === "member" ? value : null;
+}
+
 function reviewItem(value: unknown): ReviewItem {
   const row = asRecord(value);
   if (
     !row ||
     typeof row.id !== "string" ||
-    typeof row.sourceLine !== "string" ||
     typeof row.rawName !== "string" ||
     typeof row.houseNumber !== "number" ||
-    typeof row.kind !== "string" ||
-    !REVIEW_STATUS.has(row.status as ReviewStatus) ||
-    !MATCH_TYPES.has(row.matchType as ReviewMatchType)
+    !REVIEW_STATUS.has(row.status as ReviewStatus)
   ) {
     throw new MissioApiError(500, UNEXPECTED, null, "server_error");
   }
   return {
     id: row.id,
     status: row.status as ReviewStatus,
-    sourceLine: row.sourceLine,
+    sourceLine: sourceLineOf(row.sourceLine),
     rawName: row.rawName,
-    kind: row.kind as ReviewKind,
-    matchType: row.matchType as ReviewMatchType,
+    kind: nullableText(row.kind),
+    matchType: nullableText(row.matchType),
     houseNumber: row.houseNumber,
     house: reviewHouse(row.house),
-    role: row.role == null ? null : roleOf(row.role),
-    candidates: people(row.candidates ?? []),
-    notes: optionalString(row.notes),
+    role: optionalRole(row.role),
+    candidates: people(row.candidates),
+    notes: nullableText(row.notes),
     createdAt: typeof row.createdAt === "string" ? row.createdAt : "",
-    resolvedAt: optionalString(row.resolvedAt),
+    resolvedAt: nullableText(row.resolvedAt),
   };
 }
 

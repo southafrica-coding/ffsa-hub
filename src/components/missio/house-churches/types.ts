@@ -1,10 +1,10 @@
 /**
- * UI-side contract for `/api/missio/house-churches`.
+ * UI-side view of `/api/missio/house-churches`.
  *
- * Hub Backend owns the routes. These types follow the contract after Hub
- * Data's schema landed (contacts, house numbers, pastor-only access). They
- * are not imported from a server module: that code is not on main yet.
- * Adjust this file when the routes merge if a field name differs.
+ * Shapes follow Hub Backend draft #616 (`cursor/missio-house-churches-backend-d64c`),
+ * especially `ImportReviewItem`: `sourceLine` is a number, `kind` and `matchType`
+ * are `string | null`, and `notes` is the parser annotation. This file is not
+ * a copy of `src/lib/missio/types.ts`.
  */
 
 export type HouseCampus = "potch" | "jhb";
@@ -59,11 +59,6 @@ export interface MemberMutationResponse {
 
 export type ReviewStatus = "pending" | "matched" | "new" | "skipped";
 
-/** `person` and `family_label` are the known kinds. The route may add more. */
-export type ReviewKind = "person" | "family_label" | (string & {});
-
-export type ReviewMatchType = "none" | "multiple" | "family_label" | "first_only" | "partial";
-
 export interface ReviewHouseRef {
   id: string;
   number: number;
@@ -73,15 +68,18 @@ export interface ReviewHouseRef {
 export interface ReviewItem {
   id: string;
   status: ReviewStatus;
-  sourceLine: string;
+  /** Sheet line number. Null only when the payload omitted a usable number. */
+  sourceLine: number | null;
   rawName: string;
-  kind: ReviewKind;
-  matchType: ReviewMatchType;
+  /** Known values include person, couple_split, family_label, and first_only. */
+  kind: string | null;
+  matchType: string | null;
   houseNumber: number;
   house: ReviewHouseRef | null;
   role: HouseRole | null;
   /** Up to five possible people. May be empty. */
   candidates: PersonRef[];
+  /** Parser annotation, for example "see house 4". Not the raw sheet text. */
   notes: string | null;
   createdAt: string;
   resolvedAt: string | null;
@@ -111,9 +109,12 @@ export type HouseErrorCode =
   | "unauthenticated"
   | "forbidden"
   | "invalid_input"
+  | "not_missio_person"
   | "not_found"
   | "already_member"
   | "already_resolved"
+  | "membership_not_current"
+  | "ended_at_in_future"
   | "exists_use_search"
   | "rate_limited"
   | "server_error";

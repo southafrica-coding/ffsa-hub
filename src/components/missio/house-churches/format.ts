@@ -1,4 +1,4 @@
-import type { HouseRole, HouseSummary, PersonRef, ReviewItem, ReviewMatchType } from "./types";
+import type { HouseRole, HouseSummary, PersonRef, ReviewItem } from "./types";
 
 const ROLE_ORDER: Record<HouseRole, number> = {
   leader: 0,
@@ -12,12 +12,18 @@ export const ROLE_LABEL: Record<HouseRole, string> = {
   member: "Member",
 };
 
-const MATCH_LABEL: Record<ReviewMatchType, string> = {
+const MATCH_LABEL: Record<string, string> = {
   none: "No match found",
   multiple: "Several possible matches",
   family_label: "Family name, not one person",
   first_only: "First name only",
   partial: "Partial name",
+};
+
+const KIND_LABEL: Record<string, string> = {
+  couple_split: "Couple, split into two",
+  family_label: "Family name, not one person",
+  first_only: "First name only",
 };
 
 export function houseTitle(house: { number: number; name: string | null }): string {
@@ -30,12 +36,6 @@ export function peopleCount(count: number): string {
   return safe === 1 ? "1 person" : `${safe} people`;
 }
 
-/** Extra line for a match button. Only what the contact record actually has. */
-export function candidateContext(person: PersonRef): string | null {
-  if (person.orgPersonId) return "In the people list";
-  return null;
-}
-
 export function nameList(people: PersonRef[]): string {
   const names = people.map((person) => person.displayName.trim()).filter(Boolean);
   if (names.length === 0) return "No one yet";
@@ -44,8 +44,14 @@ export function nameList(people: PersonRef[]): string {
   return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }
 
+export function meetingDayLabel(day: string | null | undefined): string {
+  const trimmed = day?.trim() ?? "";
+  if (!trimmed) return "";
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+}
+
 export function meetingLine(house: Pick<HouseSummary, "meetingDay" | "location">): string {
-  const day = house.meetingDay?.trim() ?? "";
+  const day = meetingDayLabel(house.meetingDay);
   const place = house.location?.trim() ?? "";
   if (day && place) return `${day} · ${place}`;
   return day || place;
@@ -63,13 +69,17 @@ export function sortMembers<T extends { role: HouseRole; displayName: string }>(
   });
 }
 
-/** Plain-English reasons for one review row. Family wording is not repeated. */
+export function reviewHeading(item: { sourceLine: number | null; rawName: string }): string {
+  return item.sourceLine == null ? item.rawName : `Line ${item.sourceLine} · ${item.rawName}`;
+}
+
+/** Kind label, then match type, without repeating the same sentence. Person and unknown kinds are omitted. */
 export function reviewReasons(item: Pick<ReviewItem, "kind" | "matchType">): string[] {
   const reasons: string[] = [];
-  if (item.kind === "family_label") reasons.push(MATCH_LABEL.family_label);
-  const match = MATCH_LABEL[item.matchType];
+  const kind = item.kind ? KIND_LABEL[item.kind] : undefined;
+  if (kind) reasons.push(kind);
+  const match = item.matchType ? MATCH_LABEL[item.matchType] : undefined;
   if (match && !reasons.includes(match)) reasons.push(match);
-  if (reasons.length === 0) reasons.push("Needs a decision");
   return reasons;
 }
 

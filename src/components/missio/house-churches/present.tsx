@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CAMPUS_LABEL } from "../access";
 import shell from "../shell.module.css";
-import { nameList } from "./format";
+import { meetingDayLabel, nameList } from "./format";
 import type { HouseCampus, PersonRef } from "./types";
 import styles from "./house-churches.module.css";
 
@@ -31,7 +31,7 @@ export function RoleBlock({ label, people }: { label: string; people: PersonRef[
 }
 
 export function MeetingMeta({ day, place }: { day: string | null; place: string | null }) {
-  const when = day?.trim() ?? "";
+  const when = meetingDayLabel(day);
   const where = place?.trim() ?? "";
   if (!when && !where) return null;
   return (

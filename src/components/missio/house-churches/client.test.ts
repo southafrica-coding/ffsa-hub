@@ -32,15 +32,15 @@ const detail: HouseDetail = {
 const reviewItem: ReviewItem = {
   id: "review-1",
   status: "pending",
-  sourceLine: "Adler family — house 4",
+  sourceLine: 4,
   rawName: "The Adler family",
   kind: "family_label",
-  matchType: "family_label",
+  matchType: "none",
   houseNumber: 4,
   house: { id: "house-4", number: 4, name: null },
-  role: null,
+  role: "leader",
   candidates: [amina],
-  notes: null,
+  notes: "see house 4",
   createdAt: "2026-11-01T08:00:00.000Z",
   resolvedAt: null,
 };
@@ -164,11 +164,70 @@ describe("house church fetchers", () => {
     await expect(client.listHouses()).rejects.toBeInstanceOf(MissioApiError);
   });
 
-  it("names a duplicate and an existing contact in plain language", () => {
-    expect(houseErrorCopy(new MissioApiError(409, "dup", null, "already_member"), "fallback")).toBe("Already in this house");
-    expect(houseErrorCopy(new MissioApiError(409, "exists", null, "exists_use_search"), "fallback")).toMatch(/Search for them and link them/);
-    expect(houseErrorCopy(new MissioApiError(429, "slow", 12, "rate_limited"), "fallback")).toBe(
-      "Too many attempts, try again in 12 seconds"
+  it("parses a #616 review item, including a numeric line and a null kind", async () => {
+    const shaped = {
+      ...reviewItem,
+      kind: null,
+      matchType: null,
+      extraFromBackend: true,
+      candidates: [{ ...amina, nickname: "A" }],
+    };
+    const { fetchImpl } = mockFetch(() => json({ items: [shaped] }));
+    const client = createHouseChurchesClient(fetchImpl);
+    const queue = await client.listReview();
+    expect(queue.items[0]).toMatchObject({
+      sourceLine: 4,
+      rawName: "The Adler family",
+      kind: null,
+      matchType: null,
+      role: "leader",
+      notes: "see house 4",
+    });
+    expect(queue.items[0]).not.toHaveProperty("extraFromBackend");
+  });
+
+  it("maps every pinned code to fixed copy and drops the server message", async () => {
+    const serverText = "insert or update violates foreign key constraint fk_house_church_members";
+    const cases: Array<{ status: number; code: string; copy: string; fieldErrors?: Record<string, string[]> }> = [
+      { status: 400, code: "invalid_input", copy: "Check the details and try again." },
+      { status: 400, code: "not_missio_person", copy: "This person isn’t in Missio yet. Add them in Missio People first." },
+      { status: 404, code: "not_found", copy: "That couldn’t be found." },
+      { status: 409, code: "already_member", copy: "They’re already in this house." },
+      { status: 409, code: "already_resolved", copy: "Someone else already sorted this one." },
+      { status: 409, code: "membership_not_current", copy: "They’re no longer in this house." },
+      { status: 409, code: "ended_at_in_future", copy: "That end date is still in the future." },
+      { status: 409, code: "exists_use_search", copy: "This person already exists. Open Missio People, then Add person." },
+      { status: 429, code: "rate_limited", copy: "Too many attempts, try again in 12 seconds" },
+      { status: 500, code: "server_error", copy: "Something went wrong on our side. Try again." },
+      { status: 409, code: "brand_new_code", copy: "That didn’t work. Try again." },
+    ];
+    for (const item of cases) {
+      const { fetchImpl } = mockFetch(() =>
+        json({ error: serverText, code: item.code, message: serverText, fieldErrors: item.fieldErrors }, item.status, item.code === "rate_limited" ? { "retry-after": "12" } : {})
+      );
+      const client = createHouseChurchesClient(fetchImpl);
+      await expect(client.listHouses()).rejects.toMatchObject({ code: item.code });
+      try {
+        await client.listHouses();
+      } catch (caught) {
+        expect(caught).toBeInstanceOf(MissioApiError);
+        const error = caught as MissioApiError;
+        expect(houseErrorCopy(error)).toBe(item.copy);
+        expect(houseErrorCopy(error)).not.toContain("foreign key");
+        expect(error.message).not.toContain("foreign key");
+      }
+    }
+
+    const { fetchImpl } = mockFetch(() =>
+      json({ error: serverText, code: "invalid_input", fieldErrors: { contactId: ["Pick someone from Missio."] } }, 400)
     );
+    const client = createHouseChurchesClient(fetchImpl);
+    try {
+      await client.listHouses();
+    } catch (caught) {
+      const error = caught as MissioApiError;
+      expect(houseErrorCopy(error)).toBe("Pick someone from Missio.");
+      expect(houseErrorCopy(error)).not.toContain("foreign key");
+    }
   });
 });
