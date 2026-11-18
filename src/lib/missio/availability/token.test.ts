@@ -2,52 +2,60 @@ import { describe, expect, it } from "vitest";
 import {
   AVAILABILITY_TOKEN_HASH_PATTERN,
   AVAILABILITY_TOKEN_PATTERN,
-  generateAvailabilityToken,
+  AvailabilityTokenSecretError,
+  deriveAvailabilityToken,
   hashAvailabilityToken,
+  issuedAvailabilityToken,
+  newAvailabilityNonce,
   personalAvailabilityUrl,
-  tokenHashRecord,
+  requireAvailabilityTokenSecret,
   verifyAvailabilityToken,
 } from "./token";
 
-describe("availability tokens", () => {
-  it("stores a sha256 hex digest and not the raw token", () => {
-    const { raw, tokenHash } = generateAvailabilityToken();
-    expect(raw).toMatch(AVAILABILITY_TOKEN_PATTERN);
-    expect(tokenHash).toMatch(AVAILABILITY_TOKEN_HASH_PATTERN);
-    expect(tokenHash).not.toBe(raw);
-    expect(tokenHash).toBe(hashAvailabilityToken(raw));
+const secret = "test-secret";
+const requestId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1";
+const contactId = "11111111-1111-4111-8111-111111111111";
 
-    const record = tokenHashRecord(raw, "2026-11-23T22:00:00.000Z");
-    expect(record).toEqual({ token_hash: tokenHash, expires_at: "2026-11-23T22:00:00.000Z" });
-    expect(JSON.stringify(record)).not.toContain(raw);
-    expect(record).not.toHaveProperty("token");
+describe("derived availability tokens", () => {
+  it("rebuilds the same link from the secret, ids, and nonce", () => {
+    const nonce = newAvailabilityNonce();
+    const first = deriveAvailabilityToken({ secret, requestId, contactId, nonce });
+    const second = deriveAvailabilityToken({ secret, requestId, contactId, nonce });
+    expect(first).toBe(second);
+    expect(first).toMatch(AVAILABILITY_TOKEN_PATTERN);
   });
 
-  it("verifies the raw token against the stored hash", () => {
-    const { raw, tokenHash } = generateAvailabilityToken();
-    const tampered = `${raw.slice(0, 42)}${raw.endsWith("a") ? "b" : "a"}`;
-    const flipped = `${tokenHash[0] === "0" ? "1" : "0"}${tokenHash.slice(1)}`;
-    expect(verifyAvailabilityToken(raw, tokenHash)).toBe(true);
-    expect(verifyAvailabilityToken(tampered, tokenHash)).toBe(false);
-    expect(verifyAvailabilityToken(raw, flipped)).toBe(false);
+  it("stores the nonce and a hash, not the raw token", () => {
+    const issued = issuedAvailabilityToken({ secret, requestId, contactId });
+    expect(issued.nonce).toMatch(AVAILABILITY_TOKEN_PATTERN);
+    expect(issued.token_hash).toMatch(AVAILABILITY_TOKEN_HASH_PATTERN);
+    expect(issued.token_hash).toBe(hashAvailabilityToken(issued.raw));
+    const stored = { nonce: issued.nonce, token_hash: issued.token_hash };
+    expect(JSON.stringify(stored)).not.toContain(issued.raw);
+    expect(stored).not.toHaveProperty("token");
+    expect(verifyAvailabilityToken(issued.raw, issued.token_hash)).toBe(true);
   });
 
-  it("rejects a raw value that was stored in place of a hash", () => {
-    const { raw } = generateAvailabilityToken();
-    expect(verifyAvailabilityToken(raw, raw)).toBe(false);
-    expect(AVAILABILITY_TOKEN_HASH_PATTERN.test(raw)).toBe(false);
+  it("changes the link when the nonce rotates and keeps the old hash from matching", () => {
+    const first = issuedAvailabilityToken({ secret, requestId, contactId });
+    const rotated = issuedAvailabilityToken({ secret, requestId, contactId });
+    expect(rotated.raw).not.toBe(first.raw);
+    expect(verifyAvailabilityToken(first.raw, rotated.token_hash)).toBe(false);
+    expect(verifyAvailabilityToken(rotated.raw, first.token_hash)).toBe(false);
+  });
+
+  it("fails closed when the secret env var is missing", () => {
+    const previous = process.env.MISSIO_AVAILABILITY_TOKEN_SECRET;
+    delete process.env.MISSIO_AVAILABILITY_TOKEN_SECRET;
+    expect(() => requireAvailabilityTokenSecret()).toThrow(AvailabilityTokenSecretError);
+    if (previous == null) delete process.env.MISSIO_AVAILABILITY_TOKEN_SECRET;
+    else process.env.MISSIO_AVAILABILITY_TOKEN_SECRET = previous;
   });
 
   it("builds the personal link without putting the hash in the path", () => {
-    const { raw, tokenHash } = generateAvailabilityToken();
-    const url = personalAvailabilityUrl("https://hub.example.org/", raw);
-    expect(url).toBe(`https://hub.example.org/serve/missio/${raw}`);
-    expect(url).not.toContain(tokenHash);
-  });
-
-  it("hashes the same raw token the same way every time", () => {
-    const raw = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    expect(hashAvailabilityToken(raw)).toBe(hashAvailabilityToken(raw));
-    expect(hashAvailabilityToken(raw)).not.toBe(hashAvailabilityToken(`${raw.slice(0, 42)}b`));
+    const issued = issuedAvailabilityToken({ secret, requestId, contactId });
+    const url = personalAvailabilityUrl("https://hub.example.org/", issued.raw);
+    expect(url).toBe(`https://hub.example.org/serve/missio/${issued.raw}`);
+    expect(url).not.toContain(issued.token_hash);
   });
 });

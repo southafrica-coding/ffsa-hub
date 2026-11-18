@@ -80,6 +80,15 @@ export function VolunteersBoard({
   }
 
   const selected = snapshot?.requests.find((request) => request.id === snapshot.selectedRequestId) ?? null;
+  const linkPeople = (() => {
+    const seen = new Map<string, string>();
+    for (const team of snapshot?.teams ?? []) {
+      for (const person of [...team.leaders, ...team.members]) {
+        if (!seen.has(person.contactId)) seen.set(person.contactId, person.name);
+      }
+    }
+    return [...seen.entries()].map(([contactId, name]) => ({ contactId, name }));
+  })();
 
   return (
     <div className={`${content.page} ${styles.root}`} data-testid="volunteers-board">
@@ -233,7 +242,9 @@ export function VolunteersBoard({
                   <tbody>
                     {snapshot.grid.map((team) => (
                       <tr key={team.teamId}>
-                        <th className={styles.teamCol} scope="row">{team.name}</th>
+                        <th className={styles.teamCol} scope="row">
+                          <span className={styles.teamName}>{team.name}</span>
+                        </th>
                         {team.dates.map((cell) => (
                           <td key={cell.serviceDate}>
                             <span className={styles.count} data-tone="in">{cell.counts.available} in</span>
@@ -252,7 +263,7 @@ export function VolunteersBoard({
 
           <h2>Messages</h2>
           <p className={styles.meta}>
-            Preparing a message writes a fresh link for each person who has not answered. It does not send anything.
+            Preparing a message reuses each person’s current link, and makes one only if they do not have a live link. It does not send anything.
           </p>
           <div className={styles.actions}>
             <button
@@ -302,6 +313,57 @@ export function VolunteersBoard({
             </div>
           ) : null}
 
+          <h2>Links</h2>
+          <p className={styles.meta}>One link per person for this request, even when they are on more than one team.</p>
+          {linkPeople.length === 0 ? <p className={styles.meta}>Add someone to a team to copy a link.</p> : null}
+          {linkPeople.map((person) => (
+            <div key={person.contactId} className={styles.person}>
+              <div className={styles.personName}>{person.name}</div>
+              <div className={styles.actions}>
+                <button
+                  type="button"
+                  className={styles.ghost}
+                  disabled={!selected || busy}
+                  onClick={() => {
+                    if (!selected) return;
+                    void run(async () => {
+                      const issued = await client.copyLink(selected.id, person.contactId);
+                      const copied = await copyText(issued.url);
+                      setLinks((current) => ({
+                        ...current,
+                        [person.contactId]: { url: issued.url, copied },
+                      }));
+                    });
+                  }}
+                >
+                  {links[person.contactId]?.copied ? "Copied link" : "Copy link"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.quiet}
+                  disabled={!selected || busy}
+                  onClick={() => {
+                    if (!selected) return;
+                    if (!window.confirm(`Reset ${person.name}'s link? The old link stops working.`)) return;
+                    void run(async () => {
+                      const issued = await client.resetLink(selected.id, person.contactId);
+                      const copied = await copyText(issued.url);
+                      setLinks((current) => ({
+                        ...current,
+                        [person.contactId]: { url: issued.url, copied },
+                      }));
+                    });
+                  }}
+                >
+                  Reset link (old link stops working)
+                </button>
+              </div>
+              {links[person.contactId] ? (
+                <input className={styles.linkBox} readOnly value={links[person.contactId].url} aria-label={`Link for ${person.name}`} />
+              ) : null}
+            </div>
+          ))}
+
           <h2>Teams</h2>
           <form
             className={styles.row}
@@ -348,17 +410,8 @@ export function VolunteersBoard({
                 <PersonRow
                   key={`leader-${person.contactId}`}
                   name={person.name}
-                  link={links[person.contactId]}
-                  canLink={Boolean(selected)}
+                  teamName={team.name}
                   busy={busy}
-                  onCopy={() => {
-                    if (!selected) return;
-                    void run(async () => {
-                      const issued = await client.copyLink(selected.id, person.contactId);
-                      const copied = await copyText(issued.url);
-                      setLinks((current) => ({ ...current, [person.contactId]: { url: issued.url, copied } }));
-                    });
-                  }}
                   onRemove={() => {
                     void run(async () => {
                       await client.removeLeader(team.id, person.contactId);
@@ -373,17 +426,8 @@ export function VolunteersBoard({
                 <PersonRow
                   key={`member-${person.contactId}`}
                   name={person.name}
-                  link={links[person.contactId]}
-                  canLink={Boolean(selected)}
+                  teamName={team.name}
                   busy={busy}
-                  onCopy={() => {
-                    if (!selected) return;
-                    void run(async () => {
-                      const issued = await client.copyLink(selected.id, person.contactId);
-                      const copied = await copyText(issued.url);
-                      setLinks((current) => ({ ...current, [person.contactId]: { url: issued.url, copied } }));
-                    });
-                  }}
                   onRemove={() => {
                     void run(async () => {
                       await client.removeMember(team.id, person.contactId);
@@ -485,33 +529,31 @@ export function VolunteersBoard({
 
 function PersonRow({
   name,
-  link,
-  canLink,
+  teamName,
   busy,
-  onCopy,
   onRemove,
 }: {
   name: string;
-  link?: { url: string; copied: boolean };
-  canLink: boolean;
+  teamName: string;
   busy: boolean;
-  onCopy: () => void;
   onRemove: () => void;
 }) {
   return (
     <div className={styles.person}>
       <div className={styles.personName}>{name}</div>
       <div className={styles.actions}>
-        <button type="button" className={styles.ghost} disabled={!canLink || busy} onClick={onCopy}>
-          {link?.copied ? "Copied link" : "Copy link"}
-        </button>
-        <button type="button" className={styles.quiet} disabled={busy} onClick={onRemove}>
+        <button
+          type="button"
+          className={styles.quiet}
+          disabled={busy}
+          onClick={() => {
+            if (!window.confirm(`Remove ${name} from ${teamName}?`)) return;
+            onRemove();
+          }}
+        >
           Remove
         </button>
       </div>
-      {link ? (
-        <input className={styles.linkBox} readOnly value={link.url} aria-label={`Link for ${name}`} />
-      ) : null}
     </div>
   );
 }

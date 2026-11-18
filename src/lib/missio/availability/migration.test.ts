@@ -3,8 +3,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = path.resolve(__dirname, "../../../..");
-const migration = readFileSync(path.join(root, "supabase/migrations/335_missio_volunteer_availability.sql"), "utf8");
-const rollback = readFileSync(path.join(root, "supabase/rollbacks/335_missio_volunteer_availability.sql"), "utf8");
+const migration = readFileSync(path.join(root, "supabase/migrations/333_missio_volunteer_availability.sql"), "utf8");
+const rollback = readFileSync(path.join(root, "supabase/rollbacks/333_missio_volunteer_availability.sql"), "utf8");
 
 function stripSqlComments(sql: string) {
   return sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--.*$/gm, "");
@@ -12,10 +12,10 @@ function stripSqlComments(sql: string) {
 
 const code = stripSqlComments(migration);
 
-describe("335 Missio volunteer availability wall", () => {
-  it("is migration 335 and does not create Planning Center link tables", () => {
-    expect(path.basename(path.join(root, "supabase/migrations/335_missio_volunteer_availability.sql"))).toBe(
-      "335_missio_volunteer_availability.sql"
+describe("333 Missio volunteer availability wall", () => {
+  it("is migration 333 and does not create Planning Center link tables", () => {
+    expect(path.basename(path.join(root, "supabase/migrations/333_missio_volunteer_availability.sql"))).toBe(
+      "333_missio_volunteer_availability.sql"
     );
     expect(code).not.toMatch(/create table[^;]*pco_/i);
   });
@@ -73,6 +73,17 @@ describe("335 Missio volunteer availability wall", () => {
   it("closes answers once the Johannesburg service date has passed", () => {
     expect(code).toMatch(/NEW\.service_date < \(pg_catalog\.timezone\('Africa\/Johannesburg', pg_catalog\.now\(\)\)\)::date/);
     expect(code).toMatch(/status IN \('available', 'unavailable', 'maybe'\)/);
+  });
+
+  it("stamps created_by from auth.uid and rejects a contact who is not on a roster", () => {
+    expect(code).toMatch(/NEW\.created_by := auth\.uid\(\)/);
+    expect(code).toMatch(/NEW\.created_by := OLD\.created_by/);
+    expect(code).toMatch(/RAISE EXCEPTION 'missio_contact_not_in_org'/);
+    expect(code).toMatch(/CREATE TRIGGER trg_availability_tokens_roster/);
+    expect(code).toMatch(/CREATE TRIGGER trg_availability_responses_roster/);
+    expect(code).not.toMatch(/CREATE POLICY "Missio pastors manage availability requests"/);
+    expect(code).toMatch(/FOR INSERT/);
+    expect(code).not.toMatch(/FOR UPDATE\s+TO authenticated[\s\S]*availability_requests/);
   });
 
   it("rolls back only the objects this migration creates", () => {

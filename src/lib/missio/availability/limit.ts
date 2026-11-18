@@ -14,27 +14,35 @@ function limited(result: RateLimitResult, message: string) {
   );
 }
 
-/** Public link reads and saves. The key is the IP and, once known, the token hash. Never the raw token. */
+/**
+ * Public link reads and saves. Writes are limited per token hash first, with a
+ * high per-IP ceiling so a shared church network is not locked out. Never the raw token.
+ */
 export async function serveAvailabilityLimit(
   request: Request,
   bucket: "read" | "write",
   tokenHash?: string
 ): Promise<NextResponse | null> {
+  const message = "Too many tries. Wait a minute, then open the link again.";
+  if (bucket === "write" && tokenHash) {
+    const tokenHit = await getRateLimiter().hit(`serve:missio:write:token:${tokenHash}`, {
+      limit: 30,
+      windowSeconds: 600,
+    });
+    if (!tokenHit.allowed) return limited(tokenHit, message);
+  }
   const ip = clientIp(request);
   const ipHit = await getRateLimiter().hit(`serve:missio:${bucket}:${ip}`, {
-    limit: bucket === "read" ? 40 : 20,
+    limit: bucket === "write" ? 400 : 80,
     windowSeconds: 600,
   });
-  if (!ipHit.allowed) {
-    return limited(ipHit, "Too many tries. Wait a minute, then open the link again.");
-  }
-  if (!tokenHash) return null;
-  const tokenHit = await getRateLimiter().hit(`serve:missio:${bucket}:token:${tokenHash}`, {
-    limit: bucket === "read" ? 40 : 20,
-    windowSeconds: 600,
-  });
-  if (!tokenHit.allowed) {
-    return limited(tokenHit, "Too many tries. Wait a minute, then open the link again.");
+  if (!ipHit.allowed) return limited(ipHit, message);
+  if (bucket === "read" && tokenHash) {
+    const tokenHit = await getRateLimiter().hit(`serve:missio:read:token:${tokenHash}`, {
+      limit: 80,
+      windowSeconds: 600,
+    });
+    if (!tokenHit.allowed) return limited(tokenHit, message);
   }
   return null;
 }

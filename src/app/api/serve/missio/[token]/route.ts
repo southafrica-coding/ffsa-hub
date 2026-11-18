@@ -7,7 +7,10 @@ import { adminClient, loadPublicAvailability, savePublicAvailability } from "@/l
 export const dynamic = "force-dynamic";
 
 function json(body: unknown, status = 200) {
-  return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" },
+  });
 }
 
 async function limited(request: Request, raw: string, bucket: "read" | "write") {
@@ -18,7 +21,10 @@ async function limited(request: Request, raw: string, bucket: "read" | "write") 
 export async function GET(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
   const gate = await limited(request, token, "read");
-  if (gate) return gate;
+  if (gate) {
+    gate.headers.set("X-Robots-Tag", "noindex");
+    return gate;
+  }
   try {
     const result = await loadPublicAvailability(adminClient(), token);
     if (!result.ok) return json({ error: result.error, code: result.code }, result.status);
@@ -32,7 +38,10 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
 export async function PUT(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
   const gate = await limited(request, token, "write");
-  if (gate) return gate;
+  if (gate) {
+    gate.headers.set("X-Robots-Tag", "noindex");
+    return gate;
+  }
   let body: unknown;
   try {
     body = await request.json();

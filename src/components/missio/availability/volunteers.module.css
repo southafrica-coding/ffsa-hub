@@ -251,7 +251,17 @@
   position: sticky;
   left: 0;
   z-index: 1;
-  min-width: 8rem;
+  width: 9.5rem;
+  max-width: 9.5rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.teamName {
+  display: block;
+  max-width: 9.5rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dateCol {
@@ -286,16 +296,16 @@
 }
 
 @media (max-width: 767px) {
+  .actions,
+  .row {
+    flex-wrap: wrap;
+  }
+
   .primary,
   .ghost,
   .quiet {
-    width: 100%;
-  }
-
-  .actions,
-  .row {
-    flex-direction: column;
-    align-items: stretch;
+    width: auto;
+    flex: 0 1 auto;
   }
 }
 

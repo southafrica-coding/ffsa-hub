@@ -39,11 +39,13 @@ export function filledPublicView(): PublicAvailabilityView {
   });
 }
 
-export function pastorGridFixture(): VolunteersSnapshot {
+export function pastorGridFixture(longName = false): VolunteersSnapshot {
   const teams = [
     {
       id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
-      name: "Sunday band",
+      name: longName
+        ? "Sunday morning worship band and welcome rotation for the whole campus"
+        : "Sunday band",
       leaders: [PEOPLE.noor],
       members: [PEOPLE.sam, PEOPLE.alex],
     },
@@ -97,6 +99,7 @@ export function pastorGridFixture(): VolunteersSnapshot {
       contactIds: gridInput.flatMap((team) => teamRoster(team)),
       dates: DATES,
       responses,
+      today: "2026-11-18",
     }).length,
   };
 }

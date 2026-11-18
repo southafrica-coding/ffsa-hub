@@ -1,5 +1,5 @@
 -- ============================================================
--- FFSA Hub — Migration 335: Missio weekly volunteer availability
+-- FFSA Hub — Migration 333: Missio weekly volunteer availability
 -- ============================================================
 -- DRAFT. Not applied to any hosted database by the PR that adds
 -- this file. Previews share the production database, so do not run
@@ -109,7 +109,7 @@ BEGIN
      AND op.contact_id = NEW.contact_id
     WHERE t.id = NEW.team_id
   ) THEN
-    RAISE EXCEPTION 'contact is not in this Missio org'
+    RAISE EXCEPTION 'missio_contact_not_in_org'
       USING ERRCODE = 'foreign_key_violation';
   END IF;
   RETURN NEW;
@@ -170,6 +170,85 @@ GRANT EXECUTE ON FUNCTION public.availability_response_guard() TO service_role;
 
 COMMENT ON FUNCTION public.availability_response_guard() IS
   'Service-role writes only. Rejects a past Johannesburg service date and a date that is not on the request.';
+
+-- The creator is the signed-in user. A caller cannot supply or change it.
+CREATE OR REPLACE FUNCTION public.availability_request_stamp_creator()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.created_by := auth.uid();
+  ELSE
+    NEW.created_by := OLD.created_by;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.availability_request_stamp_creator() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.availability_request_stamp_creator() TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.availability_request_stamp_creator() IS
+  'Sets availability_requests.created_by from auth.uid() on insert and refuses a later change.';
+
+-- Tokens and answers are only for someone already in this org and on a team.
+-- The trigger runs for every role, including service_role (RLS bypass does not skip it).
+CREATE OR REPLACE FUNCTION public.missio_availability_contact_on_roster()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_org uuid;
+BEGIN
+  SELECT r.org_id
+    INTO v_org
+    FROM public.availability_requests r
+   WHERE r.id = NEW.request_id;
+
+  IF v_org IS NULL
+     OR NOT EXISTS (
+       SELECT 1
+         FROM public.org_people op
+        WHERE op.org_id = v_org
+          AND op.contact_id = NEW.contact_id
+     )
+     OR NOT EXISTS (
+       SELECT 1
+         FROM public.missio_teams t
+        WHERE t.org_id = v_org
+          AND (
+            EXISTS (
+              SELECT 1
+                FROM public.missio_team_members m
+               WHERE m.team_id = t.id
+                 AND m.contact_id = NEW.contact_id
+            )
+            OR EXISTS (
+              SELECT 1
+                FROM public.missio_team_leaders l
+               WHERE l.team_id = t.id
+                 AND l.contact_id = NEW.contact_id
+            )
+          )
+     )
+  THEN
+    RAISE EXCEPTION 'missio_contact_not_in_org'
+      USING ERRCODE = 'foreign_key_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.missio_availability_contact_on_roster() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.missio_availability_contact_on_roster() TO service_role;
+
+COMMENT ON FUNCTION public.missio_availability_contact_on_roster() IS
+  'A token or answer requires the contact in org_people for the request org and on a team roster there. Raises missio_contact_not_in_org (23503).';
 
 -- ────────────────────────────────────────────────────────────
 -- 2. Tables
@@ -260,11 +339,19 @@ CREATE TRIGGER trg_availability_requests_org
   BEFORE INSERT OR UPDATE OF org_id ON public.availability_requests
   FOR EACH ROW EXECUTE FUNCTION public.missio_volunteer_org_is_missio();
 
+DROP TRIGGER IF EXISTS trg_availability_requests_creator ON public.availability_requests;
+CREATE TRIGGER trg_availability_requests_creator
+  BEFORE INSERT OR UPDATE ON public.availability_requests
+  FOR EACH ROW EXECUTE FUNCTION public.availability_request_stamp_creator();
+
 -- Hash only. No raw token column. No anon or authenticated policy.
 CREATE TABLE IF NOT EXISTS public.availability_tokens (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   request_id  uuid NOT NULL REFERENCES public.availability_requests (id) ON DELETE CASCADE,
   contact_id  uuid NOT NULL REFERENCES public.contacts (id) ON DELETE CASCADE,
+  -- Random per row. The raw link is HMAC(secret, request_id || contact_id || nonce)
+  -- and is not stored. token_hash is SHA-256 of that raw link.
+  nonce       text NOT NULL CHECK (nonce ~ '^[A-Za-z0-9_-]{43}$'),
   token_hash  text NOT NULL CHECK (token_hash ~ '^[0-9a-f]{64}$'),
   expires_at  timestamptz NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now(),
@@ -273,13 +360,18 @@ CREATE TABLE IF NOT EXISTS public.availability_tokens (
 );
 
 COMMENT ON TABLE public.availability_tokens IS
-  'Service-role only. token_hash is SHA-256 hex of the personal link. The raw token is shown once when the link is generated and is never stored.';
+  'Service-role only. Stores a nonce and the SHA-256 of the HMAC link. The raw token is derived when a pastor copies it and is never stored.';
 
 COMMENT ON COLUMN public.availability_tokens.token_hash IS
   'SHA-256 hex of the raw link token. Not the token itself.';
 
 CREATE INDEX IF NOT EXISTS availability_tokens_request_id_idx
   ON public.availability_tokens (request_id);
+
+DROP TRIGGER IF EXISTS trg_availability_tokens_roster ON public.availability_tokens;
+CREATE TRIGGER trg_availability_tokens_roster
+  BEFORE INSERT OR UPDATE ON public.availability_tokens
+  FOR EACH ROW EXECUTE FUNCTION public.missio_availability_contact_on_roster();
 
 CREATE TABLE IF NOT EXISTS public.availability_responses (
   request_id   uuid NOT NULL REFERENCES public.availability_requests (id) ON DELETE CASCADE,
@@ -307,6 +399,11 @@ CREATE TRIGGER trg_availability_response_guard
   BEFORE INSERT OR UPDATE ON public.availability_responses
   FOR EACH ROW EXECUTE FUNCTION public.availability_response_guard();
 
+DROP TRIGGER IF EXISTS trg_availability_responses_roster ON public.availability_responses;
+CREATE TRIGGER trg_availability_responses_roster
+  BEFORE INSERT OR UPDATE ON public.availability_responses
+  FOR EACH ROW EXECUTE FUNCTION public.missio_availability_contact_on_roster();
+
 -- ────────────────────────────────────────────────────────────
 -- 3. Grants and RLS
 --    Supabase default privileges grant new public tables to
@@ -332,7 +429,7 @@ REVOKE ALL ON TABLE public.availability_responses FROM PUBLIC, anon, authenticat
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.missio_teams TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.missio_team_leaders TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.missio_team_members TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.availability_requests TO authenticated;
+GRANT SELECT, INSERT, DELETE ON TABLE public.availability_requests TO authenticated;
 GRANT SELECT ON TABLE public.availability_responses TO authenticated;
 
 GRANT ALL ON TABLE public.missio_teams TO service_role;
@@ -407,15 +504,33 @@ CREATE POLICY "Missio pastors manage team members"
   );
 
 DROP POLICY IF EXISTS "Missio pastors manage availability requests" ON public.availability_requests;
-CREATE POLICY "Missio pastors manage availability requests"
+
+DROP POLICY IF EXISTS "Missio pastors read availability requests" ON public.availability_requests;
+CREATE POLICY "Missio pastors read availability requests"
   ON public.availability_requests
-  FOR ALL
+  FOR SELECT
   TO authenticated
   USING (
     (SELECT public.has_org_role('missio', ARRAY['pastor']))
     AND org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
-  )
+  );
+
+DROP POLICY IF EXISTS "Missio pastors insert availability requests" ON public.availability_requests;
+CREATE POLICY "Missio pastors insert availability requests"
+  ON public.availability_requests
+  FOR INSERT
+  TO authenticated
   WITH CHECK (
+    (SELECT public.has_org_role('missio', ARRAY['pastor']))
+    AND org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
+  );
+
+DROP POLICY IF EXISTS "Missio pastors delete availability requests" ON public.availability_requests;
+CREATE POLICY "Missio pastors delete availability requests"
+  ON public.availability_requests
+  FOR DELETE
+  TO authenticated
+  USING (
     (SELECT public.has_org_role('missio', ARRAY['pastor']))
     AND org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
   );

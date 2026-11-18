@@ -64,12 +64,17 @@ export function aggregateAvailabilityGrid(input: {
   });
 }
 
-/** People on any team who have not answered every service date. Maybe counts as an answer. */
+/**
+ * People on any team who have not answered every service date that is still
+ * open. A date before `today` (Johannesburg) is ignored. Maybe counts as an answer.
+ */
 export function unansweredContacts(input: {
   contactIds: readonly string[];
   dates: readonly string[];
   responses: readonly { contactId: string; serviceDate: string }[];
+  today: string;
 }): string[] {
+  const openDates = input.dates.filter((date) => date >= input.today);
   const answered = new Map<string, Set<string>>();
   for (const row of input.responses) {
     const set = answered.get(row.contactId) ?? new Set<string>();
@@ -78,6 +83,6 @@ export function unansweredContacts(input: {
   }
   return [...new Set(input.contactIds)].filter((contactId) => {
     const set = answered.get(contactId);
-    return input.dates.some((date) => !set?.has(date));
+    return openDates.some((date) => !set?.has(date));
   });
 }

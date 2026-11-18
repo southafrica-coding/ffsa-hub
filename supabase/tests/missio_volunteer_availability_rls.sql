@@ -1,5 +1,5 @@
--- Disposable role-matrix check for migration 335. Not a migration.
--- Stubs the tables 329 needs, applies 329 and 335 twice, then reads
+-- Disposable role-matrix check for migration 333. Not a migration.
+-- Stubs the tables 329 needs, applies 329 and 333 twice, then reads
 -- and writes as a Missio pastor, a Missio house church leader, an
 -- FFSA admin, anon, and the service role.
 --
@@ -166,8 +166,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 INSERT INTO public.labels (slug, name) VALUES ('missio', 'Missio');
 
 \ir ../migrations/329_missio_org_phase0.sql
-\ir ../migrations/335_missio_volunteer_availability.sql
-\ir ../migrations/335_missio_volunteer_availability.sql
+\ir ../migrations/333_missio_volunteer_availability.sql
+\ir ../migrations/333_missio_volunteer_availability.sql
 
 INSERT INTO public.roles (name) VALUES ('admin'), ('super_admin');
 INSERT INTO public.permissions (key) VALUES ('contacts.view');
@@ -276,6 +276,19 @@ BEGIN
   RETURN v;
 EXCEPTION WHEN OTHERS THEN
   RETURN 'err ' || SQLSTATE;
+END;
+$$;
+
+CREATE FUNCTION pg_temp.errtext(who text, stmt text)
+RETURNS text
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_temp.become(who);
+  EXECUTE stmt;
+  EXECUTE 'RESET ROLE';
+  RETURN 'ok';
+EXCEPTION WHEN OTHERS THEN
+  RETURN SQLSTATE || ' ' || SQLERRM;
 END;
 $$;
 
@@ -394,16 +407,18 @@ SELECT pg_temp.expect(
 );
 
 SELECT pg_temp.expect(
-  'token_hash exists and a raw token column does not',
+  'token_hash and nonce exist and a raw token column does not',
   (
     SELECT (count(*) FILTER (WHERE column_name = 'token_hash'))::text
       || '/' ||
       (count(*) FILTER (WHERE column_name = 'token'))::text
+      || '/' ||
+      (count(*) FILTER (WHERE column_name = 'nonce'))::text
     FROM information_schema.columns
     WHERE table_schema = 'public'
       AND table_name = 'availability_tokens'
   ),
-  '1/0'
+  '1/0/1'
 );
 
 SELECT pg_temp.expect(
@@ -436,7 +451,9 @@ SELECT pg_temp.expect(
       AND p.proname IN (
         'missio_volunteer_org_is_missio',
         'missio_volunteer_contact_in_org',
-        'availability_response_guard'
+        'availability_response_guard',
+        'availability_request_stamp_creator',
+        'missio_availability_contact_on_roster'
       )
       AND p.prosecdef
       AND EXISTS (
@@ -445,7 +462,7 @@ SELECT pg_temp.expect(
           AND split_part(cfg, '=', 2) IN ('', '""')
       )
   ),
-  '3'
+  '5'
 );
 
 -- ── Pastor can manage a team. Admin cannot. ──────────────
@@ -539,13 +556,13 @@ SELECT pg_temp.expect(
 
 SELECT pg_temp.expect(
   'outsider contact cannot join a team',
-  pg_temp.exec(
+  pg_temp.errtext(
     'a1111111-1111-1111-1111-111111111111',
     $$INSERT INTO public.missio_team_members (team_id, contact_id)
       SELECT id, 'c3333333-3333-3333-3333-333333333333'
       FROM public.missio_teams WHERE name = 'Sunday band'$$
   ),
-  'err 23503'
+  '23503 missio_contact_not_in_org'
 );
 
 SELECT pg_temp.expect(
@@ -554,10 +571,38 @@ SELECT pg_temp.expect(
     'a1111111-1111-1111-1111-111111111111',
     $$INSERT INTO public.availability_requests (org_id, starts_on, ends_on, service_dates, created_by)
       SELECT id, '2099-01-01', '2099-01-31', ARRAY['2099-01-04'::date, '2099-01-11'::date],
-             'a1111111-1111-1111-1111-111111111111'
+             'a4444444-4444-4444-4444-444444444444'
       FROM public.organisations WHERE slug = 'missio'$$
   ),
   'rows=1'
+);
+
+SELECT pg_temp.expect(
+  'created_by is the inserting pastor, not the supplied id',
+  (SELECT created_by::text FROM public.availability_requests WHERE starts_on = '2099-01-01'),
+  'a1111111-1111-1111-1111-111111111111'
+);
+
+SELECT pg_temp.expect(
+  'pastor cannot update a request',
+  pg_temp.exec(
+    'a1111111-1111-1111-1111-111111111111',
+    $$UPDATE public.availability_requests SET ends_on = '2099-02-28' WHERE starts_on = '2099-01-01'$$
+  ),
+  'err 42501'
+);
+
+SELECT pg_temp.exec(
+  'service',
+  $$UPDATE public.availability_requests
+       SET created_by = 'a4444444-4444-4444-4444-444444444444'
+     WHERE starts_on = '2099-01-01'$$
+);
+
+SELECT pg_temp.expect(
+  'created_by stays the pastor after an update',
+  (SELECT created_by::text FROM public.availability_requests WHERE starts_on = '2099-01-01'),
+  'a1111111-1111-1111-1111-111111111111'
 );
 
 SELECT pg_temp.expect(
@@ -575,8 +620,8 @@ SELECT pg_temp.expect(
   'pastor cannot insert a token',
   pg_temp.exec(
     'a1111111-1111-1111-1111-111111111111',
-    $$INSERT INTO public.availability_tokens (request_id, contact_id, token_hash, expires_at)
-      SELECT id, 'c1111111-1111-1111-1111-111111111111', repeat('ab', 32), '2099-02-01'
+    $$INSERT INTO public.availability_tokens (request_id, contact_id, nonce, token_hash, expires_at)
+      SELECT id, 'c1111111-1111-1111-1111-111111111111', repeat('a', 43), repeat('ab', 32), '2099-02-01'
       FROM public.availability_requests$$
   ),
   'err 42501'
@@ -601,8 +646,8 @@ SELECT pg_temp.expect(
   'raw token text is rejected',
   pg_temp.exec(
     'service',
-    $$INSERT INTO public.availability_tokens (request_id, contact_id, token_hash, expires_at)
-      SELECT id, 'c1111111-1111-1111-1111-111111111111', 'not-a-hash-and-not-hex-64', '2099-02-01'
+    $$INSERT INTO public.availability_tokens (request_id, contact_id, nonce, token_hash, expires_at)
+      SELECT id, 'c1111111-1111-1111-1111-111111111111', repeat('a', 43), 'not-a-hash-and-not-hex-64', '2099-02-01'
       FROM public.availability_requests$$
   ),
   'err 23514'
@@ -612,14 +657,36 @@ SELECT pg_temp.expect(
   'service role stores a hash',
   pg_temp.exec(
     'service',
-    $$INSERT INTO public.availability_tokens (request_id, contact_id, token_hash, expires_at)
-      SELECT id, 'c1111111-1111-1111-1111-111111111111', repeat('ab', 32), '2099-02-01'
-      FROM public.availability_requests$$
+    $$INSERT INTO public.availability_tokens (request_id, contact_id, nonce, token_hash, expires_at)
+      SELECT id, 'c1111111-1111-1111-1111-111111111111', repeat('a', 43), repeat('ab', 32), '2099-02-01'
+      FROM public.availability_requests WHERE starts_on = '2099-01-01'$$
   ),
   'rows=1'
 );
 
+SELECT pg_temp.expect(
+  'service role cannot token a contact who is not on a Missio team',
+  pg_temp.errtext(
+    'service',
+    $$INSERT INTO public.availability_tokens (request_id, contact_id, nonce, token_hash, expires_at)
+      SELECT id, 'c3333333-3333-3333-3333-333333333333', repeat('b', 43), repeat('cd', 32), '2099-02-01'
+      FROM public.availability_requests WHERE starts_on = '2099-01-01'$$
+  ),
+  '23503 missio_contact_not_in_org'
+);
+
 -- ── Responses: service role, closed after the date ───────
+
+SELECT pg_temp.expect(
+  'service role cannot answer for a contact who is not on a Missio team',
+  pg_temp.errtext(
+    'service',
+    $$INSERT INTO public.availability_responses (request_id, contact_id, service_date, status)
+      SELECT id, 'c3333333-3333-3333-3333-333333333333', '2099-01-04', 'available'
+      FROM public.availability_requests WHERE starts_on = '2099-01-01'$$
+  ),
+  '23503 missio_contact_not_in_org'
+);
 
 SELECT pg_temp.expect(
   'pastor cannot insert a response',

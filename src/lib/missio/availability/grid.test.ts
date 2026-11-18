@@ -62,7 +62,27 @@ describe("unansweredContacts", () => {
           { contactId: "noor", serviceDate: "2026-11-29" },
           { contactId: "sam", serviceDate: "2026-11-22" },
         ],
+        today: "2026-11-01",
       })
     ).toEqual(["sam"]);
+  });
+
+  it("ignores a service date that has already passed in Johannesburg", () => {
+    expect(
+      unansweredContacts({
+        contactIds: ["sam"],
+        dates: ["2026-11-15", "2026-11-22"],
+        responses: [{ contactId: "sam", serviceDate: "2026-11-22" }],
+        today: "2026-11-18",
+      })
+    ).toEqual([]);
+    expect(
+      unansweredContacts({
+        contactIds: ["sam"],
+        dates: ["2026-11-15"],
+        responses: [],
+        today: "2026-11-18",
+      })
+    ).toEqual([]);
   });
 });

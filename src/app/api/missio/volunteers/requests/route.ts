@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     if (!body.ok) return body.response;
     const parsed = createRequestSchema.safeParse(body.body);
     if (!parsed.success) return json({ error: firstIssue(parsed.error), code: "invalid_input" }, 400);
-    const result = await createAvailabilityRequest(auth.supabase, auth.orgId, auth.user.id, parsed.data);
+    const result = await createAvailabilityRequest(auth.supabase, auth.orgId, parsed.data);
     if (!result.ok) return fromResult(result);
     return json(result.body, 201);
   });

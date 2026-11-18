@@ -104,7 +104,9 @@ export function PublicAvailabilityForm({
       <div className={styles.wrap}>
         <p className={styles.eyebrow}>Missio</p>
         <h1>Hi {view.firstName}</h1>
-        <p className={styles.lede}>Mark the Sundays you can serve. Each tap saves.</p>
+        <p className={styles.lede}>
+          Mark the Sundays you can serve. Each tap saves. You can change an answer until the end of that Sunday.
+        </p>
         {dates.length === 0 ? <p className={styles.lede}>There are no Sundays left on this link.</p> : null}
         <div className={styles.days}>
           {dates.map((date) => (

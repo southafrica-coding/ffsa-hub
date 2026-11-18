@@ -20,9 +20,11 @@ import { PUBLIC_NAME_COLUMNS, toPublicAvailability, type PublicAvailabilityView 
 import type { CreateRequestInput, PublicSaveInput } from "@/lib/missio/availability/schema";
 import {
   AVAILABILITY_TOKEN_PATTERN,
-  generateAvailabilityToken,
+  AvailabilityTokenSecretError,
+  hashAvailabilityToken,
+  issuedAvailabilityToken,
   personalAvailabilityUrl,
-  tokenHashRecord,
+  requireAvailabilityTokenSecret,
   verifyAvailabilityToken,
 } from "@/lib/missio/availability/token";
 
@@ -270,6 +272,7 @@ export async function loadVolunteers(
         contactIds: gridInput.flatMap((team) => teamRoster(team)),
         dates: selected.serviceDates,
         responses,
+        today: johannesburgToday(),
       }).length
     : 0;
 
@@ -288,10 +291,10 @@ export async function loadVolunteers(
 export async function createAvailabilityRequest(
   supabase: Client,
   orgId: string,
-  userId: string,
   input: CreateRequestInput
 ): Promise<Ok<{ id: string }> | Fail> {
   const serviceDates = [...new Set(input.serviceDates)].sort();
+  // created_by is stamped from auth.uid() by the insert trigger.
   const { data, error } = await supabase
     .from("availability_requests")
     .insert({
@@ -299,7 +302,6 @@ export async function createAvailabilityRequest(
       starts_on: input.startsOn,
       ends_on: input.endsOn,
       service_dates: serviceDates,
-      created_by: userId,
     })
     .select("id")
     .single();
@@ -448,7 +450,129 @@ async function assertOnRoster(supabase: Client, orgId: string, contactId: string
   return null;
 }
 
+const LINK_SECRET_ERROR = "Volunteer links need MISSIO_AVAILABILITY_TOKEN_SECRET on the server.";
+
+function linkSecret(): { ok: true; secret: string } | Fail {
+  try {
+    return { ok: true, secret: requireAvailabilityTokenSecret() };
+  } catch (error) {
+    if (error instanceof AvailabilityTokenSecretError) {
+      log(error.message);
+      return fail(500, "server_error", LINK_SECRET_ERROR);
+    }
+    throw error;
+  }
+}
+
+type StoredToken = { nonce: string; expires_at: string; token_hash: string };
+
+async function readStoredToken(admin: Client, requestId: string, contactId: string): Promise<StoredToken | Fail | null> {
+  const { data, error } = await admin
+    .from("availability_tokens")
+    .select("nonce, expires_at, token_hash")
+    .eq("request_id", requestId)
+    .eq("contact_id", contactId)
+    .maybeSingle();
+  if (error) {
+    log(error.message ?? "token read");
+    return fail(500, "server_error", "The link didn't get written.");
+  }
+  return (data as StoredToken | null) ?? null;
+}
+
+function urlForStoredToken(
+  secret: string,
+  request: VolunteerRequest,
+  contactId: string,
+  stored: StoredToken,
+  origin: string
+): Ok<{ url: string }> | Fail {
+  const issued = issuedAvailabilityToken({
+    secret,
+    requestId: request.id,
+    contactId,
+    nonce: stored.nonce,
+  });
+  if (issued.token_hash !== stored.token_hash) {
+    log("stored availability token hash does not match the derived link");
+    return fail(500, "server_error", "The link didn't get written.");
+  }
+  return { ok: true, body: { url: personalAvailabilityUrl(origin, issued.raw) } };
+}
+
+async function saveToken(
+  admin: Client,
+  request: VolunteerRequest,
+  contactId: string,
+  secret: string,
+  origin: string
+): Promise<Ok<{ url: string }> | Fail> {
+  const issued = issuedAvailabilityToken({ secret, requestId: request.id, contactId });
+  const { error } = await admin.from("availability_tokens").upsert(
+    {
+      request_id: request.id,
+      contact_id: contactId,
+      nonce: issued.nonce,
+      token_hash: issued.token_hash,
+      expires_at: tokenExpiresAt(request.serviceDates),
+    },
+    { onConflict: "request_id,contact_id" }
+  );
+  if (error) {
+    log(error.message ?? "token");
+    if (error.code === "23503" || /missio_contact_not_in_org/.test(error.message ?? "")) {
+      return fail(400, "invalid_input", "That person is not on a Missio team.");
+    }
+    return fail(500, "server_error", "The link didn't get written.");
+  }
+  return { ok: true, body: { url: personalAvailabilityUrl(origin, issued.raw) } };
+}
+
+/** Reuses a live link. Creates one only when this person has none that still works. */
+async function ensureLiveLink(
+  admin: Client,
+  request: VolunteerRequest,
+  contactId: string,
+  origin: string,
+  now: Date
+): Promise<Ok<{ url: string }> | Fail> {
+  const secret = linkSecret();
+  if (!("secret" in secret)) return secret;
+  const stored = await readStoredToken(admin, request.id, contactId);
+  if (stored && "status" in stored) return stored;
+  if (stored && !isTokenExpired(stored.expires_at, now)) {
+    return urlForStoredToken(secret.secret, request, contactId, stored, origin);
+  }
+  return saveToken(admin, request, contactId, secret.secret, origin);
+}
+
+async function rotateLink(
+  admin: Client,
+  request: VolunteerRequest,
+  contactId: string,
+  origin: string
+): Promise<Ok<{ url: string }> | Fail> {
+  const secret = linkSecret();
+  if (!("secret" in secret)) return secret;
+  return saveToken(admin, request, contactId, secret.secret, origin);
+}
+
 export async function issuePersonalLink(
+  supabase: Client,
+  orgId: string,
+  requestId: string,
+  contactId: string,
+  origin: string,
+  now = new Date()
+): Promise<Ok<{ url: string }> | Fail> {
+  const request = await loadOwnedRequest(supabase, orgId, requestId);
+  if ("status" in request) return request;
+  const roster = await assertOnRoster(supabase, orgId, contactId);
+  if (roster) return roster;
+  return ensureLiveLink(createAdminClient(), request, contactId, origin, now);
+}
+
+export async function resetPersonalLink(
   supabase: Client,
   orgId: string,
   requestId: string,
@@ -459,33 +583,7 @@ export async function issuePersonalLink(
   if ("status" in request) return request;
   const roster = await assertOnRoster(supabase, orgId, contactId);
   if (roster) return roster;
-  const admin = createAdminClient();
-  const issued = await writeToken(admin, request, contactId, origin);
-  return issued;
-}
-
-async function writeToken(
-  admin: Client,
-  request: VolunteerRequest,
-  contactId: string,
-  origin: string
-): Promise<Ok<{ url: string; firstName: string }> | Fail> {
-  const generated = generateAvailabilityToken();
-  const record = tokenHashRecord(generated.raw, tokenExpiresAt(request.serviceDates));
-  const { error } = await admin.from("availability_tokens").upsert(
-    {
-      request_id: request.id,
-      contact_id: contactId,
-      token_hash: record.token_hash,
-      expires_at: record.expires_at,
-    },
-    { onConflict: "request_id,contact_id" }
-  );
-  if (error) {
-    log(error.message ?? "token");
-    return fail(500, "server_error", "The link didn't get written.");
-  }
-  return { ok: true, body: { url: personalAvailabilityUrl(origin, generated.raw), firstName: "" } };
+  return rotateLink(createAdminClient(), request, contactId, origin);
 }
 
 export async function prepareNudge(
@@ -514,6 +612,7 @@ export async function prepareNudge(
     contactIds: rosterIds(rows),
     dates: request.serviceDates,
     responses,
+    today: johannesburgToday(),
   });
   const namesResult = await directoryByContact(supabase, orgId, pending);
   if ("error" in namesResult) return namesResult.error;
@@ -521,7 +620,7 @@ export async function prepareNudge(
   const admin = createAdminClient();
   const people: NudgePerson[] = [];
   for (const contactId of pending) {
-    const written = await writeToken(admin, request, contactId, origin);
+    const written = await ensureLiveLink(admin, request, contactId, origin, new Date());
     if (!written.ok) return written;
     people.push({
       firstName: namesResult.get(contactId)?.firstName ?? "there",
@@ -535,11 +634,57 @@ export async function prepareNudge(
 
 type TokenRow = { request_id: string; contact_id: string; expires_at: string; token_hash: string };
 
+async function contactStillOnRoster(admin: Client, requestId: string, contactId: string): Promise<boolean | Fail> {
+  const request = await admin.from("availability_requests").select("org_id").eq("id", requestId).maybeSingle();
+  if (request.error) {
+    log(request.error.message ?? "public org");
+    return fail(500, "server_error", "Missio didn't load this link.");
+  }
+  const orgId = (request.data as { org_id?: string } | null)?.org_id;
+  if (!orgId) return false;
+  const person = await admin
+    .from("org_people")
+    .select("contact_id")
+    .eq("org_id", orgId)
+    .eq("contact_id", contactId)
+    .maybeSingle();
+  if (person.error) {
+    log(person.error.message ?? "public org person");
+    return fail(500, "server_error", "Missio didn't load this link.");
+  }
+  if (!person.data) return false;
+  const teams = await admin.from("missio_teams").select("id").eq("org_id", orgId);
+  if (teams.error) {
+    log(teams.error.message ?? "public teams");
+    return fail(500, "server_error", "Missio didn't load this link.");
+  }
+  const teamIds = ((teams.data ?? []) as Array<{ id?: string }>).map((row) => row.id).filter((id): id is string => Boolean(id));
+  if (teamIds.length === 0) return false;
+  const [members, leaders] = await Promise.all([
+    admin.from("missio_team_members").select("contact_id").eq("contact_id", contactId).in("team_id", teamIds).limit(1),
+    admin.from("missio_team_leaders").select("contact_id").eq("contact_id", contactId).in("team_id", teamIds).limit(1),
+  ]);
+  if (members.error || leaders.error) {
+    log(members.error?.message ?? leaders.error?.message ?? "public roster");
+    return fail(500, "server_error", "Missio didn't load this link.");
+  }
+  return ((members.data ?? []).length + (leaders.data ?? []).length) > 0;
+}
+
 async function readToken(admin: Client, raw: string, now: Date): Promise<Ok<TokenRow> | Fail> {
+  try {
+    requireAvailabilityTokenSecret();
+  } catch (error) {
+    if (error instanceof AvailabilityTokenSecretError) {
+      log(error.message);
+      return fail(500, "server_error", "Missio didn't load this link.");
+    }
+    throw error;
+  }
   if (!AVAILABILITY_TOKEN_PATTERN.test(raw)) {
     return fail(404, "invalid_token", "This link doesn't work.");
   }
-  const tokenHash = tokenHashRecord(raw, new Date(0).toISOString()).token_hash;
+  const tokenHash = hashAvailabilityToken(raw);
   const { data, error } = await admin
     .from("availability_tokens")
     .select("request_id, contact_id, expires_at, token_hash")
@@ -553,6 +698,9 @@ async function readToken(admin: Client, raw: string, now: Date): Promise<Ok<Toke
   if (!row || !verifyAvailabilityToken(raw, row.token_hash)) {
     return fail(404, "invalid_token", "This link doesn't work.");
   }
+  const serving = await contactStillOnRoster(admin, row.request_id, row.contact_id);
+  if (typeof serving !== "boolean") return serving;
+  if (!serving) return fail(404, "invalid_token", "This link doesn't work.");
   if (isTokenExpired(row.expires_at, now)) {
     return fail(410, "expired", "This link has expired.");
   }
