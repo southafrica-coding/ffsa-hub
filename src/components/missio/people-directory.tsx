@@ -163,7 +163,31 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
           </div>
         ) : null}
         {list.phase === "ready" && list.rows.length > 0 ? (
-          <table className={styles.table} data-testid="people-table">
+          <>
+            <ul className={styles.peopleCards} data-testid="people-cards">
+              {list.rows.map((person) => (
+                <li key={person.id} className={styles.personCard}>
+                  <div className={styles.personCardTop}>
+                    <span className={styles.personName}>{person.name}</span>
+                    <span className={`${styles.badge} ${badgeClass(person.status)}`} data-status={person.status}>
+                      {STATUS_LABEL[person.status]}
+                    </span>
+                  </div>
+                  <div className={styles.personCardMeta}>
+                    <span className={styles.campus}>{CAMPUS_LABEL[person.campus]}</span>
+                    {person.campus === "potch" ? <span className={styles.campusMain}>Main</span> : null}
+                  </div>
+                  <div className={styles.muted}>
+                    {person.currentStage?.trim() ? person.currentStage : "—"}
+                    <span className={styles.campusMain}>{formatJoined(person.joinedAt)}</span>
+                  </div>
+                  <button type="button" className={styles.textButton} onClick={() => setEditing(person)}>
+                    Edit
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <table className={styles.table} data-testid="people-table">
             <thead>
               <tr>
                 <th>Name</th>
@@ -198,6 +222,7 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
               ))}
             </tbody>
           </table>
+            </>
         ) : null}
         {list.phase === "ready" && total > DEFAULT_PEOPLE_LIMIT ? (
           <div className={styles.pager}>
