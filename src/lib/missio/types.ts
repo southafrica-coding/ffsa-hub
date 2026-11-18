@@ -100,6 +100,7 @@ export type MissioErrorCode =
   | "unauthenticated"
   | "forbidden"
   | "not_found"
+  | "ended_at_in_future"
   | "server_error"
   | "method_not_allowed";
 
@@ -153,20 +154,21 @@ export type HouseChurchDetailResponse = {
 
 export type ImportReviewStatus = "pending" | "matched" | "new" | "skipped";
 
+/**
+ * A review row a pastor can act on. sourceLine is the sheet line number.
+ * rawName is that one person's name. The rest of the sheet line (notes,
+ * other names, the raw CSV) is not returned.
+ */
 export type ImportReviewItem = {
   id: string;
   status: ImportReviewStatus;
   sourceLine: number;
   rawName: string;
-  kind: string | null;
   matchType: string | null;
   houseNumber: number;
   house: { id: string; number: number; name: string | null } | null;
   role: HouseChurchRole;
   candidates: PersonRef[];
-  notes: string | null;
-  createdAt: string;
-  resolvedAt: string | null;
 };
 
 export type ImportReviewListResponse = {

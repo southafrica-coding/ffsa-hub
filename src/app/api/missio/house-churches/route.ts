@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listHouses, pastorHouseAccess } from "@/lib/missio/house-churches";
+import { listHouses, pastorHouseAccess, publicError } from "@/lib/missio/house-churches";
 
 // GET /api/missio/house-churches
 //
@@ -17,6 +17,6 @@ export async function GET(_request: Request) {
   if ("response" in access) return access.response;
 
   const result = await listHouses(access.auth, access.scope);
-  if (!result.ok) return json({ error: result.error, code: result.code }, result.status);
+  if (!result.ok) return json(publicError(result), result.status);
   return json(result.body);
 }
