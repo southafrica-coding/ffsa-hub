@@ -48,6 +48,8 @@ export async function middleware(request: NextRequest) {
     "/e", // public ticket storefront (/e/[slug] + /e/[slug]/thanks)
     "/f", // public form runtime (/f/[slug]) — CRM lead-capture forms
     "/join", // public signup link (/join/[code]) — anyone with the active code can self-onboard
+    "/connect/missio", // public Missio connect card (/connect/missio only — not /connect or any other /connect path)
+    "/api/missio/connect", // public Missio connect submit (/api/missio/connect only — not any other /api/missio route)
     "/preferences", // public email preference / unsubscribe page
     "/subscribe", // public sign-up page for labels opened up with public_subscribe (196)
     "/unsubscribe", // public one-click opt-out landing page from email footers

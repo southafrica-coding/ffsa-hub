@@ -93,6 +93,7 @@ export type MissioErrorCode =
   | "already_in_org"
   | "already_member"
   | "already_resolved"
+  | "conflict"
   | "not_missio_person"
   | "invalid_token"
   | "invalid_input"
@@ -101,6 +102,8 @@ export type MissioErrorCode =
   | "forbidden"
   | "not_found"
   | "ended_at_in_future"
+  | "membership_not_current"
+  | "member_left_missio"
   | "server_error"
   | "method_not_allowed";
 
@@ -185,4 +188,65 @@ export type ImportReviewListResponse = {
 export type ResolveImportReviewResponse = {
   item: ImportReviewItem;
   member?: HouseChurchMemberView;
+};
+
+export type ConnectVisitType = "first_time" | "been_a_while" | "regular";
+
+export type FollowupStage = "new" | "contacted" | "visited_house" | "joined";
+
+export type FollowupSource = "contact" | "connect_response";
+
+/**
+ * One row of GET /api/missio/follow-up.
+ * key is c_<contactId> for a labelled Missio contact and r_<connectResponseId> for a card.
+ * stage is the effective stage. People with no follow-up row yet are "new" and followupId is null.
+ * phone and email follow FOLLOWUP_LIST_INCLUDES_CONTACT_PII in follow-up.ts.
+ * A phone-only card that is waiting on a pastor keeps an r_ key.
+ * needsConfirm is true when connect_responses.match_status is pending_confirm.
+ * suggestedContact is the contact id and a display name. No phone and no email.
+ * The list view does not include match_status, so the card row supplies it.
+ */
+export type FollowupPerson = {
+  key: string;
+  source: FollowupSource;
+  contactId: string | null;
+  connectResponseId: string | null;
+  followupId: string | null;
+  displayName: string;
+  phone: string | null;
+  email: string | null;
+  visitType: ConnectVisitType | null;
+  wantsHouseChurch: boolean | null;
+  wantsPrayer: boolean | null;
+  stage: FollowupStage;
+  assignedLeader: PersonRef | null;
+  submittedAt: string | null;
+  needsConfirm: boolean;
+  suggestedContact: { contactId: string; displayName: string } | null;
+};
+
+export type FollowupListResponse = {
+  people: FollowupPerson[];
+  canWrite: boolean;
+};
+
+export type FollowupTimelineKind = "submitted" | "stage_change" | "note";
+
+export type FollowupTimelineEntry = {
+  id: string;
+  kind: FollowupTimelineKind;
+  fromStage: FollowupStage | null;
+  toStage: FollowupStage | null;
+  body: string | null;
+  by: { displayName: string } | null;
+  at: string;
+};
+
+export type ConnectFieldErrors = {
+  name?: string;
+  phone?: string;
+  email?: string;
+  visitType?: string;
+  prayerRequest?: string;
+  notes?: string;
 };

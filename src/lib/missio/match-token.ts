@@ -8,6 +8,7 @@ import { createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 const SALT = "ffsa-hub";
 const TOKEN_INFO = "missio-match-token-v1";
 const AUDIT_INFO = "missio-audit-v1";
+const CONNECT_RATE_INFO = "missio-connect-rate-v1";
 const TOKEN_TTL_SECONDS = 15 * 60;
 
 function baseSecret(): string | null {
@@ -50,6 +51,17 @@ export function queryHmac(normalizedQuery: string): string | null {
   const key = derivedKey(AUDIT_INFO);
   if (!key) return null;
   return createHmac("sha256", key).update(normalizedQuery).digest("base64url");
+}
+
+/**
+ * HMAC of a client IP (or device id) for connect_responses.rate_key_hash.
+ * Same service-role key as match tokens. Null when that key is missing.
+ * Never persist the raw IP.
+ */
+export function connectRateKeyHash(ip: string): string | null {
+  const key = derivedKey(CONNECT_RATE_INFO);
+  if (!key) return null;
+  return createHmac("sha256", key).update(ip).digest("base64url");
 }
 
 export function matchTokenFits(args: {

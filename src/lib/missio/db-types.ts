@@ -214,3 +214,135 @@ export type MissioMemberStatusRow = {
   roles: string[];
   is_member: true;
 };
+
+/**
+ * Connect card and follow-up funnel.
+ *
+ * Shapes follow migration 332 (PR 614, head 252a067d4a0a0fd923c2ef4cb106ca5d307dda19),
+ * stacked on 331 at c587e497. That migration is not applied here. Do not add
+ * these tables to src/types/database.ts by hand.
+ *
+ * RLS is has_org_role('missio', ARRAY['pastor']) plus the missio org id.
+ * is_admin(), has_role(), and has_any_role() are not consulted. An FFSA admin
+ * does not pass. Public QR rows are service-role inserts (source qr). Pastors
+ * may insert only source manual. There is no anon policy.
+ *
+ * AFTER INSERT, attach_missio_connect_response takes an advisory lock.
+ * An explicit matched_contact_id attaches or creates the follow-up and
+ * writes kind connect_card. A phone that already points at a contact is
+ * pending_confirm (suggested_contact_id) and writes no follow-up. No match
+ * creates a new follow-up. The app does not insert the follow-up itself.
+ * link_missio_connect_match() is an AFTER UPDATE OF matched_contact_id
+ * trigger with no arguments. Joining a house does not create a follow-up.
+ * record_missio_followup_stage() writes kind stage_change
+ * (including on insert). The attach trigger writes kind connect_card.
+ * Pastors insert kind note only. A service-role note sets changed_by to
+ * the pastor. The pin trigger overwrites it when auth.uid() is set.
+ * The app must not insert stage_change rows.
+ * phone_e164 is trigger-owned and copies normalizePhoneE164 (default ZA).
+ * matched_at is trigger-owned. matched_contact_id, contact_id, and
+ * assigned_leader_contact_id must be null or already in org_people, or
+ * the guard raises 23503 missio_contact_not_in_org. assigned_user_id
+ * must be null or a user with an org_staff_roles row in Missio, or the
+ * guard raises 23503 missio_user_not_in_org.
+ * Pastor UPDATE grants: connect_responses (matched_contact_id, notes,
+ * wants_house_church, wants_prayer, prayer_request, service_date) and
+ * missio_followups (stage, assigned_leader_contact_id, assigned_user_id).
+ * These routes do not update any other column, including as service role.
+ * The views have no email column.
+ *
+ * Partial uniques: one open follow-up per (org_id, contact_id) where
+ * contact_id IS NOT NULL AND stage <> 'joined', and one row per
+ * connect_response_id WHERE connect_response_id IS NOT NULL.
+ * A row needs contact_id or connect_response_id (or both).
+ *
+ * missio_followup_effective is security_invoker. effective_stage is joined
+ * while the contact has a current Missio house membership, otherwise stage.
+ * missio_not_in_house is owner-rights with a security barrier, pastor-gated.
+ */
+
+export type ConnectVisitType = "first_time" | "been_a_while" | "regular";
+
+export type ConnectSource = "qr" | "manual" | "pco";
+
+export type FollowupStage = "new" | "contacted" | "visited_house" | "joined";
+
+export type FollowupHistoryKind = "stage_change" | "note" | "connect_card";
+
+export type ConnectResponseRow = {
+  id: string;
+  org_id: string;
+  submitted_at: string;
+  name: string;
+  /** As typed. The trigger fills phone_e164. */
+  phone: string;
+  /** Set by trigger. Null when phone cannot be parsed. Do not write it. */
+  phone_e164: string | null;
+  email: string | null;
+  visit_type: ConnectVisitType;
+  wants_house_church: boolean;
+  wants_prayer: boolean;
+  prayer_request: string | null;
+  notes: string | null;
+  service_date: string | null;
+  /** DEFAULT 'potch'. CHECK (campus IN ('potch', 'jhb')). */
+  campus: OrgCampus;
+  matched_contact_id: string | null;
+  /** unmatched | pending_confirm | confirmed. Default unmatched. */
+  match_status: "unmatched" | "pending_confirm" | "confirmed";
+  /** Set only while match_status is pending_confirm. Not the link. */
+  suggested_contact_id: string | null;
+  matched_by: string | null;
+  matched_at: string | null;
+  source: ConnectSource;
+  /** HMAC of an IP or device id. Never a raw IP. */
+  rate_key_hash: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MissioFollowupRow = {
+  id: string;
+  org_id: string;
+  contact_id: string | null;
+  connect_response_id: string | null;
+  stage: FollowupStage;
+  assigned_leader_contact_id: string | null;
+  assigned_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MissioFollowupStageHistoryRow = {
+  id: string;
+  followup_id: string;
+  from_stage: FollowupStage | null;
+  to_stage: FollowupStage | null;
+  /** DEFAULT auth.uid(). */
+  changed_by: string | null;
+  changed_at: string;
+  notes: string | null;
+  kind: FollowupHistoryKind;
+};
+
+export type MissioFollowupEffectiveRow = MissioFollowupRow & {
+  effective_stage: FollowupStage;
+};
+
+/**
+ * Pastor-gated owner-rights view. Contact rows expose names only.
+ * Card rows expose the typed phone and phone_e164. No email column.
+ */
+export type MissioNotInHouseRow = {
+  source: "contact" | "connect_response";
+  contact_id: string | null;
+  connect_response_id: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string | null;
+  phone: string | null;
+  phone_e164: string | null;
+  wants_house_church: boolean | null;
+  followup_stage: FollowupStage | null;
+  submitted_at: string | null;
+};

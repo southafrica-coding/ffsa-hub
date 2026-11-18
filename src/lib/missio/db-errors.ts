@@ -59,6 +59,12 @@ const SERVER: MappedDbError = {
   error: "Something went wrong.",
 };
 
+const ALREADY_RESOLVED: MappedDbError = {
+  status: 409,
+  code: "already_resolved",
+  error: "This row is already resolved.",
+};
+
 const NOT_IN_ORG = [
   "missio_member_not_in_org",
   "missio_contact_not_in_org",
@@ -83,6 +89,7 @@ const LEFT_MISSIO: MappedDbError = {
 
 export function mapMissioDbError(error: DbErrorLike): MappedDbError {
   const message = error.message ?? "";
+  if (error.code === "23505") return ALREADY_RESOLVED;
   if (error.code === "23503" && NOT_IN_ORG.some((name) => message.includes(name))) return NOT_MISSIO;
   if (error.code === "23514" && message.includes("missio_started_at_in_future")) return FUTURE_START;
   if (error.code === "23514" && message.includes("missio_ended_at_in_future")) return ENDED_IN_FUTURE;

@@ -334,6 +334,32 @@ describe("middleware: bearer tokens (phone app)", () => {
     expect(current.queries).toHaveLength(0);
   });
 
+  it("Missio connect is public, and the neighbouring paths stay signed-in", async () => {
+    const card = await middleware(req("/connect/missio"));
+    expect(location(card)).toBeNull();
+    expect(card.status).toBe(200);
+    expect(current.getUserCalls).toHaveLength(0);
+
+    const submit = await middleware(
+      new NextRequest(new URL("/api/missio/connect", "https://hub.test"), { method: "POST" })
+    );
+    expect(submit.status).toBe(200);
+    expect(location(submit)).toBeNull();
+    expect(current.getUserCalls).toHaveLength(0);
+
+    expect(location(await middleware(req("/connect")))?.pathname).toBe("/login");
+    expect(location(await middleware(req("/connect/other")))?.pathname).toBe("/login");
+    expect(location(await middleware(req("/connect/missio-extra")))?.pathname).toBe("/login");
+
+    const followUp = await middleware(req("/api/missio/follow-up"));
+    expect(followUp.status).toBe(401);
+    expect(await followUp.json()).toMatchObject({ error: "unauthenticated" });
+    const people = await middleware(req("/api/missio/people"));
+    expect(people.status).toBe(401);
+    const prefix = await middleware(req("/api/missio/connectivity"));
+    expect(prefix.status).toBe(401);
+  });
+
   it("/.well-known is public", async () => {
     const res = await middleware(req("/.well-known/apple-app-site-association"));
     expect(location(res)).toBeNull();
