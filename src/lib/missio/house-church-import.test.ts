@@ -2,8 +2,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  EMPTY_ORG_PEOPLE_MESSAGE,
   MISSIO_PROD_PROJECT_REF,
   applyHouseChurchImport,
+  checkEmptyOrgPeoplePool,
   checkImportWriteGate,
   classifyHouseChurchRow,
   formatImportSummary,
@@ -512,5 +514,37 @@ describe("import write gate", () => {
         approveProd: true,
       })
     ).toEqual({ ok: true });
+  });
+
+  it("refuses to match when Missio org_people is empty, including a dry run", () => {
+    const dev = "https://devref.supabase.co";
+    expect(checkEmptyOrgPeoplePool({ count: 0, allowEmptyPool: false, supabaseUrl: dev })).toEqual({
+      ok: false,
+      error: EMPTY_ORG_PEOPLE_MESSAGE,
+    });
+    expect(checkEmptyOrgPeoplePool({ count: 0, allowEmptyPool: false, supabaseUrl: url })).toEqual({
+      ok: false,
+      error: EMPTY_ORG_PEOPLE_MESSAGE,
+    });
+    expect(checkEmptyOrgPeoplePool({ count: 3, allowEmptyPool: false, supabaseUrl: dev })).toEqual({ ok: true });
+    expect(
+      checkEmptyOrgPeoplePool({ count: 0, allowEmptyPool: true, supabaseUrl: dev })
+    ).toEqual({ ok: true });
+    expect(parseImportCli(["houses.csv", "--allow-empty-pool"])).toMatchObject({
+      ok: true,
+      apply: false,
+      allowEmptyPool: true,
+    });
+  });
+
+  it("rejects --allow-empty-pool against the production ref", () => {
+    const refused = checkEmptyOrgPeoplePool({ count: 0, allowEmptyPool: true, supabaseUrl: url });
+    expect(refused.ok).toBe(false);
+    if (refused.ok) return;
+    expect(refused.error).toContain("--allow-empty-pool");
+    expect(refused.error).not.toBe(EMPTY_ORG_PEOPLE_MESSAGE);
+    expect(
+      checkEmptyOrgPeoplePool({ count: 12, allowEmptyPool: true, supabaseUrl: url }).ok
+    ).toBe(false);
   });
 });

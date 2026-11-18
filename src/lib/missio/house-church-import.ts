@@ -217,13 +217,23 @@ export function supabaseProjectRef(url: string | undefined): string | null {
   }
 }
 
+export const EMPTY_ORG_PEOPLE_MESSAGE = "Missio org_people is empty - run the approved backfill first";
+
 export function parseImportCli(argv: string[]):
-  | { ok: true; csvPath: string; apply: boolean; projectRef: string | null; approveProd: boolean }
+  | {
+      ok: true;
+      csvPath: string;
+      apply: boolean;
+      projectRef: string | null;
+      approveProd: boolean;
+      allowEmptyPool: boolean;
+    }
   | { ok: false; error: string } {
   let csvPath: string | null = null;
   let apply = false;
   let projectRef: string | null = null;
   let approveProd = false;
+  let allowEmptyPool = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] ?? "";
@@ -233,6 +243,10 @@ export function parseImportCli(argv: string[]):
     }
     if (arg === "--i-have-approval-for-prod") {
       approveProd = true;
+      continue;
+    }
+    if (arg === "--allow-empty-pool") {
+      allowEmptyPool = true;
       continue;
     }
     if (arg === "--project-ref") {
@@ -255,7 +269,26 @@ export function parseImportCli(argv: string[]):
   }
 
   if (!csvPath) return { ok: false, error: "CSV path is required." };
-  return { ok: true, csvPath, apply, projectRef, approveProd };
+  return { ok: true, csvPath, apply, projectRef, approveProd, allowEmptyPool };
+}
+
+/**
+ * Before matching, including a dry run. An empty Missio org_people table
+ * means the approved backfill has not run. --allow-empty-pool is only for
+ * a non-production project ref and is refused when the URL is production.
+ */
+export function checkEmptyOrgPeoplePool(input: {
+  count: number;
+  allowEmptyPool: boolean;
+  supabaseUrl: string | undefined;
+}): { ok: true } | { ok: false; error: string } {
+  const ref = supabaseProjectRef(input.supabaseUrl);
+  if (input.allowEmptyPool && ref === MISSIO_PROD_PROJECT_REF) {
+    return { ok: false, error: "Refusing --allow-empty-pool on production. Nothing was written." };
+  }
+  if (input.count > 0) return { ok: true };
+  if (input.allowEmptyPool) return { ok: true };
+  return { ok: false, error: EMPTY_ORG_PEOPLE_MESSAGE };
 }
 
 /**

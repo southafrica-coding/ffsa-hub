@@ -25,6 +25,7 @@ import { resolve } from "node:path";
 
 // The house-church tables are not in the generated Database type yet.
 import {
+  checkEmptyOrgPeoplePool,
   checkImportWriteGate,
   formatImportSummary,
   parseHouseChurchCsv,
@@ -93,9 +94,8 @@ async function loadSnapshot(db: Db, orgId: string): Promise<ImportSnapshot> {
   const orgPeopleContactIds = (
     await fetchAll(db, "org_people", "id, contact_id", (query) => query.eq("org_id", orgId))
   ).map((row) => String(row.contact_id));
-  // Match pool is Missio org_people only. A later approved branch could add
-  // contacts that carry the Missio label, then create their org_people row
-  // before the membership. That branch is not enabled.
+  // Match pool is Missio org_people only. The Missio label is never the pool.
+  // Hub Data backfills org_people from labelled contacts before this import.
   const matchIds = [...new Set(orgPeopleContactIds)];
   const contacts: ContactName[] = [];
   for (let index = 0; index < matchIds.length; index += 200) {
@@ -259,6 +259,15 @@ async function main() {
   }
 
   const snapshot = await loadSnapshot(db, org.data.id as string);
+  const pool = checkEmptyOrgPeoplePool({
+    count: snapshot.orgPeopleContactIds.length,
+    allowEmptyPool: args.allowEmptyPool,
+    supabaseUrl,
+  });
+  if (!pool.ok) {
+    console.error(pool.error);
+    process.exit(1);
+  }
   const result = await runHouseChurchImport({
     rows: parsed.rows,
     snapshot,
