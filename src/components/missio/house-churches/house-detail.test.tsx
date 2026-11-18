@@ -1,5 +1,5 @@
 /** @vitest-environment happy-dom */
-import type { ReactNode } from "react";
+import { act, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MissioApiError, type MissioClient } from "../api";
 import type { HouseChurchesClient } from "./client";
@@ -92,11 +92,15 @@ describe("house detail", () => {
     expect(host.textContent).toContain("Oak Table");
     expect(host.textContent).toContain("House 2");
     expect(host.textContent).toContain("Missio Potch");
-    expect(host.textContent).toContain("Main");
+    expect(host.textContent).not.toContain("Main");
     expect(host.textContent).toContain("3 people");
-    expect(host.textContent).toContain("Wednesday · 9 Kestrel Lane");
-    expect(host.textContent).toContain("Leaders: Theo Martins");
-    expect(host.textContent).toContain("Co-leaders: Lindiwe Nkosi");
+    expect(host.textContent).toContain("Wednesday");
+    expect(host.textContent).toContain("9 Kestrel Lane");
+    expect(host.textContent).toContain("Leaders");
+    expect(host.textContent).toContain("Theo Martins");
+    expect(host.textContent).not.toContain("Leaders:");
+    expect(host.textContent).toContain("Co-leaders");
+    expect(host.textContent).toContain("Lindiwe Nkosi");
     expect(host.textContent).toContain("Soup is on Theo this month.");
     const names = [...host.querySelectorAll("[data-testid=house-members] li")].map((row) => row.textContent);
     expect(names[0]).toContain("Theo Martins");
@@ -130,17 +134,33 @@ describe("house detail", () => {
       />
     );
     await settle();
-    const remove = host.querySelector("button[aria-label='Remove Amina Kruger from house']") as HTMLButtonElement;
+    expect(host.querySelector("button[aria-label='Remove Amina Kruger from house']")).toBeNull();
+    const editAmina = host.querySelector("button[aria-label='Edit Amina Kruger']") as HTMLButtonElement;
+    await act(async () => {
+      editAmina.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const remove = document.body.querySelector("button[aria-label='Remove Amina Kruger from house']") as HTMLButtonElement;
     expect(remove.textContent?.trim()).toBe("Remove from house");
-    await settle();
-    remove.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await settle();
+    await act(async () => {
+      remove.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(removed).toEqual([]);
+    const confirm = document.body.querySelector("button[aria-label='Confirm remove Amina Kruger']") as HTMLButtonElement;
+    await act(async () => {
+      confirm.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
     expect(removed).toEqual(["c-amina"]);
 
-    const select = host.querySelector("[aria-label='Role for Theo Martins']") as HTMLSelectElement;
-    await settle();
-    setValue(select, "member");
-    await settle();
+    const editTheo = host.querySelector("button[aria-label='Edit Theo Martins']") as HTMLButtonElement;
+    await act(async () => {
+      editTheo.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const select = document.body.querySelector("[aria-label='Role for Theo Martins']") as HTMLSelectElement;
+    await act(async () => {
+      setValue(select, "member");
+      await Promise.resolve();
+    });
     expect(roles).toEqual(["c-theo:member"]);
   });
 
@@ -196,7 +216,8 @@ describe("house detail", () => {
     );
     await settle();
     expect(host.querySelector("[data-testid=add-member]")).toBeNull();
-    expect(host.querySelector("button[aria-label='Remove Amina Kruger from house']")).toBeNull();
+    expect(host.querySelector("button[aria-label='Edit Amina Kruger']")).toBeNull();
+    expect(document.body.querySelector("button[aria-label='Remove Amina Kruger from house']")).toBeNull();
     expect(host.textContent).toContain("Amina Kruger");
   });
 

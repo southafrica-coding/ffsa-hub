@@ -30,6 +30,12 @@ export function peopleCount(count: number): string {
   return safe === 1 ? "1 person" : `${safe} people`;
 }
 
+/** Extra line for a match button. Only what the contact record actually has. */
+export function candidateContext(person: PersonRef): string | null {
+  if (person.orgPersonId) return "In the people list";
+  return null;
+}
+
 export function nameList(people: PersonRef[]): string {
   const names = people.map((person) => person.displayName.trim()).filter(Boolean);
   if (names.length === 0) return "No one yet";

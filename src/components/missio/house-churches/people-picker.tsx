@@ -11,11 +11,13 @@ export function PeoplePicker({
   onPick,
   pending = false,
   label = "Search people",
+  showLabel = true,
 }: {
   people: Pick<MissioClient, "listPeople">;
   onPick: (person: MissioPerson) => void;
   pending?: boolean;
   label?: string;
+  showLabel?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [rows, setRows] = useState<MissioPerson[] | null>(null);
@@ -54,7 +56,7 @@ export function PeoplePicker({
       }}
     >
       <label className={shell.field}>
-        {label}
+        {showLabel ? label : <span className={shell.visuallyHidden}>{label}</span>}
         <input
           name="q"
           aria-label={label}

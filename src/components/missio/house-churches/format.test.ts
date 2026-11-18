@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { houseTitle, peopleCount, reviewReasons, sortHouses, sortMembers } from "./format";
+import { candidateContext, houseTitle, peopleCount, reviewReasons, sortHouses, sortMembers } from "./format";
 
 describe("house church formatting", () => {
   it("uses House N when the name is missing", () => {
@@ -27,6 +27,21 @@ describe("house church formatting", () => {
       "Amina Kruger",
       "Jonah Feldman",
     ]);
+  });
+
+  it("mentions the people list only when the contact is already a Missio person", () => {
+    expect(
+      candidateContext({
+        contactId: "c",
+        displayName: "Peter Adler",
+        firstName: "Peter",
+        lastName: "Adler",
+        orgPersonId: "p",
+      })
+    ).toBe("In the people list");
+    expect(
+      candidateContext({ contactId: "c", displayName: "Jonah Feldman", firstName: "Jonah", lastName: "Feldman" })
+    ).toBeNull();
   });
 
   it("says a family label is not one person, once", () => {

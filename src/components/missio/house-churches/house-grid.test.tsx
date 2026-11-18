@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MissioApiError } from "../api";
 import type { HouseChurchesClient } from "./client";
 import { HouseChurchGrid } from "./house-grid";
-import type { HouseSummary } from "./types";
+import type { HouseSummary, ReviewItem } from "./types";
 import { cleanup, render, settle } from "./test-render";
 
 vi.mock("next/link", () => ({
@@ -91,15 +91,32 @@ describe("house church grid", () => {
     expect(cards[0]?.textContent).toContain("Theo Martins");
     expect(cards[0]?.textContent).toContain("Lindiwe Nkosi");
     expect(cards[0]?.textContent).toContain("Missio JHB");
-    expect(cards[0]?.textContent).toContain("Wednesday · 9 Kestrel Lane");
+    expect(cards[0]?.textContent).toContain("Wednesday");
+    expect(cards[0]?.textContent).toContain("9 Kestrel Lane");
     expect(cards[1]?.getAttribute("href")).toBe("/missio/house-churches/house-4");
     expect(cards[1]?.textContent).toContain("House 4");
     expect(cards[1]?.textContent).toContain("6 people");
     expect(cards[1]?.textContent).toContain("Missio Potch");
-    expect(cards[1]?.textContent).toContain("Main");
-    expect(cards[1]?.textContent).toContain("Leaders: No one yet");
-    expect(host.textContent).toContain("Review names");
+    expect(cards[1]?.textContent).not.toContain("Main");
+    expect(cards[1]?.textContent).toContain("Leaders");
+    expect(cards[1]?.textContent).toContain("No one yet");
+    expect(cards[1]?.textContent).not.toContain("Leaders:");
+    const review = host.querySelector("[data-testid=review-names]");
+    expect(review?.textContent).toBe("Review names");
+    expect(review?.getAttribute("href")).toBe("/missio/house-churches/review");
     expect(host.textContent).not.toMatch(/Delete|Coming soon|Soon/);
+  });
+
+  it("shows how many names are waiting when that count is known", async () => {
+    const host = mount(
+      <HouseChurchGrid
+        client={client({
+          listReview: async () => ({ items: Array.from({ length: 12 }, (_, index) => ({ id: `r-${index}` }) as ReviewItem) }),
+        })}
+      />
+    );
+    await settle();
+    expect(host.querySelector("[data-testid=review-names]")?.textContent).toBe("Review names (12)");
   });
 
   it("hides review when the pastor cannot write", async () => {

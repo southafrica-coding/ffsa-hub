@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { MissioApiError, missioClient, type MissioClient } from "../api";
 import content from "../content.module.css";
 import shell from "../shell.module.css";
 import type { MissioPerson } from "../types-shim";
 import { houseChurchesClient, houseErrorCopy, type HouseChurchesClient } from "./client";
-import { houseTitle, reviewReasons } from "./format";
+import { candidateContext, houseTitle, reviewReasons, ROLE_LABEL } from "./format";
 import { useMissioLoad } from "./load";
 import { PeoplePicker } from "./people-picker";
+import { AllHousesLink } from "./present";
 import { accessStatus, HouseStatus } from "./status";
 import type { ResolveBody, ReviewItem } from "./types";
 import styles from "./house-churches.module.css";
@@ -82,9 +82,7 @@ export function ReviewQueue({
 
   return (
     <div className={`${content.page} ${styles.root}`}>
-      <Link href="/missio/house-churches" className={styles.back}>
-        All houses
-      </Link>
+      <AllHousesLink />
       <div className={styles.reviewHead}>
         <h1 className={content.title}>Review names</h1>
         {item ? (
@@ -117,6 +115,7 @@ export function ReviewQueue({
       ) : null}
       {item ? (
         <ReviewCard
+          key={item.id}
           item={item}
           pending={pending}
           notice={notice}
@@ -199,23 +198,27 @@ function ReviewCard({
   onCreate: () => void;
   onSkip: () => void;
 }) {
+  const [creating, setCreating] = useState(false);
   const houseLabel = item.house ? houseTitle(item.house) : `House ${item.houseNumber}`;
-  const showSource = item.sourceLine.trim() !== item.rawName.trim();
+  const showName = item.sourceLine.trim() !== item.rawName.trim();
   const reasons = reviewReasons(item);
 
   return (
-    <article className={styles.block} data-testid="review-item">
-      <p className={`${shell.eyebrow} ${content.eyebrow}`}>Original line</p>
-      {showSource ? <p className={styles.quote}>{item.sourceLine}</p> : null}
-      <h2>{item.rawName}</h2>
-      <p className={styles.line}>{houseLabel}</p>
-      {item.house && item.house.name?.trim() ? <p className={styles.number}>House {item.house.number}</p> : null}
-      <ul className={styles.reasons}>
-        {reasons.map((reason) => (
-          <li key={reason}>{reason}</li>
-        ))}
-      </ul>
-      {item.notes?.trim() ? <p className={styles.line}>Note: {item.notes.trim()}</p> : null}
+    <article data-testid="review-item">
+      <section className={styles.summary} data-testid="review-summary">
+        <p className={`${shell.eyebrow} ${content.eyebrow}`}>Original line</p>
+        <p className={styles.quoteBox}>{item.sourceLine}</p>
+        {showName ? <h2>{item.rawName}</h2> : null}
+        <p className={styles.line}>{houseLabel}</p>
+        {item.house && item.house.name?.trim() ? <p className={styles.number}>House {item.house.number}</p> : null}
+        {item.role ? <p className={styles.line}>Role: {ROLE_LABEL[item.role]}</p> : null}
+        <ul className={styles.reasons}>
+          {reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+        {item.notes?.trim() ? <p className={styles.line}>Note: {item.notes.trim()}</p> : null}
+      </section>
       {notice ? (
         <p className={shell.alert} role="alert">
           {notice}
@@ -223,67 +226,87 @@ function ReviewCard({
       ) : null}
 
       {item.candidates.length > 0 ? (
-        <section>
+        <section className={styles.section}>
           <h2>Possible matches</h2>
           <ul className={styles.choices} data-testid="review-candidates">
-            {item.candidates.map((candidate) => (
-              <li key={candidate.contactId}>
-                <button
-                  type="button"
-                  className={`${shell.ghost} ${styles.choice}`}
-                  disabled={pending}
-                  onClick={() => onLink(candidate.contactId)}
-                >
-                  <span>Use {candidate.displayName}</span>
-                </button>
-              </li>
-            ))}
+            {item.candidates.map((candidate) => {
+              const context = candidateContext(candidate);
+              return (
+                <li key={candidate.contactId}>
+                  <button
+                    type="button"
+                    className={`${shell.ghost} ${styles.choice}`}
+                    disabled={pending}
+                    onClick={() => onLink(candidate.contactId)}
+                  >
+                    <span className={styles.choiceBody}>
+                      <span>Use {candidate.displayName}</span>
+                      {context ? <span className={styles.choiceMeta}>{context}</span> : null}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}
 
-      <PeoplePicker
-        people={people}
-        pending={pending}
-        label="Search people"
-        onPick={(person: MissioPerson) => onLink(person.contactId)}
-      />
-
-      <section>
-        <h2>Create a person</h2>
-        <form
-          className={styles.form}
-          data-testid="review-create"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onCreate();
-          }}
-        >
-          <label className={shell.field}>
-            First name
-            <input aria-label="First name" value={firstName} onChange={(event) => onFirstName(event.target.value)} />
-          </label>
-          <label className={shell.field}>
-            Last name
-            <input aria-label="Last name" value={lastName} onChange={(event) => onLastName(event.target.value)} />
-          </label>
-          <label className={shell.field}>
-            Email
-            <input aria-label="Email" inputMode="email" autoComplete="off" value={email} onChange={(event) => onEmail(event.target.value)} />
-          </label>
-          <label className={shell.field}>
-            Phone
-            <input aria-label="Phone" inputMode="tel" autoComplete="off" value={phone} onChange={(event) => onPhone(event.target.value)} />
-          </label>
-          <div className={styles.formActions}>
-            <button type="submit" className={shell.primary} disabled={pending}>
-              Create person
-            </button>
-          </div>
-        </form>
+      <section className={styles.section}>
+        <h2>Search people</h2>
+        <PeoplePicker
+          people={people}
+          pending={pending}
+          label="Search people"
+          showLabel={false}
+          onPick={(person: MissioPerson) => onLink(person.contactId)}
+        />
       </section>
 
-      <section>
+      <section className={styles.section}>
+        <button
+          type="button"
+          className={shell.ghost}
+          aria-expanded={creating}
+          data-testid="create-toggle"
+          onClick={() => setCreating((open) => !open)}
+        >
+          Create new person
+        </button>
+        {creating ? (
+          <form
+            className={styles.form}
+            data-testid="review-create"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onCreate();
+            }}
+          >
+            <label className={shell.field}>
+              First name
+              <input aria-label="First name" value={firstName} onChange={(event) => onFirstName(event.target.value)} />
+            </label>
+            <label className={shell.field}>
+              Last name
+              <input aria-label="Last name" value={lastName} onChange={(event) => onLastName(event.target.value)} />
+            </label>
+            <label className={shell.field}>
+              Email
+              <input aria-label="Email" inputMode="email" autoComplete="off" value={email} onChange={(event) => onEmail(event.target.value)} />
+            </label>
+            <label className={shell.field}>
+              Phone
+              <input aria-label="Phone" inputMode="tel" autoComplete="off" value={phone} onChange={(event) => onPhone(event.target.value)} />
+            </label>
+            <div className={styles.formActions}>
+              <button type="submit" className={shell.primary} disabled={pending}>
+                Create person
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </section>
+
+      <section className={styles.section}>
         <h2>Skip</h2>
         <form
           className={styles.form}

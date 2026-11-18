@@ -2,15 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CAMPUS_LABEL, formatJoined } from "../access";
+import { formatJoined, missioSkinVars } from "../access";
 import { MissioApiError, missioClient, type MissioClient } from "../api";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import content from "../content.module.css";
 import shell from "../shell.module.css";
 import type { MissioPerson } from "../types-shim";
 import { houseChurchesClient, houseErrorCopy, type HouseChurchesClient } from "./client";
-import { houseTitle, meetingLine, nameList, peopleCount, personHref, ROLE_LABEL, sortMembers } from "./format";
+import { houseTitle, peopleCount, personHref, ROLE_LABEL, sortMembers } from "./format";
 import { useMissioLoad } from "./load";
 import { PeoplePicker } from "./people-picker";
+import { AllHousesLink, CampusTag, MeetingMeta, RoleBlock } from "./present";
 import { HouseStatus } from "./status";
 import type { HouseMember, HouseRole } from "./types";
 import styles from "./house-churches.module.css";
@@ -72,13 +74,10 @@ export function HouseDetailView({
   const house = state.phase === "ready" ? state.data.house : null;
   const canWrite = state.phase === "ready" ? state.data.canWrite : false;
   const members = house ? sortMembers(house.members) : [];
-  const meets = house ? meetingLine(house) : "";
 
   return (
     <div className={`${content.page} ${styles.root}`}>
-      <Link href="/missio/house-churches" className={styles.back}>
-        All houses
-      </Link>
+      <AllHousesLink />
       {state.phase === "loading" ? (
         <div className={shell.state} data-state="loading" role="status">
           Loading this house…
@@ -92,13 +91,12 @@ export function HouseDetailView({
           <p className={`${shell.eyebrow} ${content.eyebrow}`}>House {house.number}</p>
           <h1 className={content.title}>{houseTitle(house)}</h1>
           <p className={styles.line}>
-            <span className={shell.campus}>{CAMPUS_LABEL[house.campus]}</span>
-            {house.campus === "potch" ? <span className={shell.campusMain}>Main</span> : null}
+            <CampusTag campus={house.campus} />
             <span className={styles.count}> · {peopleCount(house.memberCount)}</span>
           </p>
-          {meets ? <p className={styles.line}>{meets}</p> : null}
-          <p className={styles.line}>Leaders: {nameList(house.leaders)}</p>
-          <p className={styles.line}>Co-leaders: {nameList(house.coLeaders)}</p>
+          <MeetingMeta day={house.meetingDay} place={house.location} />
+          <RoleBlock label="Leaders" people={house.leaders} />
+          <RoleBlock label="Co-leaders" people={house.coLeaders} />
           {house.leaderNotes?.trim() ? (
             <section className={styles.block}>
               <h2>Leader notes</h2>
@@ -114,54 +112,18 @@ export function HouseDetailView({
             <h2>People</h2>
             {members.length === 0 ? <p className={styles.line}>No one is in this house yet.</p> : null}
             {members.length > 0 ? (
-              <>
-                <ul className={shell.peopleCards} data-testid="house-members">
-                  {members.map((member) => (
-                    <MemberCard
-                      key={member.contactId}
-                      member={member}
-                      canWrite={canWrite}
-                      pending={pending}
-                      onRole={(next) => void changeRole(member, next)}
-                      onRemove={() => void remove(member)}
-                    />
-                  ))}
-                </ul>
-                <table className={`${shell.table} ${content.table}`} data-testid="house-member-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Role</th>
-                      <th>Since</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {members.map((member) => (
-                      <tr key={member.contactId}>
-                        <td>
-                          <PersonName member={member} />
-                        </td>
-                        <td>{canWrite ? <RoleSelect member={member} disabled={pending} onRole={(next) => void changeRole(member, next)} /> : ROLE_LABEL[member.role]}</td>
-                        <td className={shell.muted}>{member.startedAt ? formatJoined(member.startedAt) : "—"}</td>
-                        <td>
-                          {canWrite ? (
-                            <button
-                              type="button"
-                              className={shell.textButton}
-                              disabled={pending}
-                              aria-label={`Remove ${member.displayName} from house`}
-                              onClick={() => void remove(member)}
-                            >
-                              Remove from house
-                            </button>
-                          ) : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
+              <ul className={styles.memberList} data-testid="house-members">
+                {members.map((member) => (
+                  <MemberRow
+                    key={member.contactId}
+                    member={member}
+                    canWrite={canWrite}
+                    pending={pending}
+                    onRole={(next) => void changeRole(member, next)}
+                    onRemove={() => void remove(member)}
+                  />
+                ))}
+              </ul>
             ) : null}
           </section>
           {canWrite ? (
@@ -218,7 +180,7 @@ function RoleSelect({
   );
 }
 
-function MemberCard({
+function MemberRow({
   member,
   canWrite,
   pending,
@@ -231,28 +193,62 @@ function MemberCard({
   onRole: (role: HouseRole) => void;
   onRemove: () => void;
 }) {
+  const [confirming, setConfirming] = useState(false);
   return (
-    <li className={shell.personCard}>
-      <div className={shell.personCardTop}>
+    <li className={styles.memberRow}>
+      <div className={styles.memberName}>
         <PersonName member={member} />
-        {canWrite ? null : (
-          <span className={member.role === "member" ? shell.tagQuiet : shell.tag}>{ROLE_LABEL[member.role]}</span>
-        )}
       </div>
-      {member.startedAt ? <div className={shell.muted}>Since {formatJoined(member.startedAt)}</div> : null}
+      <span className={member.role === "member" ? shell.tagQuiet : shell.tag}>{ROLE_LABEL[member.role]}</span>
+      {member.startedAt ? <span className={shell.muted}>Since {formatJoined(member.startedAt)}</span> : null}
       {canWrite ? (
-        <>
-          <RoleSelect member={member} disabled={pending} onRole={onRole} />
-          <button
-            type="button"
-            className={shell.textButton}
-            disabled={pending}
-            aria-label={`Remove ${member.displayName} from house`}
-            onClick={onRemove}
-          >
-            Remove from house
-          </button>
-        </>
+        <Popover
+          onOpenChange={(open) => {
+            if (!open) setConfirming(false);
+          }}
+        >
+          <PopoverTrigger asChild>
+            <button type="button" className={shell.textButton} aria-label={`Edit ${member.displayName}`}>
+              Edit
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className={styles.menu} style={missioSkinVars()} align="end">
+            <p className={styles.menuTitle}>{member.displayName}</p>
+            <label className={shell.field}>
+              Role
+              <RoleSelect member={member} disabled={pending} onRole={onRole} />
+            </label>
+            {confirming ? (
+              <div className={styles.menuActions}>
+                <p className={styles.confirmCopy}>Remove {member.displayName} from this house?</p>
+                <button
+                  type="button"
+                  className={shell.primary}
+                  disabled={pending}
+                  aria-label={`Confirm remove ${member.displayName}`}
+                  onClick={onRemove}
+                >
+                  Remove
+                </button>
+                <button type="button" className={shell.ghost} onClick={() => setConfirming(false)}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className={styles.menuActions}>
+                <button
+                  type="button"
+                  className={shell.ghost}
+                  disabled={pending}
+                  aria-label={`Remove ${member.displayName} from house`}
+                  onClick={() => setConfirming(true)}
+                >
+                  Remove from house
+                </button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
       ) : null}
     </li>
   );

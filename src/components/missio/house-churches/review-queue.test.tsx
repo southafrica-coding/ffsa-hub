@@ -1,5 +1,5 @@
 /** @vitest-environment happy-dom */
-import type { ReactNode } from "react";
+import { act, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MissioApiError, type MissioClient } from "../api";
 import type { HouseChurchesClient } from "./client";
@@ -136,7 +136,8 @@ describe("review queue", () => {
       />
     );
     await settle();
-    const usePeter = [...host.querySelectorAll("button")].find((button) => button.textContent === "Use Peter Adler");
+    const usePeter = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Use Peter Adler"));
+    expect(usePeter?.textContent).toContain("In the people list");
     usePeter?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await settle();
     expect(bodies[0]).toEqual({ action: "link", contactId: "c-peter" });
@@ -164,6 +165,9 @@ describe("review queue", () => {
       />
     );
     await settle();
+    await act(async () => {
+      host.querySelector("[data-testid=create-toggle]")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
     setValue(host.querySelector("[aria-label='First name']") as HTMLInputElement, "Elise");
     setValue(host.querySelector("[aria-label='Last name']") as HTMLInputElement, "Navarro");
     setValue(host.querySelector("[aria-label='Email']") as HTMLInputElement, "elise@example.com");
@@ -224,6 +228,9 @@ describe("review queue", () => {
     expect(bodies[0]).toEqual({ action: "skip", notes: "A household, not one person" });
     expect(host.textContent).toContain("Jonah");
 
+    await act(async () => {
+      host.querySelector("[data-testid=create-toggle]")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
     setValue(host.querySelector("[aria-label='First name']") as HTMLInputElement, "Jonah");
     await settle();
     (host.querySelector("[data-testid=review-create]") as HTMLFormElement).requestSubmit();

@@ -1,17 +1,39 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CAMPUS_LABEL } from "../access";
 import content from "../content.module.css";
 import shell from "../shell.module.css";
 import { houseChurchesClient, type HouseChurchesClient } from "./client";
-import { houseTitle, meetingLine, nameList, peopleCount, sortHouses } from "./format";
+import { houseTitle, peopleCount, sortHouses } from "./format";
 import { useMissioLoad } from "./load";
+import { CampusTag, MeetingMeta, RoleBlock } from "./present";
 import { HouseStatus } from "./status";
 import styles from "./house-churches.module.css";
 
 export function HouseChurchGrid({ client = houseChurchesClient }: { client?: HouseChurchesClient }) {
   const { state, retry } = useMissioLoad(() => client.listHouses(), [client]);
+  const canWrite = state.phase === "ready" && state.data.canWrite;
+  const [reviewCount, setReviewCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!canWrite) {
+      setReviewCount(null);
+      return;
+    }
+    let active = true;
+    client.listReview().then(
+      (page) => {
+        if (active) setReviewCount(page.items.length);
+      },
+      () => {
+        if (active) setReviewCount(null);
+      }
+    );
+    return () => {
+      active = false;
+    };
+  }, [canWrite, client]);
 
   return (
     <div className={`${content.page} ${styles.root}`}>
@@ -39,17 +61,14 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
       {state.phase === "ready" && state.data.houses.length > 0 ? (
         <>
           {state.data.canWrite ? (
-            <p className={styles.line}>
-              <Link href="/missio/house-churches/review" className={styles.personLink}>
-                Review names
-              </Link>
-            </p>
+            <Link href="/missio/house-churches/review" className={`${shell.ghost} ${styles.reviewButton}`} data-testid="review-names">
+              {reviewCount != null && reviewCount > 0 ? `Review names (${reviewCount})` : "Review names"}
+            </Link>
           ) : null}
           <ul className={styles.grid} data-testid="house-grid">
             {sortHouses(state.data.houses).map((house) => {
               const title = houseTitle(house);
               const named = Boolean(house.name?.trim());
-              const meets = meetingLine(house);
               return (
                 <li key={house.id}>
                   <Link
@@ -63,12 +82,11 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
                     </div>
                     {named ? <p className={styles.number}>House {house.number}</p> : null}
                     <p className={styles.line}>
-                      <span className={shell.campus}>{CAMPUS_LABEL[house.campus]}</span>
-                      {house.campus === "potch" ? <span className={shell.campusMain}>Main</span> : null}
+                      <CampusTag campus={house.campus} />
                     </p>
-                    <p className={styles.line}>Leaders: {nameList(house.leaders)}</p>
-                    <p className={styles.line}>Co-leaders: {nameList(house.coLeaders)}</p>
-                    {meets ? <p className={styles.line}>{meets}</p> : null}
+                    <RoleBlock label="Leaders" people={house.leaders} />
+                    <RoleBlock label="Co-leaders" people={house.coLeaders} />
+                    <MeetingMeta day={house.meetingDay} place={house.location} />
                   </Link>
                 </li>
               );
