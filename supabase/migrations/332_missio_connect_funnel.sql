@@ -112,7 +112,10 @@ ALTER TABLE public.connect_responses
 
 ALTER TABLE public.connect_responses
   ADD CONSTRAINT connect_responses_unmatched_check
-  CHECK (match_status <> 'unmatched' OR matched_contact_id IS NULL);
+  CHECK (
+    match_status <> 'unmatched'
+    OR (matched_contact_id IS NULL AND suggested_contact_id IS NULL)
+  );
 
 COMMENT ON COLUMN public.connect_responses.match_status IS
   'unmatched: no contact, a new follow-up is created. pending_confirm: phone matched an existing contact (suggested_contact_id) and nothing was attached. confirmed: a pastor set matched_contact_id and the follow-up plus connect_card timeline row exist.';
@@ -963,7 +966,7 @@ BEGIN
 END;
 $fn$;
 
-REVOKE ALL ON FUNCTION public.missio_followup_lock(uuid, uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.missio_followup_lock(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
 
 -- BEFORE INSERT, every role including service role. Ignores a
 -- caller-supplied match_status and suggested_contact_id and writes
@@ -981,6 +984,20 @@ DECLARE
   v_suggested uuid;
 BEGIN
   IF TG_OP = 'UPDATE' THEN
+    -- Callers cannot move match_status or the suggestion. decline
+    -- and link set missio.connect_match_writer for their own writes.
+    -- Confirming a card only sets matched_contact_id; this trigger
+    -- then writes confirmed, below, after this check.
+    IF coalesce(pg_catalog.current_setting('missio.connect_match_writer', true), '')
+         IS DISTINCT FROM 'on'
+       AND (
+         NEW.match_status IS DISTINCT FROM OLD.match_status
+         OR NEW.suggested_contact_id IS DISTINCT FROM OLD.suggested_contact_id
+       )
+    THEN
+      RAISE EXCEPTION 'missio_match_locked'
+        USING ERRCODE = '23514';
+    END IF;
     IF NEW.matched_contact_id IS NOT NULL
        AND NEW.matched_contact_id IS DISTINCT FROM OLD.matched_contact_id
     THEN
@@ -1003,7 +1020,9 @@ BEGIN
   END IF;
 
   IF NEW.matched_contact_id IS NOT NULL THEN
-    IF NEW.source IS DISTINCT FROM 'manual' OR auth.uid() IS NULL THEN
+    IF NEW.source IS DISTINCT FROM 'manual'
+       OR NOT (SELECT public.has_org_role('missio', ARRAY['pastor']))
+    THEN
       RAISE EXCEPTION 'missio_match_requires_pastor'
         USING ERRCODE = '23514';
     END IF;
@@ -1074,7 +1093,7 @@ $$;
 REVOKE ALL ON FUNCTION public.assign_missio_connect_match() FROM PUBLIC, anon, authenticated;
 
 COMMENT ON FUNCTION public.assign_missio_connect_match() IS
-  'BEFORE INSERT, every role. Computes match_status and suggested_contact_id and ignores the caller. 23514 missio_match_requires_pastor when matched_contact_id is set and the row is not a signed-in manual card. 23503 missio_contact_not_in_org when suggested_contact_id is not Missio org_people. BEFORE UPDATE sets confirmed when the match is first set, and applies the same org check to suggested_contact_id.';
+  'BEFORE INSERT, every role. Computes match_status and suggested_contact_id and ignores the caller. 23514 missio_match_requires_pastor when matched_contact_id is set and the row is not a manual card from a Missio pastor. 23503 missio_contact_not_in_org when suggested_contact_id is not Missio org_people. BEFORE UPDATE sets confirmed when the match is first set. 23514 missio_match_locked when a caller changes match_status or suggested_contact_id. decline_missio_connect_match and link_missio_connect_match set missio.connect_match_writer for that write.';
 
 DROP TRIGGER IF EXISTS trg_connect_response_set_match ON public.connect_responses;
 CREATE TRIGGER trg_connect_response_set_match
@@ -1199,6 +1218,8 @@ BEGIN
 
   PERFORM public.missio_followup_lock(NEW.org_id, NEW.matched_contact_id, NULL);
 
+  PERFORM pg_catalog.set_config('missio.connect_match_writer', 'on', true);
+
   UPDATE public.connect_responses
      SET match_status = 'confirmed'
    WHERE id = NEW.id;
@@ -1305,6 +1326,9 @@ BEGIN
     INTO v_org, v_phone, v_status
   FROM public.connect_responses cr
   WHERE cr.id = card_id
+    AND cr.org_id = (
+      SELECT o.id FROM public.organisations o WHERE o.slug = 'missio'
+    )
   FOR UPDATE;
 
   IF v_org IS NULL THEN
@@ -1312,37 +1336,96 @@ BEGIN
       USING ERRCODE = 'P0002';
   END IF;
 
+  PERFORM public.missio_followup_lock(v_org, NULL, v_phone);
+
+  -- The lock waits out another decline of this phone. Re-read
+  -- after it, so a concurrent decline is visible.
+  SELECT cr.phone_e164, cr.match_status
+    INTO v_phone, v_status
+  FROM public.connect_responses cr
+  WHERE cr.id = card_id;
+
   IF v_status IS DISTINCT FROM 'pending_confirm' THEN
     RAISE EXCEPTION 'missio_decline_not_pending'
       USING ERRCODE = '23514';
   END IF;
 
-  PERFORM public.missio_followup_lock(v_org, NULL, v_phone);
+  PERFORM pg_catalog.set_config('missio.connect_match_writer', 'on', true);
 
   UPDATE public.connect_responses
      SET match_status = 'unmatched',
          suggested_contact_id = NULL
    WHERE id = card_id;
 
-  INSERT INTO public.missio_followups (
-    org_id, contact_id, connect_response_id, stage
-  ) VALUES (
-    v_org, NULL, card_id, 'new'
-  )
-  RETURNING id INTO v_followup;
+  SELECT f.id
+    INTO v_followup
+  FROM public.missio_followups f
+  WHERE f.org_id = v_org
+    AND f.connect_response_id = card_id
+  ORDER BY f.created_at, f.id
+  LIMIT 1;
 
-  INSERT INTO public.missio_followup_stage_history (
-    followup_id, kind, connect_response_id, changed_by
-  ) VALUES (
-    v_followup, 'connect_card', card_id, auth.uid()
-  );
+  IF v_followup IS NULL AND v_phone IS NOT NULL THEN
+    SELECT f.id
+      INTO v_followup
+    FROM public.missio_followups f
+    WHERE f.org_id = v_org
+      AND f.contact_id IS NULL
+      AND f.stage <> 'joined'
+      AND EXISTS (
+        SELECT 1
+        FROM public.connect_responses cr
+        WHERE cr.org_id = v_org
+          AND cr.phone_e164 = v_phone
+          AND (
+            cr.id = f.connect_response_id
+            OR EXISTS (
+              SELECT 1
+              FROM public.missio_followup_stage_history h
+              WHERE h.followup_id = f.id
+                AND h.kind = 'connect_card'
+                AND h.connect_response_id = cr.id
+            )
+          )
+      )
+    ORDER BY f.created_at, f.id
+    LIMIT 1;
+  END IF;
+
+  IF v_followup IS NULL THEN
+    INSERT INTO public.missio_followups (
+      org_id, contact_id, connect_response_id, stage
+    ) VALUES (
+      v_org, NULL, card_id, 'new'
+    )
+    RETURNING id INTO v_followup;
+  ELSE
+    UPDATE public.missio_followups
+       SET connect_response_id = card_id
+     WHERE id = v_followup
+       AND connect_response_id IS NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.missio_followup_stage_history h
+    WHERE h.followup_id = v_followup
+      AND h.kind = 'connect_card'
+      AND h.connect_response_id = card_id
+  ) THEN
+    INSERT INTO public.missio_followup_stage_history (
+      followup_id, kind, connect_response_id, changed_by
+    ) VALUES (
+      v_followup, 'connect_card', card_id, auth.uid()
+    );
+  END IF;
 END;
 $$;
 
 REVOKE ALL ON FUNCTION public.decline_missio_connect_match(uuid) FROM PUBLIC, anon;
 
 COMMENT ON FUNCTION public.decline_missio_connect_match(uuid) IS
-  'Pastor only. Turns a pending_confirm card into unmatched, clears suggested_contact_id, and creates that newcomer''s own stage-new follow-up plus a connect_card timeline row. Takes the missio_followup lock on the card phone. changed_by is auth.uid(). 42501 missio_pastor_required when the caller is not a Missio pastor. 23514 missio_decline_not_pending when the card is not pending. P0002 missio_card_not_found when the card does not exist.';
+  'Pastor only, Missio org only. Turns a pending_confirm card into unmatched, clears suggested_contact_id, and attaches a connect_card timeline row. Reuses the follow-up already tied to this card, else an open contact-less follow-up for the same phone, and inserts one only when neither exists. Takes the missio_followup lock on the card phone. Sets missio.connect_match_writer for the status write. changed_by is auth.uid(). 42501 missio_pastor_required when the caller is not a Missio pastor. 23514 missio_decline_not_pending when the card is not pending. P0002 missio_card_not_found when the card is missing or not in the Missio org.';
 
 COMMENT ON FUNCTION public.link_missio_connect_match() IS
   'AFTER UPDATE of matched_contact_id. Takes the missio_followup lock, marks the card confirmed, and creates or attaches the follow-up plus the connect_card timeline row. A card that already has an empty follow-up gets the contact when no other open follow-up has it. A clash writes a note on both and leaves them unmerged. changed_by is auth.uid() when that is set.';
@@ -1665,6 +1748,15 @@ CREATE POLICY "Pastors can insert followups"
         SELECT 1 FROM public.org_people op
         WHERE op.org_id = missio_followups.org_id
           AND op.contact_id = missio_followups.assigned_leader_contact_id
+      )
+    )
+    AND (
+      connect_response_id IS NULL
+      OR NOT EXISTS (
+        SELECT 1
+        FROM public.connect_responses cr
+        WHERE cr.id = missio_followups.connect_response_id
+          AND cr.match_status = 'pending_confirm'
       )
     )
   );
