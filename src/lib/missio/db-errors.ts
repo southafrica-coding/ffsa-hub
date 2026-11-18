@@ -1,9 +1,30 @@
-import type { MissioErrorCode } from "@/lib/missio/types";
-
 /**
- * One mapper for Postgres errors raised by migration 331.
- * The response is a fixed message. message, details, and hint never leave this function.
+ * House-church error contract for Hub UI.
+ * The response uses one of these codes and a fixed message.
+ * Database message, details, and hint never leave this file.
  */
+export const HOUSE_CHURCH_ERROR_CODES = [
+  "invalid_input",
+  "not_missio_person",
+  "not_found",
+  "already_member",
+  "already_resolved",
+  "membership_not_current",
+  "ended_at_in_future",
+  "unauthenticated",
+  "forbidden",
+  "rate_limited",
+  "server_error",
+] as const;
+
+export type HouseChurchErrorCode = (typeof HOUSE_CHURCH_ERROR_CODES)[number];
+
+const CODE_SET: ReadonlySet<string> = new Set(HOUSE_CHURCH_ERROR_CODES);
+
+export function isHouseChurchErrorCode(code: string): code is HouseChurchErrorCode {
+  return CODE_SET.has(code);
+}
+
 export type DbErrorLike = {
   code?: string;
   message?: string;
@@ -13,7 +34,7 @@ export type DbErrorLike = {
 
 export type MappedDbError = {
   status: 400 | 409 | 500;
-  code: MissioErrorCode;
+  code: HouseChurchErrorCode;
   error: string;
 };
 
@@ -44,14 +65,29 @@ export function mapMissioDbError(error: DbErrorLike): MappedDbError {
   return SERVER;
 }
 
-/** Zod and other input failures. Field paths only, plus this message. Never the submitted value. */
-export function invalidInput(fieldPaths: string[] = []): { status: 400; code: "invalid_input"; error: string; fields?: string[] } {
-  const body: { status: 400; code: "invalid_input"; error: string; fields?: string[] } = {
+const FIELD_MESSAGE = "Check this field and try again.";
+
+/** invalid_input. fieldErrors maps a field path to our message. Never the submitted value or Zod text. */
+export function invalidInput(fieldErrors: Record<string, string> = {}): {
+  status: 400;
+  code: "invalid_input";
+  error: string;
+  fieldErrors: Record<string, string>;
+} {
+  const cleaned: Record<string, string> = {};
+  for (const [path, message] of Object.entries(fieldErrors)) {
+    const key = path.trim();
+    if (!key) continue;
+    cleaned[key] = message.trim() || FIELD_MESSAGE;
+  }
+  return {
     status: 400,
     code: "invalid_input",
     error: "Check the fields and try again.",
+    fieldErrors: cleaned,
   };
-  const fields = [...new Set(fieldPaths.map((path) => path.trim()).filter(Boolean))];
-  if (fields.length > 0) body.fields = fields;
-  return body;
+}
+
+export function fieldError(path: string): Record<string, string> {
+  return { [path]: FIELD_MESSAGE };
 }

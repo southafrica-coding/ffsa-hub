@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MISSIO_PEOPLE_ROLES, MISSIO_SLUG, requireOrgRole, type OrgAccess } from "@/lib/missio/access";
-import { invalidInput, mapMissioDbError } from "@/lib/missio/db-errors";
+import {
+  fieldError,
+  invalidInput,
+  isHouseChurchErrorCode,
+  mapMissioDbError,
+  type HouseChurchErrorCode,
+} from "@/lib/missio/db-errors";
 import { membershipBlocksInsert, membershipIsCurrent, membershipIsOpen } from "@/lib/missio/house-church-import";
 import { createPerson } from "@/lib/missio/people";
 import type {
@@ -16,7 +22,6 @@ import type {
   ImportReviewListResponse,
   ImportReviewStatus,
   MissioCampus,
-  MissioErrorCode,
   PersonRef,
   ResolveImportReviewResponse,
 } from "@/lib/missio/types";
@@ -61,7 +66,13 @@ const ROLE_ORDER: Record<HouseChurchRole, number> = { leader: 0, co_leader: 1, m
 
 export type HouseScope = { mode: "all" } | { mode: "houses"; ids: readonly string[] };
 
-type Fail = { ok: false; status: number; error: string; code: MissioErrorCode; fields?: string[] };
+type Fail = {
+  ok: false;
+  status: number;
+  error: string;
+  code: HouseChurchErrorCode;
+  fieldErrors?: Record<string, string>;
+};
 
 type HouseRow = {
   id: string;
@@ -108,20 +119,45 @@ type ContactNameRow = {
   preferred_name?: string | null;
 };
 
-function fail(status: number, code: MissioErrorCode, error: string): Fail {
-  return { ok: false, status, code, error };
+function fail(status: number, code: HouseChurchErrorCode, error: string, fieldErrors?: Record<string, string>): Fail {
+  return fieldErrors ? { ok: false, status, code, error, fieldErrors } : { ok: false, status, code, error };
 }
 
-/** Response body for a failed call. Field paths are ours; database and Zod text are not. */
-export function publicError(result: Fail): { error: string; code: MissioErrorCode; fields?: string[] } {
-  const body: { error: string; code: MissioErrorCode; fields?: string[] } = { error: result.error, code: result.code };
-  if (result.fields && result.fields.length > 0) body.fields = result.fields;
+/** Response body for a failed call. fieldErrors is paths plus our messages. */
+export function publicError(result: Fail): {
+  error: string;
+  code: HouseChurchErrorCode;
+  fieldErrors?: Record<string, string>;
+} {
+  const body: { error: string; code: HouseChurchErrorCode; fieldErrors?: Record<string, string> } = {
+    error: result.error,
+    code: result.code,
+  };
+  if (result.code === "invalid_input") body.fieldErrors = result.fieldErrors ?? {};
   return body;
 }
 
 function zodFail(error: z.ZodError): Fail {
-  const mapped = invalidInput(error.issues.map((issue) => issue.path.map(String).join(".")).filter(Boolean));
-  return { ok: false, status: mapped.status, code: mapped.code, error: mapped.error, fields: mapped.fields };
+  const fieldErrors: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const path = issue.path.map(String).join(".");
+    if (!path || fieldErrors[path]) continue;
+    Object.assign(fieldErrors, fieldError(path));
+  }
+  const mapped = invalidInput(fieldErrors);
+  return fail(mapped.status, mapped.code, mapped.error, mapped.fieldErrors);
+}
+
+/** People-module codes that are not in the house-church contract become one of the pinned codes. */
+function fromPersonError(status: number, code: string | undefined): Fail {
+  if (code === "exists_use_search") return fail(400, "not_missio_person", "This person is not in Missio.");
+  if (code && isHouseChurchErrorCode(code)) {
+    if (code === "invalid_input") return fail(400, "invalid_input", "Check the fields and try again.", {});
+    if (code === "server_error") return fail(500, "server_error", "Something went wrong.");
+    if (code === "not_found") return fail(404, "not_found", "Review item not found.");
+    return fail(status, code, "Something went wrong.");
+  }
+  return fail(500, "server_error", "Something went wrong.");
 }
 
 function isFail(value: Map<string, PersonRef> | Fail): value is Fail {
@@ -309,6 +345,10 @@ async function requireMissioPerson(
 
 /** Postgres errors go through mapMissioDbError. The database text stays out of the body. */
 function dbWriteError(error: { code?: string; message?: string; details?: string; hint?: string }, label: string): Fail {
+  if (label === "membership write" && error.code === "23505") {
+    console.error("[missio] membership write failed", error.code);
+    return fail(409, "already_member", "This person is already in this house.");
+  }
   const mapped = mapMissioDbError(error);
   console.error(`[missio] ${label} failed`, error.code ?? "write failed");
   return fail(mapped.status, mapped.code, mapped.error);
@@ -495,6 +535,14 @@ function currentMembers(rows: MemberRow[], inMissio: ReadonlySet<string>, today 
 /** The open row (ended_at IS NULL). A second open row is what the unique index rejects. */
 function blockingMember(rows: MemberRow[]): MemberRow | null {
   return rows.find((row) => membershipBlocksInsert(asMembership(row))) ?? null;
+}
+
+/** PATCH and DELETE on a row that has already ended. No row at all stays not_found. */
+function closedMembership(rows: MemberRow[]): Fail {
+  if (rows.some((row) => row.ended_at)) {
+    return fail(409, "membership_not_current", "This membership has already ended.");
+  }
+  return fail(404, "not_found", "Member not found.");
 }
 
 async function memberRowsFor(
@@ -710,7 +758,7 @@ export async function changeMemberRole(
   const existing = await memberRowsFor(auth, house.house.id, contactId);
   if (!existing.ok) return existing;
   const target = blockingMember(existing.rows);
-  if (!target) return fail(404, "not_found", "Member not found.");
+  if (!target) return closedMembership(existing.rows);
 
   const updated = await auth.supabase
     .from("house_church_members")
@@ -758,15 +806,13 @@ export async function endMember(
   const existing = await memberRowsFor(auth, house.house.id, contactId);
   if (!existing.ok) return existing;
   const target = blockingMember(existing.rows);
-  if (!target) return fail(404, "not_found", "Member not found.");
+  if (!target) return closedMembership(existing.rows);
 
   const started = (target.started_at ?? todayIsoDate()).slice(0, 10);
   if (started > todayIsoDate()) {
     // It never began. Setting ended_at to that future date raises 23514
-    // missio_ended_at_in_future. Authenticated DELETE was revoked in
-    // 53acd953; the service role still can, and guard_house_church_member
-    // does not run on DELETE. A new insert with started_at after today
-    // raises 23514 missio_started_at_in_future and is a server_error.
+    // missio_ended_at_in_future. At 571555e9 migration 331 allows DELETE,
+    // and guard_house_church_member does not run on DELETE.
     const admin = adminClient();
     if ("error" in admin) return fail(500, "server_error", admin.error);
     const removed = await admin.client
@@ -816,6 +862,8 @@ function toReviewItem(row: ReviewRow, house: HouseRow | null, candidates: Person
     status,
     sourceLine: Number(row.source_line),
     rawName: row.raw_name,
+    kind: blankToNull(row.kind),
+    note: blankToNull(row.notes),
     matchType: blankToNull(row.match_type),
     houseNumber: Number(row.house_number),
     house: house ? { id: house.id, number: Number(house.number), name: blankToNull(house.name) } : null,
@@ -1062,7 +1110,7 @@ export async function resolveImportReview(
   });
   if (!created.ok) {
     await releaseReview(auth, itemId);
-    return fail(created.status, (created.code ?? "server_error") as MissioErrorCode, created.error);
+    return fromPersonError(created.status, created.code);
   }
   const person = await requireMissioPerson(auth, created.body.person.contactId);
   if (!person.ok) {

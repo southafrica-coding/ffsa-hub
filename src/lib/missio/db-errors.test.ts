@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { invalidInput, mapMissioDbError } from "@/lib/missio/db-errors";
+import { HOUSE_CHURCH_ERROR_CODES, invalidInput, mapMissioDbError, type HouseChurchErrorCode } from "@/lib/missio/db-errors";
 
 const SECRET = "relation secret_table detail hint Ada Lovelace note";
 
@@ -71,29 +71,55 @@ describe("mapMissioDbError", () => {
     expect(
       mapMissioDbError({ code: "23503", message: SECRET, details: "foreign key", hint: "contacts" }).code
     ).toBe("server_error");
-    expect(mapMissioDbError({ code: "23514", message: "ended_at_check", details: SECRET }).code).toBe("server_error");
-    const started = mapMissioDbError({
+    const unmapped = mapMissioDbError({
       code: "23514",
-      message: "missio_started_at_in_future",
+      message: "ended_at_check",
       details: SECRET,
       hint: "started_at > current_date",
     });
-    expect(started).toEqual({ status: 500, code: "server_error", error: "Something went wrong." });
-    expect(JSON.stringify(started)).not.toContain("missio_started_at_in_future");
-    expect(JSON.stringify(started)).not.toContain(SECRET);
+    expect(unmapped).toEqual({ status: 500, code: "server_error", error: "Something went wrong." });
+    expect(JSON.stringify(unmapped)).not.toContain("ended_at_check");
+    expect(JSON.stringify(unmapped)).not.toContain(SECRET);
+    expect(JSON.stringify(unmapped)).not.toContain("current_date");
+  });
+});
+
+describe("HOUSE_CHURCH_ERROR_CODES", () => {
+  it("pins the Hub UI list", () => {
+    expect([...HOUSE_CHURCH_ERROR_CODES]).toEqual([
+      "invalid_input",
+      "not_missio_person",
+      "not_found",
+      "already_member",
+      "already_resolved",
+      "membership_not_current",
+      "ended_at_in_future",
+      "unauthenticated",
+      "forbidden",
+      "rate_limited",
+      "server_error",
+    ]);
+    const sample: HouseChurchErrorCode = "membership_not_current";
+    expect(HOUSE_CHURCH_ERROR_CODES).toContain(sample);
   });
 });
 
 describe("invalidInput", () => {
-  it("returns our message and field paths, not the submitted value", () => {
-    const body = invalidInput(["contactId", "role"]);
+  it("returns our message and fieldErrors, not the submitted value", () => {
+    const body = invalidInput({
+      contactId: "Check this field and try again.",
+      role: "Check this field and try again.",
+    });
     expect(body).toEqual({
       status: 400,
       code: "invalid_input",
       error: "Check the fields and try again.",
-      fields: ["contactId", "role"],
+      fieldErrors: {
+        contactId: "Check this field and try again.",
+        role: "Check this field and try again.",
+      },
     });
     expect(JSON.stringify(body)).not.toContain("Ada Lovelace");
-    expect(invalidInput().fields).toBeUndefined();
+    expect(invalidInput().fieldErrors).toEqual({});
   });
 });
