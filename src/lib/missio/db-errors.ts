@@ -94,9 +94,10 @@ export function mapMissioDbError(error: DbErrorLike): MappedDbError {
 }
 
 /**
- * DELETE's mapper. Until the follow-up trigger, ending someone who is no
- * longer in org_people raises 23503 missio_member_not_in_org. That is
- * member_left_missio here. Every other database error uses mapMissioDbError.
+ * Defensive fallback. At c587e497, ending a membership does not re-check
+ * org_people, so DELETE does not raise missio_member_not_in_org. If that
+ * exception still arrives, the response is member_left_missio and the
+ * database text stays out. Every other error uses mapMissioDbError.
  */
 export function mapMembershipEndError(error: DbErrorLike): MappedDbError {
   const message = error.message ?? "";

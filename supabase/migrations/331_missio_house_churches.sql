@@ -145,18 +145,26 @@ BEGIN
       USING ERRCODE = '23514';
   END IF;
 
-  SELECT hc.org_id INTO v_org
-  FROM public.house_churches hc
-  WHERE hc.id = NEW.house_church_id;
+  -- Re-check org_people only when the person or the house changes.
+  -- Ending a membership, or changing its role, still works after the
+  -- org_people row has been removed.
+  IF TG_OP = 'INSERT'
+     OR NEW.contact_id IS DISTINCT FROM OLD.contact_id
+     OR NEW.house_church_id IS DISTINCT FROM OLD.house_church_id
+  THEN
+    SELECT hc.org_id INTO v_org
+    FROM public.house_churches hc
+    WHERE hc.id = NEW.house_church_id;
 
-  IF v_org IS NULL OR NOT EXISTS (
-    SELECT 1
-    FROM public.org_people op
-    WHERE op.org_id = v_org
-      AND op.contact_id = NEW.contact_id
-  ) THEN
-    RAISE EXCEPTION 'missio_member_not_in_org'
-      USING ERRCODE = '23503';
+    IF v_org IS NULL OR NOT EXISTS (
+      SELECT 1
+      FROM public.org_people op
+      WHERE op.org_id = v_org
+        AND op.contact_id = NEW.contact_id
+    ) THEN
+      RAISE EXCEPTION 'missio_member_not_in_org'
+        USING ERRCODE = '23503';
+    END IF;
   END IF;
 
   IF auth.uid() IS NOT NULL THEN
@@ -170,7 +178,7 @@ $$;
 REVOKE ALL ON FUNCTION public.guard_house_church_member() FROM PUBLIC, anon, authenticated;
 
 COMMENT ON FUNCTION public.guard_house_church_member() IS
-  'BEFORE INSERT OR UPDATE, every role. 23503 missio_member_not_in_org when the contact is not in org_people for the house org. 23514 missio_started_at_in_future when started_at is after today. 23514 missio_ended_at_in_future when ended_at is after today. Pins created_by to auth.uid() when that is set; a null auth.uid() (service role) keeps the supplied value. Does not run on DELETE.';
+  'BEFORE INSERT OR UPDATE, every role. 23503 missio_member_not_in_org when an insert, or an update that changes contact_id or house_church_id, has no org_people row for the house org. Ending a membership or changing its role does not re-check org_people. 23514 missio_started_at_in_future when started_at is after today. 23514 missio_ended_at_in_future when ended_at is after today. Pins created_by to auth.uid() when that is set; a null auth.uid() keeps the supplied value. Does not run on DELETE.';
 
 DROP TRIGGER IF EXISTS trg_house_church_member_end_not_future ON public.house_church_members;
 DROP TRIGGER IF EXISTS trg_house_church_member_pin_created_by ON public.house_church_members;
@@ -491,12 +499,6 @@ CREATE POLICY "Pastors can update house church members"
       FROM public.house_churches hc
       WHERE hc.id = house_church_id
         AND hc.org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
-        AND EXISTS (
-          SELECT 1
-          FROM public.org_people op
-          WHERE op.org_id = hc.org_id
-            AND op.contact_id = house_church_members.contact_id
-        )
     )
   );
 

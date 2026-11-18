@@ -319,21 +319,6 @@ const state = vi.hoisted(() => {
     }
     const hits = state.tables[table].filter((row) => matches(row, op));
     const payload = (op.payload ?? {}) as Row;
-    if (table === "house_church_members" && payload.ended_at != null) {
-      const inOrg = new Set(state.tables.org_people.map((person) => person.contact_id));
-      if (hits.some((row) => !inOrg.has(row.contact_id))) {
-        return {
-          data: null,
-          error: {
-            code: "23503",
-            message: "missio_member_not_in_org",
-            details: "sheet line with Grace Hopper",
-            hint: "org_people missing",
-          },
-          count: null,
-        };
-      }
-    }
     for (const row of hits) {
       Object.assign(row, payload, { updated_at: "2026-04-02T00:00:00.000Z" });
       if (
@@ -982,24 +967,19 @@ describe("membership writes", () => {
     expect(state.tables.house_church_members).toEqual([]);
   });
 
-  it("maps ending someone who left Missio to member_left_missio and writes nothing", async () => {
+  it("soft-ends a membership after the person has left Missio", async () => {
     addHouse({ id: HOUSE_1, number: 3 });
     addContact({ id: ADA, first: "Ada", last: "Lovelace", inOrg: false });
     addMember({ id: "member-ada", houseId: HOUSE_1, contactId: ADA, role: "member", startedAt: "2026-01-01" });
     const orgBefore = JSON.stringify(state.tables.org_people);
     const res = await remove(HOUSE_1, ADA);
-    expect(res.status).toBe(409);
-    const body = await res.json();
-    expect(body).toEqual({
-      error: "This person is no longer in Missio; membership can't be changed here.",
-      code: "member_left_missio",
-    });
-    const text = JSON.stringify(body);
-    expect(text).not.toContain("missio_member_not_in_org");
-    expect(text).not.toContain("Grace Hopper");
-    expect(text).not.toContain("org_people");
-    expect(state.tables.house_church_members[0].ended_at).toBeNull();
-    expect(state.writes.some((write) => write.table === "house_church_members")).toBe(false);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(state.tables.house_church_members[0].ended_at).toBe(todayIsoDate());
+    expect(state.writes.some((write) => write.table === "house_church_members" && write.op === "delete")).toBe(false);
+    expect(state.writes.find((write) => write.table === "house_church_members" && write.op === "update")?.client).toBe(
+      "user"
+    );
     expect(JSON.stringify(state.tables.org_people)).toBe(orgBefore);
   });
 
