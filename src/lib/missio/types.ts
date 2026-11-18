@@ -91,6 +91,8 @@ export type UpdateMissioPersonInput = {
 export type MissioErrorCode =
   | "exists_use_search"
   | "already_in_org"
+  | "already_member"
+  | "already_resolved"
   | "invalid_token"
   | "invalid_input"
   | "rate_limited"
@@ -99,3 +101,78 @@ export type MissioErrorCode =
   | "not_found"
   | "server_error"
   | "method_not_allowed";
+
+export type HouseChurchRole = "leader" | "co_leader" | "member";
+
+/**
+ * A contact as a house-church screen may show them.
+ * displayName is the preferred name when there is one, otherwise the first name, plus the last name.
+ * orgPersonId is set only when this contact has an org_people row in Missio.
+ * House membership is not a status on that row: a member is someone with an active house_church_members row.
+ */
+export type PersonRef = {
+  contactId: string;
+  displayName: string;
+  firstName: string | null;
+  lastName: string | null;
+  orgPersonId?: string;
+};
+
+export type HouseChurchMemberView = PersonRef & {
+  role: HouseChurchRole;
+  startedAt: string;
+};
+
+export type HouseChurchSummary = {
+  id: string;
+  number: number;
+  name: string | null;
+  campus: MissioCampus;
+  meetingDay: string | null;
+  location: string | null;
+  memberCount: number;
+  leaders: PersonRef[];
+  coLeaders: PersonRef[];
+};
+
+export type HouseChurchDetail = HouseChurchSummary & {
+  leaderNotes: string | null;
+  members: HouseChurchMemberView[];
+};
+
+export type HouseChurchListResponse = {
+  houses: HouseChurchSummary[];
+  canWrite: true;
+};
+
+export type HouseChurchDetailResponse = {
+  house: HouseChurchDetail;
+  canWrite: true;
+};
+
+export type ImportReviewStatus = "pending" | "matched" | "new" | "skipped";
+
+export type ImportReviewItem = {
+  id: string;
+  status: ImportReviewStatus;
+  sourceLine: number;
+  rawName: string;
+  kind: string | null;
+  matchType: string | null;
+  houseNumber: number;
+  house: { id: string; number: number; name: string | null } | null;
+  role: HouseChurchRole;
+  candidates: PersonRef[];
+  notes: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+};
+
+export type ImportReviewListResponse = {
+  items: ImportReviewItem[];
+};
+
+export type ResolveImportReviewResponse = {
+  item: ImportReviewItem;
+  member?: HouseChurchMemberView;
+};

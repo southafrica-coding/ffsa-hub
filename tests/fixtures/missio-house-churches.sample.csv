@@ -1,0 +1,9 @@
+source_line,house,role,raw_name,first,last,people_count_on_row,kind,note,part_index,parts_in_row
+1,1,Leader 1,Ada Lovelace,Ada,Lovelace,1,person,,1,1
+2,1,Leader 2,Grace Hopper,Grace,Hopper,1,person,,1,1
+3,1,Member,Alan Turing,Alan,Turing,1,person,,1,1
+4,2,Member,The Turing Family,"The Turing Family",,3,family_label,"label for a household",1,1
+5,2,Member,Alan,Alan,,1,first_only,,1,1
+6,2,Member,Grace Hopper,Grace,Hopper,2,couple_split,split from a couple,1,2
+7,2,Member,Alan Turing,Alan,Turing,2,couple_split,split from a couple,2,2
+8,1,Member,Jose Obrien,José,O'Brien,1,person,,1,1

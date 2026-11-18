@@ -5,7 +5,7 @@ import { getRateLimiter, retryAfterSeconds } from "@/lib/rate-limit";
 // a person, and the other way around. About 20 a minute per user.
 export async function missioRateLimit(
   userId: string,
-  bucket: "contact-search" | "person-create"
+  bucket: "contact-search" | "person-create" | "house-church-write"
 ): Promise<NextResponse | null> {
   const limit = await getRateLimiter().hit(`missio:${bucket}:${userId}`, {
     limit: 20,
