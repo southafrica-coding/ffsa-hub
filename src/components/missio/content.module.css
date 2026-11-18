@@ -2,7 +2,7 @@
    stay in shell.module.css so the mobile shell can change on its own. */
 
 .page {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
   color: var(--ink, #1c1b17);
 }
@@ -37,7 +37,7 @@
 }
 
 .page .eyebrow {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
 }
@@ -52,7 +52,7 @@
 }
 
 .page .lede {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
   margin: 12px 0 0;
   max-width: 40rem;
@@ -118,7 +118,7 @@
 }
 
 .page .cardBody {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
   margin-top: 8px;
 }
@@ -150,7 +150,7 @@
 }
 
 .page .table th {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1.5;
@@ -158,6 +158,6 @@
 }
 
 .page .table td {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
 }

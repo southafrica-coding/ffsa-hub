@@ -3,7 +3,7 @@
   max-width: 100%;
   min-width: 0;
   font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
   color: var(--ink, #1c1b17);
 }
@@ -11,7 +11,7 @@
 .root h2 {
   font-family: var(--font-missio-display), Fraunces, Georgia, serif;
   font-weight: 560;
-  font-size: 19px;
+  font-size: 22px;
   line-height: 1.25;
   letter-spacing: -0.4px;
   text-transform: none;
@@ -24,7 +24,7 @@
 .root button:focus-visible {
   font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
   font-weight: 600 !important;
-  font-size: 14px !important;
+  font-size: 15px !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
   border-radius: 6px !important;
@@ -44,7 +44,7 @@
   background: #fff !important;
   color: var(--ink, #1c1b17) !important;
   font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
-  font-size: 14px !important;
+  font-size: 15px !important;
   font-weight: 400 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
@@ -114,7 +114,7 @@
 
 .root label {
   font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
-  font-size: 13px !important;
+  font-size: 14px !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
@@ -125,7 +125,7 @@
   display: grid;
   gap: 8px;
   min-width: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--sub, #5b574d);
 }
 
@@ -187,7 +187,7 @@
 .meta {
   margin: 0;
   color: var(--sub, #5b574d);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .legend {
@@ -197,7 +197,7 @@
   margin: 12px 0 0;
   padding: 0;
   list-style: none;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .legend i {
@@ -238,7 +238,7 @@
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid var(--rule, #ddd7c8);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   background: var(--panel, #fbf9f4);
 }
@@ -288,7 +288,7 @@
 
 .linkBox {
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .error {

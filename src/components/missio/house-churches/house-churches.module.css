@@ -7,7 +7,7 @@
 
 .root label {
   font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
@@ -20,7 +20,7 @@
 .root button:focus-visible {
   font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
   font-weight: 600 !important;
-  font-size: 14px !important;
+  font-size: 15px !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
   border-radius: 6px !important;
@@ -34,7 +34,7 @@
   max-width: 100%;
   min-width: 0 !important;
   font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
-  font-size: 14px !important;
+  font-size: 15px !important;
   font-weight: 400 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
@@ -237,7 +237,7 @@
 }
 
 .roleLabel {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
   color: var(--quiet, #6e685b);
@@ -269,7 +269,7 @@
 
 .root .doneTitle {
   margin: 40px 0 0;
-  font-size: 19px;
+  font-size: 22px;
   font-weight: 560;
   line-height: 1.25;
   letter-spacing: -0.4px;
@@ -330,7 +330,7 @@
 
 .choiceMeta {
   font-weight: 400;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.4;
   color: var(--quiet, #6e685b);
 }
@@ -411,7 +411,7 @@
 }
 
 .menu label {
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-weight: 600 !important;
   color: var(--sub, #5b574d) !important;
 }
@@ -420,7 +420,7 @@
 .menu button:hover,
 .menu button:focus,
 .menu button:focus-visible {
-  font-size: 14px !important;
+  font-size: 15px !important;
   font-weight: 600 !important;
   border-radius: 6px !important;
 }
@@ -430,7 +430,7 @@
   width: 100%;
   margin-top: 8px;
   font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
-  font-size: 14px !important;
+  font-size: 15px !important;
   font-weight: 400 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
