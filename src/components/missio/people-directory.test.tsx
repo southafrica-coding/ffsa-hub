@@ -104,6 +104,8 @@ describe("people directory", () => {
     });
     expect(host.textContent).toContain("Mina Osei");
     expect(host.textContent).toContain("Missio JHB");
+    expect(host.textContent).toContain("Mark someone inactive to close the record.");
+    expect(host.textContent).not.toContain("Potch is the main church");
     expect(host.textContent).toContain("—");
     expect(host.textContent).not.toMatch(/Delete/);
     const campusSelect = host.querySelector("[aria-label=Campus]") as HTMLSelectElement;

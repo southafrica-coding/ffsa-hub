@@ -64,6 +64,13 @@
   align-items: stretch;
 }
 
+.solo {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  margin-top: 24px;
+}
+
 .page .grid + .grid {
   margin-top: 16px;
 }

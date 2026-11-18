@@ -75,9 +75,7 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
         <div>
           <p className={`${styles.eyebrow} ${content.eyebrow}`}>Missio people</p>
           <h1 className={content.title}>People</h1>
-          <p className={`${styles.lede} ${content.lede}`}>
-            Potch is the main church. Johannesburg is Missio JHB. Mark someone inactive to close the record.
-          </p>
+          <p className={`${styles.lede} ${content.lede}`}>Mark someone inactive to close the record.</p>
         </div>
         <button type="button" className={styles.primary} onClick={() => setAdding(true)}>
           Add person
