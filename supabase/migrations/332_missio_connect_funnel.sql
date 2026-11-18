@@ -97,21 +97,323 @@ COMMENT ON COLUMN public.connect_responses.phone_e164 IS
   'E.164 form of phone. South Africa is the default country. Null when the number cannot be parsed. Set by trigger, not by the caller.';
 
 -- Migration 068 does not expose a normalizer. It stores
--- contact_phones.phone_normalized, filled by the application with
--- libphonenumber-js, and checks the shape ^\+[1-9][0-9]{6,14}$.
--- The steps below are src/lib/phone.ts normalizePhoneE164, default
--- region ZA. Postgres has no libphonenumber, so a candidate is
--- accepted when it matches that 068 shape and a length that
--- function treats as a real number: a ZA national number of 9
--- digits, a NANP number of 10 digits, or any other already-typed
--- E.164 that is not a broken ZA number. Private: revoked from
--- anon and authenticated. The trigger below is the caller.
+-- contact_phones.phone_normalized, filled by src/lib/phone.ts
+-- normalizePhoneE164 (default region ZA) via libphonenumber-js.
+-- This copies that control flow: try the text as typed, then a
+-- leading +, then a country code glued to a trunk 0, then the
+-- digits with leading zeros stripped as a ZA local number.
+-- A candidate is kept only when libphonenumber would call it
+-- valid: a known calling code, a national length that code
+-- allows, and for South Africa the national pattern. An extension
+-- (ext, extension, x, #) is dropped first. A leading 00 is the
+-- ZA international prefix. Unknown codes such as +999 are null.
+-- Private: revoked from anon and authenticated.
+CREATE OR REPLACE FUNCTION public.missio_phone_e164_try(input text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path = ''
+AS $fn$
+DECLARE
+  compact text;
+  digits text;
+  cc text;
+  national text;
+  stripped text;
+  lens int[];
+BEGIN
+  IF input IS NULL OR btrim(input) = '' THEN
+    RETURN NULL;
+  END IF;
+  compact := btrim(input);
+  compact := regexp_replace(
+    compact,
+    '[[:space:]]*(ext(ension)?\.?|x|#)[[:space:]]*[0-9]+[[:space:]]*$',
+    '',
+    'i'
+  );
+  IF left(compact, 1) = '+' THEN
+    compact := '+' || regexp_replace(substr(compact, 2), '[^0-9]', '', 'g');
+  ELSE
+    compact := regexp_replace(compact, '[^0-9]', '', 'g');
+  END IF;
+  IF compact = '' OR compact = '+' THEN
+    RETURN NULL;
+  END IF;
+  IF left(compact, 2) = '00' THEN
+    compact := '+' || substr(compact, 3);
+    WHILE left(compact, 2) = '+0' LOOP
+      compact := '+' || substr(compact, 3);
+    END LOOP;
+  END IF;
+
+  IF left(compact, 1) = '+' THEN
+    digits := substr(compact, 2);
+    IF digits !~ '^[1-9][0-9]{6,14}$' THEN
+      RETURN NULL;
+    END IF;
+    SELECT v.code, v.lens INTO cc, lens
+    FROM (
+      VALUES
+      ('211', ARRAY[9]::int[]),
+      ('212', ARRAY[9]::int[]),
+      ('213', ARRAY[8,9]::int[]),
+      ('216', ARRAY[8]::int[]),
+      ('218', ARRAY[9]::int[]),
+      ('220', ARRAY[7,9]::int[]),
+      ('221', ARRAY[9]::int[]),
+      ('222', ARRAY[8]::int[]),
+      ('223', ARRAY[8]::int[]),
+      ('224', ARRAY[8,9]::int[]),
+      ('225', ARRAY[10]::int[]),
+      ('226', ARRAY[8]::int[]),
+      ('227', ARRAY[8]::int[]),
+      ('228', ARRAY[8]::int[]),
+      ('229', ARRAY[10]::int[]),
+      ('230', ARRAY[7,8,10]::int[]),
+      ('231', ARRAY[7,8,9]::int[]),
+      ('232', ARRAY[8]::int[]),
+      ('233', ARRAY[8,9]::int[]),
+      ('234', ARRAY[10,11,12,13,14]::int[]),
+      ('235', ARRAY[8]::int[]),
+      ('236', ARRAY[8]::int[]),
+      ('237', ARRAY[8,9]::int[]),
+      ('238', ARRAY[7]::int[]),
+      ('239', ARRAY[7]::int[]),
+      ('240', ARRAY[9]::int[]),
+      ('241', ARRAY[7,8]::int[]),
+      ('242', ARRAY[9]::int[]),
+      ('243', ARRAY[7,8,9,10]::int[]),
+      ('244', ARRAY[9]::int[]),
+      ('245', ARRAY[7,9]::int[]),
+      ('246', ARRAY[7]::int[]),
+      ('247', ARRAY[5,6]::int[]),
+      ('248', ARRAY[7]::int[]),
+      ('249', ARRAY[9]::int[]),
+      ('250', ARRAY[8,9]::int[]),
+      ('251', ARRAY[9]::int[]),
+      ('252', ARRAY[6,7,8,9]::int[]),
+      ('253', ARRAY[8]::int[]),
+      ('254', ARRAY[7,8,9,10]::int[]),
+      ('255', ARRAY[9]::int[]),
+      ('256', ARRAY[9]::int[]),
+      ('257', ARRAY[8]::int[]),
+      ('258', ARRAY[8,9]::int[]),
+      ('260', ARRAY[9]::int[]),
+      ('261', ARRAY[9]::int[]),
+      ('262', ARRAY[9]::int[]),
+      ('263', ARRAY[7,9,10]::int[]),
+      ('264', ARRAY[8,9]::int[]),
+      ('265', ARRAY[7,9]::int[]),
+      ('266', ARRAY[8]::int[]),
+      ('267', ARRAY[7,8,10]::int[]),
+      ('268', ARRAY[8,9]::int[]),
+      ('269', ARRAY[7]::int[]),
+      ('290', ARRAY[4,5]::int[]),
+      ('291', ARRAY[7]::int[]),
+      ('297', ARRAY[7]::int[]),
+      ('298', ARRAY[6]::int[]),
+      ('299', ARRAY[6]::int[]),
+      ('350', ARRAY[8]::int[]),
+      ('351', ARRAY[9]::int[]),
+      ('352', ARRAY[4,5,6,7,8,9,10,11]::int[]),
+      ('353', ARRAY[7,8,9,10]::int[]),
+      ('354', ARRAY[7,9]::int[]),
+      ('355', ARRAY[6,7,8,9]::int[]),
+      ('356', ARRAY[8]::int[]),
+      ('357', ARRAY[8]::int[]),
+      ('358', ARRAY[5,6,7,8,9,10,11,12]::int[]),
+      ('359', ARRAY[6,7,8,9,12]::int[]),
+      ('370', ARRAY[8]::int[]),
+      ('371', ARRAY[8]::int[]),
+      ('372', ARRAY[7,8,10]::int[]),
+      ('373', ARRAY[8]::int[]),
+      ('374', ARRAY[8]::int[]),
+      ('375', ARRAY[6,7,8,9,10,11]::int[]),
+      ('376', ARRAY[6,8,9]::int[]),
+      ('377', ARRAY[8,9]::int[]),
+      ('378', ARRAY[8,10]::int[]),
+      ('380', ARRAY[9,10]::int[]),
+      ('381', ARRAY[6,7,8,9,10,11,12]::int[]),
+      ('382', ARRAY[8,9]::int[]),
+      ('383', ARRAY[8,9,10,11,12]::int[]),
+      ('385', ARRAY[7,8,9]::int[]),
+      ('386', ARRAY[5,6,7,8]::int[]),
+      ('387', ARRAY[8,9]::int[]),
+      ('389', ARRAY[8]::int[]),
+      ('420', ARRAY[9,10,11,12]::int[]),
+      ('421', ARRAY[6,7,9]::int[]),
+      ('423', ARRAY[7,9]::int[]),
+      ('500', ARRAY[5]::int[]),
+      ('501', ARRAY[7,11]::int[]),
+      ('502', ARRAY[8,11]::int[]),
+      ('503', ARRAY[7,8,11]::int[]),
+      ('504', ARRAY[8,11]::int[]),
+      ('505', ARRAY[8]::int[]),
+      ('506', ARRAY[8,10]::int[]),
+      ('507', ARRAY[7,8,10,11]::int[]),
+      ('508', ARRAY[6,9]::int[]),
+      ('509', ARRAY[8]::int[]),
+      ('590', ARRAY[9]::int[]),
+      ('591', ARRAY[8,9]::int[]),
+      ('592', ARRAY[7]::int[]),
+      ('593', ARRAY[8,9,10,11]::int[]),
+      ('594', ARRAY[9]::int[]),
+      ('595', ARRAY[6,7,8,9,10,11]::int[]),
+      ('596', ARRAY[9]::int[]),
+      ('597', ARRAY[6,7]::int[]),
+      ('598', ARRAY[4,5,6,7,8,9,10,11,12,13]::int[]),
+      ('599', ARRAY[7,8]::int[]),
+      ('670', ARRAY[7,8]::int[]),
+      ('672', ARRAY[6]::int[]),
+      ('673', ARRAY[7]::int[]),
+      ('674', ARRAY[7]::int[]),
+      ('675', ARRAY[7,8]::int[]),
+      ('676', ARRAY[5,7]::int[]),
+      ('677', ARRAY[5,7]::int[]),
+      ('678', ARRAY[5,7]::int[]),
+      ('679', ARRAY[7,11]::int[]),
+      ('680', ARRAY[7]::int[]),
+      ('681', ARRAY[6,9]::int[]),
+      ('682', ARRAY[5]::int[]),
+      ('683', ARRAY[4,7]::int[]),
+      ('685', ARRAY[5,6,7,10]::int[]),
+      ('686', ARRAY[5,8]::int[]),
+      ('687', ARRAY[6]::int[]),
+      ('688', ARRAY[5,6,7]::int[]),
+      ('689', ARRAY[6,8,9]::int[]),
+      ('690', ARRAY[4,5,6,7]::int[]),
+      ('691', ARRAY[7]::int[]),
+      ('692', ARRAY[7]::int[]),
+      ('800', ARRAY[8]::int[]),
+      ('808', ARRAY[8]::int[]),
+      ('850', ARRAY[8,10]::int[]),
+      ('852', ARRAY[5,6,7,8,9,11]::int[]),
+      ('853', ARRAY[7,8]::int[]),
+      ('855', ARRAY[8,9,10]::int[]),
+      ('856', ARRAY[8,9,10]::int[]),
+      ('870', ARRAY[9,12]::int[]),
+      ('878', ARRAY[12]::int[]),
+      ('880', ARRAY[6,7,8,9,10]::int[]),
+      ('881', ARRAY[9,10]::int[]),
+      ('882', ARRAY[7,8,9,10,11,12]::int[]),
+      ('883', ARRAY[8,9,10,11,12]::int[]),
+      ('886', ARRAY[7,8,9,10,11]::int[]),
+      ('888', ARRAY[11]::int[]),
+      ('960', ARRAY[7,10]::int[]),
+      ('961', ARRAY[7,8]::int[]),
+      ('962', ARRAY[8,9]::int[]),
+      ('963', ARRAY[8,9]::int[]),
+      ('964', ARRAY[8,9,10]::int[]),
+      ('965', ARRAY[7,8]::int[]),
+      ('966', ARRAY[9,10]::int[]),
+      ('967', ARRAY[7,8,9]::int[]),
+      ('968', ARRAY[7,8,9]::int[]),
+      ('970', ARRAY[8,9,10]::int[]),
+      ('971', ARRAY[5,6,7,8,9,10,11,12]::int[]),
+      ('972', ARRAY[7,8,9,10,11,12]::int[]),
+      ('973', ARRAY[8]::int[]),
+      ('974', ARRAY[7,8,9,11]::int[]),
+      ('975', ARRAY[7,8]::int[]),
+      ('976', ARRAY[8,9,10]::int[]),
+      ('977', ARRAY[8,10,11]::int[]),
+      ('979', ARRAY[9]::int[]),
+      ('992', ARRAY[9]::int[]),
+      ('993', ARRAY[8]::int[]),
+      ('994', ARRAY[9]::int[]),
+      ('995', ARRAY[9]::int[]),
+      ('996', ARRAY[9,10]::int[]),
+      ('998', ARRAY[9]::int[]),
+      ('20', ARRAY[8,9,10]::int[]),
+      ('27', ARRAY[5,6,7,8,9,10]::int[]),
+      ('30', ARRAY[10,11,12]::int[]),
+      ('31', ARRAY[5,6,7,8,9,10,11]::int[]),
+      ('32', ARRAY[8,9]::int[]),
+      ('33', ARRAY[9]::int[]),
+      ('34', ARRAY[9]::int[]),
+      ('36', ARRAY[8,9]::int[]),
+      ('39', ARRAY[6,7,8,9,10,11,12]::int[]),
+      ('40', ARRAY[6,9]::int[]),
+      ('41', ARRAY[9,12]::int[]),
+      ('43', ARRAY[4,5,6,7,8,9,10,11,12,13]::int[]),
+      ('44', ARRAY[7,9,10]::int[]),
+      ('45', ARRAY[8]::int[]),
+      ('46', ARRAY[6,7,8,9,10,12]::int[]),
+      ('47', ARRAY[5,8]::int[]),
+      ('48', ARRAY[6,7,8,9,10]::int[]),
+      ('49', ARRAY[4,5,6,7,8,9,10,11,12,13,14,15]::int[]),
+      ('51', ARRAY[8,9]::int[]),
+      ('52', ARRAY[10]::int[]),
+      ('53', ARRAY[6,7,8,10]::int[]),
+      ('54', ARRAY[10,11]::int[]),
+      ('55', ARRAY[8,9,10,11]::int[]),
+      ('56', ARRAY[9,10,11]::int[]),
+      ('57', ARRAY[8,10,11]::int[]),
+      ('58', ARRAY[10]::int[]),
+      ('60', ARRAY[8,9,10]::int[]),
+      ('61', ARRAY[5,6,7,8,9,10,12]::int[]),
+      ('62', ARRAY[7,8,9,10,11,12,13,14,15,16,17]::int[]),
+      ('63', ARRAY[6,8,9,10,11,12,13]::int[]),
+      ('64', ARRAY[5,6,7,8,9,10]::int[]),
+      ('65', ARRAY[8,10,11]::int[]),
+      ('66', ARRAY[8,9,10,13]::int[]),
+      ('81', ARRAY[8,9,10,11,12,13,14,15,16,17]::int[]),
+      ('82', ARRAY[5,6,8,9,10,11,12,13,14]::int[]),
+      ('84', ARRAY[7,8,9,10]::int[]),
+      ('86', ARRAY[7,8,9,10,11,12]::int[]),
+      ('90', ARRAY[7,10,12,13]::int[]),
+      ('91', ARRAY[8,9,10,11,12,13]::int[]),
+      ('92', ARRAY[8,9,10,11,12]::int[]),
+      ('93', ARRAY[9]::int[]),
+      ('94', ARRAY[9]::int[]),
+      ('95', ARRAY[6,7,8,9,10]::int[]),
+      ('98', ARRAY[4,5,6,7,10]::int[]),
+      ('1', ARRAY[7,10]::int[]),
+      ('7', ARRAY[10,14]::int[])
+    ) AS v(code, lens)
+    WHERE left(digits, length(v.code)) = v.code
+    ORDER BY length(v.code) DESC
+    LIMIT 1;
+    IF cc IS NULL THEN
+      RETURN NULL;
+    END IF;
+    national := substr(digits, length(cc) + 1);
+    stripped := national;
+    IF left(national, 1) = '0' THEN
+      stripped := substr(national, 2);
+    END IF;
+    IF cc = '27' THEN
+      IF stripped ~ '^([1-79][0-9]{8}|8[0-9]{4,9})$' THEN
+        RETURN '+27' || stripped;
+      END IF;
+      RETURN NULL;
+    END IF;
+    IF left(national, 1) = '0' AND length(stripped) = ANY (lens) THEN
+      RETURN '+' || cc || stripped;
+    END IF;
+    IF length(national) = ANY (lens) THEN
+      RETURN '+' || cc || national;
+    END IF;
+    RETURN NULL;
+  END IF;
+
+  digits := compact;
+  IF digits ~ '^0([1-79][0-9]{8}|8[0-9]{4,9})$' THEN
+    RETURN '+27' || substr(digits, 2);
+  END IF;
+  IF digits ~ '^([1-79][0-9]{8}|8[0-9]{4,9})$' THEN
+    RETURN '+27' || digits;
+  END IF;
+  RETURN NULL;
+END;
+$fn$;
+
 CREATE OR REPLACE FUNCTION public.missio_phone_e164(raw text)
 RETURNS text
 LANGUAGE plpgsql
 IMMUTABLE
 SET search_path = ''
-AS $$
+AS $fn$
 DECLARE
   trimmed text;
   had_plus boolean;
@@ -136,18 +438,15 @@ BEGIN
   IF length(digits) < 7 OR length(digits) > 15 THEN
     RETURN NULL;
   END IF;
-  -- A rejected + number is not guessed into another country.
   IF had_plus THEN
     RETURN NULL;
   END IF;
 
-  -- Prepend +. "27821234567" and "16162187556".
   parsed := public.missio_phone_e164_try('+' || digits);
   IF parsed IS NOT NULL THEN
     RETURN parsed;
   END IF;
 
-  -- HubSpot-style country code plus a 0-prefixed local number.
   IF left(digits, 2) = '27' AND substr(digits, 3, 1) = '0' AND length(digits) >= 11 THEN
     parsed := public.missio_phone_e164_try('+27' || substr(digits, 4));
     IF parsed IS NOT NULL THEN
@@ -169,7 +468,6 @@ BEGIN
     END IF;
   END IF;
 
-  -- Local number in ZA, leading zeros stripped.
   digits := regexp_replace(digits, '^0+', '');
   IF length(digits) >= 7 THEN
     parsed := public.missio_phone_e164_try(digits);
@@ -180,56 +478,7 @@ BEGIN
 
   RETURN NULL;
 END;
-$$;
-
--- The acceptance step of normalizePhoneE164. Not granted to callers.
-CREATE OR REPLACE FUNCTION public.missio_phone_e164_try(input text)
-RETURNS text
-LANGUAGE plpgsql
-IMMUTABLE
-SET search_path = ''
-AS $$
-DECLARE
-  digits text;
-BEGIN
-  IF input IS NULL OR btrim(input) = '' THEN
-    RETURN NULL;
-  END IF;
-
-  IF left(btrim(input), 1) = '+' THEN
-    digits := regexp_replace(substr(btrim(input), 2), '\D', '', 'g');
-    IF digits !~ '^[1-9][0-9]{6,14}$' THEN
-      RETURN NULL;
-    END IF;
-    -- ZA national number is 9 digits: +27 and 11 digits total.
-    IF left(digits, 2) = '27' THEN
-      IF length(digits) = 11 THEN
-        RETURN '+' || digits;
-      END IF;
-      RETURN NULL;
-    END IF;
-    -- NANP, the other length the app function documents.
-    IF left(digits, 1) = '1' AND length(digits) = 11 THEN
-      RETURN '+' || digits;
-    END IF;
-    IF length(digits) BETWEEN 8 AND 15 THEN
-      RETURN '+' || digits;
-    END IF;
-    RETURN NULL;
-  END IF;
-
-  digits := regexp_replace(input, '\D', '', 'g');
-  -- ZA local with a leading 0: 10 digits.
-  IF digits ~ '^0[1-9][0-9]{8}$' THEN
-    RETURN '+27' || substr(digits, 2);
-  END IF;
-  -- ZA local without the leading 0: 9 digits.
-  IF digits ~ '^[1-9][0-9]{8}$' THEN
-    RETURN '+27' || digits;
-  END IF;
-  RETURN NULL;
-END;
-$$;
+$fn$;
 
 REVOKE ALL ON FUNCTION public.missio_phone_e164(text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.missio_phone_e164_try(text) FROM PUBLIC, anon, authenticated;
@@ -510,6 +759,21 @@ BEGIN
       USING ERRCODE = '23503';
   END IF;
 
+  IF TG_TABLE_NAME = 'missio_followups' THEN
+    IF NEW.assigned_user_id IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1
+         FROM public.org_staff_roles r
+         JOIN public.organisations o ON o.id = r.org_id
+         WHERE r.user_id = NEW.assigned_user_id
+           AND r.org_id = NEW.org_id
+           AND o.slug = 'missio'
+       ) THEN
+      RAISE EXCEPTION 'missio_user_not_in_org'
+        USING ERRCODE = '23503';
+    END IF;
+  END IF;
+
   IF TG_TABLE_NAME = 'connect_responses' THEN
     IF auth.uid() IS NOT NULL AND (TG_OP = 'INSERT' OR v_match_changed) THEN
       NEW.matched_by := auth.uid();
@@ -526,17 +790,17 @@ $$;
 REVOKE ALL ON FUNCTION public.guard_missio_connect_contact() FROM PUBLIC, anon, authenticated;
 
 COMMENT ON FUNCTION public.guard_missio_connect_contact() IS
-  'BEFORE write, every role. 23503 missio_contact_not_in_org when matched_contact_id, contact_id, or assigned_leader_contact_id is set and that contact is not in org_people for the row org. Nulls are allowed. When auth.uid() is set, matched_by is overwritten with it; a null auth.uid() keeps the supplied value. matched_at becomes now() when the match or the timestamp changes.';
+  'BEFORE write, every role. 23503 missio_contact_not_in_org when matched_contact_id, contact_id, or assigned_leader_contact_id is set and that contact is not in org_people for the row org. 23503 missio_user_not_in_org when assigned_user_id is set and that user has no org_staff_roles row in the Missio org. Nulls are allowed. When auth.uid() is set, matched_by is overwritten with it; a null auth.uid() keeps the supplied value. matched_at becomes now() when the match or the timestamp changes.';
 
 DROP TRIGGER IF EXISTS trg_connect_response_guard_contact ON public.connect_responses;
 CREATE TRIGGER trg_connect_response_guard_contact
-  BEFORE INSERT OR UPDATE OF matched_contact_id, matched_by, matched_at
+  BEFORE INSERT OR UPDATE OF matched_contact_id, matched_by, matched_at, org_id
   ON public.connect_responses
   FOR EACH ROW EXECUTE FUNCTION public.guard_missio_connect_contact();
 
 DROP TRIGGER IF EXISTS trg_missio_followup_guard_contact ON public.missio_followups;
 CREATE TRIGGER trg_missio_followup_guard_contact
-  BEFORE INSERT OR UPDATE OF contact_id, assigned_leader_contact_id, org_id
+  BEFORE INSERT OR UPDATE OF contact_id, assigned_leader_contact_id, assigned_user_id, org_id
   ON public.missio_followups
   FOR EACH ROW EXECUTE FUNCTION public.guard_missio_connect_contact();
 
@@ -576,8 +840,19 @@ SET search_path = ''
 AS $$
 DECLARE
   v_followup uuid;
-  v_other uuid;
+  v_lock_key text;
 BEGIN
+  -- Serialize cards for the same person so two concurrent inserts
+  -- attach to one open follow-up instead of both inserting.
+  IF NEW.matched_contact_id IS NOT NULL THEN
+    v_lock_key := NEW.org_id::text || ':contact:' || NEW.matched_contact_id::text;
+  ELSIF NEW.phone_e164 IS NOT NULL THEN
+    v_lock_key := NEW.org_id::text || ':phone:' || NEW.phone_e164;
+  END IF;
+  IF v_lock_key IS NOT NULL THEN
+    PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_lock_key, 0));
+  END IF;
+
   IF NEW.matched_contact_id IS NOT NULL THEN
     SELECT f.id INTO v_followup
     FROM public.missio_followups f
@@ -972,7 +1247,8 @@ CREATE POLICY "Pastors can insert manual connect responses"
       matched_contact_id IS NULL
       OR EXISTS (
         SELECT 1 FROM public.org_people op
-        WHERE op.org_id = org_id AND op.contact_id = matched_contact_id
+        WHERE op.org_id = connect_responses.org_id
+          AND op.contact_id = connect_responses.matched_contact_id
       )
     )
   );
@@ -993,7 +1269,8 @@ CREATE POLICY "Pastors can update connect responses"
       matched_contact_id IS NULL
       OR EXISTS (
         SELECT 1 FROM public.org_people op
-        WHERE op.org_id = org_id AND op.contact_id = matched_contact_id
+        WHERE op.org_id = connect_responses.org_id
+          AND op.contact_id = connect_responses.matched_contact_id
       )
     )
   );
@@ -1020,15 +1297,16 @@ CREATE POLICY "Pastors can insert followups"
       contact_id IS NULL
       OR EXISTS (
         SELECT 1 FROM public.org_people op
-        WHERE op.org_id = org_id AND op.contact_id = contact_id
+        WHERE op.org_id = missio_followups.org_id
+          AND op.contact_id = missio_followups.contact_id
       )
     )
     AND (
       assigned_leader_contact_id IS NULL
       OR EXISTS (
         SELECT 1 FROM public.org_people op
-        WHERE op.org_id = org_id
-          AND op.contact_id = assigned_leader_contact_id
+        WHERE op.org_id = missio_followups.org_id
+          AND op.contact_id = missio_followups.assigned_leader_contact_id
       )
     )
   );
@@ -1049,15 +1327,16 @@ CREATE POLICY "Pastors can update followups"
       contact_id IS NULL
       OR EXISTS (
         SELECT 1 FROM public.org_people op
-        WHERE op.org_id = org_id AND op.contact_id = contact_id
+        WHERE op.org_id = missio_followups.org_id
+          AND op.contact_id = missio_followups.contact_id
       )
     )
     AND (
       assigned_leader_contact_id IS NULL
       OR EXISTS (
         SELECT 1 FROM public.org_people op
-        WHERE op.org_id = org_id
-          AND op.contact_id = assigned_leader_contact_id
+        WHERE op.org_id = missio_followups.org_id
+          AND op.contact_id = missio_followups.assigned_leader_contact_id
       )
     )
   );

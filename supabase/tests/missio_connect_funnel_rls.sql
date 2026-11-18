@@ -1133,6 +1133,68 @@ SELECT pg_temp.expect('anon still cannot read not-in-house after the extra rows'
   pg_temp.scalar('anon', $$SELECT count(*)::text FROM public.missio_not_in_house$$),
   'err 42501');
 
+SELECT pg_temp.expect('policy text names the outer connect card columns',
+  (SELECT bool_and(
+      pg_get_expr(pol.polwithcheck, pol.polrelid) LIKE '%connect_responses.org_id%'
+      AND pg_get_expr(pol.polwithcheck, pol.polrelid) LIKE '%connect_responses.matched_contact_id%'
+    )::text
+     FROM pg_policy pol
+     JOIN pg_class c ON c.oid = pol.polrelid
+    WHERE c.relname = 'connect_responses'
+      AND pol.polcmd IN ('a', 'w')
+      AND pol.polwithcheck IS NOT NULL
+      AND pg_get_expr(pol.polwithcheck, pol.polrelid) LIKE '%org_people%'),
+  'true');
+SELECT pg_temp.expect('policy text names the outer follow-up columns',
+  (SELECT bool_and(
+      pg_get_expr(pol.polwithcheck, pol.polrelid) LIKE '%missio_followups.org_id%'
+      AND pg_get_expr(pol.polwithcheck, pol.polrelid) LIKE '%missio_followups.contact_id%'
+    )::text
+     FROM pg_policy pol
+     JOIN pg_class c ON c.oid = pol.polrelid
+    WHERE c.relname = 'missio_followups'
+      AND pol.polcmd IN ('a', 'w')
+      AND pg_get_expr(pol.polwithcheck, pol.polrelid) LIKE '%org_people%'),
+  'true');
+ALTER TABLE public.connect_responses DISABLE TRIGGER trg_connect_response_guard_contact;
+SELECT pg_temp.expect('RLS alone blocks a match to someone outside the org',
+  pg_temp.exec('a1111111-1111-1111-1111-111111111111', $$
+    UPDATE public.connect_responses
+       SET matched_contact_id = 'c5555555-5555-5555-5555-555555555555'
+     WHERE id = 'd2222222-2222-4222-8222-222222222222'
+  $$),
+  'err 42501');
+ALTER TABLE public.connect_responses ENABLE TRIGGER trg_connect_response_guard_contact;
+SELECT pg_temp.expect('service role cannot assign a hub user with no Missio role',
+  pg_temp.fail('service', $$
+    UPDATE public.missio_followups
+       SET assigned_user_id = 'a4444444-4444-4444-4444-444444444444'
+     WHERE connect_response_id = 'd1111111-1111-4111-8111-111111111111'
+  $$),
+  '23503 missio_user_not_in_org');
+
+SELECT pg_temp.expect('phone +27 with a trunk 0 normalizes',
+  (SELECT public.missio_phone_e164('+27 082 123 4567')),
+  '+27821234567');
+SELECT pg_temp.expect('phone 0027 international prefix normalizes',
+  (SELECT public.missio_phone_e164('0027821234567')),
+  '+27821234567');
+SELECT pg_temp.expect('phone 00 international prefix normalizes a US number',
+  (SELECT public.missio_phone_e164('0016162187556')),
+  '+16162187556');
+SELECT pg_temp.expect('phone extension is ignored',
+  (SELECT public.missio_phone_e164('0821234567 ext 12')),
+  '+27821234567');
+SELECT pg_temp.expect('unknown calling code +999 is null',
+  (SELECT (public.missio_phone_e164('+999123456789') IS NULL)::text),
+  'true');
+SELECT pg_temp.expect('nine-digit 111111111 is the ZA number phone.ts accepts',
+  (SELECT public.missio_phone_e164('111111111')),
+  '+27111111111');
+SELECT pg_temp.expect('ten-digit junk 1111111111 is null',
+  (SELECT (public.missio_phone_e164('1111111111') IS NULL)::text),
+  'true');
+
 -- ── Report ────────────────────────────────────────────────
 DO $$
 DECLARE
