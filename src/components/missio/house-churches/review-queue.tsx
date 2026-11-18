@@ -28,7 +28,9 @@ export function ReviewQueue({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [skipNote, setSkipNote] = useState("");
-  const focusTarget = useRef<"item" | "done" | null>(null);
+  // People already added from the name on screen. A sheet name can be a couple.
+  const [added, setAdded] = useState<string[]>([]);
+  const focusTarget = useRef<"item" | "done" | "next" | null>(null);
   const noticeRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
@@ -43,7 +45,8 @@ export function ReviewQueue({
     const target = focusTarget.current;
     if (!target) return;
     focusTarget.current = null;
-    const id = target === "done" ? "review-done-heading" : "review-item-heading";
+    const id =
+      target === "done" ? "review-done-heading" : target === "next" ? "review-next" : "review-item-heading";
     document.getElementById(id)?.focus();
   });
 
@@ -60,9 +63,17 @@ export function ReviewQueue({
     setNotice(null);
   }
 
+  function resetPersonFields() {
+    setFirstName("");
+    setLastName("");
+    setEmail("");
+    setPhone("");
+  }
+
   function advance(count: number) {
     const next = index + 1;
     resetFields();
+    setAdded([]);
     setIndex(next);
     const done = next >= count;
     if (done) setFinished(true);
@@ -73,6 +84,7 @@ export function ReviewQueue({
     const page = await client.listReview();
     const remaining = page.items.filter((row) => row.id !== currentId);
     setQueue(remaining);
+    setAdded([]);
     if (remaining.length === 0) {
       setFinished(true);
       setIndex(0);
@@ -82,13 +94,21 @@ export function ReviewQueue({
     setIndex(Math.min(fromIndex, remaining.length - 1));
   }
 
-  async function resolve(body: ResolveBody, count: number) {
+  async function resolve(body: ResolveBody, count: number, name?: string) {
     if (!item) return;
     setPending(true);
     setNotice(null);
     try {
-      await client.resolveReview(item.id, body);
-      advance(count);
+      const again = added.length > 0 && body.action !== "skip";
+      await client.resolveReview(item.id, again ? { ...body, also: true } : body);
+      if (body.action === "skip") {
+        advance(count);
+      } else {
+        // Stay on the name so a spouse or the rest of a household can be added.
+        setAdded((names) => [...names, name ?? "Person"]);
+        resetPersonFields();
+        focusTarget.current = "next";
+      }
     } catch (caught) {
       if (caught instanceof MissioApiError && caught.code === "already_resolved") {
         setNotice(houseErrorCopy(caught));
@@ -123,7 +143,7 @@ export function ReviewQueue({
       {finished ? null : (
         <p className={`${shell.lede} ${content.lede}`}>
           Match each imported name to a person, create them, or skip. Linking or creating adds them to the house and
-          to Missio.
+          to Missio. If the name is a couple, add both before moving on.
         </p>
       )}
 
@@ -161,12 +181,15 @@ export function ReviewQueue({
           email={email}
           phone={phone}
           skipNote={skipNote}
+          added={added}
+          last={index + 1 >= total}
+          onNext={() => advance(total)}
           onFirstName={setFirstName}
           onLastName={setLastName}
           onEmail={setEmail}
           onPhone={setPhone}
           onSkipNote={setSkipNote}
-          onLink={(contactId) => void resolve({ action: "link", contactId }, total)}
+          onLink={(contactId, name) => void resolve({ action: "link", contactId }, total, name)}
           onCreate={() => {
             const given = firstName.trim();
             if (!given) {
@@ -184,7 +207,8 @@ export function ReviewQueue({
                 ...(mail ? { email: mail } : {}),
                 ...(number ? { phone: number } : {}),
               },
-              total
+              total,
+              family ? `${given} ${family}` : given
             );
           }}
           onSkip={() => {
@@ -213,6 +237,9 @@ function ReviewCard({
   email,
   phone,
   skipNote,
+  added,
+  last,
+  onNext,
   onFirstName,
   onLastName,
   onEmail,
@@ -230,12 +257,15 @@ function ReviewCard({
   email: string;
   phone: string;
   skipNote: string;
+  added: string[];
+  last: boolean;
+  onNext: () => void;
   onFirstName: (value: string) => void;
   onLastName: (value: string) => void;
   onEmail: (value: string) => void;
   onPhone: (value: string) => void;
   onSkipNote: (value: string) => void;
-  onLink: (contactId: string) => void;
+  onLink: (contactId: string, name: string) => void;
   onCreate: () => void;
   onSkip: () => void;
 }) {
@@ -262,9 +292,26 @@ function ReviewCard({
         </ul>
       </section>
 
+      {added.length > 0 ? (
+        <section className={styles.added} data-testid="review-added" aria-live="polite">
+          <h2>Added to House {houseNumber}</h2>
+          <ul className={styles.addedList}>
+            {added.map((name, at) => (
+              <li key={`${name}-${at}`}>{name}</li>
+            ))}
+          </ul>
+          <p className={styles.quiet}>Is this name a couple or a household? Add the next person below.</p>
+          <div className={styles.formActions}>
+            <button id="review-next" type="button" className={shell.primary} disabled={pending} onClick={onNext}>
+              {last ? "Done" : "Next name"}
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       {item.candidates.length > 0 ? (
         <section className={styles.section}>
-          <h2>Possible matches</h2>
+          <h2>{added.length > 0 ? "Add another: possible matches" : "Possible matches"}</h2>
           <ul className={styles.choices} data-testid="review-candidates">
             {item.candidates.map((candidate) => (
               <li key={candidate.contactId}>
@@ -272,7 +319,7 @@ function ReviewCard({
                   type="button"
                   className={`${shell.ghost} ${styles.choice}`}
                   disabled={pending}
-                  onClick={() => onLink(candidate.contactId)}
+                  onClick={() => onLink(candidate.contactId, candidate.displayName)}
                 >
                   <span className={styles.choiceText}>
                     <span className={styles.choiceName}>Use {candidate.displayName}</span>
@@ -286,7 +333,7 @@ function ReviewCard({
       ) : null}
 
       <section className={styles.section}>
-        <h2>Search everyone</h2>
+        <h2>{added.length > 0 ? "Add another: search everyone" : "Search everyone"}</h2>
         <p className={`${shell.help} ${styles.searchHelp}`}>
           Looks through every contact in the Hub, not only Missio. Linking someone adds them to Missio.
         </p>
@@ -337,32 +384,34 @@ function ReviewCard({
         ) : null}
       </section>
 
-      <section className={styles.section}>
-        <h2>Skip</h2>
-        <form
-          className={styles.form}
-          data-testid="review-skip"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSkip();
-          }}
-        >
-          <label className={shell.field}>
-            Note
-            <textarea
-              className={styles.note}
-              aria-label="Skip note"
-              value={skipNote}
-              onChange={(event) => onSkipNote(event.target.value)}
-            />
-          </label>
-          <div className={styles.formActions}>
-            <button type="submit" className={shell.ghost} disabled={pending}>
-              Skip
-            </button>
-          </div>
-        </form>
-      </section>
+      {added.length > 0 ? null : (
+        <section className={styles.section}>
+          <h2>Skip</h2>
+          <form
+            className={styles.form}
+            data-testid="review-skip"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSkip();
+            }}
+          >
+            <label className={shell.field}>
+              Note
+              <textarea
+                className={styles.note}
+                aria-label="Skip note"
+                value={skipNote}
+                onChange={(event) => onSkipNote(event.target.value)}
+              />
+            </label>
+            <div className={styles.formActions}>
+              <button type="submit" className={shell.ghost} disabled={pending}>
+                Skip
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
     </article>
   );
 }
@@ -380,7 +429,7 @@ function ContactSearch({
 }: {
   client: Pick<HouseChurchesClient, "searchReviewContacts">;
   pending: boolean;
-  onPick: (contactId: string) => void;
+  onPick: (contactId: string, name: string) => void;
 }) {
   const fieldId = useId();
   const [draft, setDraft] = useState("");
@@ -447,7 +496,7 @@ function ContactSearch({
                 type="button"
                 className={`${shell.ghost} ${styles.choice}`}
                 disabled={pending}
-                onClick={() => onPick(person.contactId)}
+                onClick={() => onPick(person.contactId, person.displayName)}
               >
                 <span className={styles.choiceText}>
                   <span className={styles.choiceName}>{person.displayName}</span>

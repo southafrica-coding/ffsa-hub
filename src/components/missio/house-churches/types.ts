@@ -101,8 +101,8 @@ export interface ReviewListResponse {
 }
 
 export type ResolveBody =
-  | { action: "link"; contactId: string }
-  | { action: "create"; firstName: string; lastName?: string; email?: string; phone?: string }
+  | { action: "link"; contactId: string; also?: true }
+  | { action: "create"; firstName: string; lastName?: string; email?: string; phone?: string; also?: true }
   | { action: "skip"; notes?: string };
 
 /** Link and create add the person to the house. Skip does not. */

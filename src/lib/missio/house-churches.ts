@@ -251,7 +251,9 @@ const addMemberSchema = z
 const roleSchema = z.object({ role: z.enum(ROLES) }).strict();
 
 const resolveSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("link"), contactId: z.string().uuid() }).strict(),
+  // `also` adds one more person to a row that is already resolved, for a
+  // sheet name that stands for a couple or a household.
+  z.object({ action: z.literal("link"), contactId: z.string().uuid(), also: z.literal(true).optional() }).strict(),
   z
     .object({
       action: z.literal("create"),
@@ -259,6 +261,7 @@ const resolveSchema = z.discriminatedUnion("action", [
       lastName: z.string().trim().max(200).nullable().optional(),
       email: z.string().trim().email().max(320).nullable().optional(),
       phone: z.string().trim().min(1).max(40).nullable().optional(),
+      also: z.literal(true).optional(),
     })
     .strict(),
   z
@@ -1191,17 +1194,18 @@ async function shapeClaimedReview(
   row: ReviewRow,
   house: HouseRow | null,
   member: HouseChurchMemberView | undefined,
-  action: "link" | "create" | "skip"
+  action: "link" | "create" | "skip",
+  also = false
 ): Promise<{ ok: true; body: ResolveImportReviewResponse } | Fail> {
   await audit(admin, {
     userId: auth.user.id,
-    action: "missio.import_review_resolve",
+    action: also ? "missio.import_review_add_also" : "missio.import_review_resolve",
     resourceType: "missio_import_review",
     resourceId: row.id,
     changes: {
       action,
       status: row.status,
-      contactId: row.resolved_contact_id,
+      contactId: also ? member?.contactId ?? null : row.resolved_contact_id,
       houseNumber: row.house_number,
       orgPersonCreated: action === "create",
     },
@@ -1227,9 +1231,47 @@ export async function resolveImportReview(
 
   const loaded = await loadReview(auth, itemId);
   if (!loaded.ok) return loaded;
-  if (loaded.row.status !== "pending") return fail(409, "already_resolved", "This row is already resolved.");
+  // One sheet name can stand for two people ("Botha" for a couple). Once a
+  // row is linked or created, `also` adds another person to the same house
+  // in the same role. The row keeps its first resolved contact.
+  const status = loaded.row.status;
+  const also =
+    parsed.data.action !== "skip" && parsed.data.also === true && (status === "matched" || status === "new");
+  if (status !== "pending" && !also) return fail(409, "already_resolved", "This row is already resolved.");
   const role = asRole(loaded.row.role);
   if (!role) return fail(500, "server_error", "Something went wrong.");
+
+  if (also && parsed.data.action !== "skip") {
+    const house = await loadHouseByNumber(auth, scope, Number(loaded.row.house_number));
+    if (!house.ok) return house;
+    const admin = adminClient();
+    if ("error" in admin) return fail(500, "server_error", "Something went wrong.");
+    let contactId: string;
+    if (parsed.data.action === "link") {
+      contactId = parsed.data.contactId;
+      const known = await requireMissioPerson(auth, contactId);
+      if (!known.ok && known.status !== 400) return known;
+      if (!known.ok) {
+        const added = await ensureMissioPerson(auth, contactId, asCampus(house.house.campus));
+        if (!added.ok) return added;
+      }
+    } else {
+      const name = [parsed.data.firstName, emptyToUndefined(parsed.data.lastName)].filter(Boolean).join(" ");
+      const created = await createPerson(auth, {
+        name,
+        email: emptyToUndefined(parsed.data.email),
+        phone: emptyToUndefined(parsed.data.phone),
+        campus: asCampus(house.house.campus),
+      });
+      if (!created.ok) return fromPersonError(created.status, created.code);
+      contactId = created.body.person.contactId;
+    }
+    const person = await requireMissioPerson(auth, contactId);
+    if (!person.ok) return person;
+    const attached = await attachKnownMember(auth, admin.client, house.house, person, role);
+    if (!attached.ok) return attached;
+    return shapeClaimedReview(auth, admin.client, loaded.row, house.house, attached.member, parsed.data.action, true);
+  }
 
   if (parsed.data.action === "link") {
     let person = await requireMissioPerson(auth, parsed.data.contactId);

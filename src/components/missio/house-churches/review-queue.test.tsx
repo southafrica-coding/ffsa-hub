@@ -146,6 +146,19 @@ describe("review queue", () => {
     usePeter?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await settle();
     expect(bodies[0]).toEqual({ action: "link", contactId: "c-peter" });
+    // Stays on the name so a spouse can be added, and says who went in.
+    expect(host.querySelector("[data-testid=review-progress]")?.textContent?.trim()).toBe("1 of 2");
+    expect(host.querySelector("[data-testid=review-added]")?.textContent).toContain("Peter Adler");
+    expect(host.querySelector("[data-testid=review-skip]")).toBeNull();
+    expect(document.activeElement?.id).toBe("review-next");
+    const again = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Use Peter Adler"));
+    again?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await settle();
+    expect(bodies[1]).toEqual({ action: "link", contactId: "c-peter", also: true });
+    bodies.length = 1;
+    expect(host.querySelector("#review-next")?.textContent?.trim()).toBe("Next name");
+    host.querySelector("#review-next")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await settle();
     expect(host.querySelector("[data-testid=review-progress]")?.textContent?.trim()).toBe("2 of 2");
     expect(host.textContent).toContain("Line 3 · Jonah");
     expect(host.textContent).toContain("First name only");
@@ -185,6 +198,11 @@ describe("review queue", () => {
       lastName: "Navarro",
       email: "elise@example.com",
     });
+    expect(host.querySelector("[data-testid=review-added]")?.textContent).toContain("Elise Navarro");
+    expect((host.querySelector("[aria-label='First name']") as HTMLInputElement).value).toBe("");
+    expect(host.querySelector("#review-next")?.textContent?.trim()).toBe("Done");
+    host.querySelector("#review-next")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await settle();
     expect(host.querySelector("[data-testid=review-done]")?.textContent).toContain("That name is resolved.");
   });
 

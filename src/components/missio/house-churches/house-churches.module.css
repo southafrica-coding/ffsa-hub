@@ -461,3 +461,26 @@
 .searchHelp {
   margin: 0 0 4px;
 }
+
+/* Review queue: who has been added from the name on screen. */
+.added {
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--olive, #4e6b4f);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--olive-soft, #e3eadf);
+}
+
+.added h2 {
+  margin: 0 0 6px;
+}
+
+.addedList {
+  margin: 0 0 8px;
+  padding: 0 0 0 18px;
+  font-weight: 600;
+}
+
+.added .formActions {
+  margin-top: 12px;
+}

@@ -1302,6 +1302,31 @@ describe("import review", () => {
     state.userId = PASTOR;
   });
 
+  it("adds a second person to a resolved row with also, and only with also", async () => {
+    addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
+    addContact({ id: ADA, first: "Ada", last: "Botha", inOrg: true, personId: "person-ada" });
+    addContact({ id: OUTSIDE, first: "Ben", last: "Botha", inOrg: false });
+    addReview({ id: REVIEW, rawName: "Botha", sourceLine: 4, houseNumber: 3, role: "leader", candidate_contact_ids: [ADA] });
+
+    expect((await resolve(REVIEW, { action: "link", contactId: ADA })).status).toBe(200);
+    expect((await resolve(REVIEW, { action: "link", contactId: OUTSIDE })).status).toBe(409);
+    expect(state.tables.house_church_members).toHaveLength(1);
+
+    const second = await resolve(REVIEW, { action: "link", contactId: OUTSIDE, also: true });
+    expect(second.status).toBe(200);
+    expect((await second.json()).member).toMatchObject({ contactId: OUTSIDE, role: "leader" });
+    expect(state.tables.house_church_members).toHaveLength(2);
+    expect(state.tables.org_people.map((row) => row.contact_id)).toContain(OUTSIDE);
+    expect(state.tables.missio_import_review[0]).toMatchObject({ status: "matched", resolved_contact_id: ADA });
+    expect(JSON.stringify(state.tables.audit_logs.at(-1))).toContain("missio.import_review_add_also");
+
+    // Same person twice is harmless, and a skipped row takes nobody.
+    expect((await resolve(REVIEW, { action: "link", contactId: OUTSIDE, also: true })).status).toBe(200);
+    expect(state.tables.house_church_members).toHaveLength(2);
+    state.tables.missio_import_review[0].status = "skipped";
+    expect((await resolve(REVIEW, { action: "link", contactId: OUTSIDE, also: true })).status).toBe(409);
+  });
+
   it("adds a contact who is not in Missio yet, then links them", async () => {
     addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
     addContact({ id: OUTSIDE, first: "Outside", last: "Person", inOrg: false });
