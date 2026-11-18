@@ -240,11 +240,11 @@
   font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
-  color: var(--quiet, #7a7466);
+  color: var(--quiet, #6e685b);
 }
 
 .quiet {
-  color: var(--quiet, #7a7466);
+  color: var(--quiet, #6e685b);
 }
 
 .metaLine {
@@ -332,7 +332,7 @@
   font-weight: 400;
   font-size: 12px;
   line-height: 1.4;
-  color: var(--quiet, #7a7466);
+  color: var(--quiet, #6e685b);
 }
 
 .memberList {

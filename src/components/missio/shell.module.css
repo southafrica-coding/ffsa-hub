@@ -355,7 +355,7 @@
 .filterLabel {
   font-size: 11px;
   font-weight: 600;
-  color: var(--quiet, #7a7466);
+  color: var(--quiet, #6e685b);
 }
 
 .select,
@@ -798,7 +798,7 @@
   display: inline-flex;
   margin-top: 16px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text, #8e3d1f);
 }
 
 .markInactive {

@@ -167,7 +167,7 @@
 }
 
 .muted {
-  color: var(--quiet, #7a7466);
+  color: var(--quiet, #6e685b);
 }
 
 .badges {
@@ -281,7 +281,7 @@
 
 .entryMeta {
   margin: 8px 0 0;
-  color: var(--quiet, #7a7466);
+  color: var(--quiet, #6e685b);
 }
 
 .sheetControls {

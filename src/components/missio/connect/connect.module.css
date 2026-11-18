@@ -108,7 +108,7 @@
 
 .optional {
   font-weight: 400;
-  color: var(--quiet, #7a7466);
+  color: var(--quiet, #6e685b);
 }
 
 .choices {
