@@ -64,6 +64,13 @@ In your PR, always state:
   Vercel project env for **Production _and_ Preview** — otherwise preview builds and
   production will break.
 
+## UI polish
+
+Visual changes to Hub screens follow [docs/ui-polish-checklist.md](docs/ui-polish-checklist.md).
+Passes 1–6 (clutter, spacing, copy, grid, the Roboto family, the type scale) apply
+everywhere, including dense admin tables. Passes 7–10 (imagery, rich menus, hover,
+load-in) are only for the org switcher, the Missio landing, and public pages.
+
 ## Questions
 
 If you're unsure about a migration, a permission change, or anything that touches
