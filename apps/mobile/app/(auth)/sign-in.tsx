@@ -1,3 +1,4 @@
+import { ArrowUpRight } from "lucide-react-native";
 import { useEffect, useRef, useState, type ComponentRef } from "react";
 import { Image, Linking, Pressable, View, type TextInput } from "react-native";
 
@@ -12,12 +13,12 @@ import {
   type CooldownState,
 } from "@/auth/sign-in-logic";
 import { clearSignOutReason, useSignOutReason } from "@/auth/sign-out-reason";
-import { Banner, Button, Screen, Text, TextField } from "@/components";
+import { Banner, Button, LargeTitle, Screen, Text, TextField } from "@/components";
 import { announce } from "@/lib/a11y";
 import { DEACTIVATED_MESSAGE } from "@/lib/api";
 import { getEnv } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
-import { touch } from "@/theme/tokens";
+import { fontFamily, fontSize, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 const wordmark = {
@@ -82,75 +83,82 @@ export default function SignInScreen() {
   }
 
   return (
-    <Screen keyboard>
-      <View className="flex-1 justify-center gap-6">
-        <View className="gap-4">
-          <Image
-            source={scheme === "dark" ? wordmark.dark : wordmark.light}
-            accessibilityRole="image"
-            accessibilityLabel="Fire and Fragrance"
-            resizeMode="contain"
-            style={{ width: 220, height: 26 }}
-          />
-          <View
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={{ width: 16, height: 3, backgroundColor: colors.accent }}
-          />
-          <Text variant="display">Sign in</Text>
-          <Text tone="secondary">Use the email and password you use for FFSA Hub on the web.</Text>
-        </View>
+    <Screen keyboard contentStyle={{ paddingTop: 40, paddingBottom: space.xl, gap: space.xl }}>
+      <View style={{ gap: space.xl }}>
+        <Image
+          source={scheme === "dark" ? wordmark.dark : wordmark.light}
+          accessibilityRole="image"
+          accessibilityLabel="Fire and Fragrance"
+          resizeMode="contain"
+          style={{ width: 220, height: 26 }}
+        />
+        {/* LargeTitle carries its own 16 below; the blocks under it sit 24 apart. */}
+        <LargeTitle
+          hero
+          eyebrow="FFSA Hub"
+          title="Sign in"
+          subtitle="Use the email and password you use for FFSA Hub on the web."
+          style={{ marginTop: space.xl, marginBottom: -space.lg }}
+        />
+      </View>
 
-        {signOutReason === "deactivated" ? (
-          <Banner tone="danger" title="Account deactivated" testID="banner-deactivated">
-            {DEACTIVATED_MESSAGE}
-          </Banner>
-        ) : signOutReason === "unauthenticated" ? (
-          <Banner tone="info" testID="banner-session-ended">
-            Your session has ended. Please sign in again.
-          </Banner>
-        ) : null}
+      {signOutReason === "deactivated" ? (
+        <Banner tone="error" title="Account deactivated" testID="banner-deactivated">
+          {DEACTIVATED_MESSAGE}
+        </Banner>
+      ) : signOutReason === "unauthenticated" ? (
+        <Banner tone="info" testID="banner-session-ended">
+          Your session has ended. Please sign in again.
+        </Banner>
+      ) : null}
 
-        <View className="gap-4">
-          <TextField
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            error={fieldErrors.email}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="email"
-            textContentType="username"
-            keyboardType="email-address"
-            returnKeyType="next"
-            submitBehavior="submit"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-            editable={!submitting}
-          />
-          <TextField
-            ref={passwordRef}
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            error={fieldErrors.password}
-            secure
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="current-password"
-            textContentType="password"
-            returnKeyType="go"
-            onSubmitEditing={onSubmit}
-            editable={!submitting}
-          />
-        </View>
+      <View style={{ gap: space.lg }}>
+        <TextField
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          error={fieldErrors.email}
+          placeholder="you@example.com"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="username"
+          keyboardType="email-address"
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          editable={!submitting}
+        />
+        <TextField
+          ref={passwordRef}
+          label="Password"
+          value={password}
+          onChangeText={setPassword}
+          error={fieldErrors.password}
+          placeholder="Password"
+          secure
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="current-password"
+          textContentType="password"
+          returnKeyType="go"
+          onSubmitEditing={onSubmit}
+          editable={!submitting}
+        />
 
+        {/* One form-level message, above Sign in: never under a field, so it can't hint which part was wrong. */}
         {formError ? (
-          <Banner tone="danger" testID="sign-in-error">
+          <Banner tone="error" testID="sign-in-error">
             {formError}
           </Banner>
         ) : null}
         {waitSeconds > 0 ? (
-          <Text tone="attention" accessibilityLiveRegion="polite" testID="cooldown">
+          <Text
+            tone="attention"
+            accessibilityLiveRegion="polite"
+            testID="cooldown"
+            style={{ fontSize: fontSize.sectionTitle, lineHeight: 22, fontFamily: fontFamily.bodyMedium }}
+          >
             {cooldownMessage(waitSeconds)}
           </Text>
         ) : null}
@@ -161,11 +169,20 @@ export default function SignInScreen() {
           accessibilityRole="link"
           accessibilityLabel="Forgot password? Opens the website in your browser"
           onPress={openForgotPassword}
-          style={{ minHeight: touch.minTarget, justifyContent: "center", alignSelf: "flex-start" }}
+          style={({ pressed }) => ({
+            minHeight: touch.minTarget,
+            marginTop: -space.sm,
+            flexDirection: "row",
+            alignItems: "center",
+            alignSelf: "flex-start",
+            gap: space.xs,
+            opacity: pressed ? 0.6 : 1,
+          })}
         >
-          <Text tone="default" style={{ textDecorationLine: "underline" }}>
+          <Text variant="label" tone="default" style={{ textDecorationLine: "underline" }}>
             Forgot password?
           </Text>
+          <ArrowUpRight size={14} color={colors.text} />
         </Pressable>
       </View>
     </Screen>
