@@ -1,4 +1,5 @@
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+import { useNavigation } from "expo-router";
 import { Camera, Flashlight, FlashlightOff, X } from "lucide-react-native";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BackHandler, Linking, ScrollView, View } from "react-native";
@@ -75,6 +76,17 @@ export function ScannerView({ onScanned, paused, onClose, onTypeCode, overlay }:
     });
     return () => sub.remove();
   }, []);
+  // iOS: no swipe-back while the camera is open, so Close is the only way
+  // out (Jack, Nov 2026). Turned off on this screen and every screen holding
+  // it: the volunteer door is the first route of /scan, so the swipe that
+  // would leave it belongs to the root stack. Back on when the camera closes.
+  const navigation = useNavigation();
+  useEffect(() => {
+    const holders: { setOptions: (o: { gestureEnabled: boolean }) => void }[] = [];
+    for (let n: typeof navigation | undefined = navigation; n; n = n.getParent()) holders.push(n);
+    holders.forEach((n) => n.setOptions({ gestureEnabled: false }));
+    return () => holders.forEach((n) => n.setOptions({ gestureEnabled: true }));
+  }, [navigation]);
 
   const handle = (r: BarcodeScanningResult) => {
     if (r.data) onScanned(r.data);

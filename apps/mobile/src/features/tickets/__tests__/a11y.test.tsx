@@ -23,7 +23,11 @@ import { NOW, makeMe, makeTickets } from "../testing/fixtures";
 let mockNet = { isConnected: true, isInternetReachable: true };
 let mockPermission: { granted: boolean; canAskAgain: boolean } | null = { granted: true, canAskAgain: true };
 
-jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }), Stack: { Screen: () => null } }));
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ push: jest.fn() }),
+  useNavigation: () => ({ setOptions: jest.fn(), getParent: () => undefined }),
+  Stack: { Screen: () => null },
+}));
 jest.mock("expo-network", () => ({ useNetworkState: () => mockNet }));
 jest.mock("expo-keep-awake", () => ({ useKeepAwake: jest.fn() }));
 jest.mock("expo-haptics", () => ({

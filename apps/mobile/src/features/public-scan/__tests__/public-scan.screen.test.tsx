@@ -22,7 +22,7 @@ let mockPermission: { granted: boolean; canAskAgain: boolean } | null = { grante
 const mockCamera: { props: { onBarcodeScanned?: (r: { data: string; type: string }) => void } | null } = { props: null };
 const mockRouter = { canGoBack: jest.fn(() => false), replace: jest.fn(), back: jest.fn() };
 
-jest.mock("expo-router", () => ({ useRouter: () => mockRouter }));
+jest.mock("expo-router", () => ({ useRouter: () => mockRouter, useNavigation: () => ({ setOptions: jest.fn(), getParent: () => undefined }) }));
 jest.mock("expo-network", () => ({ useNetworkState: () => ({ isConnected: true, isInternetReachable: true }) }));
 jest.mock("expo-keep-awake", () => ({ useKeepAwake: jest.fn() }));
 jest.mock("expo-haptics", () => ({

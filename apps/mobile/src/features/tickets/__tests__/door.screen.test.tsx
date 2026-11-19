@@ -17,7 +17,10 @@ const mockCamera: { props: { onBarcodeScanned?: (r: { data: string; type: string
   props: null,
 };
 
-jest.mock("expo-router", () => ({ Stack: { Screen: () => null } }));
+// The door's stack screen and the screen holding its stack (swipe-back).
+const mockParentNav = { setOptions: jest.fn(), getParent: () => undefined };
+const mockNav = { setOptions: jest.fn(), getParent: () => mockParentNav };
+jest.mock("expo-router", () => ({ Stack: { Screen: () => null }, useNavigation: () => mockNav }));
 jest.mock("expo-network", () => ({ useNetworkState: () => mockNet }));
 jest.mock("expo-keep-awake", () => ({ useKeepAwake: jest.fn() }));
 jest.mock("expo-haptics", () => ({
@@ -342,6 +345,21 @@ describe("Door", () => {
       } finally {
         add.mockRestore();
       }
+    });
+
+    it("iOS swipe-back is off while the camera is open, so Close is the only way out", async () => {
+      await render(<DoorScreen eventId="e1" door={makeDoor()} />);
+      expect(mockNav.setOptions).not.toHaveBeenCalled();
+      await fireEvent.press(screen.getByRole("button", { name: "Scan tickets" }));
+      expect(screen.getByTestId("camera")).toBeTruthy();
+      // This screen and the one holding its stack (the volunteer door is the first route of /scan).
+      expect(mockNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
+      expect(mockParentNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
+
+      await fireEvent.press(screen.getByRole("button", { name: "Close scanner" }));
+      expect(screen.queryByTestId("camera")).toBeNull();
+      expect(mockNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true });
+      expect(mockParentNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true });
     });
 
     it("asks just in time, with a reason", async () => {
