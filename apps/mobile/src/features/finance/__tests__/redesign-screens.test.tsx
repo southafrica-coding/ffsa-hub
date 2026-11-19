@@ -182,6 +182,27 @@ describe("My finance (3.1)", () => {
     noProblems();
   });
 
+  it("finance staff on no team still see the finance-office placeholder", async () => {
+    mockMe = makeMe({ roles: [{ name: "finance_admin", scopeType: null, scopeId: null }], permissions: [] });
+    mockHome.mockResolvedValue({ teams: [] });
+    const { wrap } = makeOutbox();
+    await render(wrap(<FinanceHomeScreen />));
+    expect(await screen.findByTestId("empty-state")).toBeTruthy();
+    expect(screen.getByRole("header", { name: strings.home.officeSection })).toBeTruthy();
+    expect(screen.getByTestId("finance-office")).toBeTruthy();
+    expect(screen.getByText(strings.home.officeNotBuilt)).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
+    noProblems();
+  });
+
+  it("finance staff by permission (finance.view) on no team see it too", async () => {
+    mockMe = makeMe({ roles: [], permissions: [{ key: "finance.view", scopeType: null, scopeId: null, source: "role" }] });
+    mockHome.mockResolvedValue({ teams: [] });
+    const { wrap } = makeOutbox();
+    await render(wrap(<FinanceHomeScreen />));
+    expect(await screen.findByTestId("finance-office")).toBeTruthy();
+  });
+
   it("not on a team (3.5): the calm empty card, and no placeholder", async () => {
     mockHome.mockResolvedValue({ teams: [] });
     const { wrap } = makeOutbox();
@@ -304,6 +325,20 @@ describe("Team (3.2 / 3.6)", () => {
     expect(screen.getByText(strings.expense.receiptCount(1))).toBeTruthy();
     expect(screen.getAllByText(strings.expense.noReceipt)).toHaveLength(2);
     expect(screen.getByTestId("expense-row-e3").props.accessibilityLabel).toMatch(/Logged from Slack$/);
+  });
+
+  it("a long expense list is virtualised: only the first rows render, drawn as one rounded group", async () => {
+    const many = Array.from({ length: 150 }, (_, i) => exp({ id: `x${i}`, category_id: "food", description: `Expense ${i}`, zar_amount: 10 + i }));
+    mockTeam.mockResolvedValue(money({ expenses: many, receiptCounts: {} }));
+    const { wrap } = makeOutbox();
+    await render(wrap(<TeamScreen teamId={TEAM} />));
+    expect(await screen.findByTestId("expense-row-x0")).toBeTruthy();
+    expect(screen.queryByTestId("expense-row-x149")).toBeNull();
+    expect(screen.getByRole("header", { name: new RegExp(`^${strings.team.expenses}, 150 · `) })).toBeTruthy();
+    // The first row carries the group's top corners and border.
+    let node = screen.getByTestId("expense-row-x0").parent;
+    while (node && flat(node.props.style).borderLeftWidth === undefined) node = node.parent;
+    expect(flat(node?.props.style)).toMatchObject({ borderTopLeftRadius: 8, borderTopWidth: 1, borderBottomWidth: 0 });
   });
 
   it("the saved-offline note coming back from the form is the calm queued banner, not an alert", async () => {

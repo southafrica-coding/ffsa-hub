@@ -4,13 +4,13 @@ import { useCallback } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { EmptyState, LargeTitleScrollView, ListGroup, SkeletonList, Text } from "@/components";
+import { Bleed, EmptyState, FadeIn, Freshness, GroupRow, LargeTitleList, ListGroup, ListGroupItem, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { refreshControlColors } from "@/theme/styles";
 import { hairline, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-import { BIG_KPI, Bleed, DateBlock, Freshness, GroupRow, LoadError, SectionCount, StatusTag } from "../components/parts";
+import { BIG_KPI, DateBlock, StatusTag } from "../components/parts";
 import { loadAttendance, loadErrorMessage } from "../data";
 import { attendanceStatus, dayAndMonth, formatDate, formatTime, summariseAttendance } from "../logic";
 import { strings } from "../strings";
@@ -38,63 +38,78 @@ export default function AttendanceScreen() {
   const rows = state.status === "ready" ? state.data : [];
   const summary = summariseAttendance(rows);
 
+  const ready = state.status === "ready";
+
+  // The records are virtualised (years of check-ins stay smooth), drawn as
+  // one group with ListGroupItem; everything above them is the list header.
   return (
-    <LargeTitleScrollView
+    <LargeTitleList
       eyebrow={s.context}
       title={s.title}
       back={{ label: strings.list.title, onPress: () => router.back() }}
       contentContainerStyle={{ flexGrow: 1 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
-    >
-      {state.status === "loading" ? (
-        <Bleed>
-          <SkeletonList label={s.loading} count={5} inset={false} />
-        </Bleed>
-      ) : null}
-      {state.status === "error" ? (
-        <Bleed>
-          <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
-        </Bleed>
-      ) : null}
-      <Freshness state={state} onRetry={retry} />
+      header={
+        <View style={{ gap: space.lg, paddingTop: space.lg }}>
+          {state.status === "loading" ? (
+            <Bleed>
+              <SkeletonList label={s.loading} count={5} inset={false} />
+            </Bleed>
+          ) : null}
+          {state.status === "error" ? (
+            <Bleed>
+              <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
+            </Bleed>
+          ) : null}
+          <Freshness state={state} onRetry={retry} bleed />
 
-      {summary.pct !== null ? (
-        <View
-          accessible
-          accessibilityLabel={strings.a11y.withBreakdown(
-            s.summaryA11y(summary.pct, summary.present, summary.total),
-            summary.byStatus.map((b) => `${b.label} ${b.count}`).join(", "),
-          )}
-          testID="summary"
-          style={{ gap: 2, paddingBottom: 14, borderBottomWidth: hairline, borderBottomColor: colors.text }}
-        >
-          <Text variant="label">{s.present}</Text>
-          <View style={{ flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", columnGap: space.md }}>
-            <Text variant="kpi" style={BIG_KPI}>{`${summary.pct}%`}</Text>
-            <Text variant="rowTitle" tone="secondary">
-              {s.summary(summary.present, summary.total)}
-            </Text>
-          </View>
-          <Text variant="caption" tone="secondary" testID="breakdown">
-            {summary.byStatus.map((b) => `${b.label} ${b.count}`).join(" · ")}
-          </Text>
+          {summary.pct !== null ? (
+            <FadeIn>
+              <View
+                accessible
+                accessibilityLabel={strings.a11y.withBreakdown(
+                  s.summaryA11y(summary.pct, summary.present, summary.total),
+                  summary.byStatus.map((b) => `${b.label} ${b.count}`).join(", "),
+                )}
+                testID="summary"
+                style={{ gap: 2, paddingBottom: 14, borderBottomWidth: hairline, borderBottomColor: colors.text }}
+              >
+                <Text variant="label">{s.present}</Text>
+                <View style={{ flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", columnGap: space.md }}>
+                  <Text variant="kpi" style={BIG_KPI}>{`${summary.pct}%`}</Text>
+                  <Text variant="rowTitle" tone="secondary">
+                    {s.summary(summary.present, summary.total)}
+                  </Text>
+                </View>
+                <Text variant="caption" tone="secondary" testID="breakdown">
+                  {summary.byStatus.map((b) => `${b.label} ${b.count}`).join(" · ")}
+                </Text>
+              </View>
+            </FadeIn>
+          ) : null}
+
+          {ready ? <SectionTitle title={s.records} meta={s.logged(rows.length)} tight /> : null}
         </View>
-      ) : null}
-
-      {state.status === "ready" ? (
-        <View>
-          <SectionCount title={s.records} meta={s.logged(rows.length)} tight />
+      }
+      data={ready ? rows : []}
+      keyExtractor={(r) => r.id}
+      renderItem={({ item, index }) => (
+        <Bleed>
+          <ListGroupItem index={index} count={rows.length}>
+            <AttendanceRow record={item} />
+          </ListGroupItem>
+        </Bleed>
+      )}
+      empty={
+        ready ? (
           <Bleed>
             <ListGroup inset={false}>
-              {rows.length === 0 ? <EmptyState testID="empty" card={false} icon={CalendarCheck} title={s.emptyTitle} body={s.emptyBody} /> : null}
-              {rows.map((r) => (
-                <AttendanceRow key={r.id} record={r} />
-              ))}
+              <EmptyState testID="empty" card={false} icon={CalendarCheck} title={s.emptyTitle} body={s.emptyBody} />
             </ListGroup>
           </Bleed>
-        </View>
-      ) : null}
-    </LargeTitleScrollView>
+        ) : null
+      }
+    />
   );
 }
 

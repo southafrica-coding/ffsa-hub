@@ -9,7 +9,9 @@ import { strings } from "../strings";
 const mockShared: { value: number }[] = [];
 jest.mock("react-native-reanimated", () => {
   const { View } = jest.requireActual("react-native");
+  // The rest of the shared stand-in (FadeIn and friends for the kit), with this test's shared values on top.
   return {
+    ...jest.requireActual("../../../../test/reanimated-mock"),
     __esModule: true,
     default: { View },
     useSharedValue: (v: number) => {

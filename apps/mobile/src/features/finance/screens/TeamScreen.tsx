@@ -3,19 +3,7 @@ import { Clock, FileText, ImageOff, Plus } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { RefreshControl, View } from "react-native";
 
-import {
-  Banner,
-  Button,
-  LargeTitleScrollView,
-  ListGroup,
-  ListRow,
-  MoneyText,
-  NeedsYouBand,
-  SkeletonList,
-  StatusChip,
-  Text,
-  type BackAction,
-} from "@/components";
+import { type BackAction, Banner, Bleed, Button, ChoiceChips, GroupRow, InfoRow, FadeIn, LargeTitleList, ListGroup, ListGroupItem, ListRow, LoadError, MoneyText, NeedsYouBand, PushedPage, SectionTitle, SkeletonList, StaleNote, StatusChip, StatusLine, Text } from "@/components";
 import { useSession } from "@/auth/session-provider";
 import { announce } from "@/lib/a11y";
 import { supabase } from "@/lib/supabase";
@@ -26,8 +14,7 @@ import { useTheme } from "@/theme/use-theme";
 import { userMessage } from "../api";
 import { formatSavedAt } from "../cache";
 import { OutboxList } from "../components/OutboxList";
-import { ChoiceChips } from "../components/form-parts";
-import { Bleed, BudgetBar, GroupRow, InfoRow, LoadError, PushedPage, SectionTitle, StaleNote, StatusLine } from "../components/parts";
+import { BudgetBar } from "../components/parts";
 import { loadTeam, receiptCount, type ReadClient, type TeamData, type TeamMemberView, type TeamMoneyView } from "../data";
 import { takeFlash, type Flash } from "../flash";
 import { budgetFigures, budgetLines, formatMoney, moneyLabel, sumBy } from "../money";
@@ -157,14 +144,12 @@ function MoneyView({
   const categoryName = useMemo(() => new Map(view.categories.map((c) => [c.id, c.name])), [view.categories]);
   const context = [view.team.location ?? strings.home.locationTbc, view.team.country].filter(Boolean).join(" · ");
 
-  return (
-    <LargeTitleScrollView
-      back={back}
-      eyebrow={context}
-      title={view.team.team_name}
-      gap={0}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />}
-    >
+  const openExpense = (id: string) => router.push({ pathname: "/finance/[teamId]/expense/[expenseId]", params: { teamId, expenseId: id } });
+
+  // Everything above the expense rows; the rows themselves are virtualised
+  // (a team can log hundreds), drawn as one group with ListGroupItem.
+  const header = (
+    <FadeIn>
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, flexWrap: "wrap", marginTop: -space.sm }}>
         <StatusChip label={strings.status[view.team.status] ?? view.team.status} variant="quiet" icon={null} />
         {!view.canEdit ? <StatusChip label={strings.team.viewOnly} variant="quiet" icon={null} /> : null}
@@ -260,27 +245,37 @@ function MoneyView({
           />
         </View>
       ) : null}
-      {shown.length === 0 ? (
+    </FadeIn>
+  );
+
+  return (
+    <LargeTitleList
+      back={back}
+      eyebrow={context}
+      title={view.team.team_name}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />}
+      header={header}
+      data={shown}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item, index }) => (
+        <Bleed>
+          <ListGroupItem index={index} count={shown.length}>
+            <ExpenseRow
+              expense={item}
+              category={categoryName.get(item.category_id) ?? strings.team.otherLine}
+              receipts={receiptCount(item, view.receiptCounts)}
+              waiting={receiptsFor(items, item.id, userId).length}
+              onPress={() => openExpense(item.id)}
+            />
+          </ListGroupItem>
+        </Bleed>
+      )}
+      empty={
         <Text tone="secondary" style={{ paddingVertical: space.sm }}>
           {filter === ALL ? strings.team.noExpenses : strings.team.noExpensesInLine}
         </Text>
-      ) : (
-        <Bleed>
-          <ListGroup inset={false}>
-            {shown.map((item) => (
-              <ExpenseRow
-                key={item.id}
-                expense={item}
-                category={categoryName.get(item.category_id) ?? strings.team.otherLine}
-                receipts={receiptCount(item, view.receiptCounts)}
-                waiting={receiptsFor(items, item.id, userId).length}
-                onPress={() => router.push({ pathname: "/finance/[teamId]/expense/[expenseId]", params: { teamId, expenseId: item.id } })}
-              />
-            ))}
-          </ListGroup>
-        </Bleed>
-      )}
-    </LargeTitleScrollView>
+      }
+    />
   );
 }
 
@@ -377,33 +372,40 @@ function MemberView({
   const o = view.overview;
   const role = strings.roles[o.my_role ?? ""] ?? o.my_role ?? "";
   const facts = [dateRange(o.start_date, o.end_date), strings.team.people(o.roster.length), role ? strings.team.yourRole(role) : null];
+  // The roster is virtualised too (a big team), drawn as one group.
   return (
-    <LargeTitleScrollView
+    <LargeTitleList
       back={back}
       eyebrow={[o.program_name, o.location ?? strings.home.locationTbc, o.country].filter(Boolean).join(" · ")}
       title={o.team_name}
-      gap={0}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />}
-    >
-      <Text variant="label" style={{ marginTop: -space.sm }}>
-        {facts.filter(Boolean).join(" · ")}
-      </Text>
-      {stale ? <Bleed style={{ marginTop: space.md }}>{stale}</Bleed> : null}
-      <SectionTitle title={strings.team.whoIsGoing} meta={`${o.roster.length}`} />
-      {o.roster.length > 0 ? (
-        <Bleed>
-          <ListGroup inset={false}>
-            {o.roster.map((p) => {
-              const name = p.name ?? strings.team.unnamed;
-              const theirRole = strings.roles[p.role] ?? p.role;
-              return <InfoRow key={p.id} title={name} meta={theirRole} accessibilityLabel={`${name}, ${theirRole}`} />;
-            })}
-          </ListGroup>
-        </Bleed>
-      ) : null}
-      <Text tone="secondary" style={{ marginTop: space.lg }}>
-        {strings.team.memberNote}
-      </Text>
-    </LargeTitleScrollView>
+      header={
+        <FadeIn>
+          <Text variant="label" style={{ marginTop: -space.sm }}>
+            {facts.filter(Boolean).join(" · ")}
+          </Text>
+          {stale ? <Bleed style={{ marginTop: space.md }}>{stale}</Bleed> : null}
+          <SectionTitle title={strings.team.whoIsGoing} meta={`${o.roster.length}`} />
+        </FadeIn>
+      }
+      data={o.roster}
+      keyExtractor={(p) => p.id}
+      renderItem={({ item: p, index }) => {
+        const name = p.name ?? strings.team.unnamed;
+        const theirRole = strings.roles[p.role] ?? p.role;
+        return (
+          <Bleed>
+            <ListGroupItem index={index} count={o.roster.length}>
+              <InfoRow title={name} meta={theirRole} accessibilityLabel={`${name}, ${theirRole}`} />
+            </ListGroupItem>
+          </Bleed>
+        );
+      }}
+      footer={
+        <Text tone="secondary" style={{ marginTop: space.lg }}>
+          {strings.team.memberNote}
+        </Text>
+      }
+    />
   );
 }
