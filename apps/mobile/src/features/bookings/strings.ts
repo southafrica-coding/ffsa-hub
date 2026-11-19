@@ -7,6 +7,8 @@ export const strings = {
   common: {
     back: "Back",
     home: "Home",
+    bookings: "Bookings",
+    booking: "Booking",
     close: "Close",
     tryAgain: "Try again",
     cancel: "Cancel",
@@ -23,6 +25,7 @@ export const strings = {
     context: "Reservations",
     title: "Bookings",
     loading: "Loading your bookings",
+    errorTitle: "Couldn't load your bookings.",
     newRequest: "New request",
     newRequestHint: "Book a space or a vehicle",
     empty: "You have no bookings. Request a room, vehicle or equipment.",
