@@ -3,7 +3,7 @@ import { Clock, ShieldCheck, Wallet } from "lucide-react-native";
 import { useCallback } from "react";
 import { RefreshControl, View } from "react-native";
 
-import { Banner, Bleed, EmptyState, FadeIn, GroupRow, InfoRow, LargeTitleScrollView, ListGroup, LoadError, NeedsYouBand, SectionTitle, SkeletonList, StaleNote, StatusChip, StatusLine, Text } from "@/components";
+import { Banner, Bleed, EmptyState, FadeIn, GroupRow, InfoRow, LargeTitleScrollView, ListGroup, LoadError, NeedsYouBand, SectionTitle, SkeletonList, StaleNote, StatusChip, StatusLine, Text, useLargeText } from "@/components";
 import { useSession } from "@/auth/session-provider";
 import { useMe } from "@/features/shell";
 import { supabase } from "@/lib/supabase";
@@ -115,6 +115,7 @@ export default function FinanceHomeScreen() {
 }
 
 function TeamRow({ team, pending, onPress }: { team: HomeTeam; pending: OutboxItem[]; onPress: () => void }) {
+  const stacked = useLargeText();
   const role = strings.roles[team.role] ?? team.role;
   const status = strings.status[team.status] ?? team.status;
   const line2 = [team.program_name, team.location ?? s.locationTbc, role].filter(Boolean).join(" · ");
@@ -133,8 +134,15 @@ function TeamRow({ team, pending, onPress }: { team: HomeTeam; pending: OutboxIt
       accessibilityHint={s.teamHint}
       testID={`team-row-${team.team_id}`}
     >
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: space.md }}>
-        <Text variant="rowTitle" style={{ flex: 1 }}>
+      {/* The name keeps its words whole: at large text the chip goes under it (QA: "Leadershi/p"). */}
+      <View
+        style={
+          stacked
+            ? { alignItems: "flex-start", gap: space.xs }
+            : { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: space.md }
+        }
+      >
+        <Text variant="rowTitle" style={stacked ? undefined : { flex: 1, minWidth: 0 }}>
           {team.team_name}
         </Text>
         <StatusChip label={status} variant="quiet" icon={null} />

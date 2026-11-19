@@ -3,10 +3,10 @@
 // controls are reachable by role/label, and async results are announced.
 
 import { fireEvent, render, screen } from "@testing-library/react-native";
-import { AccessibilityInfo, Platform } from "react-native";
+import { AccessibilityInfo, Platform, StyleSheet } from "react-native";
 
 import type { Me } from "@/lib/api";
-import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems, wordBreakRisks } from "@/lib/a11y/testing";
 
 import { makeMe } from "../../../../test/fixtures";
 import { DataError, loadHome, loadTeam, type HomeData, type TeamMoneyView } from "../data";
@@ -258,6 +258,8 @@ describe("largest text: nothing is capped or clipped", () => {
     await render(wrap(<FinanceHomeScreen />));
     expect(await screen.findByRole("header", { name: strings.home.title })).toBeTruthy();
     expect(largeTextProblems(screen.container as never)).toEqual([]);
+    // The team name keeps its words whole: the Active chip goes under it (QA: "Leadershi/p").
+    expect(wordBreakRisks(screen.container as never, (st) => StyleSheet.flatten(st as never) ?? {})).toEqual([]);
     noProblems();
     dims.mockRestore();
   });
