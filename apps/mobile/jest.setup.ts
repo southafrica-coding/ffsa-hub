@@ -34,34 +34,6 @@ jest.mock("expo-crypto", () => {
   };
 });
 
-// Reanimated's own Jest mock doesn't load under this SDK's worklets build
-// ("loadUnpackersWithCode"), so the kit's collapsing header (and any screen
-// importing @/components) gets this minimal stand-in: shared values are plain
-// objects, animated styles are computed once, scroll handlers are inert.
-// A test file can still jest.mock("react-native-reanimated") its own way.
-// The stand-in is registered as "react-native-reanimated/mock" too, because
-// expo-router/testing-library re-mocks Reanimated with that module (and falls
-// back to an empty object when it can't load).
-jest.mock("react-native-reanimated", () => jest.requireMock("react-native-reanimated/mock"));
-jest.mock("react-native-reanimated/mock", () => {
-  const RN = jest.requireActual("react-native");
-  const Animated = { View: RN.View, Text: RN.Text, ScrollView: RN.ScrollView, FlatList: RN.FlatList, Image: RN.Image };
-  return {
-    __esModule: true,
-    default: Animated,
-    ...Animated,
-    Extrapolation: { CLAMP: "clamp", EXTEND: "extend", IDENTITY: "identity" },
-    interpolate: (x: number, input: number[], output: number[]) => {
-      if (x <= input[0]) return output[0];
-      if (x >= input[input.length - 1]) return output[output.length - 1];
-      const t = (x - input[0]) / (input[input.length - 1] - input[0]);
-      return output[0] + t * (output[output.length - 1] - output[0]);
-    },
-    useSharedValue: <T,>(v: T) => ({ value: v }),
-    useAnimatedStyle: (fn: () => unknown) => fn(),
-    useAnimatedScrollHandler: () => () => {},
-    useReducedMotion: () => false,
-    withTiming: <T,>(v: T) => v,
-    withSpring: <T,>(v: T) => v,
-  };
-});
+// Reanimated: one small stand-in for every test (see test/reanimated-mock.ts).
+jest.mock("react-native-reanimated", () => jest.requireActual("./test/reanimated-mock"));
+jest.mock("react-native-reanimated/mock", () => jest.requireActual("./test/reanimated-mock"));

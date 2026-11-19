@@ -6,6 +6,8 @@ export const kitStrings = {
   back: "Back",
   backTo: (parent: string) => `Back to ${parent}`,
   tryAgain: "Try again",
+  refreshFailed: (when: string) => `Couldn't refresh. Showing what was saved at ${when}.`,
+  lastUpdated: (when: string) => `Last updated ${when}`,
   opensInBrowser: "Opens in browser",
   loading: "Loading",
   unread: "Unread",

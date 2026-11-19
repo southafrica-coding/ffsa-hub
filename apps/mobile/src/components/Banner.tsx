@@ -1,6 +1,6 @@
 import { CircleAlert, CircleCheck, Clock, CloudOff, Info, type LucideIcon } from "lucide-react-native";
 import { useEffect, type ReactNode } from "react";
-import { Platform, Pressable, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, View } from "react-native";
 
 import { announce, announcement } from "@/lib/a11y/announce";
 import { bannerStyle, type BannerTone } from "@/theme/styles";
@@ -18,6 +18,8 @@ export type BannerProps = {
   /** Inline text action ("Try again"). */
   actionLabel?: string;
   onAction?: () => void;
+  /** The inline action is running ("Send now"): a spinner, and it can't be pressed twice. */
+  actionBusy?: boolean;
   /** Any other action (e.g. a Button), shown under the message. */
   action?: ReactNode;
   /** Replace the tone's icon; `null` for none. */
@@ -46,7 +48,7 @@ const isAlert = (tone: BannerTone) => tone === "error" || tone === "danger";
  * tone="needsYou" still draws the yellow band for older screens; new code
  * uses NeedsYouBand.
  */
-export function Banner({ tone = "info", title, children, actionLabel, onAction, action, icon, testID }: BannerProps) {
+export function Banner({ tone = "info", title, children, actionLabel, onAction, actionBusy = false, action, icon, testID }: BannerProps) {
   const { colors } = useTheme();
   useRegisterNeedsYouBand(tone === "needsYou");
   const s = bannerStyle(tone, colors);
@@ -99,6 +101,8 @@ export function Banner({ tone = "info", title, children, actionLabel, onAction, 
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={inlineAction.label}
+          accessibilityState={{ busy: actionBusy, disabled: actionBusy }}
+          disabled={actionBusy}
           onPress={inlineAction.onPress}
           hitSlop={4}
           style={({ pressed }) => ({
@@ -109,9 +113,13 @@ export function Banner({ tone = "info", title, children, actionLabel, onAction, 
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          <Text variant="label" tone="default" style={{ textDecorationLine: "underline" }}>
-            {inlineAction.label}
-          </Text>
+          {actionBusy ? (
+            <ActivityIndicator testID="banner-action-busy" color={colors.text} />
+          ) : (
+            <Text variant="label" tone="default" style={{ textDecorationLine: "underline" }}>
+              {inlineAction.label}
+            </Text>
+          )}
         </Pressable>
       ) : null}
       {action ? <View style={{ flexBasis: "100%", alignItems: "flex-start" }}>{action}</View> : null}

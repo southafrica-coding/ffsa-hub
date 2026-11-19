@@ -1,6 +1,6 @@
 import { X } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { Modal, Pressable, ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useReduceMotion } from "@/lib/a11y";
@@ -15,6 +15,8 @@ export type SheetProps = {
   title: string;
   /** One caption line under the title. */
   subtitle?: string;
+  /** What VoiceOver reads for the subtitle, when the visible form is abbreviated ("Wednesday 18 November, 8 to 9:30 am"). */
+  subtitleAccessibilityLabel?: string;
   onClose: () => void;
   children: ReactNode;
   /** Pinned under the scrolling body (decision buttons). */
@@ -28,20 +30,21 @@ export type SheetProps = {
  * The app's one bottom sheet (short choices, record detail, confirms): 8pt top
  * corners, grabber, 17/600 title and a × close button. Closes on the scrim,
  * the × or the system back gesture, and keeps screen-reader focus inside
- * while open. No slide under Reduce Motion.
+ * while open. No slide under Reduce Motion. Rides above the keyboard, so
+ * a note field inside stays visible while typing.
  *
  * A custom Modal rather than expo-router's formSheet: every sheet in the app
  * is opened from component state (not a route), so moving to formSheet
  * would mean new routes and passing state through params (a behaviour change
  * for the feature slices, not this kit).
  */
-export function Sheet({ visible, title, subtitle, onClose, children, footer, closeLabel = kitStrings.close, testID }: SheetProps) {
+export function Sheet({ visible, title, subtitle, subtitleAccessibilityLabel, onClose, children, footer, closeLabel = kitStrings.close, testID }: SheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
   return (
     <Modal visible={visible} transparent animationType={reduceMotion ? "fade" : "slide"} onRequestClose={onClose} statusBarTranslucent>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+      <KeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <Pressable
           // Hidden from screen readers: the × and the back gesture do the same job.
           accessibilityRole="button"
@@ -75,7 +78,7 @@ export function Sheet({ visible, title, subtitle, onClose, children, footer, clo
                 {title}
               </Text>
               {subtitle ? (
-                <Text variant="caption" tone="secondary">
+                <Text variant="caption" tone="secondary" accessibilityLabel={subtitleAccessibilityLabel}>
                   {subtitle}
                 </Text>
               ) : null}
@@ -99,7 +102,7 @@ export function Sheet({ visible, title, subtitle, onClose, children, footer, clo
               </View>
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.xs, paddingBottom: space.lg, gap: space.lg }}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.xs, paddingBottom: space.lg, gap: space.lg }}>
             {children}
           </ScrollView>
           {footer ? (
@@ -108,7 +111,7 @@ export function Sheet({ visible, title, subtitle, onClose, children, footer, clo
             </View>
           ) : null}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

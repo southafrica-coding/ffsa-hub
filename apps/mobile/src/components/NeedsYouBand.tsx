@@ -1,7 +1,7 @@
 import { Pressable, View } from "react-native";
 
 import { needsYouBandStyle } from "@/theme/styles";
-import { fontFamily, palette, radius, touch } from "@/theme/tokens";
+import { fontFamily, fontSize, palette, radius, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { useRegisterNeedsYouBand } from "./Screen";
@@ -12,9 +12,15 @@ export type NeedsYouBandProps = {
   eyebrow: string;
   /** One line in row-title weight, e.g. "Booking request: Seminar room". */
   text: string;
+  /** Optional second line in regular weight (Home: the first unread title). */
+  detail?: string;
   /** Optional inline black button (44pt). */
   actionLabel?: string;
   onAction?: () => void;
+  /** What VoiceOver says for the button, when the visible label is short ("Open: New booking request"). */
+  actionAccessibilityLabel?: string;
+  /** What the button does, when it isn't obvious ("Opens the application form on the FFSA Hub website"). */
+  actionAccessibilityHint?: string;
   /** What VoiceOver says for the group; defaults to eyebrow + text. */
   accessibilityLabel?: string;
   testID?: string;
@@ -25,7 +31,7 @@ export type NeedsYouBandProps = {
  * ONE per screen (Screen warns in development), and only when real data
  * drives it. Never invent a signal to fill it.
  */
-export function NeedsYouBand({ eyebrow, text, actionLabel, onAction, accessibilityLabel, testID }: NeedsYouBandProps) {
+export function NeedsYouBand({ eyebrow, text, detail, actionLabel, onAction, actionAccessibilityLabel, actionAccessibilityHint, accessibilityLabel, testID }: NeedsYouBandProps) {
   const { colors } = useTheme();
   useRegisterNeedsYouBand(true);
   return (
@@ -36,7 +42,7 @@ export function NeedsYouBand({ eyebrow, text, actionLabel, onAction, accessibili
       <View
         accessible
         accessibilityRole="summary"
-        accessibilityLabel={accessibilityLabel ?? `${eyebrow}. ${text}`}
+        accessibilityLabel={accessibilityLabel ?? [eyebrow, text, detail].filter(Boolean).join(". ")}
         style={{ flex: 1, minWidth: 180, gap: 2 }}
       >
         <Text variant="eyebrow" tone="onAccent">
@@ -45,11 +51,17 @@ export function NeedsYouBand({ eyebrow, text, actionLabel, onAction, accessibili
         <Text variant="rowTitle" tone="onAccent">
           {text}
         </Text>
+        {detail ? (
+          <Text tone="onAccent" style={{ fontSize: fontSize.sectionTitle, lineHeight: 22 }}>
+            {detail}
+          </Text>
+        ) : null}
       </View>
       {actionLabel && onAction ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={actionLabel}
+          accessibilityLabel={actionAccessibilityLabel ?? actionLabel}
+          accessibilityHint={actionAccessibilityHint}
           onPress={onAction}
           style={({ pressed }) => ({
             minHeight: touch.floor,

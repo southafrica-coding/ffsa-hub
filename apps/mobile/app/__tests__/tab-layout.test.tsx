@@ -17,8 +17,7 @@ import MeScreen from "../(app)/me/index";
 // The real tab layout under expo-router. Auth is out of the picture here
 // (app/_layout.tsx's gate has its own test): these routes are the signed-in area.
 
-// expo-router's testing library swaps Reanimated for its official mock, which can't load under this SDK.
-jest.mock("react-native-reanimated/mock", () => jest.requireActual("../../test/reanimated-mock"));
+// Reanimated: jest.setup.ts registers the shared stand-in for expo-router's re-mock too.
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
 jest.mock("@/auth/session-provider", () => ({
   useSession: () => ({ status: "signedIn", session: { user: { id: "u1" } } }),

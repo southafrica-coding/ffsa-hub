@@ -3,7 +3,7 @@ import { StyleSheet } from "react-native";
 
 import { palette } from "@/theme/tokens";
 
-import { Banner, Button, Divider, Masthead, Screen, Text, TextField } from "..";
+import { Banner, Button, Divider, LargeTitle, Screen, Text, TextField } from "..";
 
 function flat(style: unknown) {
   return StyleSheet.flatten(style as never) ?? {};
@@ -11,7 +11,7 @@ function flat(style: unknown) {
 
 describe("Text", () => {
   it("gives headings the header role and scales with the OS font size", async () => {
-    await render(<Text variant="display">Sign in</Text>);
+    await render(<Text variant="pageTitle">Sign in</Text>);
     const el = screen.getByRole("header", { name: "Sign in" });
     expect(el.props.allowFontScaling).toBe(true);
     expect(flat(el.props.style)).toMatchObject({ textTransform: "uppercase", color: palette.ink });
@@ -123,7 +123,7 @@ describe("Banner", () => {
   });
 });
 
-describe("Divider and Masthead", () => {
+describe("Divider and LargeTitle", () => {
   it("draws a hairline or a strong rule, hidden from screen readers", async () => {
     const { rerender } = await render(<Divider />);
     expect(flat(screen.getByTestId("divider", { includeHiddenElements: true }).props.style).height).toBe(1);
@@ -134,8 +134,8 @@ describe("Divider and Masthead", () => {
     });
   });
 
-  it("Masthead (deprecated) now draws the LargeTitle: yellow tick, eyebrow and title", async () => {
-    await render(<Masthead context="FFSA Hub · Home" title="Hello, Jo" />);
+  it("LargeTitle: yellow tick, eyebrow and title", async () => {
+    await render(<LargeTitle eyebrow="FFSA Hub · Home" title="Hello, Jo" />);
     // The tick is decoration: drawn, but hidden from screen readers.
     const tick = screen.getByTestId("large-title-tick", { includeHiddenElements: true });
     expect(flat(tick.props.style).backgroundColor).toBe(palette.yellow);

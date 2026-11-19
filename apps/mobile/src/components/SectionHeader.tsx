@@ -9,6 +9,11 @@ export type SectionHeaderProps = {
   /** Optional underlined text action on the right ("Mark all read"). */
   actionLabel?: string;
   onAction?: () => void;
+  /** What VoiceOver says for the action ("Mark all 3 as read"). */
+  actionAccessibilityLabel?: string;
+  actionTestID?: string;
+  /** What VoiceOver reads for the title ("Wednesday 18 November" for "Wed 18 Nov"). */
+  accessibilityLabel?: string;
   /** 12pt top padding instead of 24 (first section under a title). */
   tight?: boolean;
   /** Side padding: 20 (gutter) by default; 0 inside an already padded screen. */
@@ -17,7 +22,7 @@ export type SectionHeaderProps = {
 };
 
 /** 15/600 sentence-case section title. Not caps: the page title is the one caps moment. */
-export function SectionHeader({ title, actionLabel, onAction, tight = false, inset = true, testID }: SectionHeaderProps) {
+export function SectionHeader({ title, actionLabel, onAction, actionAccessibilityLabel, actionTestID, accessibilityLabel, tight = false, inset = true, testID }: SectionHeaderProps) {
   return (
     <View
       testID={testID}
@@ -32,13 +37,14 @@ export function SectionHeader({ title, actionLabel, onAction, tight = false, ins
         paddingHorizontal: inset ? space.gutter : 0,
       }}
     >
-      <Text variant="sectionTitle" tone="default" accessibilityRole="header" style={{ flexShrink: 1 }}>
+      <Text variant="sectionTitle" tone="default" accessibilityRole="header" accessibilityLabel={accessibilityLabel} style={{ flexShrink: 1 }}>
         {title}
       </Text>
       {actionLabel && onAction ? (
         <Pressable
+          testID={actionTestID}
           accessibilityRole="button"
-          accessibilityLabel={actionLabel}
+          accessibilityLabel={actionAccessibilityLabel ?? actionLabel}
           onPress={onAction}
           hitSlop={4}
           style={({ pressed }) => ({ minHeight: touch.floor, justifyContent: "center", paddingLeft: space.md, opacity: pressed ? 0.6 : 1 })}

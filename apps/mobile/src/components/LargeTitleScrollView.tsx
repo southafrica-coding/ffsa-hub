@@ -69,15 +69,15 @@ export function LargeTitleScrollView({
       {header.title}
     </Animated.Text>
   );
-  const pushed = Boolean(header.back || header.navRight);
-  const { back, navRight, ...titleProps } = header;
+  const pushed = Boolean(header.back || header.navRight || header.navLeft);
+  const { back, navRight, navLeft, ...titleProps } = header;
 
   return (
     <NeedsYouBandScope>
       <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: colors.bg }}>
         {pushed ? (
           <View style={{ paddingHorizontal: space.gutter, backgroundColor: colors.bg }}>
-            <NavBar back={back} right={navRight} title={navTitle} />
+            <NavBar back={back} left={navLeft} right={navRight} title={navTitle} />
             <Animated.View
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"

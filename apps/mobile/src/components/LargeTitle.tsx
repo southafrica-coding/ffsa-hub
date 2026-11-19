@@ -32,6 +32,8 @@ export type LargeTitleProps = {
   back?: BackAction;
   /** Trailing nav-bar content on pushed screens. */
   navRight?: ReactNode;
+  /** Leading nav-bar content instead of the back button (Cancel, Done). */
+  navLeft?: ReactNode;
   style?: ViewStyle;
   testID?: string;
 };
@@ -42,10 +44,10 @@ export type LargeTitleProps = {
  * and render this at the top of their content; the screen supplies the side
  * gutter. For the collapse-on-scroll behaviour use LargeTitleScrollView.
  */
-export function LargeTitle({ eyebrow, title, tick = true, hero = false, subtitle, right, back, navRight, style, testID }: LargeTitleProps) {
+export function LargeTitle({ eyebrow, title, tick = true, hero = false, subtitle, right, back, navRight, navLeft, style, testID }: LargeTitleProps) {
   return (
     <View testID={testID} style={style}>
-      {back || navRight ? <NavBar back={back} right={navRight} /> : null}
+      {back || navRight || navLeft ? <NavBar back={back} left={navLeft} right={navRight} /> : null}
       <View style={{ paddingTop: 8, paddingBottom: 16, gap: 6 }}>
         {eyebrow ? <Eyebrow text={eyebrow} tick={tick} /> : null}
         <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
@@ -84,11 +86,15 @@ export function Eyebrow({ text, tick = true }: { text: string; tick?: boolean })
   );
 }
 
-/** The 44pt bar over a pushed screen: back chevron + parent name, optional title and trailing actions. */
-export function NavBar({ back, title, right }: { back?: BackAction; title?: ReactNode; right?: ReactNode }) {
+/**
+ * The 44pt bar over a pushed screen: back chevron + parent name (or any
+ * `left` content, e.g. Cancel or Done), optional centred title and trailing
+ * actions.
+ */
+export function NavBar({ back, left, title, right }: { back?: BackAction; left?: ReactNode; title?: ReactNode; right?: ReactNode }) {
   return (
     <View style={{ minHeight: touch.floor, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: -12 }}>
-      {back ? <BackButton {...back} /> : <View style={{ width: touch.floor }} />}
+      {left ?? (back ? <BackButton {...back} /> : <View style={{ width: touch.floor }} />)}
       {title ? (
         <View pointerEvents="none" style={{ position: "absolute", left: 88, right: 88, alignItems: "center" }}>
           {title}

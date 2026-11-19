@@ -5167,9 +5167,9 @@ exports[`kit gallery (dark) renders every component 1`] = `
         accessibilityRole="button"
         accessibilityState={
           {
-            "busy": undefined,
+            "busy": false,
             "checked": undefined,
-            "disabled": undefined,
+            "disabled": false,
             "expanded": undefined,
             "selected": undefined,
           }
@@ -7213,11 +7213,17 @@ exports[`kit gallery (dark) renders every component 1`] = `
       visible={true}
     >
       <View
+        onLayout={[Function]}
         style={
-          {
-            "flex": 1,
-            "justifyContent": "flex-end",
-          }
+          [
+            {
+              "flex": 1,
+              "justifyContent": "flex-end",
+            },
+            {
+              "paddingBottom": 0,
+            },
+          ]
         }
       >
         <View
@@ -7514,6 +7520,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
                 "paddingTop": 4,
               }
             }
+            keyboardShouldPersistTaps="handled"
           >
             <View>
               <Text
@@ -13358,9 +13365,9 @@ exports[`kit gallery (light) renders every component 1`] = `
         accessibilityRole="button"
         accessibilityState={
           {
-            "busy": undefined,
+            "busy": false,
             "checked": undefined,
-            "disabled": undefined,
+            "disabled": false,
             "expanded": undefined,
             "selected": undefined,
           }
@@ -15404,11 +15411,17 @@ exports[`kit gallery (light) renders every component 1`] = `
       visible={true}
     >
       <View
+        onLayout={[Function]}
         style={
-          {
-            "flex": 1,
-            "justifyContent": "flex-end",
-          }
+          [
+            {
+              "flex": 1,
+              "justifyContent": "flex-end",
+            },
+            {
+              "paddingBottom": 0,
+            },
+          ]
         }
       >
         <View
@@ -15705,6 +15718,7 @@ exports[`kit gallery (light) renders every component 1`] = `
                 "paddingTop": 4,
               }
             }
+            keyboardShouldPersistTaps="handled"
           >
             <View>
               <Text
