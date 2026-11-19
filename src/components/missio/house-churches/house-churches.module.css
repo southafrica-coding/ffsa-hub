@@ -502,3 +502,342 @@
 .existing .renameChoice {
   margin-top: 8px;
 }
+
+/* ---- Grid view (board M4d) ---- */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-top: 20px;
+  min-width: 0;
+}
+
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.root .filterChip {
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 999px !important;
+  background: var(--panel, #fbf9f4);
+  color: var(--ink, #1c1b17);
+  font-size: 14px !important;
+  cursor: pointer;
+}
+
+.root .filterChipOn {
+  border-color: var(--accent-text, #8e3d1f);
+  background: var(--accent-text, #8e3d1f);
+  color: #fff;
+}
+
+.root .filterChip:focus-visible,
+.houseCard:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.sort {
+  display: grid;
+  gap: 4px;
+  width: min(100%, 220px);
+}
+
+.houseCard {
+  display: grid;
+  gap: 8px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-md, 14px);
+  background: var(--panel, #fbf9f4);
+  box-shadow: var(--shadow-1, 0 1px 2px rgba(28, 27, 23, 0.05));
+  color: var(--ink, #1c1b17);
+  text-decoration: none;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.houseCard:hover {
+  border-color: var(--accent-text, #8e3d1f);
+}
+
+.houseTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.houseName {
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.houseMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  font-size: 14px;
+  color: var(--sub, #5b574d);
+}
+
+.houseCard .number {
+  margin: -6px 0 0;
+  font-size: 14px;
+}
+
+.size {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.sizeCount {
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.sizeLabel {
+  font-size: 14px;
+  color: var(--sub, #5b574d);
+}
+
+.dots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.dot,
+.dotOn {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rule, #ddd7c8);
+}
+
+.dotOn {
+  background: var(--olive, #4e6b4f);
+}
+
+.dotMore {
+  margin-left: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--olive-text, #3f5940);
+}
+
+.leading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 4px;
+}
+
+.faces {
+  display: inline-flex;
+  flex: none;
+}
+
+.face {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--panel, #fbf9f4);
+  border-radius: 50%;
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.face + .face {
+  margin-left: -8px;
+}
+
+.leadingName {
+  font-weight: 600;
+  font-size: 15px;
+  min-width: 0;
+}
+
+.place {
+  margin: 0;
+  font-size: 14px;
+  color: var(--quiet, #6e685b);
+}
+
+.signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.signal {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.signalReady {
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
+}
+
+.signalWarn {
+  background: var(--gold-soft, #f4ead2);
+  color: var(--gold-text, #7a5a17);
+}
+
+@media (min-width: 1200px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ---- A house (board M3c) ---- */
+.houseHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 20px;
+  min-width: 0;
+}
+
+.houseHeadText {
+  min-width: 0;
+}
+
+.houseWhere {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  color: var(--sub, #5b574d);
+}
+
+.houseWhere > span:not(:last-child)::after {
+  content: "·";
+  margin-left: 12px;
+  color: var(--quiet, #6e685b);
+}
+
+.root .headAction {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  text-decoration: none;
+}
+
+.houseCards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 20px;
+}
+
+@media (min-width: 900px) {
+  .houseCards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.panel {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-md, 14px);
+  background: var(--panel, #fbf9f4);
+  min-width: 0;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.leadingGroup h3 {
+  margin: 4px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--quiet, #6e685b);
+}
+
+.leadingList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.leadingList li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.leadingList li > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.leadingRole {
+  font-size: 13px;
+  color: var(--sub, #5b574d);
+}
+
+.healthNote {
+  margin: 4px 0 0;
+  color: var(--sub, #5b574d);
+}
+
+.memberName {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.memberName .face {
+  flex: none;
+}
+
+.houseCard {
+  align-content: start;
+}
+
+.reviewHead .reviewButton {
+  flex: none;
+  white-space: nowrap;
+  margin-top: 8px;
+}

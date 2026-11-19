@@ -1,0 +1,24 @@
+{
+  "t-almera-rental": {
+    "createdAt": "2026-11-16T14:30:00Z",
+    "createdBy": null,
+    "from": "2026-11-19",
+    "label": "Rental",
+    "note": "",
+    "source": "manual",
+    "to": "2026-12-13",
+    "updatedAt": "2026-11-16T14:30:00Z",
+    "vehicleId": "almera"
+  },
+  "t-crv-rental": {
+    "createdAt": "2026-11-16T14:30:00Z",
+    "createdBy": null,
+    "from": "2026-11-19",
+    "label": "Rental",
+    "note": "",
+    "source": "manual",
+    "to": "2026-12-13",
+    "updatedAt": "2026-11-16T14:30:00Z",
+    "vehicleId": "crv"
+  }
+}

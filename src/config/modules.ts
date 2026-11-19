@@ -22,6 +22,7 @@ import {
   Target,
   Megaphone,
   UserCheck,
+  Car,
   type LucideIcon,
 } from "lucide-react";
 
@@ -83,6 +84,17 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     icon: Building2,
     description: "Space bookings, vehicle reservations and equipment hire",
     requiredRoles: ["super_admin", "admin"], // others via bookings.* permissions
+  },
+  {
+    // Vehicle inspections, km and workshop visits (vehicles-module/HUB-PLAN.md).
+    // Shown to admins and to anyone with a fleet.* permission (the Vehicle
+    // Coordinator role), not to everyone who can book a vehicle.
+    id: "fleet",
+    label: "Fleet",
+    href: "/bookings/vehicles/fleet",
+    icon: Car,
+    description: "Vehicle inspections, km readings and workshop visits",
+    requiredRoles: ["super_admin", "admin"], // others via fleet.* permissions
   },
   {
     id: "schools",

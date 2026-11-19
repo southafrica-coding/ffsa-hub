@@ -1,0 +1,260 @@
+{
+  "h1": {
+    "name": "Hyundai H-1 2.5 CRDi",
+    "fuel": "Diesel",
+    "where": [
+      [
+        "Fuel",
+        "DIESEL ONLY. Never petrol. If someone puts petrol in, don’t start the engine: call the vehicle coordinator."
+      ],
+      [
+        "Starting",
+        "Turn the key to ON and wait until the yellow coil-shaped glow plug light goes out, then start."
+      ],
+      [
+        "Bonnet",
+        "Pull the release lever low down inside the cab (it shows a car with its bonnet open), then push the safety catch under the front edge of the bonnet and lift."
+      ],
+      [
+        "Jack and wheel spanner",
+        "In the storage compartment under the front passenger seat. Open the cover to reach them."
+      ],
+      [
+        "Spare wheel",
+        "Under the back of the van, held up by a lowering mechanism. The owner’s manual (“Removing and storing the spare tire”) shows where the jack handle fits to lower it. Practise once at the base, not on the roadside."
+      ],
+      [
+        "Battery",
+        "Under the bonnet, at the front of the engine bay."
+      ],
+      [
+        "Tyre pressures",
+        "On the sticker on the driver’s door frame. Use the full-load pressure when the van carries a full team and luggage."
+      ],
+      [
+        "Sliding doors",
+        "On both sides. The child locks are on the edge of each sliding door."
+      ]
+    ],
+    "weak": [
+      [
+        "Turbo wear (from about 80 000 km)",
+        "Loss of power, black or blue smoke, a whistle or squeal when accelerating, and the engine using more oil."
+      ],
+      [
+        "Automatic gearbox",
+        "Jerky or late gear changes, especially from 1st to 2nd, or when you press the accelerator hard."
+      ],
+      [
+        "Steering and suspension wear",
+        "Uneven tyre wear, a shaking steering wheel, or vague steering. Vans that carry heavy loads wear faster."
+      ],
+      [
+        "Cold-morning starting",
+        "Needs several tries on cold mornings: glow plugs, the fuel filter or a weak battery."
+      ],
+      [
+        "Water pump and cooling",
+        "Coolant level dropping, a sweet smell, or the temperature needle climbing."
+      ],
+      [
+        "Aircon compressor",
+        "The aircon stops blowing cold, common in hot climates."
+      ],
+      [
+        "Rear brakes",
+        "Wear faster with heavy loads: listen for squealing or grinding."
+      ]
+    ],
+    "item": {
+      "drv-start": "Wait for the coil-shaped glow plug light to go out before turning the key to start.",
+      "eng-batt": "On the H-1 the battery is at the front of the engine bay.",
+      "saf-jack": "On the H-1 the jack and spanner live under the front passenger seat.",
+      "tyr-spare": "On the H-1 the spare is under the back of the van. Check it’s held up tight and the lowering mechanism isn’t rusted.",
+      "ext-slide": "The H-1 has a sliding door on each side: check both.",
+      "drv-gears": "The H-1 has a 5-speed automatic."
+    },
+    "na": [
+      "drv-clutch"
+    ]
+  },
+  "t5": {
+    "name": "VW T5 Kombi 2.0 TDI",
+    "fuel": "Diesel",
+    "where": [
+      [
+        "Fuel",
+        "DIESEL ONLY. Never petrol. If someone puts petrol in, don’t start the engine: call the vehicle coordinator."
+      ],
+      [
+        "Starting",
+        "Turn the key to ON and wait until the yellow coil-shaped glow plug light goes out, then start."
+      ],
+      [
+        "Bonnet",
+        "Pull the release lever low down inside the cab (it shows a car with its bonnet open), then release the catch under the front edge of the bonnet and lift."
+      ],
+      [
+        "Battery",
+        "Under the driver’s seat, not under the bonnet."
+      ],
+      [
+        "Spare wheel",
+        "In a carrier under the back of the van, held up by bolts that you undo with the wheel spanner. It’s awkward: practise once at the base."
+      ],
+      [
+        "Tyre pressures",
+        "On the sticker inside the fuel flap or on the driver’s door frame."
+      ],
+      [
+        "Sliding door",
+        "On the left (kerb) side."
+      ],
+      [
+        "Gearbox",
+        "DSG automatic (7-speed, twin-clutch)."
+      ],
+      [
+        "Service history",
+        "Kept at the workshop that services it."
+      ]
+    ],
+    "weak": [
+      [
+        "DSG gearbox",
+        "Jerky or hesitant pulling away, changes that don’t happen or pick the wrong gear, or erratic shifting."
+      ],
+      [
+        "EGR cooler (cooling system)",
+        "Coolant level drops with no puddle under the van, white steam from the exhaust, or the temperature needle climbing."
+      ],
+      [
+        "Sliding door",
+        "Won’t open from outside, hard to open or close, doesn’t close fully, or the dashboard says a door is open when it isn’t."
+      ],
+      [
+        "Engine noises",
+        "Metallic noises, rough idling or hard starting: get it checked straight away."
+      ],
+      [
+        "Turbo and boost",
+        "Loss of power and black smoke under load."
+      ]
+    ],
+    "item": {
+      "eng-batt": "On the Kombi the battery is under the driver’s seat.",
+      "tyr-spare": "On the Kombi the spare hangs in a carrier under the back. Check the bolts aren’t rusted solid.",
+      "ext-slide": "The Kombi’s sliding door is on the left side.",
+      "drv-gears": "DSG gearbox: pulling away should be smooth, with no jerk or hesitation.",
+      "eng-cool": "On the Kombi, a coolant level that keeps dropping with no visible leak can be the EGR cooler: tell the workshop.",
+      "drv-start": "Wait for the coil-shaped glow plug light to go out before starting."
+    },
+    "na": [
+      "drv-clutch"
+    ]
+  },
+  "crv": {
+    "name": "Honda CR-V 2.0",
+    "fuel": "Petrol",
+    "where": [
+      [
+        "Fuel",
+        "Unleaded PETROL only. Never diesel."
+      ],
+      [
+        "Bonnet",
+        "Pull the release lever low down by the driver’s door, then push the catch under the front edge of the bonnet and lift."
+      ],
+      [
+        "Spare wheel, jack and tools",
+        "Under the boot floor: lift the floor panel."
+      ],
+      [
+        "Battery",
+        "Under the bonnet."
+      ],
+      [
+        "Tyre pressures",
+        "On the sticker on the driver’s door frame."
+      ],
+      [
+        "Tailgate",
+        "Known not to close properly: always check it’s locked."
+      ]
+    ],
+    "weak": [
+      [
+        "Aircon blowing warm",
+        "The most reported problem on this generation of CR-V: cool at first, then warm, or not cold at all."
+      ],
+      [
+        "Door lock motors",
+        "A door, often the driver’s, doesn’t lock or unlock with the remote, or the lock buzzes."
+      ],
+      [
+        "Rear brakes",
+        "A grinding noise from the back brakes, from rust on the brake parts."
+      ],
+      [
+        "Battery",
+        "Goes flat if the car stands for a while: watch for slow starting."
+      ]
+    ],
+    "item": {
+      "ext-tail": "This CR-V’s tailgate doesn’t close properly: pull on it to check it’s locked.",
+      "tyr-spare": "On the CR-V the spare is under the boot floor."
+    },
+    "na": [
+      "ext-slide"
+    ]
+  },
+  "almera": {
+    "name": "Nissan Almera 1.5",
+    "fuel": "Petrol",
+    "where": [
+      [
+        "Fuel",
+        "Unleaded PETROL only. Never diesel. The tank holds about 41 litres."
+      ],
+      [
+        "Bonnet",
+        "Pull the release lever low down by the driver’s door, then push the catch under the front edge of the bonnet and lift."
+      ],
+      [
+        "Spare wheel, jack and tools",
+        "A full-size spare under the boot floor: lift the floor panel."
+      ],
+      [
+        "Battery",
+        "Under the bonnet."
+      ],
+      [
+        "Tyre pressures",
+        "On the sticker on the driver’s door frame."
+      ],
+      [
+        "Gearbox",
+        "4-speed automatic."
+      ]
+    ],
+    "weak": [
+      [
+        "Automatic gearbox",
+        "A few gearbox failures have been reported in South Africa: watch for slipping, harsh or late gear changes."
+      ],
+      [
+        "Boot-lid handle",
+        "Known to need repair on this car: check the boot opens with the handle."
+      ]
+    ],
+    "item": {
+      "tyr-spare": "The Almera has a full-size spare under the boot floor."
+    },
+    "na": [
+      "ext-slide",
+      "lgt-fog",
+      "drv-cruise",
+      "drv-clutch"
+    ]
+  }
+}

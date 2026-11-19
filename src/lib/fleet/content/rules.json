@@ -1,0 +1,56 @@
+{
+  "kmRules": {
+    "inspect": 5000,
+    "service": 10000,
+    "warn": 500
+  },
+  "estimatedMinutes": {
+    "pre": 3,
+    "post": 10,
+    "weekly": 22,
+    "monthly": 40,
+    "workshop": 10
+  },
+  "workshopVisitKinds": [
+    "Workshop inspection (bumper to bumper)",
+    "Service",
+    "Mechanical repair",
+    "Body repair",
+    "Tyres",
+    "Roadworthy test",
+    "Licence renewal",
+    "Insurance claim",
+    "Resale evaluation",
+    "Other"
+  ],
+  "vehicleStatuses": [
+    "In service",
+    "On a trip",
+    "Booked for workshop",
+    "In workshop",
+    "Off the road",
+    "For sale"
+  ],
+  "workCheckOnCollection": {
+    "ok": "Done properly",
+    "bad": "Not right",
+    "na": "Couldn’t check"
+  },
+  "fuelLevels": [
+    "Empty",
+    "¼",
+    "½",
+    "¾",
+    "Full"
+  ],
+  "watchKinds": {
+    "damage": "Damage",
+    "repair": "Recent repair",
+    "issue": "Known problem"
+  },
+  "calendarDays": 28,
+  "weeklyTimeBudgetHoursDefault": 5,
+  "idleCapMinutes": 10,
+  "formTimeCapMinutes": 15,
+  "clashHeadsUpDays": 7
+}

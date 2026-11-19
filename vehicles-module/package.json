@@ -1,0 +1,14 @@
+{
+  "name": "ffsa-fleet-standalone",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The FFSA Fleet app (vehicle inspections, km, trips, workshop visits, Ask) running outside claude.ai, ready to be brought into the FFSA Hub.",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "seed": "node server/seed.js",
+    "start": "node server/server.js",
+    "reminder": "node server/reminder.js",
+    "test": "node --test test/api.test.js"
+  }
+}

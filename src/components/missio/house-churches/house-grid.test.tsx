@@ -5,7 +5,7 @@ import { MissioApiError } from "../api";
 import type { HouseChurchesClient } from "./client";
 import { HouseChurchGrid } from "./house-grid";
 import type { HouseSummary, ReviewItem } from "./types";
-import { cleanup, render, settle } from "./test-render";
+import { cleanup, render, setValue, settle } from "./test-render";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
@@ -80,32 +80,54 @@ describe("house church grid", () => {
     return view.host;
   }
 
-  it("renders names, leaders, and counts in house-number order", async () => {
+  it("renders houses biggest first, with leaders, size and signals", async () => {
     const host = mount(<HouseChurchGrid client={client()} />);
     await settle();
+    expect(host.querySelector("[data-testid=house-totals]")?.textContent).toBe("2 houses · 7 members");
     const cards = [...host.querySelectorAll("[data-testid=house-card]")];
     expect(cards).toHaveLength(2);
-    expect(cards[0]?.getAttribute("href")).toBe("/missio/house-churches/house-2");
-    expect(cards[0]?.textContent).toContain("Oak Table");
-    expect(cards[0]?.textContent).toContain("House 2");
-    expect(cards[0]?.textContent).toContain("1 person");
-    expect(cards[0]?.textContent).toContain("Theo Martins");
-    expect(cards[0]?.textContent).toContain("Lindiwe Nkosi");
-    expect(cards[0]?.textContent).toContain("Missio JHB");
-    expect(cards[0]?.textContent).toContain("Wednesday");
-    expect(cards[0]?.textContent).toContain("9 Kestrel Lane");
-    expect(cards[1]?.getAttribute("href")).toBe("/missio/house-churches/house-4");
-    expect(cards[1]?.textContent).toContain("House 4");
-    expect(cards[1]?.textContent).toContain("6 people");
-    expect(cards[1]?.textContent).toContain("Missio Potch");
-    expect(cards[1]?.textContent).not.toContain("Main");
-    expect(cards[1]?.textContent).toContain("Leaders");
-    expect(cards[1]?.textContent).toContain("No one yet");
-    expect(cards[1]?.textContent).not.toContain("Leaders:");
+    // Size, biggest first.
+    expect(cards[0]?.getAttribute("href")).toBe("/missio/house-churches/house-4");
+    expect(cards[0]?.textContent).toContain("House 4");
+    expect(cards[0]?.textContent).toContain("6people");
+    expect(cards[0]?.textContent).toContain("Missio Potch");
+    expect(cards[0]?.textContent).toContain("No leader yet");
+    expect(cards[0]?.textContent).toContain("No leader");
+    expect(cards[0]?.textContent).toContain("No co-leader");
+    expect(cards[1]?.getAttribute("href")).toBe("/missio/house-churches/house-2");
+    expect(cards[1]?.textContent).toContain("Oak Table");
+    expect(cards[1]?.textContent).toContain("House 2");
+    expect(cards[1]?.textContent).toContain("Theo Martins & Lindiwe");
+    expect(cards[1]?.textContent).toContain("Missio JHB");
+    expect(cards[1]?.textContent).toContain("Wed");
+    expect(cards[1]?.textContent).toContain("9 Kestrel Lane");
+    expect(cards[1]?.textContent).not.toContain("No co-leader");
     const review = host.querySelector("[data-testid=review-names]");
     expect(review?.textContent).toBe("Review names");
     expect(review?.getAttribute("href")).toBe("/missio/house-churches/review");
     expect(host.textContent).not.toMatch(/Delete|Coming soon|Soon/);
+  });
+
+  it("filters by campus and needs attention, and sorts by number", async () => {
+    const host = mount(<HouseChurchGrid client={client()} />);
+    await settle();
+    const chip = (label: string) =>
+      [...host.querySelectorAll("[data-testid=house-filters] button")].find((b) => b.textContent === label) as HTMLButtonElement;
+    act(() => chip("Missio JHB").click());
+    await settle();
+    expect(host.querySelectorAll("[data-testid=house-card]")).toHaveLength(1);
+    act(() => chip("All campuses").click());
+    act(() => chip("Needs attention").click());
+    await settle();
+    const left = [...host.querySelectorAll("[data-testid=house-card]")];
+    expect(left).toHaveLength(1);
+    expect(left[0]?.textContent).toContain("House 4");
+    act(() => chip("Needs attention").click());
+    await act(async () => {
+      setValue(host.querySelector("[data-testid=house-filters] select") as HTMLSelectElement, "number");
+    });
+    await settle();
+    expect(host.querySelector("[data-testid=house-card]")?.getAttribute("href")).toBe("/missio/house-churches/house-2");
   });
 
   it("shows how many names are waiting when that count is known", async () => {

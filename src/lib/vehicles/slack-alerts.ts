@@ -6,7 +6,8 @@
 //                 place once it's decided (in Slack or the Hub).
 //   • collected / paid / signed / cancelled — FYI.
 //   • returned  — mileage, km driven, wash/fuel, damage, + Mark completed.
-//   • digest    — 07:00 SAST: pickups, returns, overdue, unpaid, waiting.
+//   • digest    — 07:00 SAST: pickups, returns, overdue, unpaid, waiting, and
+//                 Fleet's inspection checks (one message, not two).
 //
 // Everything is best-effort: nothing here may fail the action that triggered
 // it. All reads use the ADMIN client (callers are already authorised).
@@ -501,7 +502,14 @@ const rowLine = (b: Row, tail?: string) => {
 };
 
 /** The morning summary. Sends nothing on a quiet day. */
-export async function sendVehicleDigest(): Promise<{ sent: boolean; items: number }> {
+/**
+ * The 07:00 digest. `fleet` is Fleet's reminder (lib/fleet/reminder-send fleetDigestPart):
+ * its sections go at the end of the same message, and the Vehicle Coordinator(s) get it
+ * even when they aren't on the alert list.
+ */
+export async function sendVehicleDigest(
+  opts: { fleet?: { parts: string[]; items: number; slackUserIds: string[] } | null } = {}
+): Promise<{ sent: boolean; items: number }> {
   if (!process.env.SLACK_BOT_TOKEN) return { sent: false, items: 0 };
   const admin = createAdminClient() as Client;
   const today = sastToday();
@@ -546,16 +554,22 @@ export async function sendVehicleDigest(): Promise<{ sent: boolean; items: numbe
   if (waiting.length) parts.push(`*⏳ Waiting on a decision 2+ days (${waiting.length})*\n${waiting.map((b) => rowLine(b, headline(b))).join("\n")}`);
   if (toComplete.length) parts.push(`*✔️ Signed in, not marked completed (${toComplete.length})*\n${toComplete.map((b) => rowLine(b)).join("\n")}`);
 
-  const items = overdue.length + pickups.length + returns.length + unpaid.length + waiting.length + toComplete.length;
+  const fleet = opts.fleet?.parts.length ? opts.fleet : null;
+  if (fleet) parts.push(...fleet.parts);
+
+  const items = overdue.length + pickups.length + returns.length + unpaid.length + waiting.length + toComplete.length + (fleet?.items ?? 0);
   if (items === 0) return { sent: false, items: 0 };
 
-  await postFyi(admin, {
+  const message = {
     text: `Vehicles today — ${items} thing${items === 1 ? "" : "s"} to know`,
     blocks: [
       section(`*🚐 Vehicles — ${dateRangeLabel(today, null)}*`),
       ...parts.map(section),
       context(`<${SITE}/bookings/vehicles|Open the vehicle board>`),
     ],
-  });
+  };
+  const to = new Set((await recipients(admin)).map((r) => r.slackUserId));
+  for (const id of fleet?.slackUserIds ?? []) to.add(id);
+  for (const id of to) await dm(id, message);
   return { sent: true, items };
 }

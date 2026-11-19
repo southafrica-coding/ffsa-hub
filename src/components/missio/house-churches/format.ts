@@ -93,3 +93,47 @@ export function personHref(person: Pick<PersonRef, "orgPersonId">): string | nul
   const id = person.orgPersonId?.trim();
   return id ? `/missio/people/${encodeURIComponent(id)}` : null;
 }
+
+/** A house this size with a co-leader in place can send people out. */
+export const MULTIPLY_AT = 18;
+/** The size a house is drawn against. */
+export const HOUSE_SEATS = 24;
+
+export type HouseSignal = "ready" | "no_leader" | "no_co_leader";
+
+export const SIGNAL_LABEL: Record<HouseSignal, string> = {
+  ready: "Ready to multiply",
+  no_leader: "No leader",
+  no_co_leader: "No co-leader",
+};
+
+/** The signals a house shows on the grid and its page. Same rules as Home. */
+export function houseSignals(house: Pick<HouseSummary, "memberCount" | "leaders" | "coLeaders">): HouseSignal[] {
+  const signals: HouseSignal[] = [];
+  if (house.memberCount >= MULTIPLY_AT && house.coLeaders.length > 0) signals.push("ready");
+  if (house.memberCount > 0 && house.leaders.length === 0) signals.push("no_leader");
+  if (house.memberCount > 0 && house.coLeaders.length === 0) signals.push("no_co_leader");
+  return signals;
+}
+
+/** "Esther Naidoo & Daniel": the first leader in full, then the first co-leader's first name. */
+export function leadingLine(house: Pick<HouseSummary, "leaders" | "coLeaders">): string {
+  const lead = house.leaders[0]?.displayName.trim() ?? "";
+  const co = house.coLeaders[0];
+  const coName = co ? (co.firstName?.trim() || co.displayName.trim().split(/\s+/)[0] || "") : "";
+  if (lead && coName) return `${lead} & ${coName}`;
+  if (lead) return lead;
+  if (co) return co.displayName.trim();
+  return "No leader yet";
+}
+
+export function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters = parts.length > 1 ? `${parts[0]![0]}${parts[parts.length - 1]![0]}` : (parts[0] ?? "?").slice(0, 2);
+  return letters.toUpperCase();
+}
+
+/** "Wed" from "wednesday". */
+export function shortDay(day: string | null | undefined): string {
+  return meetingDayLabel(day).slice(0, 3);
+}

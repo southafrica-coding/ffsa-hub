@@ -17,6 +17,8 @@ export default defineConfig({
   },
   test: {
     // apps/mobile is a separate Expo app with its own Jest setup.
-    exclude: [...configDefaults.exclude, "apps/**"],
+    // vehicles-module/ is the FFSA Fleet reference app with its own node:test suite
+    // (cd vehicles-module && npm test).
+    exclude: [...configDefaults.exclude, "apps/**", "vehicles-module/**"],
   },
 });

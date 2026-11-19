@@ -9,12 +9,24 @@ import content from "../content.module.css";
 import shell from "../shell.module.css";
 import type { MissioPerson } from "../types-shim";
 import { houseChurchesClient, houseErrorCopy, type HouseChurchesClient } from "./client";
-import { houseTitle, peopleCount, personHref, ROLE_LABEL, sortMembers } from "./format";
+import {
+  houseSignals,
+  houseTitle,
+  initialsOf,
+  MULTIPLY_AT,
+  meetingDayLabel,
+  peopleCount,
+  personHref,
+  ROLE_LABEL,
+  SIGNAL_LABEL,
+  sortMembers,
+} from "./format";
+import { SizeDots } from "./house-grid";
 import { useMissioLoad } from "./load";
 import { PeoplePicker } from "./people-picker";
-import { AllHousesLink, CampusTag, MeetingMeta, RoleBlock } from "./present";
+import { AllHousesLink, CampusTag } from "./present";
 import { HouseStatus } from "./status";
-import type { HouseDetail, HouseMember, HouseRole } from "./types";
+import type { HouseDetail, HouseMember, HouseRole, PersonRef } from "./types";
 import styles from "./house-churches.module.css";
 
 function portaledMissioClass() {
@@ -154,15 +166,40 @@ export function HouseDetailView({
       ) : null}
       {house ? (
         <>
-          <p className={`${shell.eyebrow} ${content.eyebrow}`}>House {house.number}</p>
-          <h1 className={content.title}>{houseTitle(house)}</h1>
-          <p className={styles.line}>
-            <CampusTag campus={house.campus} />
-            <span className={styles.count}> · {peopleCount(house.memberCount)}</span>
-          </p>
-          <MeetingMeta day={house.meetingDay} place={house.location} />
-          <RoleBlock label="Leaders" people={house.leaders} />
-          <RoleBlock label="Co-leaders" people={house.coLeaders} />
+          <header className={styles.houseHead}>
+            <div className={styles.houseHeadText}>
+              {house.name?.trim() ? <p className={`${shell.eyebrow} ${content.eyebrow}`}>House {house.number}</p> : null}
+              <h1 className={content.title}>{houseTitle(house)}</h1>
+              <p className={styles.houseWhere}>
+                {meetingDayLabel(house.meetingDay) ? <span>{meetingDayLabel(house.meetingDay)}s</span> : null}
+                {house.location?.trim() ? <span>{house.location.trim()}</span> : null}
+                <CampusTag campus={house.campus} />
+              </p>
+            </div>
+            {canWrite ? (
+              <a href="#house-add" className={`${shell.primary} ${styles.headAction}`}>
+                Add a person
+              </a>
+            ) : null}
+          </header>
+
+          <div className={styles.houseCards}>
+            <section className={styles.panel} data-testid="house-leading">
+              <h2>Leading</h2>
+              <LeadingList title="Leaders" role="leader" people={house.leaders} members={house.members} />
+              <LeadingList title="Co-leaders" role="co_leader" people={house.coLeaders} members={house.members} />
+            </section>
+            <section className={styles.panel} data-testid="house-health">
+              <h2>Health</h2>
+              <div className={styles.size}>
+                <span className={styles.sizeCount}>{house.memberCount}</span>
+                <span className={styles.sizeLabel}>{peopleCount(house.memberCount).replace(/^\d+\s/, "")}</span>
+              </div>
+              <SizeDots count={house.memberCount} />
+              <HealthNote house={house} />
+            </section>
+          </div>
+
           {house.leaderNotes?.trim() ? (
             <section className={styles.block}>
               <h2>Leader notes</h2>
@@ -175,7 +212,7 @@ export function HouseDetailView({
             </p>
           ) : null}
           <section className={`${styles.block} ${styles.members}`}>
-            <h2>People</h2>
+            <h2>People in this house</h2>
             {members.length === 0 ? <p className={styles.line}>No one is in this house yet.</p> : null}
             {members.length > 0 ? (
               <ul className={styles.memberList} data-testid="house-members">
@@ -193,7 +230,7 @@ export function HouseDetailView({
             ) : null}
           </section>
           {canWrite ? (
-            <section className={styles.block} data-testid="add-member">
+            <section className={styles.block} data-testid="add-member" id="house-add">
               <h2>Add someone</h2>
               <p className={styles.line}>Choose a role, then search the people list.</p>
               <label className={shell.field}>
@@ -210,6 +247,85 @@ export function HouseDetailView({
         </>
       ) : null}
     </div>
+  );
+}
+
+function LeadingList({
+  title,
+  role,
+  people,
+  members,
+}: {
+  title: string;
+  role: HouseRole;
+  people: PersonRef[];
+  members: HouseMember[];
+}) {
+  return (
+    <div className={styles.leadingGroup}>
+      <h3>{title}</h3>
+      {people.length === 0 ? (
+        <p className={styles.quiet}>No one yet</p>
+      ) : (
+        <ul className={styles.leadingList}>
+          {people.map((person) => {
+            const since = members.find((member) => member.contactId === person.contactId)?.startedAt;
+            const href = personHref(person);
+            return (
+              <li key={person.contactId}>
+                <span className={styles.face} aria-hidden="true">
+                  {initialsOf(person.displayName)}
+                </span>
+                <span>
+                  {href ? (
+                    <Link href={href} className={styles.personLink}>
+                      {person.displayName}
+                    </Link>
+                  ) : (
+                    <span className={styles.leadingName}>{person.displayName}</span>
+                  )}
+                  <span className={styles.leadingRole}>
+                    {ROLE_LABEL[role]}
+                    {since ? ` · since ${formatJoined(since)}` : ""}
+                  </span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** One sentence on where the house stands, built from the same signals as the grid. */
+function HealthNote({ house }: { house: HouseDetail }) {
+  const signals = houseSignals(house);
+  let sentence = "Healthy size, with a leader and co-leader in place.";
+  if (signals.includes("ready")) {
+    sentence = "The house is full and a co-leader is in place. This is the moment to talk about sending some people out.";
+  } else if (signals.includes("no_leader")) {
+    sentence = "This house has no leader yet. Add one below.";
+  } else if (signals.includes("no_co_leader")) {
+    sentence = "No co-leader yet. A co-leader is who leads the next house.";
+  } else if (house.memberCount === 0) {
+    sentence = "No one is in this house yet.";
+  } else if (house.memberCount < MULTIPLY_AT) {
+    sentence = `Room to grow. At ${MULTIPLY_AT} people with a co-leader, it’s ready to multiply.`;
+  }
+  return (
+    <>
+      {signals.length > 0 ? (
+        <div className={styles.signals}>
+          {signals.map((signal) => (
+            <span key={signal} className={`${styles.signal} ${signal === "ready" ? styles.signalReady : styles.signalWarn}`}>
+              {SIGNAL_LABEL[signal]}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <p className={styles.healthNote}>{sentence}</p>
+    </>
   );
 }
 
@@ -263,6 +379,9 @@ function MemberRow({
   return (
     <li className={styles.memberRow}>
       <div className={styles.memberName}>
+        <span className={styles.face} aria-hidden="true">
+          {initialsOf(member.displayName)}
+        </span>
         <PersonName member={member} />
       </div>
       {canWrite ? (

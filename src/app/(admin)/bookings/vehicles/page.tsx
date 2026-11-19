@@ -97,7 +97,7 @@ export default async function VehiclesPage({
             )}
             {isTeam && <RequestLinkButton />}
             {access.canManage && (
-              <Link href="/bookings/vehicles/fleet">
+              <Link href="/bookings/vehicles/fleet/settings">
                 <Button size="sm" variant="outline" className="gap-1.5">
                   <Settings2 className="h-4 w-4" />
                   Fleet
@@ -155,7 +155,7 @@ export default async function VehiclesPage({
                 </p>
               </div>
               {access.canManage && (
-                <Link href="/bookings/vehicles/fleet">
+                <Link href="/bookings/vehicles/fleet/settings">
                   <Button size="sm" variant="outline" className="mt-1 gap-1">
                     <Settings2 className="h-4 w-4" />
                     Set up the fleet

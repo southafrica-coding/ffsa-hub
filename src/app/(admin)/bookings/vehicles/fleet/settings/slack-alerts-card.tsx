@@ -54,7 +54,7 @@ export function SlackAlertsCard() {
         <div>
           <div className="font-semibold">Slack alerts</div>
           <div className="text-[color:var(--text-secondary)]">
-            New requests (approve / deny / assign from Slack), sign-outs and sign-ins, payments, and a 07:00 summary go
+            New requests (approve / deny / assign from Slack), sign-outs and sign-ins, payments, and a 07:00 summary (with Fleet’s inspection checks) go
             to: {chosen.length ? chosen.map((p) => p.name + (p.slackLinked ? "" : " (Slack not linked)")).join(", ") : "nobody"}
           </div>
         </div>

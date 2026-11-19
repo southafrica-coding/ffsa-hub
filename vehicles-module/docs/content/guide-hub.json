@@ -1,0 +1,298 @@
+{
+  "about": "Guide and tutorial for the Vehicles section of the FFSA Hub. Same block format as the FFSA Fleet app: {h} heading, {p} paragraph, {ul} list, {steps} tutorial steps [title, text, screen, action, action label], {changes: true} the What’s new list. Tokens in {braces} come from live settings (SPEC.md section 8). Screen keys in steps: today, vehicles, vehicle (the first vehicle), calendar, schedule, checklist. Keep this up to date with every change to the module.",
+  "pages": [
+    {
+      "id": "start",
+      "title": "Start here",
+      "blocks": [
+        {
+          "p": "The Vehicles section of the FFSA Hub is where the vehicle co-ordinator looks after the FFSA vehicles: regular inspections, km readings, bookings, workshop visits, and the in-car guides drivers use. It works on a phone."
+        },
+        {
+          "h": "The co-ordinator’s week"
+        },
+        {
+          "ul": [
+            "Every morning: open Today. It lists everything to do that day, in order, with a button to start each one. A reminder also arrives by email and Slack at 7am.",
+            "On inspection days ({days}): do the weekly check on the vehicles planned for that day, at most {max} a day. Once a month the weekly check is replaced by the longer monthly check. The Hub picks which one is due.",
+            "When a vehicle goes out on a booking: a 2-minute pre-trip check. When it comes back: a post-trip check. The km entered at handover keeps the service warnings right.",
+            "When a service or bumper-to-bumper inspection is coming up: book it in the first free 48 hours the Hub suggests. Anyone with a clashing booking is told automatically.",
+            "The whole job should take no more than {budget} a week. Today shows the time used so far."
+          ]
+        },
+        {
+          "h": "The screens"
+        },
+        {
+          "ul": [
+            "Today: what to do today and in the next two days, and the time used this week.",
+            "Vehicles: every vehicle with its condition and anything that needs attention. Tap a vehicle for its details, history, photos and manual.",
+            "Calendar: bookings and workshop visits for four weeks, with clashes in red.",
+            "Schedule: which vehicle is checked on which day, services and inspections by km, inspection days and the time budget.",
+            "Workshops: the workshops FFSA uses, with phone numbers.",
+            "Checklist: every inspection point, and which checks it belongs to.",
+            "Guide: this guide."
+          ]
+        },
+        {
+          "h": "New here?"
+        },
+        {
+          "p": "Do the tutorial. It takes about 30 minutes and walks you through every part of the job using the real vehicles. If you’re taking over from another co-ordinator, also go through the handover checklist together."
+        }
+      ]
+    },
+    {
+      "id": "tutorial",
+      "title": "Tutorial",
+      "intro": "Work through these steps in order and tick each one when you’ve done it. Use real vehicles, and discard practice inspections you don’t want to keep.",
+      "blocks": [
+        {
+          "steps": [
+            [
+              "Open Today",
+              "This is your starting point every morning. Each line shows the vehicle, what to do and roughly how long it takes. The button on the right starts it.",
+              "today"
+            ],
+            [
+              "Look around a vehicle",
+              "Open Vehicles and tap a vehicle. On Overview, read “To do”, “Key dates” and “Keep an eye on” (damage, repairs and known problems that get extra attention at every check). Then look at the Condition, History, Photos and Manual tabs.",
+              "vehicle"
+            ],
+            [
+              "Do a practice inspection",
+              "On the vehicle’s page tap Start inspection and choose Weekly check. Use Step by step: each point explains why it matters and how to check it. Tap OK, Monitor or Fix now; Monitor and Fix now open a note and a photo. Enter the odometer reading, then Save, or Discard draft if it was only practice.",
+              "vehicle"
+            ],
+            [
+              "Log a km reading",
+              "Read the odometer on a vehicle’s dashboard and log it. Handovers on bookings record the km too, so you only need this now and then.",
+              "",
+              "km-log",
+              "Log a km reading"
+            ],
+            [
+              "Look at the bookings",
+              "Open the Calendar. Hub bookings show in blue. While a vehicle is booked out its inspection is postponed, and Today reminds you of the pre-trip check before it leaves and the post-trip check when it’s back.",
+              "calendar"
+            ],
+            [
+              "Book a workshop visit",
+              "On the Calendar, tap Book a workshop visit and choose a vehicle. The form suggests the first free 48 hours on weekdays; tap Use these dates, choose the workshop and save. If anyone has a booking that clashes, the Hub offers them a similar vehicle and copies you in.",
+              "calendar"
+            ],
+            [
+              "Drop off and collect",
+              "On the day, Today shows “Take it to” and the workshop’s name: tap Dropped off. When it’s ready, tap Collected, check the work before you drive away, enter the odometer reading and the cost, attach the invoice, and save.",
+              "today"
+            ],
+            [
+              "Print an in-car guide",
+              "On a vehicle’s Manual tab, download the in-car guide, print it, laminate it and put it in the cubby hole. Drivers use it before and after every trip. The Hub tells you when it’s out of date.",
+              "vehicle"
+            ],
+            [
+              "Check your time",
+              "Today shows the time used this week against the budget. Inspections and bookings are timed automatically.",
+              "today"
+            ],
+            [
+              "Check the settings",
+              "On Schedule, look at the inspection days, the services and inspections by km, and the time budget.",
+              "schedule"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "handover",
+      "title": "Handover",
+      "intro": "Use this when the vehicle co-ordinator changes. The outgoing and incoming co-ordinators go through it together; a Hub admin does the role step.",
+      "blocks": [
+        {
+          "h": "1. Before the handover (outgoing co-ordinator)"
+        },
+        {
+          "ul": [
+            "Bring the checks up to date: Today should show nothing overdue.",
+            "Record the outcome of every workshop visit that’s been collected, and check the workshop bookings on the Calendar are right.",
+            "Log a fresh km reading for every vehicle.",
+            "Make sure each vehicle’s “Keep an eye on” list is current, and add anything you know that isn’t written down.",
+            "Check every vehicle has its last service km recorded (Schedule, “Services and inspections by km”)."
+          ]
+        },
+        {
+          "h": "2. The role (a Hub admin)"
+        },
+        {
+          "ul": [
+            "Give the new co-ordinator the Vehicle Co-ordinator role in the FFSA Hub, and remove it from the outgoing co-ordinator.",
+            "Check the new co-ordinator’s Hub profile has the right name, phone number, email and Slack account: the reminders, Slack messages and in-car guides use them.",
+            "Everything else moves to the new person automatically."
+          ]
+        },
+        {
+          "h": "3. In the vehicles"
+        },
+        {
+          "ul": [
+            "Print a new in-car guide for every vehicle (Manual tab) and swap them in the vehicles: they show the co-ordinator’s name and number. The Hub marks the old ones as out of date.",
+            "Update the emergency contact card in each vehicle with the new number."
+          ]
+        },
+        {
+          "h": "4. Hand over the physical things"
+        },
+        {
+          "ul": [
+            "Spare keys and the key safe, locknut keys, and remotes.",
+            "Where the service books and licence disc papers are kept.",
+            "Tread depth gauge, tyre pressure gauge and torch."
+          ]
+        },
+        {
+          "h": "5. Tell people"
+        },
+        {
+          "ul": [
+            "Drivers and the people who book vehicles.",
+            "The workshops (Motech and any others on the Workshops page).",
+            "The insurer’s and tracking company’s contacts, if they phone the co-ordinator."
+          ]
+        },
+        {
+          "h": "6. First week (new co-ordinator)"
+        },
+        {
+          "ul": [
+            "Do the tutorial.",
+            "Open Today every morning and work down the list.",
+            "Do at least one inspection of each type with the outgoing co-ordinator, if possible.",
+            "At the end of the week, check the time used against the budget."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "how",
+      "title": "How it works",
+      "blocks": [
+        {
+          "h": "Inspections"
+        },
+        {
+          "ul": [
+            "Pre-trip check ({pre} points): a quick go/no-go before a vehicle leaves. Any driver can do it.",
+            "Post-trip check ({post} points): when it comes back. New damage, km, fuel, cleanliness and anything the driver reports.",
+            "Weekly check ({weekly} points): everything you can check by looking, listening and driving, on the vehicle’s inspection day.",
+            "Monthly check ({monthly} points): the weekly points plus the slower once-a-month points. It replaces the weekly check on the vehicle’s first inspection day of the month.",
+            "Workshop report ({workshop} points): what only a mechanic can check. Copy the mechanic’s report into it and attach the report.",
+            "Mark each point OK, Monitor (keep an eye on it, book it soon) or Fix now (fix before the vehicle is used again). For Monitor and Fix now, write what you saw and add a photo.",
+            "A half-done inspection is saved as a draft as you go, until you save or discard it. Continue it from the vehicle’s page."
+          ]
+        },
+        {
+          "h": "The inspection schedule"
+        },
+        {
+          "p": "Each vehicle has a fixed inspection day ({days}), at most {max} vehicles a day. Change it on the Schedule page. A check is postponed while the vehicle is booked out or at the workshop, and shows as due when it’s back."
+        },
+        {
+          "p": "Short on time? On the Schedule page, tick “Weekly checks only this week” for any week. The monthly checks then move to the next week."
+        },
+        {
+          "h": "Km, services and bumper-to-bumper inspections"
+        },
+        {
+          "ul": [
+            "Every vehicle goes for a bumper-to-bumper inspection at the workshop every {inspectKm} and a service every {serviceKm}. A service covers the inspection, so they’re booked as one visit.",
+            "The Hub warns {warnKm} before either is due. It counts from the odometer reading at the last service or inspection, so record the km whenever you log a workshop visit.",
+            "Readings come from inspections, workshop visits, Log km and the km entered when a vehicle is handed out and handed back on a booking. From two readings at least a week apart, the Hub works out km a day and roughly when the limit will be reached.",
+            "If a vehicle has no service km on record, its next service can’t be worked out: fill it in with Edit details on the vehicle’s page."
+          ]
+        },
+        {
+          "h": "Bookings and the calendar"
+        },
+        {
+          "ul": [
+            "Bookings come from the Hub’s vehicle bookings. Bookings show in blue, workshop visits in orange, clashes in red. A ring marks an inspection day; filled in once it’s done.",
+            "A workshop visit blocks the vehicle from the day it goes in to the day it’s back, so nobody can book it for those days.",
+            "When a workshop visit is booked or moved, anyone whose booking clashes with it gets a message offering a similar free vehicle (car or van) with a one-tap switch. If none is free, they’re told they can wait until it’s back or make other plans. You get a copy.",
+            "Anyone whose booking starts within 7 days after a workshop visit gets a heads-up about that vehicle.",
+            "The first free 48 hours is the first two weekdays in a row with no booking or workshop visit."
+          ]
+        },
+        {
+          "h": "Workshop visits"
+        },
+        {
+          "ul": [
+            "Book workshop: the vehicle shows as “Booked for workshop”. Dropped off: “In workshop”. Collected: record what was done, and it’s back “In service”.",
+            "When you collect a vehicle, check each job on the invoice before you drive away, and attach the invoice and photos.",
+            "Issue list for workshop (on the vehicle’s page) makes a list of everything marked Monitor or Fix now, to send to the workshop."
+          ]
+        },
+        {
+          "h": "In-car guides"
+        },
+        {
+          "p": "Each vehicle has a printable guide for drivers: the checks before driving and on return, where things are on that vehicle, the fuel type, the co-ordinator’s contact details, and what to do in a breakdown. Replace it every 6 months, or sooner when the app says it’s out of date. The full manual on the same tab is the co-ordinator’s reference for every check."
+        },
+        {
+          "h": "Time this week"
+        },
+        {
+          "p": "Inspections are timed while you use them: a gap of more than 10 minutes between taps counts as 10 minutes, so a break doesn’t count. Workshop bookings, km readings and vehicle edits count the time the form was open, up to 15 minutes. The budget ({budget} a week) is set on the Schedule page."
+        },
+        {
+          "h": "Daily reminders"
+        },
+        {
+          "p": "At 7am the person with the Vehicle Co-ordinator role gets an email and a Slack message (from FFSA Fleet) listing the checks due today, tomorrow and the day after, overdue checks, booking clashes, vehicles leaving or coming back, postponed checks, workshop visits and services due by km. On Mondays it also lists in-car guides to reprint. Nothing is sent on days with nothing to do."
+        },
+        {
+          "h": "The checklist"
+        },
+        {
+          "p": "Checklist shows every point and which checks it belongs to. Sort weekly and monthly moves slow-changing points to once a month, which makes the weekly check shorter. Edit checklist changes the wording or adds points; past inspections keep the wording they were saved with."
+        }
+      ]
+    },
+    {
+      "id": "help",
+      "title": "Problems",
+      "blocks": [
+        {
+          "h": "Common problems"
+        },
+        {
+          "ul": [
+            "“I can’t see Vehicles, or can’t record inspections”: you don’t have the Vehicle Co-ordinator role. Ask a Hub admin.",
+            "“A check shows as overdue, but the vehicle was away”: the booking’s dates in the Hub don’t cover the planned day. Correct the booking and the check is postponed.",
+            "“The service warning never shows”: the vehicle has no service km on record, or its km reading is old. Fill in the last service with Edit details, and log a km reading.",
+            "“My draft inspection is gone”: drafts are saved as you go. Open the vehicle and tap Continue draft.",
+            "“The reminder goes to the wrong person”: check who has the Vehicle Co-ordinator role, and the email and Slack on their Hub profile.",
+            "“The in-car guide says out of date”: the vehicle’s details or the co-ordinator changed. Print a new one from the Manual tab."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "changes",
+      "title": "What’s new",
+      "blocks": [
+        {
+          "changes": true
+        }
+      ]
+    }
+  ],
+  "changes": [
+    [
+      "go-live",
+      "Vehicles section added to the FFSA Hub, built from the FFSA Fleet app: Today, inspections, Calendar with booking clashes, km readings, services by km, time tracker, in-car guides and this guide."
+    ]
+  ]
+}

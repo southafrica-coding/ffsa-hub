@@ -11,10 +11,9 @@ import type { HouseSummary } from "./house-churches/types";
 import styles from "./shell.module.css";
 import { useMissioViewer } from "./viewer";
 
-/** A house this size with a co-leader in place can send people out. */
-export const MULTIPLY_AT = 18;
-/** The size a house is drawn against. */
-export const HOUSE_SEATS = 24;
+import { HOUSE_SEATS, MULTIPLY_AT } from "./house-churches/format";
+
+export { HOUSE_SEATS, MULTIPLY_AT };
 
 function johannesburgNow(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {

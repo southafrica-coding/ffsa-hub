@@ -94,7 +94,9 @@ describe("house detail", () => {
     expect(host.textContent).toContain("House 2");
     expect(host.textContent).toContain("Missio Potch");
     expect(host.textContent).not.toContain("Main");
-    expect(host.textContent).toContain("3 people");
+    expect(host.querySelector("[data-testid=house-health]")?.textContent).toContain("3people");
+    expect(host.querySelector("[data-testid=house-health]")?.textContent).toContain("Room to grow.");
+    expect(host.querySelector("[data-testid=house-leading]")?.textContent).toContain("Leader · since 12 Mar 2024");
     expect(host.textContent).toContain("Wednesday");
     expect(host.textContent).toContain("9 Kestrel Lane");
     expect(host.textContent).toContain("Leaders");

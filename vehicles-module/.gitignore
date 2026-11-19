@@ -1,0 +1,7 @@
+node_modules/
+data/
+.env
+*.log
+.DS_Store
+# FFSA's real fleet data: kept on the Mac only, never committed
+seed/

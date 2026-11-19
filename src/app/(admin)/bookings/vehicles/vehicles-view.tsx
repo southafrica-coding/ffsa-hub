@@ -87,7 +87,7 @@ export function VehiclesBoard({
             )}
             {(access.canApprove || access.canManage) && <RequestLinkButton />}
             {access.canManage && (
-              <Link href="/bookings/vehicles/fleet">
+              <Link href="/bookings/vehicles/fleet/settings">
                 <Button size="sm" variant="outline" className="gap-1.5">
                   <Settings2 className="h-4 w-4" />
                   Fleet
