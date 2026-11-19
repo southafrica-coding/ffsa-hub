@@ -1,0 +1,210 @@
+/* Board M14a: household card, add dialog, households list. */
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.head h2 {
+  flex: 1;
+}
+
+.link {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link, #2f5d50);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.members {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+}
+
+.member {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule, #e7e2d5);
+}
+
+.member:last-child {
+  border-bottom: 0;
+}
+
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.avatarChild {
+  background: var(--gold-soft, #f3ead2);
+  color: var(--gold-text, #7a5a12);
+}
+
+.who {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.who b {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.memberActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 14px;
+}
+
+.addRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.seg {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin: 0 0 14px;
+  border-radius: 10px;
+  background: var(--panel, #f3f0e8);
+}
+
+.seg button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink, #1c1b17);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.seg .segOn {
+  background: var(--ink, #1d2520);
+  color: #fff;
+}
+
+.help {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--quiet, #6e685b);
+}
+
+.results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--rule, #e7e2d5);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.results button {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--rule, #e7e2d5);
+  background: #fff;
+  color: var(--ink, #1c1b17);
+  font: inherit;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.results li:last-child button {
+  border-bottom: 0;
+}
+
+.picked {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* People → Households */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.family {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 14px;
+  border: 1px solid var(--rule, #e7e2d5);
+  border-radius: 12px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stack {
+  display: flex;
+  flex: none;
+}
+
+.stack .avatar {
+  width: 30px;
+  height: 30px;
+  font-size: 11px;
+  border: 2px solid #fff;
+}
+
+.stack .avatar + .avatar {
+  margin-left: -8px;
+}

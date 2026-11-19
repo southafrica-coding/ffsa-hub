@@ -18,6 +18,8 @@ import {
   since,
   type AccessClient,
 } from "./person-profile";
+import { householdsClient, type HouseholdsClient } from "./households/client";
+import { HouseholdCard } from "./households/household-card";
 import shell from "./shell.module.css";
 import styles from "./person-profile.module.css";
 
@@ -31,12 +33,14 @@ export function PersonCardDialog({
   onClose,
   load = fetchPersonProfile,
   access = defaultAccess,
+  households = householdsClient,
 }: {
   personId: string;
   name: string;
   onClose: () => void;
   load?: (id: string) => Promise<PersonProfile>;
   access?: AccessClient;
+  households?: HouseholdsClient;
 }) {
   const { state, retry } = useMissioLoad(() => load(personId), [personId, load]);
   return (
@@ -47,7 +51,7 @@ export function PersonCardDialog({
         </p>
       ) : null}
       {state.phase === "error" ? <HouseStatus error={state.error} fallback="This person didn’t load." onRetry={retry} /> : null}
-      {state.phase === "ready" ? <CardBody profile={state.data} access={access} /> : null}
+      {state.phase === "ready" ? <CardBody profile={state.data} access={access} households={households} /> : null}
       <div className={styles.cardFoot}>
         <Link href={`/missio/people/${encodeURIComponent(personId)}`} className={styles.fullLink}>
           Open full profile
@@ -60,7 +64,7 @@ export function PersonCardDialog({
   );
 }
 
-function CardBody({ profile, access }: { profile: PersonProfile; access: AccessClient }) {
+function CardBody({ profile, access, households }: { profile: PersonProfile; access: AccessClient; households: HouseholdsClient }) {
   const { person, contact, houses, journey } = profile;
   const current = houses.filter((house) => !house.endedAt);
   return (
@@ -118,6 +122,7 @@ function CardBody({ profile, access }: { profile: PersonProfile; access: AccessC
         </div>
       ) : null}
 
+      <HouseholdCard personId={person.id} name={person.name} client={households} />
       <HubAccessCard personId={person.id} name={person.name} client={access} />
     </div>
   );

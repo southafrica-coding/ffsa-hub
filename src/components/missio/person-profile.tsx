@@ -11,6 +11,8 @@ import { houseTitle, ROLE_LABEL } from "./house-churches/format";
 import { useMissioLoad } from "./house-churches/load";
 import { HouseStatus } from "./house-churches/status";
 import { telHref, whatsAppHref } from "./follow-up/whatsapp";
+import { householdsClient, type HouseholdsClient } from "./households/client";
+import { HouseholdCard } from "./households/household-card";
 import shell from "./shell.module.css";
 import styles from "./person-profile.module.css";
 
@@ -97,10 +99,12 @@ export function PersonProfileView({
   personId,
   load = fetchPersonProfile,
   access = defaultAccess,
+  households = householdsClient,
 }: {
   personId: string;
   load?: (id: string) => Promise<PersonProfile>;
   access?: AccessClient;
+  households?: HouseholdsClient;
 }) {
   const { state, retry } = useMissioLoad(() => load(personId), [personId, load]);
   const [filter, setFilter] = useState<Filter>("all");
@@ -119,6 +123,7 @@ export function PersonProfileView({
         <HouseStatus error={state.error} fallback="This person didn’t load." onRetry={retry} />
       ) : null}
       {state.phase === "ready" ? <Profile profile={state.data} filter={filter} onFilter={setFilter} /> : null}
+      {state.phase === "ready" ? <HouseholdCard personId={personId} name={state.data.person.name} client={households} /> : null}
       {state.phase === "ready" ? <HubAccessCard personId={personId} name={state.data.person.name} client={access} /> : null}
     </div>
   );

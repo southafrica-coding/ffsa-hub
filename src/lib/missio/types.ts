@@ -107,7 +107,8 @@ export type MissioErrorCode =
   | "member_left_missio"
   | "server_error"
   | "method_not_allowed"
-  | "no_login";
+  | "no_login"
+  | "in_other_household";
 
 export type HouseChurchRole = "leader" | "co_leader" | "member";
 
