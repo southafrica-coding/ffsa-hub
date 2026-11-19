@@ -36,6 +36,20 @@ shortcut, and from Home feed items whose link is a bookings page.
   allowed, and a 403 shows "not available on your account".
 - All strings are in `strings.ts`.
 
+## Look (redesign, frames 7.1–7.14 and 13.2)
+
+Every screen draws its own header (`headerShown: false` in the layout):
+`LargeTitleScrollView` with a back chevron on the lists and details, and a
+Cancel bar with step bars on the new-request form. The request form and the
+vehicle checks are full-height pushes with the tab bar hidden
+(`TAB_BAR_HIDDEN_ROUTES` in the shell). Screens are built from the kit
+(`src/components`); what the kit doesn't have yet is in `components/ui.tsx`
+(status chip mapping, label/value `Field`, `CheckRow`, `YesNo`, `Panel`,
+`ChoiceRow`, `HintLine`, `LoadFailed`, `SectionTitle` with a count). At most
+one yellow band: Bookings home, for approvers with requests waiting.
+
+`DateTimeField` and `FormError` are also used by Me and Staff decisions.
+
 ## Why a separate outbox
 
 The finance outbox is built around expenses and receipts (an expense id and

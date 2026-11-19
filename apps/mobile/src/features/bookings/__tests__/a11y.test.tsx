@@ -197,7 +197,7 @@ describe("New request flow", () => {
       ministries: [],
     });
     await render(inSafeArea(<NewRequestScreen />));
-    expect(screen.getByRole("header", { name: strings.a11y.stepChanged(strings.steps.of(1, 1), strings.steps.titles.type) })).toBeTruthy();
+    expect(screen.getByRole("header", { name: strings.a11y.stepChanged(strings.home.newRequest, strings.steps.titles.type) })).toBeTruthy();
     noProblems();
     await fireEvent.press(screen.getByTestId("type-space"));
     const room = await screen.findByRole("radio", { name: /Prayer room/ });

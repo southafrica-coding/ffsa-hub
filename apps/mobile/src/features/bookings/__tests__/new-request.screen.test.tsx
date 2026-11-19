@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import * as Haptics from "expo-haptics";
 
 import type { MeState } from "@/features/shell";
@@ -9,7 +9,7 @@ import { loadSpaceOptions, loadVehicles } from "../data";
 import { ServerRefusal } from "../http";
 import NewRequestScreen from "../screens/NewRequestScreen";
 import { strings } from "../strings";
-import { person } from "../__fixtures__/fixtures";
+import { daysFromToday, person } from "../__fixtures__/fixtures";
 import { inSafeArea, perm } from "../__fixtures__/screen-mocks";
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn() };
@@ -23,7 +23,14 @@ jest.mock("@/features/shell", () => ({ ...jest.requireActual("@/features/shell")
 jest.mock("../data", () => ({ ...jest.requireActual("../data"), loadSpaceOptions: jest.fn(), loadVehicles: jest.fn() }));
 jest.mock("../client", () => ({ bookingsFetch: jest.fn() }));
 // The native pickers are replaced by a button that sets a fixed value per field.
-const mockValues: Record<string, string> = { date: "2026-11-10", start: "18:00", end: "21:00", checkout: "2026-11-10", return: "2026-11-12" };
+// Dates are relative to today so the fixtures can never slip into the past
+// (a licence fixed at 11 Nov 2026 expired and broke this file).
+const DAY = daysFromToday(30);
+const RETURN_DAY = daysFromToday(32);
+/** Still valid today, but runs out the day before the vehicle comes back. */
+const LICENCE_ENDS_MID_TRIP = daysFromToday(31);
+const LICENCE_VALID = daysFromToday(730);
+const mockValues: Record<string, string> = { date: DAY, start: "18:00", end: "21:00", checkout: DAY, return: RETURN_DAY };
 jest.mock("../components/DateTimeField", () => {
   const { Pressable, Text } = jest.requireActual("react-native");
   return {
@@ -80,7 +87,9 @@ describe("New request: what can be asked for", () => {
   it("only the types this account may request; equipment points to the website", async () => {
     signedInAs(["bookings.view", "vehicles.view", "vehicles.request", "equipment.view"]);
     await render(inSafeArea(<NewRequestScreen />));
-    expect(screen.getByText(strings.steps.of(1, 1))).toBeTruthy();
+    // Until a kind is chosen there are no steps to count: the eyebrow says what this is.
+    expect(screen.getByText(strings.home.newRequest)).toBeTruthy();
+    expect(screen.queryByTestId("step-progress")).toBeNull();
     expect(screen.queryByTestId("type-space")).toBeNull();
     expect(screen.getByTestId("type-vehicle")).toBeTruthy();
     expect(screen.getByText(strings.type.equipmentNotYet)).toBeTruthy();
@@ -109,12 +118,12 @@ describe("New request: a space", () => {
   it("a clash on an instant space is a hard block, in the server's words", async () => {
     routes((path, init) => {
       expect(path).toBe("/api/bookings");
-      expect(init.body).toMatchObject({ dryRun: true, venue_id: "v2", booking_date: "2026-11-10", start_time: "18:00", end_time: "21:00" });
+      expect(init.body).toMatchObject({ dryRun: true, venue_id: "v2", booking_date: DAY, start_time: "18:00", end_time: "21:00" });
       return {
         ok: true,
         autoConfirm: true,
         blocked: true,
-        conflicts: [{ date: "2026-11-10", existingId: "x", existingTitle: "Worship practice", existingTime: "17:00 – 19:00", occupiedUntil: "19:00", who: "Ana" }],
+        conflicts: [{ date: DAY, existingId: "x", existingTitle: "Worship practice", existingTime: "17:00 – 19:00", occupiedUntil: "19:00", who: "Ana" }],
       };
     });
     await toWhen();
@@ -154,7 +163,7 @@ describe("New request: a space", () => {
       if (init.body?.dryRun) return { ok: true, autoConfirm: true, blocked: false, conflicts: [] };
       return new ServerRefusal("That time is already booked — “Staff meeting” has this space on Tue 10 Nov 2026 until 20:00.", 409, {
         blocked: true,
-        conflicts: [{ date: "2026-11-10", existingId: "y", existingTitle: "Staff meeting", existingTime: "19:00 – 20:00", occupiedUntil: "20:00", who: null }],
+        conflicts: [{ date: DAY, existingId: "y", existingTitle: "Staff meeting", existingTime: "19:00 – 20:00", occupiedUntil: "20:00", who: null }],
       });
     });
     await toWhen();
@@ -179,12 +188,167 @@ describe("New request: a space", () => {
   });
 });
 
+describe("New request: the redesign (7.2, 7.3, 7.7–7.9)", () => {
+  it("Cancel closes the flow from the first screen", async () => {
+    signedInAs(["bookings.request"]);
+    await render(inSafeArea(<NewRequestScreen />));
+    await press("cancel-request");
+    expect(mockRouter.replace).toHaveBeenCalledWith("/bookings");
+  });
+
+  it("a space is five steps, with a bar for each", async () => {
+    signedInAs(["bookings.request", "vehicles.request"]);
+    await render(inSafeArea(<NewRequestScreen />));
+    await press("type-space");
+    expect(screen.getByText(strings.steps.of(2, 5))).toBeTruthy();
+    expect(screen.getByTestId("step-progress", { includeHiddenElements: true }).props.children).toHaveLength(5);
+  });
+
+  it("a vehicle is six steps, with a bar for each", async () => {
+    signedInAs(["bookings.request", "vehicles.request"]);
+    routes(() => ({ people: [] }));
+    await render(inSafeArea(<NewRequestScreen />));
+    await press("type-vehicle");
+    expect(screen.getByText(strings.steps.of(2, 6))).toBeTruthy();
+    expect(screen.getByTestId("step-progress", { includeHiddenElements: true }).props.children).toHaveLength(6);
+  });
+
+  it("which space: each says whether it needs approval, and the weekly link opens the website", async () => {
+    signedInAs(["bookings.request"]);
+    await render(inSafeArea(<NewRequestScreen />));
+    await press("type-space");
+    await screen.findByTestId("venue-v1");
+    expect(screen.getByText(strings.space.needsApproval)).toBeTruthy();
+    expect(screen.getByText(strings.space.instant)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Repeating booking on the website/ })).toBeTruthy();
+    // Nothing is said about approval until a space is chosen.
+    expect(screen.queryByText(/Goes to the booking manager/)).toBeNull();
+    await press("venue-v1");
+    expect(screen.getByText("Goes to the booking manager for approval.")).toBeTruthy();
+    // Next without a choice is the flow's own rule; with one it moves on.
+    await press("step-next");
+    expect(screen.getByRole("header", { name: strings.steps.titles.when })).toBeTruthy();
+  });
+
+  it("checking, then blocked: Next is off and the reason is on screen without tapping", async () => {
+    let answer: (v: unknown) => void = () => {};
+    fetchMock.mockImplementation(
+      (_path: string, init: Init = {}) =>
+        new Promise((resolve) => {
+          answer = (v) => resolve(init.schema ? init.schema.parse(v) : v);
+        }),
+    );
+    signedInAs(["bookings.request"]);
+    await render(inSafeArea(<NewRequestScreen />));
+    await press("type-space");
+    await fireEvent.press(await screen.findByTestId("venue-v2"));
+    await press("step-next");
+    await press("date");
+    await press("start");
+    await press("end");
+    expect(await screen.findByText(strings.when.checking, {}, { timeout: 3000 })).toBeTruthy();
+    expect(screen.getByTestId("step-next").props.accessibilityState).toMatchObject({ disabled: false });
+    // The check waits a moment after the last change before it asks.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled(), { timeout: 3000 });
+    answer({
+      ok: true,
+      autoConfirm: true,
+      blocked: true,
+      conflicts: [{ date: DAY, existingId: "x", existingTitle: "Worship practice", existingTime: "17:00 – 19:00", occupiedUntil: "19:00", who: "Ana" }],
+    });
+    expect(await screen.findByTestId("clash-blocked")).toBeTruthy();
+    expect(screen.getByText(strings.clash.blockedHelp)).toBeTruthy();
+    expect(screen.getByText(strings.clash.changeToContinue)).toBeTruthy();
+    expect(screen.getByTestId("step-next").props.accessibilityState).toMatchObject({ disabled: true });
+  });
+
+  it("a clash on a space that needs approval is a warning: 'Send anyway'", async () => {
+    routes((_path, init) => {
+      const conflicts = [{ date: DAY, existingId: "x", existingTitle: "Staff meeting", existingTime: "19:00 – 20:00", occupiedUntil: "20:00", who: "Test Leader C" }];
+      if (init.body?.dryRun) return { ok: true, autoConfirm: false, blocked: false, conflicts };
+      return { ok: true, bookingId: "new-2", autoConfirm: false, conflicts };
+    });
+    signedInAs(["bookings.request"]);
+    await render(inSafeArea(<NewRequestScreen />));
+    await press("type-space");
+    await fireEvent.press(await screen.findByTestId("venue-v1"));
+    await press("step-next");
+    await press("date");
+    await press("start");
+    await press("end");
+    expect(await screen.findByTestId("clash-warning", {}, { timeout: 3000 })).toBeTruthy();
+    expect(screen.getByText(strings.clash.warnHelp)).toBeTruthy();
+    // A warning doesn't stop the flow.
+    expect(screen.getByTestId("step-next").props.accessibilityState).toMatchObject({ disabled: false });
+    await press("step-next");
+    await fireEvent.changeText(screen.getByTestId("title"), "Worship night rehearsal");
+    await press("step-next");
+    expect(await screen.findByRole("button", { name: strings.steps.submitAnyway }, { timeout: 3000 })).toBeTruthy();
+    expect(screen.getByLabelText("What: Worship night rehearsal")).toBeTruthy();
+    expect(screen.getByLabelText("Space: Main hall")).toBeTruthy();
+    await press("submit");
+    expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: "/bookings/space/[id]", params: { id: "new-2" } });
+  });
+
+  it("who's driving: a licence hint per driver, the first-time switch, and the outside-driver link", async () => {
+    signedInAs(["vehicles.request"]);
+    routes((path, init) => {
+      if (path === "/api/vehicles/people") {
+        return { people: [person({ id: "p1", name: "Sam Driver", licence_expiry_date: LICENCE_VALID }), person({ id: "p3", name: "New Driver", licence_expiry_date: LICENCE_VALID, base_driving_test_status: "pending" })] };
+      }
+      if (init.body?.dryRun) return { ok: true, unavailableVehicleIds: [], clashingVehicleIds: [], blocked: false };
+      return { ok: true, bookingId: "vb-new", drivers: [] };
+    });
+    await render(inSafeArea(<NewRequestScreen />));
+    await press("type-vehicle");
+    await press("checkout");
+    await press("return");
+    await press("step-next");
+    await screen.findByTestId("vehicle-car1");
+    await press("step-next");
+    expect(screen.getByText(strings.drivers.intro)).toBeTruthy();
+    await fireEvent.press(await screen.findByTestId("add-me"));
+    expect(screen.getByText(`Licence valid to ${LICENCE_VALID}`)).toBeTruthy();
+    expect(screen.queryByTestId("add-me")).toBeNull();
+    await press("add-driver");
+    // Someone already on the list can't be added twice.
+    expect(screen.getByText(strings.drivers.already)).toBeTruthy();
+    await press("person-p3");
+    const firstTime = screen.getByRole("switch", { name: `New Driver. ${strings.drivers.firstTime}` });
+    expect(firstTime.props.value).toBe(true);
+    expect(screen.getByRole("switch", { name: `Sam Driver. ${strings.drivers.firstTime}` }).props.value).toBe(false);
+    expect(screen.getByRole("link", { name: new RegExp(strings.drivers.outsiderLink) })).toBeTruthy();
+  });
+
+  it("the list of drivers couldn't load: says so, with Try again", async () => {
+    signedInAs(["vehicles.request"]);
+    let fail = true;
+    routes((path, init) => {
+      if (path === "/api/vehicles/people") return fail ? new Error("down") : { people: [person({ id: "p1", licence_expiry_date: LICENCE_VALID })] };
+      if (init.body?.dryRun) return { ok: true, unavailableVehicleIds: [], clashingVehicleIds: [], blocked: false };
+      return {};
+    });
+    await render(inSafeArea(<NewRequestScreen />));
+    await press("type-vehicle");
+    await press("checkout");
+    await press("return");
+    await press("step-next");
+    await screen.findByTestId("vehicle-car1");
+    await press("step-next");
+    expect(await screen.findByText(strings.drivers.loadFailed)).toBeTruthy();
+    expect(screen.queryByTestId("add-driver")).toBeNull();
+    fail = false;
+    await fireEvent.press(screen.getByRole("button", { name: strings.common.tryAgain }));
+    expect(await screen.findByTestId("add-me")).toBeTruthy();
+  });
+});
+
 describe("New request: a vehicle", () => {
   it("taken vehicles are marked from the server's check; drivers need a valid licence; the server's refusal is shown", async () => {
     signedInAs(["vehicles.view", "vehicles.request"]);
     routes((path, init) => {
       if (path === "/api/vehicles/people") {
-        return { people: [person({ id: "p1", name: "Sam Driver" }), person({ id: "p2", name: "Lee Expired", licence_expiry_date: "2026-11-11" })] };
+        return { people: [person({ id: "p1", name: "Sam Driver", licence_expiry_date: LICENCE_VALID }), person({ id: "p2", name: "Lee Expired", licence_expiry_date: LICENCE_ENDS_MID_TRIP })] };
       }
       if (init.body?.dryRun) return { ok: true, unavailableVehicleIds: ["car1"], clashingVehicleIds: [], blocked: false };
       return new ServerRefusal("Sam Driver cannot be added as a driver — No passport photo on file. Ask them to add one to their profile.", 400, {});
@@ -207,7 +371,7 @@ describe("New request: a vehicle", () => {
     await fireEvent.press(await screen.findByTestId("add-driver"));
     await fireEvent.press(screen.getByTestId("person-p2"));
     await press("step-next");
-    expect(screen.getByText(/Lee Expired cannot be added as a driver: Licence expires on 2026-11-11, before the return date/)).toBeTruthy();
+    expect(screen.getByText(`Lee Expired cannot be added as a driver: Licence expires on ${LICENCE_ENDS_MID_TRIP}, before the return date.`)).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: strings.drivers.remove("Lee Expired") }));
     await press("add-me");
     await press("step-next");
@@ -232,7 +396,7 @@ describe("New request: a vehicle", () => {
   it("created: opens the new booking", async () => {
     signedInAs(["vehicles.request"]);
     routes((path, init) => {
-      if (path === "/api/vehicles/people") return { people: [person({ id: "p1" })] };
+      if (path === "/api/vehicles/people") return { people: [person({ id: "p1", licence_expiry_date: LICENCE_VALID })] };
       if (init.body?.dryRun) return { ok: true, unavailableVehicleIds: [], clashingVehicleIds: [], blocked: false };
       return { ok: true, bookingId: "vb-new", drivers: [{ id: "d1", name: "Sam Driver" }] };
     });

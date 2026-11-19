@@ -172,6 +172,54 @@ describe("Bookings home", () => {
   });
 });
 
+describe("Bookings home: the redesign (7.1, 13.2)", () => {
+  it("the back button goes Home (Bookings isn't a tab)", async () => {
+    signedInAs(["bookings.view"]);
+    mine.mockResolvedValue({ spaces: [], vehicles: [] });
+    await render(inSafeArea(<BookingsHomeScreen />));
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Home" }));
+    expect(mockRouter.navigate).toHaveBeenCalledWith("/");
+    expect(screen.getByRole("header", { name: strings.home.title })).toBeTruthy();
+  });
+
+  it("error (13.2): a calm card with the title, the reason and Try again; no list", async () => {
+    signedInAs(["bookings.view", "bookings.request"]);
+    mine.mockRejectedValue(new ApiError("network", "Couldn't reach FFSA Hub."));
+    await render(inSafeArea(<BookingsHomeScreen />));
+    expect(await screen.findByRole("header", { name: strings.home.errorTitle })).toBeTruthy();
+    expect(screen.getByTestId("load-failed")).toBeTruthy();
+    expect(screen.queryByTestId("empty")).toBeNull();
+    // New request stays reachable while the list can't load.
+    expect(screen.getByTestId("new-request")).toBeTruthy();
+  });
+
+  it("approver: the band and the 'Waiting for you' row both open the queue; the row stays at zero", async () => {
+    signedInAs(["bookings.view", "bookings.approve"]);
+    mine.mockResolvedValue({ spaces: [], vehicles: [] });
+    pending.mockResolvedValue({ spaces: [spaceBooking(), spaceBooking({ id: "sb2" })], vehicles: [] });
+    await render(inSafeArea(<BookingsHomeScreen />));
+    expect(await screen.findByText(strings.home.approvalsRowSub(2))).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("approvals-row"));
+    expect(mockRouter.push).toHaveBeenCalledWith("/bookings/approvals");
+  });
+
+  it("sections carry their counts; the past list stops at 20; a weekly booking says so", async () => {
+    signedInAs(["bookings.view"]);
+    mine.mockResolvedValue({
+      spaces: [
+        spaceBooking({ id: "s-series", status: "approved", booking_date: "2099-03-01", series_id: "ser1" }),
+        ...Array.from({ length: 23 }, (_, i) => spaceBooking({ id: `old-${i}`, status: "approved", booking_date: "2020-01-01", title: `Old ${i}` })),
+      ],
+      vehicles: [],
+    });
+    await render(inSafeArea(<BookingsHomeScreen />));
+    expect(await screen.findByRole("header", { name: `${strings.home.sections.upcoming}, 1` })).toBeTruthy();
+    expect(screen.getByRole("header", { name: `${strings.home.sections.past}, 20` })).toBeTruthy();
+    expect(screen.getAllByText(/^Old \d+$/)).toHaveLength(20);
+    expect(screen.getByText(strings.row.repeats)).toBeTruthy();
+  });
+});
+
 describe("Waiting for you (approvals)", () => {
   it("permission denied for non-approvers", async () => {
     signedInAs(["bookings.view", "bookings.request"]);
@@ -206,5 +254,16 @@ describe("Waiting for you (approvals)", () => {
     expect(await screen.findByText(/Couldn't load space requests/)).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText(strings.approvals.empty)).toBeTruthy();
+  });
+
+  it("back goes to Bookings; sections carry their counts", async () => {
+    signedInAs(["bookings.approve", "vehicles.approve"]);
+    pending.mockResolvedValue({ spaces: [spaceBooking()], vehicles: [vehicleBooking(), vehicleBooking({ id: "vb2" })] });
+    await render(inSafeArea(<ApprovalsScreen />));
+    expect(await screen.findByRole("header", { name: `${strings.approvals.spaces}, 1` })).toBeTruthy();
+    expect(screen.getByRole("header", { name: `${strings.approvals.vehicles}, 2` })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Bookings" }));
+    // Nothing to go back to in this test, so it opens the parent.
+    expect(mockRouter.replace).toHaveBeenCalledWith("/bookings");
   });
 });
