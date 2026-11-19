@@ -1115,3 +1115,21 @@
 .personLink:hover {
   text-decoration-color: currentColor;
 }
+
+/* People list: the name opens the person card. Looks like a link. */
+.shell .personOpen,
+.shell .personOpen:hover,
+.shell .personOpen:focus-visible {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}

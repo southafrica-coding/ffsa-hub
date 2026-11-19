@@ -22,6 +22,7 @@ import {
   sortMembers,
 } from "./format";
 import { SizeDots } from "./house-grid";
+import { PersonCardDialog } from "../person-card";
 import { useMissioLoad } from "./load";
 import { PeoplePicker } from "./people-picker";
 import { AllHousesLink, CampusTag } from "./present";
@@ -447,13 +448,22 @@ function HealthNote({ house }: { house: HouseDetail }) {
   );
 }
 
+/** The name opens the person card over the house page. */
 function PersonName({ member }: { member: HouseMember }) {
-  const href = personHref(member);
-  if (!href) return <span className={shell.personName}>{member.displayName}</span>;
+  const [open, setOpen] = useState(false);
+  const personId = member.orgPersonId?.trim();
+  if (!personId) return <span className={shell.personName}>{member.displayName}</span>;
   return (
-    <Link href={href} className={`${shell.personName} ${styles.personLink}`}>
-      {member.displayName}
-    </Link>
+    <>
+      <button
+        type="button"
+        className={`${shell.personName} ${styles.personLink} ${shell.personOpen}`}
+        onClick={() => setOpen(true)}
+      >
+        {member.displayName}
+      </button>
+      {open ? <PersonCardDialog personId={personId} name={member.displayName} onClose={() => setOpen(false)} /> : null}
+    </>
   );
 }
 

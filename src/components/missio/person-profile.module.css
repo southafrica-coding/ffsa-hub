@@ -314,3 +314,67 @@
   display: grid;
   gap: 2px;
 }
+
+/* The person card over a list. */
+.quick {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.quickHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.quickHead .tags {
+  margin: 0;
+}
+
+.quick .actions {
+  margin: 0;
+}
+
+.quick .card {
+  margin: 0;
+}
+
+.quickLabel {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--quiet, #6e685b);
+}
+
+.quickJourney {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quickJourney li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.fullLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+  color: var(--link, #2f5d50);
+  text-underline-offset: 3px;
+}
