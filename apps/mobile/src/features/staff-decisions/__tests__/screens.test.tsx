@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import * as WebBrowser from "expo-web-browser";
 import type { ReactElement } from "react";
 import { Alert } from "react-native";
@@ -86,7 +86,13 @@ describe("Schools list", () => {
     expect(screen.getByTestId(`archived-${LT_2025}`)).toBeTruthy();
     expect(screen.queryByTestId(`archived-${LT_2026}`)).toBeNull();
     expect(screen.getByLabelText("Leadership Track 2026. 3 students. 1 yes, 1 no, 1 undecided")).toBeTruthy();
+    // The counts are one line under the name (frame 12.1), and the intro sits under the title.
+    expect(screen.getByText("3 students · 1 yes · 1 no · 1 undecided")).toBeTruthy();
+    expect(screen.getByText("1 student · 0 yes · 0 no · 1 undecided")).toBeTruthy();
+    expect(screen.getByText(strings.list.intro)).toBeTruthy();
     expect(screen.queryByTestId("needs-you")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Home" }));
+    expect(mockRouter.navigate).toHaveBeenCalledWith("/");
     await fireEvent.press(screen.getByTestId(`school-${LT_2026}`));
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: "/staff-decisions/[programId]", params: { programId: LT_2026 } });
     await waitFor(() => expect(cache.writeCache).toHaveBeenCalledWith("user-1", "staff-decisions.list", expect.anything()));
@@ -147,7 +153,9 @@ describe("School detail", () => {
     expect(screen.getByText("Accepted: yes")).toBeTruthy();
     expect(screen.getByText("Accepted: no")).toBeTruthy();
     expect(screen.getByText("Not decided")).toBeTruthy();
-    expect(screen.getByTestId("note-e2")).toHaveTextContent("Not this year");
+    expect(screen.getByTestId("note-e2")).toHaveTextContent("Note: Not this year");
+    expect(screen.getByTestId("counts")).toHaveTextContent("1 yes · 1 no · 1 undecided");
+    expect(screen.getByText("Students · 3")).toBeTruthy();
     expect(screen.getByText("Decided 1 Oct 2026 by Lee Team")).toBeTruthy();
     expect(screen.getByText("Staff")).toBeTruthy();
     expect(screen.getAllByTestId("needs-you")).toHaveLength(1);
@@ -160,6 +168,16 @@ describe("School detail", () => {
     expect(screen.getByRole("button", { name: "Decide on Cara Lee" })).toBeTruthy();
     await fireEvent.press(screen.getByTestId("open-web"));
     expect(openBrowser).toHaveBeenCalledWith(`https://hub.example.test/schools/${LT_2026}?tab=staff_decision`, expect.anything());
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Staff decisions" }));
+    expect(mockRouter.back).toHaveBeenCalled();
+  });
+
+  it("the band has no button of its own, and counts every undecided student", async () => {
+    one.mockResolvedValue(detail({ rows: [student({ enrollmentId: "e1" }), student({ enrollmentId: "e2", name: "Ben Cole" })] }));
+    await show(<SchoolDetailScreen programId={LT_2026} />);
+    const band = await screen.findByTestId("needs-you");
+    expect(within(band).getByText(strings.detail.needsYouMany(2))).toBeTruthy();
+    expect(within(band).queryByRole("button")).toBeNull();
   });
 
   it("archived school: no band even with undecided students", async () => {
@@ -183,10 +201,13 @@ describe("Decision sheet", () => {
     await fireEvent.press(screen.getByRole("radio", { name: "No" }));
     expect(screen.getByLabelText(sh.noteLabelRequired)).toBeTruthy();
     await fireEvent.press(screen.getByTestId("decision-save"));
-    expect(screen.getByTestId("form-error")).toHaveTextContent(sh.noteRequired);
+    // The missing note is said on the note field itself (frame 12.4), not in a separate line.
+    expect(screen.getByRole("alert")).toHaveTextContent(sh.noteRequired);
+    expect(screen.getByTestId("decision-note").props.accessibilityHint).toBe(sh.noteRequired);
+    expect(screen.queryByTestId("form-error")).toBeNull();
     expect(decide).not.toHaveBeenCalled();
     await fireEvent.changeText(screen.getByTestId("decision-note"), "Needs another year");
-    expect(screen.queryByTestId("form-error")).toBeNull();
+    expect(screen.queryByText(sh.noteRequired)).toBeNull();
     decide.mockResolvedValue(undefined);
     await fireEvent.press(screen.getByTestId("decision-save"));
     await waitFor(() => expect(decide).toHaveBeenCalledWith(expect.anything(), { enrollmentId: "e3", accepted: false, note: "Needs another year" }));

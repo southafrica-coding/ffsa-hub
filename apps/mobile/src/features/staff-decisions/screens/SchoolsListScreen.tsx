@@ -1,29 +1,29 @@
 import { useRouter } from "expo-router";
-import { UserCheck } from "lucide-react-native";
+import { Lock, UserCheck } from "lucide-react-native";
 import { useCallback } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Masthead, Screen, Text } from "@/components";
-import { ErrorState, Row, SectionBar, Skeleton } from "@/features/finance/components/ui";
+import { EmptyState, LargeTitleScrollView, ListGroup, SkeletonList, StatusChip, Text } from "@/components";
+import { Bleed, GroupRow, LoadError } from "@/features/finance/components/parts";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { Chevron, Freshness, StatusTag } from "@/features/schools/components/ui";
-import { StateMessage } from "@/features/shell";
 import { apiFetch } from "@/lib/api-client";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { getSchools, loadErrorMessage, type School, type SchoolList } from "../api";
-import { Counts } from "../components/Counts";
+import { Freshness } from "../components/ui";
 import { schoolA11yLabel } from "../logic";
 import { strings } from "../strings";
 
 const s = strings.list;
 
 // Staff decisions: every Leadership Track school (archived ones too, since
-// this access never expires) with its Students / Yes / No / Undecided
-// counts, the web /staff-decisions table as rows. Each opens its students.
-// No yellow band here: the web list has none; the school page carries it.
+// this access never expires) with its students / yes / no / undecided
+// counts in one line, the web /staff-decisions table as rows. Each opens its
+// students. No yellow band here: the web list has none; the school page
+// carries it.
 export default function SchoolsListScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -42,56 +42,61 @@ export default function SchoolsListScreen() {
   const forbidden = state.status === "error" && state.message === strings.common.forbidden;
 
   return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
-      >
-        <Masthead context={s.context} title={s.title} />
+    <LargeTitleScrollView
+      // Staff decisions is reached from Home (it isn't a tab), so the list goes back to Home.
+      back={{ label: strings.common.home, onPress: () => router.navigate("/") }}
+      eyebrow={s.context}
+      title={s.title}
+      gap={0}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
+    >
+      {data ? (
+        <Text variant="caption" tone="secondary" style={{ marginTop: -space.sm, marginBottom: space.lg }}>
+          {s.intro}
+        </Text>
+      ) : null}
 
-        {state.status === "loading" ? <Skeleton label={s.loading} /> : null}
+      <Bleed style={{ gap: space.md }}>
+        {state.status === "loading" ? <SkeletonList label={s.loading} count={3} inset={false} /> : null}
         {forbidden ? (
-          <StateMessage testID="forbidden" icon={UserCheck} title={strings.gate.title} body={strings.common.forbidden} />
+          <EmptyState testID="forbidden" icon={Lock} title={strings.gate.title} body={strings.common.forbidden} />
         ) : state.status === "error" ? (
-          <ErrorState title={s.errorTitle} message={state.message} onRetry={retry} />
+          <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
         ) : null}
         <Freshness state={state} onRetry={retry} />
 
         {data ? (
-          <>
-            <Text tone="secondary">{s.intro}</Text>
-            {data.schools.length === 0 ? (
-              <StateMessage testID="empty" icon={UserCheck} title={s.emptyTitle} body={s.emptyBody} />
-            ) : (
-              <View>
-                <SectionBar title={s.title} meta={String(data.schools.length)} />
-                {data.schools.map((school) => (
-                  <SchoolRow
-                    key={school.id}
-                    school={school}
-                    onPress={() => router.push({ pathname: "/staff-decisions/[programId]", params: { programId: school.id } })}
-                  />
-                ))}
-              </View>
-            )}
-          </>
+          data.schools.length === 0 ? (
+            <EmptyState testID="empty" icon={UserCheck} title={s.emptyTitle} body={s.emptyBody} />
+          ) : (
+            <ListGroup inset={false}>
+              {data.schools.map((school) => (
+                <SchoolRow
+                  key={school.id}
+                  school={school}
+                  onPress={() => router.push({ pathname: "/staff-decisions/[programId]", params: { programId: school.id } })}
+                />
+              ))}
+            </ListGroup>
+          )
         ) : null}
-      </ScrollView>
-    </Screen>
+      </Bleed>
+    </LargeTitleScrollView>
   );
 }
 
 function SchoolRow({ school, onPress }: { school: School; onPress: () => void }) {
   return (
-    <Row onPress={onPress} accessibilityLabel={schoolA11yLabel(school)} accessibilityHint={s.rowHint} testID={`school-${school.id}`}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <View style={{ flex: 1, gap: 8 }}>
-          <Text variant="title">{school.name}</Text>
-          {school.archived ? <StatusTag label={s.archived} tone="default" testID={`archived-${school.id}`} /> : null}
-          <Counts total={school.total} yes={school.yes} no={school.no} undecided={school.undecided} />
-        </View>
-        <Chevron />
+    <GroupRow onPress={onPress} accessibilityLabel={schoolA11yLabel(school)} accessibilityHint={s.rowHint} testID={`school-${school.id}`}>
+      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: space.sm, rowGap: space.xs }}>
+        <Text variant="rowTitle" style={{ flexShrink: 1 }}>
+          {school.name}
+        </Text>
+        {school.archived ? <StatusChip label={s.archived} variant="quiet" icon={null} testID={`archived-${school.id}`} /> : null}
       </View>
-    </Row>
+      <Text variant="caption" tone="secondary" style={{ fontVariant: ["tabular-nums"] }}>
+        {s.rowSummary(school.total, school.yes, school.no, school.undecided)}
+      </Text>
+    </GroupRow>
   );
 }

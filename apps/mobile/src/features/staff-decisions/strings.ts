@@ -28,10 +28,8 @@ export const strings = {
     emptyTitle: "No Leadership Track schools yet.",
     emptyBody: "When a Leadership Track school is set up, it shows here.",
     archived: "Archived",
-    students: "Students",
-    yes: "Yes",
-    no: "No",
-    undecided: "Undecided",
+    rowSummary: (total: number, yes: number, no: number, undecided: number) =>
+      `${total} ${total === 1 ? "student" : "students"} · ${yes} yes · ${no} no · ${undecided} undecided`,
     rowHint: "Opens this school's students",
     rowA11y: (name: string, archived: boolean, total: number, yes: number, no: number, undecided: number) =>
       [
@@ -50,6 +48,8 @@ export const strings = {
     intro: "Everyone who arrived at this school. Students never see their decision or note.",
     counts: (yes: number, no: number, undecided: number) => `${yes} yes · ${no} no · ${undecided} undecided`,
     students: "Students",
+    studentsCount: (n: number) => `Students · ${n}`,
+    noteLine: (note: string) => `Note: ${note}`,
     emptyTitle: "Nobody has arrived yet",
     emptyBody: "Students show up here once they're set to Arrived on the school's Arrival tab on the website.",
     needsYouTitle: "Needs a decision",

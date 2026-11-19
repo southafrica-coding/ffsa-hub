@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { UserCheck } from "lucide-react-native";
 
-import { ListRow } from "@/features/shell";
+import { ListRow } from "@/components";
 
 import { useStaffDecisionsAccess } from "./access";
 import { strings } from "./strings";

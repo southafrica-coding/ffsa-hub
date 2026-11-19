@@ -43,7 +43,7 @@ describe("Schools list", () => {
   it("success: header, each row a named button with a hint, counts in words", async () => {
     list.mockResolvedValue(schoolList());
     await show(<SchoolsListScreen />);
-    expect(await screen.findByRole("header", { name: `${strings.list.title}, 2` })).toBeTruthy();
+    expect(await screen.findByRole("header", { name: strings.list.title })).toBeTruthy();
     const row = screen.getByRole("button", { name: "Leadership Track 2026. 3 students. 1 yes, 1 no, 1 undecided" });
     expect(row.props.accessibilityHint).toBe(strings.list.rowHint);
     expect(screen.getByRole("button", { name: "Leadership Track 2025. Archived. 1 student. 0 yes, 0 no, 1 undecided" })).toBeTruthy();
@@ -63,7 +63,8 @@ describe("School detail", () => {
     one.mockResolvedValue(detail());
     await show(<SchoolDetailScreen programId={LT_2026} />);
     expect(await screen.findByLabelText("Ben Cole. ben@example.org. Staff. Accepted: no. Note: Not this year. Decided 2 Oct 2026 by Lee Team")).toBeTruthy();
-    expect(screen.getByRole("header", { name: `${strings.detail.students}, 1 yes · 1 no · 1 undecided` })).toBeTruthy();
+    expect(screen.getByRole("header", { name: "Leadership Track 2026" })).toBeTruthy();
+    expect(screen.getByRole("header", { name: "Students · 3" })).toBeTruthy();
     const makeStaff = screen.getByRole("button", { name: "Make Ann Bell staff" });
     expect(makeStaff.props.accessibilityHint).toBe(strings.detail.makeStaffHint);
     expect(screen.getByRole("link", { name: /^Open this school on the website\. Opens in browser/ })).toBeTruthy();
@@ -75,18 +76,29 @@ describe("School detail", () => {
     await show(<SchoolDetailScreen programId={LT_2026} />);
     await fireEvent.press(await screen.findByRole("button", { name: "Decide on Cara Lee" }));
     expect(screen.getByRole("header", { name: strings.sheet.acceptedLabel })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: "Yes" })).toBeTruthy();
+    // Nothing is chosen until the person chooses.
+    expect(screen.getByRole("radio", { name: "Yes", checked: false })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "No", checked: false })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("radio", { name: "Yes" }));
+    expect(screen.getByRole("radio", { name: "Yes", checked: true })).toBeTruthy();
+    // Chosen is the yellow underline and the bold label, not colour alone.
+    const chosen = StyleSheet.flatten(screen.getByTestId("choice-yes").props.style);
+    expect(chosen.borderBottomWidth).toBe(2);
+    expect(chosen.borderBottomColor).toBe(colors.light.accent);
+    expect(chosen.minHeight).toBeGreaterThanOrEqual(44);
     expect(screen.getByLabelText(strings.sheet.noteLabelOptional)).toBeTruthy();
     expect(audit()).toEqual([]);
   });
 
-  it("dark mode: rows use the dark theme's rule colour (no hard-coded colours)", async () => {
+  it("dark mode: the list uses the dark theme's colours (no hard-coded colours)", async () => {
     mockScheme = "dark";
     expect(themeFor("dark").colors.rule).toBe(colors.dark.rule);
     one.mockResolvedValue(detail());
     await show(<SchoolDetailScreen programId={LT_2026} />);
-    const row = await screen.findByTestId("student-e1");
-    expect(StyleSheet.flatten(row.props.style).borderBottomColor).toBe(colors.dark.rule);
+    const group = StyleSheet.flatten((await screen.findByTestId("students")).props.style);
+    expect(group.borderColor).toBe(colors.dark.rule);
+    expect(group.backgroundColor).toBe(colors.dark.raised);
+    expect(StyleSheet.flatten(screen.getByTestId("needs-you").props.style).backgroundColor).toBe(colors.dark.accent);
     expect(audit()).toEqual([]);
   });
 });
