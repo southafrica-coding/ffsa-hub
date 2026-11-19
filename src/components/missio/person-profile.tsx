@@ -9,6 +9,7 @@ import content from "./content.module.css";
 import { houseTitle, ROLE_LABEL } from "./house-churches/format";
 import { useMissioLoad } from "./house-churches/load";
 import { HouseStatus } from "./house-churches/status";
+import { telHref, whatsAppHref } from "./follow-up/whatsapp";
 import shell from "./shell.module.css";
 import styles from "./person-profile.module.css";
 
@@ -139,6 +140,7 @@ function Profile({
           </p>
         </div>
       </header>
+      <ContactActions phone={contact.phone} email={contact.email} />
 
       <section className={styles.card} data-testid="profile-belongs">
         <h2>Belongs to</h2>
@@ -168,11 +170,11 @@ function Profile({
         <dl className={styles.facts}>
           <div>
             <dt>Phone</dt>
-            <dd>{contact.phone ?? "Not on file"}</dd>
+            <dd>{contact.phone ? <a href={telHref(contact.phone) ?? undefined}>{contact.phone}</a> : "Not on file"}</dd>
           </div>
           <div>
             <dt>Email</dt>
-            <dd>{contact.email ?? "Not on file"}</dd>
+            <dd>{contact.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : "Not on file"}</dd>
           </div>
           <div>
             <dt>Campus</dt>
@@ -185,7 +187,6 @@ function Profile({
             </div>
           ) : null}
         </dl>
-        <p className={styles.quiet}>Phone and email are partly hidden here.</p>
       </section>
 
       <section className={styles.journey} data-testid="profile-journey">
@@ -245,5 +246,30 @@ function HouseRow({ house }: { house: ProfileHouse }) {
         <span className={styles.rowMeta}>{when}</span>
       </Link>
     </li>
+  );
+}
+
+function ContactActions({ phone, email }: { phone: string | null; email: string | null }) {
+  const call = telHref(phone);
+  const chat = whatsAppHref(phone);
+  if (!call && !chat && !email) return null;
+  return (
+    <div className={styles.actions} data-testid="profile-actions">
+      {call ? (
+        <a className={styles.action} href={call}>
+          Call
+        </a>
+      ) : null}
+      {chat ? (
+        <a className={styles.action} href={chat} target="_blank" rel="noopener noreferrer">
+          WhatsApp
+        </a>
+      ) : null}
+      {email ? (
+        <a className={styles.action} href={`mailto:${email}`}>
+          Email
+        </a>
+      ) : null}
+    </div>
   );
 }

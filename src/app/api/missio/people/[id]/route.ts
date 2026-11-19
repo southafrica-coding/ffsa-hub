@@ -32,7 +32,10 @@ export async function GET(_request: Request, context: Ctx) {
   if (!UUID.test(id)) return json({ error: "Person not found.", code: "not_found" }, 404);
   const result = await getPersonProfile(auth, id);
   if (!result.ok) return json({ error: result.error, code: result.code }, result.status);
-  return json(result.profile);
+  const res = json(result.profile);
+  // Carries phone and email. Never cached by the browser or a proxy.
+  res.headers.set("cache-control", "no-store");
+  return res;
 }
 
 export async function PATCH(request: Request, context: Ctx) {

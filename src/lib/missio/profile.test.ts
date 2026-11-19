@@ -11,6 +11,10 @@ function client(log?: string[]) {
       const filters: Array<(row: Row) => boolean> = [];
       const b = {
         select: () => b,
+        insert: (row: Row) => {
+          (tables[table] ??= []).push(row);
+          return Promise.resolve({ error: null });
+        },
         eq: (col: string, val: unknown) => (filters.push((row) => row[col] === val), b),
         in: (col: string, vals: unknown[]) => (filters.push((row) => vals.includes(row[col])), b),
         rows: () => (tables[table] ?? []).filter((row) => filters.every((keep) => keep(row))),
@@ -79,15 +83,13 @@ describe("getPersonProfile", () => {
     expect(profile.journey.at(-1)).toMatchObject({ visitType: "first_time", wantsHouseChurch: true, wantsPrayer: true });
   });
 
-  it("masks contact details and never returns the prayer request", async () => {
+  it("returns contact details in full, audits the read, and never returns the prayer request", async () => {
+    tables.audit_logs = [];
     const result = await getPersonProfile(auth, "p1");
     if (!result.ok) throw new Error("expected a profile");
-    const text = JSON.stringify(result.profile);
-    expect(text).not.toContain("kea.molefe@gmail.com");
-    expect(text).not.toContain("0825550142");
-    expect(text).not.toContain("private");
-    expect(result.profile.contact.phone).toContain("0142");
-    expect(adminReads).toEqual(["contacts"]);
+    expect(result.profile.contact).toEqual({ email: "kea.molefe@gmail.com", phone: "0825550142" });
+    expect(JSON.stringify(result.profile)).not.toContain("private");
+    expect(adminReads).toEqual(["contacts", "audit_logs"]);
   });
 
   it("answers 404 for someone outside the org", async () => {

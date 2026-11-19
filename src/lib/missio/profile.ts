@@ -1,6 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { OrgAccess } from "@/lib/missio/access";
-import { maskEmail, maskPhone } from "@/lib/missio/mask";
 import { loadPerson } from "@/lib/missio/people";
 import type { HouseChurchRole, MissioErrorCode, MissioPerson } from "@/lib/missio/types";
 
@@ -10,8 +9,8 @@ import type { HouseChurchRole, MissioErrorCode, MissioPerson } from "@/lib/missi
  * The journey is derived from rows that already exist: the Missio people
  * row, house memberships, follow-up stage history and connect cards. There
  * is no journey_events table yet, so only what those tables recorded shows.
- * Contact details are masked until Jack decides who may see them in full
- * (same open decision as FOLLOWUP_LIST_INCLUDES_CONTACT_PII).
+ * Missio pastors see phone and email in full (Jack, 19 Nov 2026), so they
+ * can call or WhatsApp from the profile. Each read is audited.
  */
 
 export type ProfileHouse = {
@@ -42,7 +41,7 @@ export type JourneyEvent =
 
 export type PersonProfile = {
   person: MissioPerson;
-  /** Masked. Null when the contact has none. */
+  /** In full. Null when the contact has none. Pastors only. */
   contact: { email: string | null; phone: string | null };
   /** Current memberships first, then past ones, newest first. */
   houses: ProfileHouse[];
@@ -195,16 +194,27 @@ export async function getPersonProfile(
 
   journey.sort((a, b) => instant(b.at) - instant(a.at));
 
-  // Masked contact details. The service-role read comes after the role
-  // check that produced `auth`.
+  // Contact details. The service-role read comes after the pastor check
+  // that produced `auth`. Every profile read that returns them is audited.
   const contact: PersonProfile["contact"] = { email: null, phone: null };
   try {
     const admin = createAdminClient();
     const found = await admin.from("contacts").select("email, phone").eq("id", contactId).maybeSingle();
     if (found.error) console.error("[missio] profile contact failed", found.error.message);
     const row = found.data as { email?: string | null; phone?: string | null } | null;
-    contact.email = row?.email ? maskEmail(row.email) : null;
-    contact.phone = row?.phone ? maskPhone(row.phone) : null;
+    contact.email = row?.email?.trim() || null;
+    contact.phone = row?.phone?.trim() || null;
+    if (contact.email || contact.phone) {
+      const logged = await admin.from("audit_logs").insert({
+        user_id: auth.user.id,
+        action: "missio.person_contact_view",
+        resource_type: "contact",
+        resource_id: contactId,
+        changes: { email: Boolean(contact.email), phone: Boolean(contact.phone) },
+        created_at: new Date().toISOString(),
+      });
+      if (logged.error) console.error("[missio] audit failed", logged.error.message ?? "insert failed");
+    }
   } catch (error) {
     console.error("[missio] admin client unavailable", error instanceof Error ? error.message : "missing env");
   }

@@ -16,7 +16,7 @@ vi.mock("next/link", () => ({
 
 const profile: PersonProfile = {
   person: { id: "p1", contactId: "c1", name: "Kea Molefe", campus: "potch", status: "active", joinedAt: "2026-03-19", currentStage: null },
-  contact: { email: "k***@g***.com", phone: null },
+  contact: { email: "kea@example.org", phone: "082 555 0142" },
   houses: [
     { membershipId: "m2", houseId: "h4", number: 4, name: null, role: "co_leader", startedAt: "2026-09-01", endedAt: null },
     { membershipId: "m1", houseId: "h2", number: 2, name: "River Room", role: "member", startedAt: "2026-03-19", endedAt: "2026-08-31" },
@@ -47,7 +47,13 @@ describe("person profile", () => {
     expect(belongs.textContent).toContain("House 4 · Co-leader");
     expect(belongs.textContent).toContain("Since Sep");
     expect(belongs.querySelector("a")?.getAttribute("href")).toBe("/missio/house-churches/h4");
-    expect(host.querySelector("[data-testid=profile-contact]")?.textContent).toContain("Not on file");
+    const actions = [...host.querySelectorAll("[data-testid=profile-actions] a")].map((a) => [a.textContent, a.getAttribute("href")]);
+    expect(actions).toEqual([
+      ["Call", "tel:0825550142"],
+      ["WhatsApp", "https://wa.me/27825550142"],
+      ["Email", "mailto:kea@example.org"],
+    ]);
+    expect(host.querySelector("[data-testid=profile-contact]")?.textContent).toContain("082 555 0142");
     const steps = [...host.querySelectorAll("[data-testid=profile-journey] li")];
     expect(steps).toHaveLength(3);
     expect(steps[0].textContent).toContain("Became co-leader of House 4");

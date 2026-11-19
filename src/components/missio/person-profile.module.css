@@ -248,3 +248,41 @@
   font-size: 14px;
   color: var(--quiet, #6e685b);
 }
+
+/* Call · WhatsApp · Email under the name (board M2c). */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -6px 0 20px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 8px 18px;
+  border: 1px solid var(--rule-strong, #cfc8b6);
+  border-radius: var(--radius-xs, 6px);
+  background: #fff;
+  color: var(--ink, #1c1b17);
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.action:hover {
+  border-color: var(--accent-text, #8e3d1f);
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.facts dd a {
+  color: var(--link, #2f5d50);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
