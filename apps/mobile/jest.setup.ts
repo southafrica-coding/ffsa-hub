@@ -39,7 +39,11 @@ jest.mock("expo-crypto", () => {
 // importing @/components) gets this minimal stand-in: shared values are plain
 // objects, animated styles are computed once, scroll handlers are inert.
 // A test file can still jest.mock("react-native-reanimated") its own way.
-jest.mock("react-native-reanimated", () => {
+// The stand-in is registered as "react-native-reanimated/mock" too, because
+// expo-router/testing-library re-mocks Reanimated with that module (and falls
+// back to an empty object when it can't load).
+jest.mock("react-native-reanimated", () => jest.requireMock("react-native-reanimated/mock"));
+jest.mock("react-native-reanimated/mock", () => {
   const RN = jest.requireActual("react-native");
   const Animated = { View: RN.View, Text: RN.Text, ScrollView: RN.ScrollView, FlatList: RN.FlatList, Image: RN.Image };
   return {
