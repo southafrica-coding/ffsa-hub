@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CAMPUS_LABEL } from "../access";
 import type { HouseChurchesClient } from "./client";
 import {
+  coachNames,
   houseSignals,
   houseTitle,
   initialsOf,
@@ -35,21 +36,25 @@ type Branch = {
 export function coachBranches(houses: HouseSummary[]): Branch[] {
   const byCoach = new Map<string, Branch>();
   for (const house of houses) {
-    const key = house.coach?.contactId ?? NO_COACH;
-    const branch =
-      byCoach.get(key) ??
-      ({
-        key,
-        name: house.coach?.displayName || "No coach yet",
-        initials: house.coach ? initialsOf(house.coach.displayName) : "?",
-        houses: [],
-        people: 0,
-        attention: 0,
-      } satisfies Branch);
-    branch.houses.push(house);
-    branch.people += Math.max(0, house.memberCount);
-    if (houseSignals(house).some((signal) => signal !== "ready" && signal !== "no_coach")) branch.attention += 1;
-    byCoach.set(key, branch);
+    // A house with several coaches sits under each of them.
+    const owners = house.coaches.length > 0 ? house.coaches : [null];
+    for (const owner of owners) {
+      const key = owner?.contactId ?? NO_COACH;
+      const branch =
+        byCoach.get(key) ??
+        ({
+          key,
+          name: owner?.displayName || "No coach yet",
+          initials: owner ? initialsOf(owner.displayName) : "?",
+          houses: [],
+          people: 0,
+          attention: 0,
+        } satisfies Branch);
+      branch.houses.push(house);
+      branch.people += Math.max(0, house.memberCount);
+      if (houseSignals(house).some((signal) => signal !== "ready" && signal !== "no_coach")) branch.attention += 1;
+      byCoach.set(key, branch);
+    }
   }
   const list = [...byCoach.values()];
   for (const branch of list) branch.houses.sort((a, b) => b.memberCount - a.memberCount || a.number - b.number);
@@ -68,9 +73,12 @@ export function coachBranches(houses: HouseSummary[]): Branch[] {
 export function HouseMap({
   houses,
   client,
+  linkProfiles = true,
 }: {
   houses: HouseSummary[];
   client: Pick<HouseChurchesClient, "getHouse">;
+  /** Profiles are pastors only for now. */
+  linkProfiles?: boolean;
 }) {
   const branches = useMemo(() => coachBranches(houses), [houses]);
   const [coachKey, setCoachKey] = useState<string | null>(null);
@@ -165,7 +173,12 @@ export function HouseMap({
       {openHouse ? (
         <>
           <span className={`${styles.stem} ${styles.stemLit}`} aria-hidden="true" />
-          <HouseTray house={openHouse} coachName={open?.key === NO_COACH ? null : open?.name ?? null} client={client} />
+          <HouseTray
+            house={openHouse}
+            coachName={openHouse.coaches.length > 0 ? coachNames(openHouse.coaches) : null}
+            client={client}
+            linkProfiles={linkProfiles}
+          />
         </>
       ) : null}
     </div>
@@ -176,10 +189,12 @@ function HouseTray({
   house,
   coachName,
   client,
+  linkProfiles,
 }: {
   house: HouseSummary;
   coachName: string | null;
   client: Pick<HouseChurchesClient, "getHouse">;
+  linkProfiles: boolean;
 }) {
   const [detail, setDetail] = useState<HouseDetail | null>(null);
   const [failed, setFailed] = useState(false);
@@ -229,7 +244,12 @@ function HouseTray({
             {leading.length === 0 ? <p className={styles.hint}>No leader yet</p> : null}
             <ul className={styles.people}>
               {leading.map((member) => (
-                <Person key={member.contactId} name={member.displayName} href={personHref(member)} tag={ROLE_LABEL[member.role]} />
+                <Person
+                  key={member.contactId}
+                  name={member.displayName}
+                  href={linkProfiles ? personHref(member) : null}
+                  tag={ROLE_LABEL[member.role]}
+                />
               ))}
             </ul>
           </div>
@@ -237,7 +257,7 @@ function HouseTray({
             <h3>Members · {rest.length}</h3>
             <ul className={styles.people}>
               {rest.slice(0, 12).map((member) => (
-                <Person key={member.contactId} name={member.displayName} href={personHref(member)} />
+                <Person key={member.contactId} name={member.displayName} href={linkProfiles ? personHref(member) : null} />
               ))}
             </ul>
             {rest.length > 12 ? <p className={styles.hint}>+ {rest.length - 12} more</p> : null}

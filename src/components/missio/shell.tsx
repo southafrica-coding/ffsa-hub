@@ -4,7 +4,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { canAccessMissio, missioSkinVars } from "./access";
+import { canAccessMissio, isMissioPastor, missioSkinVars } from "./access";
 import { MissioViewerProvider } from "./viewer";
 import { MissioApiError, missioClient, type MissioClient } from "./api";
 import { loadFfsaRoleNames } from "./ffsa-roles";
@@ -186,7 +186,8 @@ function MissioSidebar({
   const people = section === "people";
   const houses = section === "houses";
   const follow = section === "follow";
-  const pastor = canAccessMissio(me);
+  const pastor = isMissioPastor(me);
+  const housesLabel = housesNavLabel(me);
   const volunteers = pathname.startsWith("/missio/volunteers");
 
   const orgNode = <OrgHeader state={header} />;
@@ -194,31 +195,33 @@ function MissioSidebar({
   return (
     <aside className={`${styles.side} ${inDrawer ? styles.sideDrawer : ""}`}>
       {inDrawer ? <div className={styles.drawerOrg}>{orgNode}</div> : orgNode}
-      <form className={styles.search} action="/missio/people" onSubmit={() => onNavigate?.()}>
-        <SearchIcon />
-        <input name="q" placeholder="Search" aria-label="Search Missio" />
-      </form>
+      {pastor ? (
+        <form className={styles.search} action="/missio/people" onSubmit={() => onNavigate?.()}>
+          <SearchIcon />
+          <input name="q" placeholder="Search" aria-label="Search Missio" />
+        </form>
+      ) : null}
       <nav className={styles.nav} aria-label="Missio">
         <Link href="/missio" className={`${styles.navLink} ${home ? styles.navOn : ""}`} aria-current={home ? "page" : undefined} onClick={onNavigate}>
           <HomeIcon />
           <span>Home</span>
         </Link>
-        <Link href="/missio/people" className={`${styles.navLink} ${people ? styles.navOn : ""}`} aria-current={people ? "page" : undefined} onClick={onNavigate}>
-          <PeopleIcon />
-          <span>People</span>
-        </Link>
         {pastor ? (
-          <Link
-            href="/missio/house-churches"
-            className={`${styles.navLink} ${houses ? styles.navOn : ""}`}
-            aria-current={houses ? "page" : undefined}
-            data-testid="missio-nav-house-churches"
-            onClick={onNavigate}
-          >
-            <HouseIcon />
-            <span>House churches</span>
+          <Link href="/missio/people" className={`${styles.navLink} ${people ? styles.navOn : ""}`} aria-current={people ? "page" : undefined} onClick={onNavigate}>
+            <PeopleIcon />
+            <span>People</span>
           </Link>
         ) : null}
+        <Link
+          href="/missio/house-churches"
+          className={`${styles.navLink} ${houses ? styles.navOn : ""}`}
+          aria-current={houses ? "page" : undefined}
+          data-testid="missio-nav-house-churches"
+          onClick={onNavigate}
+        >
+          <HouseIcon />
+          <span>{housesLabel}</span>
+        </Link>
         {pastor ? (
           <Link
             href="/missio/follow-up"
@@ -267,7 +270,7 @@ function MissioSidebar({
 function MissioTabBar({ me }: { me: MissioMe }) {
   const pathname = usePathname();
   const section = missioSection(pathname);
-  const pastor = canAccessMissio(me);
+  const pastor = isMissioPastor(me);
   const volunteers = pathname.startsWith("/missio/volunteers");
   const tabs: Array<{ key: string; href: string; label: string; on: boolean; icon: ReactNode }> = [
     {
@@ -277,10 +280,19 @@ function MissioTabBar({ me }: { me: MissioMe }) {
       on: section === "home" && !volunteers,
       icon: <HomeIcon />,
     },
-    { key: "people", href: "/missio/people", label: "People", on: section === "people", icon: <PeopleIcon /> },
   ];
+  if (!pastor) {
+    tabs.push({
+      key: "house-churches",
+      href: "/missio/house-churches",
+      label: housesNavLabel(me) === "My house" ? "My house" : "Houses",
+      on: section === "houses",
+      icon: <HouseIcon />,
+    });
+  }
   if (pastor) {
     tabs.push(
+      { key: "people", href: "/missio/people", label: "People", on: section === "people", icon: <PeopleIcon /> },
       { key: "house-churches", href: "/missio/house-churches", label: "Houses", on: section === "houses", icon: <HouseIcon /> },
       { key: "follow-up", href: "/missio/follow-up", label: "Follow-up", on: section === "follow", icon: <FollowIcon /> },
       { key: "volunteers", href: "/missio/volunteers", label: "Volunteers", on: volunteers, icon: <CalendarIcon /> }
@@ -370,12 +382,20 @@ const ROLE_LABEL: Record<string, string> = {
   pastor: "Pastor",
   admin: "Admin",
   house_church_leader: "House church leader",
+  coach: "Coach",
   team_leader: "Team leader",
   finance: "Finance",
 };
 
+/** Leaders who only lead see "My house"; pastors and coaches see "House churches". */
+function housesNavLabel(me: MissioMe): string {
+  const roles: readonly string[] = me.rolesByOrg.missio ?? [];
+  if (roles.includes("pastor") || roles.includes("coach")) return "House churches";
+  return roles.includes("house_church_leader") ? "My house" : "House churches";
+}
+
 function roleLabel(roles: string[]): string {
-  const role = roles.find((item) => item === "pastor") ?? roles[0];
+  const role = roles.find((item) => item === "pastor") ?? roles.find((item) => item === "coach") ?? roles[0];
   if (!role) return "";
   return ROLE_LABEL[role] ?? role;
 }

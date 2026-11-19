@@ -37,7 +37,7 @@ export interface MissioMe {
   }>;
   rolesByOrg: Record<
     string,
-    Array<"pastor" | "admin" | "house_church_leader" | "team_leader" | "finance">
+    Array<"pastor" | "admin" | "house_church_leader" | "team_leader" | "finance" | "coach">
   >;
   currentOrg: "missio" | null;
 }

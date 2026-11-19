@@ -89,6 +89,7 @@ const state = vi.hoisted(() => {
           op: { action: "select", filters: [], orders: [], payload: args as unknown as Row },
         });
         if (fn === "is_admin") return { data: true, error: null };
+        if (fn === "missio_coached_house_ids" || fn === "missio_led_house_ids") return myHouses(fn);
         if (fn !== "has_org_role") return { data: null, error: { message: `unknown rpc ${fn}` } };
         if (state.rpcError) return { data: null, error: state.rpcError };
         return hasOrgRole(args?.p_org_slug ?? "", args?.p_roles ?? null);
@@ -97,6 +98,23 @@ const state = vi.hoisted(() => {
         return builder(table, client);
       },
     };
+  }
+
+  /** Mirrors migration 338: role grant + users.contact_id + open rows. */
+  function myHouses(fn: string) {
+    const me = (state.tables.users ?? []).find((row) => row.id === state.userId);
+    const contactId = me?.contact_id;
+    const role = fn === "missio_coached_house_ids" ? "coach" : "house_church_leader";
+    if (!contactId || !hasOrgRole("missio", [role]).data) return { data: [], error: null };
+    const ids =
+      fn === "missio_coached_house_ids"
+        ? (state.tables.missio_coach_assignments ?? [])
+            .filter((row) => row.coach_contact_id === contactId && row.ended_at == null)
+            .map((row) => row.house_church_id)
+        : (state.tables.house_church_members ?? [])
+            .filter((row) => row.contact_id === contactId && row.ended_at == null && (row.role === "leader" || row.role === "co_leader"))
+            .map((row) => row.house_church_id);
+    return { data: [...new Set(ids)], error: null };
   }
 
   function hasOrgRole(slug: string, roles: string[] | null) {
@@ -621,18 +639,69 @@ describe("access on house church routes", () => {
     expect(state.writes).toEqual([]);
   });
 
-  it("returns 403 for a Missio admin and for a house church leader", async () => {
+  it("returns 403 for a Missio admin, and an empty list for a leader with no house", async () => {
     seedHouses();
-    for (const userId of [ORG_ADMIN, LEADER]) {
-      state.userId = userId;
-      state.ops = [];
-      const res = await list();
-      expect(res.status).toBe(403);
-      expect((await res.json()).code).toBe("forbidden");
-      const rpc = state.ops.find((op) => op.table === "rpc:has_org_role");
-      expect(rpc?.op.payload).toMatchObject({ p_org_slug: "missio", p_roles: ["pastor"] });
-    }
+    state.userId = ORG_ADMIN;
+    const denied = await list();
+    expect(denied.status).toBe(403);
+    expect((await denied.json()).code).toBe("forbidden");
+    const rpc = state.ops.find((op) => op.table === "rpc:has_org_role");
+    expect(rpc?.op.payload).toMatchObject({ p_org_slug: "missio", p_roles: ["pastor", "coach", "house_church_leader"] });
+
+    state.userId = LEADER;
+    const empty = await list();
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toMatchObject({ houses: [], canWrite: false, abilities: { place: false, editMembers: false } });
+    expect((await post(HOUSE_1, { contactId: ADA, role: "member" })).status).toBe(403);
+    expect((await patch(HOUSE_1, ADA, { role: "leader" })).status).toBe(403);
+    expect((await review()).status).toBe(403);
     expect(state.writes).toEqual([]);
+  });
+
+  it("shows a coach only the houses they coach, and lets them change roles there only", async () => {
+    seedHouses();
+    addContact({ id: ADA, first: "Ada", last: "Coach", inOrg: true, personId: "person-ada" });
+    addContact({ id: GRACE, first: "Grace", last: "Member", inOrg: true, personId: "person-grace" });
+    addMember({ houseId: HOUSE_1, contactId: GRACE, role: "member" });
+    addMember({ houseId: HOUSE_2, contactId: GRACE, role: "member" });
+    state.tables.users = [{ id: LEADER, contact_id: ADA }];
+    state.tables.org_staff_roles.push({ id: "role-coach", user_id: LEADER, org_id: MISSIO, role: "coach", campus: null });
+    state.tables.missio_coach_assignments = [
+      { id: "ca1", house_church_id: HOUSE_1, coach_contact_id: ADA, started_at: "2026-11-01", ended_at: null },
+    ];
+    state.userId = LEADER;
+
+    const res = await list();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.houses.map((house: { id: string }) => house.id)).toEqual([HOUSE_1]);
+    expect(body.abilities).toEqual({ place: false, editMembers: true });
+    expect((await detail(HOUSE_2)).status).toBe(404);
+    const house = await (await detail(HOUSE_1)).json();
+    expect(house.abilities).toEqual({ place: false, editMembers: true });
+    expect(house.canWrite).toBe(false);
+
+    expect((await patch(HOUSE_1, GRACE, { role: "co_leader" })).status).toBe(200);
+    expect((await patch(HOUSE_2, GRACE, { role: "co_leader" })).status).toBe(404);
+    expect((await post(HOUSE_1, { contactId: ADA, role: "member" })).status).toBe(403);
+  });
+
+  it("shows a leader their own house, read only", async () => {
+    seedHouses();
+    addContact({ id: ADA, first: "Ada", last: "Leader", inOrg: true, personId: "person-ada" });
+    addContact({ id: GRACE, first: "Grace", last: "Member", inOrg: true, personId: "person-grace" });
+    addMember({ houseId: HOUSE_2, contactId: ADA, role: "co_leader" });
+    addMember({ houseId: HOUSE_2, contactId: GRACE, role: "member" });
+    state.tables.users = [{ id: LEADER, contact_id: ADA }];
+    state.userId = LEADER;
+
+    const body = await (await list()).json();
+    expect(body.houses.map((house: { id: string }) => house.id)).toEqual([HOUSE_2]);
+    expect(body.abilities).toEqual({ place: false, editMembers: false });
+    const house = await (await detail(HOUSE_2)).json();
+    expect(house.house.members.map((member: { contactId: string }) => member.contactId).sort()).toEqual([ADA, GRACE].sort());
+    expect((await patch(HOUSE_2, GRACE, { role: "leader" })).status).toBe(403);
+    expect((await remove(HOUSE_2, GRACE)).status).toBe(403);
   });
 
   it("asks has_org_role for pastor and does not filter a pastor down to one house", async () => {
@@ -640,7 +709,7 @@ describe("access on house church routes", () => {
     const res = await list();
     expect(res.status).toBe(200);
     const rpc = state.ops.find((op) => op.table === "rpc:has_org_role");
-    expect(rpc?.op.payload).toMatchObject({ p_org_slug: "missio", p_roles: ["pastor"] });
+    expect(rpc?.op.payload).toMatchObject({ p_org_slug: "missio", p_roles: ["pastor", "coach", "house_church_leader"] });
     const houses = state.ops.find((op) => op.table === "house_churches" && op.op.action === "select");
     expect(houses?.op.filters.some((filter) => filter.type === "in")).toBe(false);
     expect(state.ops.some((op) => op.table === "rpc:is_admin")).toBe(false);
@@ -689,8 +758,7 @@ describe("GET /api/missio/house-churches", () => {
           orgPersonId: "person-grace",
         },
       ],
-      coach: null,
-      coachSince: null,
+      coaches: [],
     });
     expect(body.houses[0].leaderNotes).toBeUndefined();
     expect(body.houses[1].memberCount).toBe(1);
@@ -1393,9 +1461,10 @@ describe("import review", () => {
     expect((await resolve(REVIEW, { action: "link", contactId: OUTSIDE, also: true })).status).toBe(409);
   });
 
-  it("sets, changes and clears a house's coach, keeping the history", async () => {
+  it("adds several coaches to a house, removes one, and keeps the history", async () => {
     addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
     addContact({ id: ADA, first: "Ada", last: "Coach", inOrg: true, personId: "person-ada" });
+    addContact({ id: GRACE, first: "Grace", last: "Coach", inOrg: true, personId: "person-grace" });
     addContact({ id: OUTSIDE, first: "Not", last: "Missio", inOrg: false });
     state.tables.missio_coach_assignments = [];
     const put = (body: unknown) =>
@@ -1404,28 +1473,30 @@ describe("import review", () => {
         { params: Promise.resolve({ id: HOUSE_1 }) }
       );
 
-    expect((await put({ contactId: OUTSIDE })).status).toBe(400);
+    expect((await put({ contactId: OUTSIDE, on: true })).status).toBe(400);
+    expect((await put({ contactId: ADA })).status).toBe(400);
     expect(state.tables.missio_coach_assignments).toHaveLength(0);
 
-    const set = await put({ contactId: ADA });
-    expect(set.status).toBe(200);
-    expect((await set.json()).coach).toMatchObject({ contactId: ADA, displayName: "Ada Coach" });
-    expect(state.tables.missio_coach_assignments).toHaveLength(1);
+    expect((await put({ contactId: ADA, on: true })).status).toBe(200);
+    const two = await (await put({ contactId: GRACE, on: true })).json();
+    expect(two.coaches.map((coach: { contactId: string }) => coach.contactId).sort()).toEqual([ADA, GRACE].sort());
     expect(state.writes.find((w) => w.table === "missio_coach_assignments")?.client).toBe("user");
 
-    const list = await (await listHouses(new Request("http://localhost/api/missio/house-churches"))).json();
-    expect(list.houses[0].coach).toMatchObject({ contactId: ADA });
-    expect((await put({ contactId: ADA })).status).toBe(200);
-    expect(state.tables.missio_coach_assignments).toHaveLength(1);
+    // Adding the same coach again changes nothing.
+    expect((await put({ contactId: ADA, on: true })).status).toBe(200);
+    expect(state.tables.missio_coach_assignments).toHaveLength(2);
 
-    const cleared = await put({ contactId: null });
-    expect((await cleared.json()).coach).toBeNull();
-    expect(state.tables.missio_coach_assignments).toHaveLength(1);
-    expect(state.tables.missio_coach_assignments[0].ended_at).toEqual(expect.any(String));
-    expect(JSON.stringify(state.tables.audit_logs)).toContain("missio.house_coach_set");
+    const list = await (await listHouses(new Request("http://localhost/api/missio/house-churches"))).json();
+    expect(list.houses[0].coaches).toHaveLength(2);
+
+    const left = await (await put({ contactId: ADA, on: false })).json();
+    expect(left.coaches.map((coach: { contactId: string }) => coach.contactId)).toEqual([GRACE]);
+    expect(state.tables.missio_coach_assignments).toHaveLength(2);
+    expect(state.tables.missio_coach_assignments.find((row) => row.coach_contact_id === ADA)?.ended_at).toEqual(expect.any(String));
+    expect(JSON.stringify(state.tables.audit_logs)).toContain("missio.house_coach_removed");
 
     state.userId = LEADER;
-    expect((await put({ contactId: ADA })).status).toBe(403);
+    expect((await put({ contactId: ADA, on: true })).status).toBe(403);
     state.userId = PASTOR;
   });
 

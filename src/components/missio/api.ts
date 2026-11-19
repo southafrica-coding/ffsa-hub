@@ -8,6 +8,7 @@ import type {
   UpdateMissioPersonInput,
 } from "./types-shim";
 import type { PersonProfile } from "@/lib/missio/profile";
+import type { HubAccess } from "@/lib/missio/hub-access";
 
 /**
  * Every Missio request the UI makes. People, contact match, and the viewer
@@ -265,4 +266,29 @@ export async function fetchPersonProfile(id: string, fetchImpl: FetchLike = fetc
     throw new MissioApiError(500, "Missio returned an unexpected person.", null, "server_error");
   }
   return body as unknown as PersonProfile;
+}
+
+/** GET /api/missio/people/:id/access. Pastors only. */
+export async function fetchHubAccess(id: string, fetchImpl: FetchLike = fetch): Promise<HubAccess> {
+  const res = await fetchImpl(`/api/missio/people/${encodeURIComponent(id)}/access`, {
+    credentials: "same-origin",
+    headers: { accept: "application/json" },
+  });
+  return (await parseResponse(res)) as unknown as HubAccess;
+}
+
+/** PUT /api/missio/people/:id/access. Give or take a coach / leader role. */
+export async function saveHubRole(
+  id: string,
+  role: "coach" | "house_church_leader",
+  on: boolean,
+  fetchImpl: FetchLike = fetch
+): Promise<HubAccess> {
+  const res = await fetchImpl(`/api/missio/people/${encodeURIComponent(id)}/access`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: { accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify({ role, on }),
+  });
+  return (await parseResponse(res)) as unknown as HubAccess;
 }

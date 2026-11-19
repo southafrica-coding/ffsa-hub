@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { canAccessMissio } from "./access";
+import { canAccessMissio, isMissioPastor } from "./access";
 import content from "./content.module.css";
 import { followUpClient, type FollowUpClient } from "./follow-up/client";
 import type { FollowUpStage } from "./follow-up/types";
 import { houseChurchesClient, type HouseChurchesClient } from "./house-churches/client";
 import type { HouseSummary } from "./house-churches/types";
+import { coachNames } from "./house-churches/format";
 import styles from "./shell.module.css";
 import { useMissioViewer } from "./viewer";
 
@@ -56,7 +57,7 @@ export function houseOverview(houses: HouseSummary[]): HouseOverview {
     if (ready) readyToMultiply += 1;
     if (house.memberCount > 0 && house.coLeaders.length === 0) noCoLeader += 1;
     if (house.memberCount > 0 && house.leaders.length === 0) noLeader += 1;
-    if (house.memberCount > 0 && !house.coach) noCoach += 1;
+    if (house.memberCount > 0 && house.coaches.length === 0) noCoach += 1;
     return { id: house.id, number: house.number, size: house.memberCount, ready };
   });
   return { houses: sorted.length, people, readyToMultiply, noCoLeader, noLeader, noCoach, bars };
@@ -122,7 +123,8 @@ export function MissioHome({
 } = {}) {
   const { greeting, date } = johannesburgNow();
   const viewer = useMissioViewer();
-  const pastor = viewer != null && canAccessMissio(viewer);
+  const pastor = viewer != null && isMissioPastor(viewer);
+  const inMissio = viewer != null && canAccessMissio(viewer);
 
   const loadHouses = useCallback(async () => {
     const [list, review] = await Promise.all([houses.listHouses(), houses.listReview()]);
@@ -134,6 +136,8 @@ export function MissioHome({
   }, [followUp]);
 
   const [houseLoad, retryHouses] = useLoad(loadHouses, pastor);
+  const loadMine = useCallback(async () => (await houses.listHouses()).houses, [houses]);
+  const [mineLoad, retryMine] = useLoad(loadMine, inMissio && !pastor);
   const [followLoad, retryFollow] = useLoad(loadFollowUp, pastor);
 
   const people = (
@@ -149,11 +153,55 @@ export function MissioHome({
   );
 
   if (!pastor) {
+    // Coaches and leaders: their own houses, nothing they can't act on.
+    const mine = mineLoad.state === "ready" ? [...mineLoad.data].sort((a, b) => a.number - b.number) : [];
     return (
       <div className={`${content.page} ${content.reveal}`}>
         <p className={`${styles.eyebrow} ${content.eyebrow}`}>{date}</p>
         <h1 className={content.title}>{greeting}</h1>
-        <div className={content.solo}>{people}</div>
+        {!inMissio ? <div className={content.solo}>{people}</div> : null}
+        {inMissio && mineLoad.state === "loading" ? (
+          <p className={styles.state} role="status">
+            Loading your houses…
+          </p>
+        ) : null}
+        {inMissio && mineLoad.state === "error" ? (
+          <div className={styles.state} role="alert">
+            <p>Your houses didn’t load.</p>
+            <button type="button" className={styles.ghost} onClick={retryMine}>
+              Try again
+            </button>
+          </div>
+        ) : null}
+        {inMissio && mineLoad.state === "ready" && mine.length === 0 ? (
+          <p className={styles.state} data-testid="home-no-houses">
+            No house is linked to you yet. A pastor sets who leads and coaches each house.
+          </p>
+        ) : null}
+        {mine.length > 0 ? (
+          <div className={content.homeGrid} data-testid="home-my-houses">
+            {mine.map((house) => (
+              <Link
+                key={house.id}
+                href={`/missio/house-churches/${encodeURIComponent(house.id)}`}
+                className={`${styles.card} ${content.card} ${content.rowCard}`}
+              >
+                <div>
+                  <div className={`${styles.cardTitle} ${content.cardTitle}`}>
+                    {house.name?.trim() || `House ${house.number}`}
+                  </div>
+                  <p className={`${styles.cardBody} ${content.cardBody}`}>
+                    {house.memberCount === 1 ? "1 person" : `${house.memberCount} people`}
+                    {house.coaches.length > 0 ? ` · coached by ${coachNames(house.coaches)}` : ""}
+                  </p>
+                </div>
+                <span className={content.go} aria-hidden="true">
+                  →
+                </span>
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   }

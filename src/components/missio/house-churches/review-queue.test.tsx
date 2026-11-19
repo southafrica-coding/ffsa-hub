@@ -71,7 +71,7 @@ function client(items: ReviewItem[], resolveReview?: HouseChurchesClient["resolv
       throw new Error("unused");
     },
     listReview: async () => ({ items }),
-    setCoach: async () => ({ coach: null, coachSince: null }),
+    setCoach: async () => ({ coaches: [] }),
     searchReviewContacts,
     resolveReview:
       resolveReview ??

@@ -7,6 +7,7 @@ import content from "../content.module.css";
 import shell from "../shell.module.css";
 import { houseChurchesClient, type HouseChurchesClient } from "./client";
 import {
+  coachNames,
   HOUSE_SEATS,
   SIGNAL_LABEL,
   houseSignals,
@@ -61,7 +62,7 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
   const campuses = useMemo(() => [...new Set(houses.map((house) => house.campus))].sort(), [houses]);
   const coaches = useMemo(() => {
     const seen = new Map<string, string>();
-    for (const house of houses) if (house.coach) seen.set(house.coach.contactId, house.coach.displayName);
+    for (const house of houses) for (const each of house.coaches) seen.set(each.contactId, each.displayName);
     return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1], "en"));
   }, [houses]);
   // The map is the default once any house has a coach; before that every
@@ -71,8 +72,8 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
     const list = houses.filter((house) => {
       if (campus && house.campus !== campus) return false;
       if (attention && houseSignals(house).length === 0) return false;
-      if (coach === "none" && house.coach) return false;
-      if (coach && coach !== "none" && house.coach?.contactId !== coach) return false;
+      if (coach === "none" && house.coaches.length > 0) return false;
+      if (coach && coach !== "none" && !house.coaches.some((each) => each.contactId === coach)) return false;
       return true;
     });
     return list.sort((a, b) => (sort === "size" ? b.memberCount - a.memberCount || a.number - b.number : a.number - b.number));
@@ -123,7 +124,7 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
       ) : null}
 
       {state.phase === "ready" && houses.length > 0 && shownView === "map" ? (
-        <HouseMap houses={houses} client={client} />
+        <HouseMap houses={houses} client={client} linkProfiles={canWrite} />
       ) : null}
 
       {state.phase === "ready" && houses.length > 0 && shownView === "grid" ? (
@@ -240,7 +241,7 @@ function HouseCard({ house }: { house: HouseSummary }) {
         <span className={styles.leadingName}>{leadingLine(house)}</span>
       </div>
       {house.location?.trim() ? <p className={styles.place}>{house.location.trim()}</p> : null}
-      {house.coach ? <p className={styles.place}>Coached by {house.coach.displayName}</p> : null}
+      {house.coaches.length > 0 ? <p className={styles.place}>Coached by {coachNames(house.coaches)}</p> : null}
       {signals.length > 0 ? (
         <div className={styles.signals}>
           {signals.map((signal) => (

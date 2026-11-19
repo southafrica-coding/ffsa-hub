@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { JourneyEvent, PersonProfile, ProfileHouse } from "@/lib/missio/profile";
 import { CAMPUS_LABEL, STATUS_LABEL } from "./access";
-import { fetchPersonProfile } from "./api";
+import { fetchHubAccess, fetchPersonProfile, MissioApiError, saveHubRole } from "./api";
+import type { HubAccess } from "@/lib/missio/hub-access";
 import content from "./content.module.css";
 import { houseTitle, ROLE_LABEL } from "./house-churches/format";
 import { useMissioLoad } from "./house-churches/load";
@@ -82,12 +83,24 @@ export function journeyCopy(event: JourneyEvent): { title: string; detail: strin
   }
 }
 
+type AccessClient = {
+  get: (id: string) => Promise<HubAccess>;
+  set: (id: string, role: "coach" | "house_church_leader", on: boolean) => Promise<HubAccess>;
+};
+
+const defaultAccess: AccessClient = {
+  get: (id) => fetchHubAccess(id),
+  set: (id, role, on) => saveHubRole(id, role, on),
+};
+
 export function PersonProfileView({
   personId,
   load = fetchPersonProfile,
+  access = defaultAccess,
 }: {
   personId: string;
   load?: (id: string) => Promise<PersonProfile>;
+  access?: AccessClient;
 }) {
   const { state, retry } = useMissioLoad(() => load(personId), [personId, load]);
   const [filter, setFilter] = useState<Filter>("all");
@@ -106,6 +119,7 @@ export function PersonProfileView({
         <HouseStatus error={state.error} fallback="This person didn’t load." onRetry={retry} />
       ) : null}
       {state.phase === "ready" ? <Profile profile={state.data} filter={filter} onFilter={setFilter} /> : null}
+      {state.phase === "ready" ? <HubAccessCard personId={personId} name={state.data.person.name} client={access} /> : null}
     </div>
   );
 }
@@ -271,5 +285,94 @@ function ContactActions({ phone, email }: { phone: string | null; email: string 
         </a>
       ) : null}
     </div>
+  );
+}
+
+const ROLE_ROWS: ReadonlyArray<{ role: "coach" | "house_church_leader"; label: string; help: string }> = [
+  { role: "coach", label: "Coach", help: "Sees the houses they coach and can change roles there." },
+  { role: "house_church_leader", label: "House church leader", help: "Sees the house they lead or co-lead." },
+];
+
+/** Board M10c: a pastor gives someone with a Hub login a Missio role. */
+function HubAccessCard({ personId, name, client }: { personId: string; name: string; client: AccessClient }) {
+  const [access, setAccess] = useState<HubAccess | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    client.get(personId).then(
+      (value) => live && setAccess(value),
+      () => live && setFailed(true)
+    );
+    return () => {
+      live = false;
+    };
+  }, [client, personId]);
+
+  async function toggle(role: "coach" | "house_church_leader", on: boolean) {
+    setPending(true);
+    setNotice(null);
+    try {
+      setAccess(await client.set(personId, role, on));
+    } catch (caught) {
+      setNotice(
+        caught instanceof MissioApiError && caught.code === "no_login"
+          ? "They don’t have a Hub login yet."
+          : "That didn’t work. Try again."
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section className={styles.card} data-testid="profile-access">
+      <h2>Hub access</h2>
+      {failed ? <p className={styles.quiet}>Access didn’t load.</p> : null}
+      {!access && !failed ? <p className={styles.quiet}>Checking…</p> : null}
+      {access && !access.hasLogin ? (
+        <p className={styles.quiet}>
+          {name || "This person"} doesn’t have a Hub login yet. Once an FFSA admin invites them with the email on
+          their contact, you can make them a coach or leader here.
+        </p>
+      ) : null}
+      {access?.hasLogin ? (
+        <>
+          {access.roles.includes("pastor") ? <p className={styles.quiet}>Pastor. Pastors see everything.</p> : null}
+          <ul className={styles.rows}>
+            {ROLE_ROWS.map((row) => {
+              const on = access.roles.includes(row.role);
+              return (
+                <li key={row.role} className={styles.accessRow}>
+                  <label className={styles.accessLabel}>
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      disabled={pending}
+                      onChange={(event) => void toggle(row.role, event.target.checked)}
+                    />
+                    <span>
+                      <span className={styles.rowMain}>{row.label}</span>
+                      <span className={styles.rowMeta}>{row.help}</span>
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          <p className={styles.quiet}>
+            Which houses they see comes from the house pages: who leads, co-leads and coaches each one.
+            {access.lastSignInAt ? ` Last signed in ${journeyDate(access.lastSignInAt)}.` : " They haven’t signed in yet."}
+          </p>
+        </>
+      ) : null}
+      {notice ? (
+        <p className={styles.quiet} role="alert">
+          {notice}
+        </p>
+      ) : null}
+    </section>
   );
 }

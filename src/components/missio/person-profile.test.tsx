@@ -28,6 +28,11 @@ const profile: PersonProfile = {
   ],
 };
 
+const noLogin = {
+  get: async () => ({ hasLogin: false, roles: [], lastSignInAt: null }),
+  set: async () => ({ hasLogin: false, roles: [], lastSignInAt: null }),
+};
+
 describe("person profile", () => {
   const roots: Array<ReturnType<typeof render>["root"]> = [];
   const hosts: HTMLElement[] = [];
@@ -40,7 +45,7 @@ describe("person profile", () => {
   }
 
   it("shows who they are, where they belong and their journey", async () => {
-    const host = mount(<PersonProfileView personId="p1" load={async () => profile} />);
+    const host = mount(<PersonProfileView personId="p1" load={async () => profile} access={noLogin} />);
     await settle();
     expect(host.querySelector("h1")?.textContent).toBe("Kea Molefe");
     const belongs = host.querySelector("[data-testid=profile-belongs]") as HTMLElement;
@@ -70,6 +75,7 @@ describe("person profile", () => {
     const host = mount(
       <PersonProfileView
         personId="nope"
+        access={noLogin}
         load={async () => {
           throw new MissioApiError(404, "x", null, "not_found");
         }}
@@ -84,5 +90,36 @@ describe("person profile", () => {
     expect(journeyCopy({ id: "x", at: "2026-01-01", type: "added" }).title).toBe("Added to Missio");
     expect(journeyCopy({ id: "x", at: "2026-01-01", type: "left_house", houseId: "h", number: 2, name: null, role: "member" }).title).toBe("Left House 2");
     expect(journeyCopy({ id: "x", at: "2026-01-01", type: "followup_stage", stage: "joined" })).toEqual({ title: "Follow-up closed", detail: "Joined a house church" });
+  });
+
+  it("lets a pastor make someone with a login a coach, and explains when there's no login", async () => {
+    const calls: Array<[string, boolean]> = [];
+    let roles: string[] = ["house_church_leader"];
+    const host = mount(
+      <PersonProfileView
+        personId="p1"
+        load={async () => profile}
+        access={{
+          get: async () => ({ hasLogin: true, roles, lastSignInAt: null }),
+          set: async (_id, role, on) => {
+            calls.push([role, on]);
+            roles = on ? [...roles, role] : roles.filter((item) => item !== role);
+            return { hasLogin: true, roles, lastSignInAt: null };
+          },
+        }}
+      />
+    );
+    await settle();
+    const card = host.querySelector("[data-testid=profile-access]") as HTMLElement;
+    const boxes = [...card.querySelectorAll("input[type=checkbox]")] as HTMLInputElement[];
+    expect(boxes.map((box) => box.checked)).toEqual([false, true]);
+    boxes[0]!.click();
+    await settle();
+    expect(calls).toEqual([["coach", true]]);
+    expect(([...card.querySelectorAll("input[type=checkbox]")] as HTMLInputElement[])[0]!.checked).toBe(true);
+
+    const other = mount(<PersonProfileView personId="p1" load={async () => profile} access={noLogin} />);
+    await settle();
+    expect(other.querySelector("[data-testid=profile-access]")?.textContent).toContain("doesn’t have a Hub login yet");
   });
 });

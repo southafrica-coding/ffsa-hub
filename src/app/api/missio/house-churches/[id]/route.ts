@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getHouse, isUuid, pastorHouseAccess, publicError } from "@/lib/missio/house-churches";
+import { getHouse, houseReadAccess, isUuid, publicError } from "@/lib/missio/house-churches";
 
 // GET /api/missio/house-churches/:id
 
@@ -12,13 +12,13 @@ function json(body: unknown, status = 200) {
 }
 
 export async function GET(_request: Request, context: Ctx) {
-  const access = await pastorHouseAccess();
+  const access = await houseReadAccess();
   if ("response" in access) return access.response;
 
   const { id } = await context.params;
   if (!isUuid(id)) return json({ error: "House not found.", code: "not_found" }, 404);
 
-  const result = await getHouse(access.auth, access.scope, id);
+  const result = await getHouse(access.auth, access.scope, id, access.abilities, access.editScope);
   if (!result.ok) return json(publicError(result), result.status);
   return json(result.body);
 }

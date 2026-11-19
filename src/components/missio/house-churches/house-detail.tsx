@@ -26,7 +26,7 @@ import { useMissioLoad } from "./load";
 import { PeoplePicker } from "./people-picker";
 import { AllHousesLink, CampusTag } from "./present";
 import { HouseStatus } from "./status";
-import type { HouseDetail, HouseMember, HouseRole, PersonRef } from "./types";
+import type { CoachRef, HouseDetail, HouseMember, HouseRole, PersonRef } from "./types";
 import styles from "./house-churches.module.css";
 
 function portaledMissioClass() {
@@ -65,14 +65,20 @@ export function HouseDetailView({
   people?: Pick<MissioClient, "listPeople">;
 }) {
   const { state, retry } = useMissioLoad(() => client.getHouse(houseId), [client, houseId]);
-  const [live, setLive] = useState<{ house: HouseDetail; canWrite: boolean } | null>(null);
+  const [live, setLive] = useState<{ house: HouseDetail; canWrite: boolean; canEdit: boolean } | null>(null);
   const [role, setRole] = useState<HouseRole>("member");
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
-    if (state.phase === "ready") setLive({ house: state.data.house, canWrite: state.data.canWrite });
+    if (state.phase === "ready") {
+      setLive({
+        house: state.data.house,
+        canWrite: state.data.canWrite,
+        canEdit: state.data.abilities?.editMembers ?? state.data.canWrite,
+      });
+    }
   }, [state]);
 
   useEffect(() => {
@@ -81,7 +87,7 @@ export function HouseDetailView({
 
   async function refreshHouse() {
     const fresh = await client.getHouse(houseId);
-    setLive({ house: fresh.house, canWrite: fresh.canWrite });
+    setLive({ house: fresh.house, canWrite: fresh.canWrite, canEdit: fresh.abilities?.editMembers ?? fresh.canWrite });
   }
 
   async function changeRole(member: HouseMember, next: HouseRole) {
@@ -149,14 +155,12 @@ export function HouseDetailView({
     }
   }
 
-  async function setCoach(contactId: string | null) {
+  async function setCoach(contactId: string, on: boolean) {
     setPending(true);
     setNotice(null);
     try {
-      const result = await client.setCoach(houseId, contactId);
-      setLive((current) =>
-        current ? { ...current, house: { ...current.house, coach: result.coach, coachSince: result.coachSince } } : current
-      );
+      const result = await client.setCoach(houseId, contactId, on);
+      setLive((current) => (current ? { ...current, house: { ...current.house, coaches: result.coaches } } : current));
       focusElement("house-coach-change");
     } catch (caught) {
       setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught) : "That didn’t work. Try again.");
@@ -167,6 +171,8 @@ export function HouseDetailView({
 
   const house = live?.house ?? null;
   const canWrite = live?.canWrite ?? false;
+  // Coaches can change roles and end memberships in houses they coach.
+  const canEdit = live?.canEdit ?? false;
   const members = house ? sortMembers(house.members) : [];
 
   return (
@@ -202,15 +208,14 @@ export function HouseDetailView({
           <div className={styles.houseCards}>
             <section className={styles.panel} data-testid="house-leading">
               <h2>Leading</h2>
-              <LeadingList title="Leaders" role="leader" people={house.leaders} members={house.members} />
-              <LeadingList title="Co-leaders" role="co_leader" people={house.coLeaders} members={house.members} />
+              <LeadingList title="Leaders" role="leader" people={house.leaders} members={house.members} linkProfile={canWrite} />
+              <LeadingList title="Co-leaders" role="co_leader" people={house.coLeaders} members={house.members} linkProfile={canWrite} />
               <CoachRow
-                coach={house.coach}
-                since={house.coachSince}
+                coaches={house.coaches}
                 canWrite={canWrite}
                 pending={pending}
                 people={people}
-                onSet={(contactId) => void setCoach(contactId)}
+                onSet={(contactId, on) => void setCoach(contactId, on)}
               />
             </section>
             <section className={styles.panel} data-testid="house-health">
@@ -244,7 +249,8 @@ export function HouseDetailView({
                   <MemberRow
                     key={member.contactId}
                     member={member}
-                    canWrite={canWrite}
+                    canWrite={canEdit}
+                    linkProfile={canWrite}
                     pending={pending}
                     onRole={(next) => void changeRole(member, next)}
                     onRemove={() => void remove(member)}
@@ -279,11 +285,13 @@ function LeadingList({
   role,
   people,
   members,
+  linkProfile,
 }: {
   title: string;
   role: HouseRole;
   people: PersonRef[];
   members: HouseMember[];
+  linkProfile: boolean;
 }) {
   return (
     <div className={styles.leadingGroup}>
@@ -294,7 +302,7 @@ function LeadingList({
         <ul className={styles.leadingList}>
           {people.map((person) => {
             const since = members.find((member) => member.contactId === person.contactId)?.startedAt;
-            const href = personHref(person);
+            const href = linkProfile ? personHref(person) : null;
             return (
               <li key={person.contactId}>
                 <span className={styles.face} aria-hidden="true">
@@ -323,57 +331,73 @@ function LeadingList({
 }
 
 function CoachRow({
-  coach,
-  since,
+  coaches,
   canWrite,
   pending,
   people,
   onSet,
 }: {
-  coach: PersonRef | null;
-  since: string | null;
+  coaches: CoachRef[];
   canWrite: boolean;
   pending: boolean;
   people: Pick<MissioClient, "listPeople">;
-  onSet: (contactId: string | null) => void;
+  onSet: (contactId: string, on: boolean) => void;
 }) {
   const [choosing, setChoosing] = useState(false);
-  const href = coach ? personHref(coach) : null;
   return (
     <div className={styles.leadingGroup} data-testid="house-coach">
-      <h3>Coached by</h3>
-      <div className={styles.coachLine}>
-        {coach ? (
-          <span className={styles.coachWho}>
-            <span className={styles.face} aria-hidden="true">
-              {initialsOf(coach.displayName)}
-            </span>
-            <span>
-              {href ? (
-                <Link href={href} className={styles.personLink}>
-                  {coach.displayName}
-                </Link>
-              ) : (
-                <span className={styles.leadingName}>{coach.displayName}</span>
-              )}
-              {since ? <span className={styles.leadingRole}>Coach · since {formatJoined(since)}</span> : null}
-            </span>
-          </span>
-        ) : (
-          <span className={styles.quiet}>No coach yet</span>
-        )}
-        {canWrite ? (
-          <button
-            type="button"
-            id="house-coach-change"
-            className={shell.textButton}
-            aria-expanded={choosing}
-            onClick={() => setChoosing((open) => !open)}
-          >
-            {coach ? "Change" : "Choose a coach"}
-          </button>
-        ) : null}
-      </div>
+      <h3>{coaches.length > 1 ? "Coaches" : "Coached by"}</h3>
+      {coaches.length === 0 ? <p className={styles.quiet}>No coach yet</p> : null}
+      {coaches.length > 0 ? (
+        <ul className={styles.leadingList}>
+          {coaches.map((coach) => {
+            const href = canWrite ? personHref(coach) : null;
+            return (
+              <li key={coach.contactId} className={styles.coachLine}>
+                <span className={styles.coachWho}>
+                  <span className={styles.face} aria-hidden="true">
+                    {initialsOf(coach.displayName)}
+                  </span>
+                  <span>
+                    {href ? (
+                      <Link href={href} className={styles.personLink}>
+                        {coach.displayName}
+                      </Link>
+                    ) : (
+                      <span className={styles.leadingName}>{coach.displayName}</span>
+                    )}
+                    <span className={styles.leadingRole}>
+                      Coach{coach.since ? ` · since ${formatJoined(coach.since)}` : ""}
+                    </span>
+                  </span>
+                </span>
+                {canWrite ? (
+                  <button
+                    type="button"
+                    className={shell.textButton}
+                    disabled={pending}
+                    aria-label={`Remove ${coach.displayName} as coach`}
+                    onClick={() => onSet(coach.contactId, false)}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {canWrite ? (
+        <button
+          type="button"
+          id="house-coach-change"
+          className={`${shell.textButton} ${styles.addCoach}`}
+          aria-expanded={choosing}
+          onClick={() => setChoosing((open) => !open)}
+        >
+          {coaches.length > 0 ? "Add another coach" : "Choose a coach"}
+        </button>
+      ) : null}
       {canWrite && choosing ? (
         <div className={styles.coachPick}>
           <PeoplePicker
@@ -382,22 +406,9 @@ function CoachRow({
             label="Search Missio people"
             onPick={(person) => {
               setChoosing(false);
-              onSet(person.contactId);
+              onSet(person.contactId, true);
             }}
           />
-          {coach ? (
-            <button
-              type="button"
-              className={shell.ghost}
-              disabled={pending}
-              onClick={() => {
-                setChoosing(false);
-                onSet(null);
-              }}
-            >
-              Remove coach
-            </button>
-          ) : null}
           <p className={styles.quiet}>A coach is pastoral covering for the leaders. Nothing waits on them.</p>
         </div>
       ) : null}
@@ -472,12 +483,15 @@ function RoleSelect({
 function MemberRow({
   member,
   canWrite,
+  linkProfile,
   pending,
   onRole,
   onRemove,
 }: {
   member: HouseMember;
   canWrite: boolean;
+  /** Profiles are pastors only for now, so only pastors get the link. */
+  linkProfile: boolean;
   pending: boolean;
   onRole: (role: HouseRole) => void;
   onRemove: () => void;
@@ -489,7 +503,7 @@ function MemberRow({
         <span className={styles.face} aria-hidden="true">
           {initialsOf(member.displayName)}
         </span>
-        <PersonName member={member} />
+        {linkProfile ? <PersonName member={member} /> : <span className={shell.personName}>{member.displayName}</span>}
       </div>
       {canWrite ? (
         <div className={styles.memberEdit}>

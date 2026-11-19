@@ -27,6 +27,7 @@ export type OrgStaffRoleName =
   | "pastor"
   | "admin"
   | "house_church_leader"
+  | "coach"
   | "team_leader"
   | "finance";
 

@@ -3,9 +3,9 @@ import { invalidInput } from "@/lib/missio/db-errors";
 import { isUuid, pastorHouseAccess, publicError, setHouseCoach } from "@/lib/missio/house-churches";
 import { missioRateLimit } from "@/lib/missio/limit";
 
-// PUT /api/missio/house-churches/:id/coach  { contactId: string | null }
+// PUT /api/missio/house-churches/:id/coach  { contactId, on }
 //
-// Pastors only. Sets or clears the house's coach. The old coach row is
+// Pastors only. Adds or removes one of the house's coaches. A removed coach row is
 // ended, not deleted, so the history stays.
 
 export const dynamic = "force-dynamic";

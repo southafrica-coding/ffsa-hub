@@ -42,14 +42,14 @@ export interface HouseSummary {
   memberCount: number;
   leaders: PersonRef[];
   coLeaders: PersonRef[];
-  /** Pastoral covering for the leaders. Null when no coach is set. */
-  coach: PersonRef | null;
-  coachSince: string | null;
+  /** Pastoral covering for the leaders. A house can have several. */
+  coaches: CoachRef[];
 }
 
+export type CoachRef = PersonRef & { since: string | null };
+
 export interface CoachResponse {
-  coach: PersonRef | null;
-  coachSince: string | null;
+  coaches: CoachRef[];
 }
 
 export interface HouseMember extends PersonRef {
@@ -62,14 +62,23 @@ export interface HouseDetail extends HouseSummary {
   members: HouseMember[];
 }
 
+/** What the viewer may do. Pastors: both. Coaches: editMembers in houses they coach. */
+export interface HouseAbilities {
+  place: boolean;
+  editMembers: boolean;
+}
+
 export interface HouseListResponse {
   houses: HouseSummary[];
+  /** Pastor actions: add people, set coaches, review names. */
   canWrite: boolean;
+  abilities?: HouseAbilities;
 }
 
 export interface HouseDetailResponse {
   house: HouseDetail;
   canWrite: boolean;
+  abilities?: HouseAbilities;
 }
 
 export interface MemberMutationResponse {

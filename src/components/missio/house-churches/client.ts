@@ -13,6 +13,7 @@ import type {
   ResolveResponse,
   ReviewContactMatch,
   CoachResponse,
+  CoachRef,
   ReviewContactSearchResponse,
   ReviewHouseRef,
   ReviewItem,
@@ -92,8 +93,8 @@ export interface HouseChurchesClient {
   addMember(houseId: string, body: { contactId: string; role: HouseRole }): Promise<MemberMutationResponse>;
   updateMemberRole(houseId: string, contactId: string, role: HouseRole): Promise<MemberMutationResponse>;
   removeMember(houseId: string, contactId: string): Promise<{ ok: true }>;
-  /** Set or clear the house's coach. Pastors only. */
-  setCoach(houseId: string, contactId: string | null): Promise<CoachResponse>;
+  /** Add or remove one of the house's coaches. Pastors only. */
+  setCoach(houseId: string, contactId: string, on: boolean): Promise<CoachResponse>;
   listReview(): Promise<ReviewListResponse>;
   resolveReview(itemId: string, body: ResolveBody): Promise<ResolveResponse>;
   /** Name search across every contact. Pastors only, review queue only. */
@@ -227,6 +228,11 @@ function people(value: unknown): PersonRef[] {
   return value.map(personRef);
 }
 
+function coachesOf(value: unknown): CoachRef[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => ({ ...personRef(item), since: optionalString(asRecord(item)?.since) }));
+}
+
 function summary(value: unknown): HouseSummary {
   const row = asRecord(value);
   if (!row || typeof row.id !== "string" || typeof row.number !== "number" || typeof row.memberCount !== "number") {
@@ -242,8 +248,7 @@ function summary(value: unknown): HouseSummary {
     memberCount: row.memberCount,
     leaders: people(row.leaders),
     coLeaders: people(row.coLeaders),
-    coach: row.coach == null ? null : personRef(row.coach),
-    coachSince: optionalString(row.coachSince),
+    coaches: coachesOf(row.coaches),
   };
 }
 
@@ -322,16 +327,22 @@ function reviewItem(value: unknown): ReviewItem {
   };
 }
 
+function abilitiesOf(body: Record<string, unknown>, canWrite: boolean) {
+  const raw = asRecord(body.abilities);
+  if (!raw) return { place: canWrite, editMembers: canWrite };
+  return { place: raw.place === true, editMembers: raw.editMembers === true };
+}
+
 function listResponse(body: Record<string, unknown>): HouseListResponse {
   if (!Array.isArray(body.houses) || typeof body.canWrite !== "boolean") {
     throw new MissioApiError(500, UNEXPECTED, null, "server_error");
   }
-  return { houses: body.houses.map(summary), canWrite: body.canWrite };
+  return { houses: body.houses.map(summary), canWrite: body.canWrite, abilities: abilitiesOf(body, body.canWrite) };
 }
 
 function detailResponse(body: Record<string, unknown>): HouseDetailResponse {
   if (typeof body.canWrite !== "boolean") throw new MissioApiError(500, UNEXPECTED, null, "server_error");
-  return { house: detailOf(body.house), canWrite: body.canWrite };
+  return { house: detailOf(body.house), canWrite: body.canWrite, abilities: abilitiesOf(body, body.canWrite) };
 }
 
 function memberResponse(body: Record<string, unknown>): MemberMutationResponse {
@@ -406,12 +417,12 @@ export function createHouseChurchesClient(fetchImpl: FetchLike = fetch): HouseCh
       if (body.ok !== true) throw new MissioApiError(500, UNEXPECTED, null, "server_error");
       return { ok: true };
     },
-    async setCoach(houseId, contactId) {
+    async setCoach(houseId, contactId, on) {
       const body = await request(houseChurchesApi.coach(houseId), {
         method: "PUT",
-        body: JSON.stringify({ contactId }),
+        body: JSON.stringify({ contactId, on }),
       });
-      return { coach: body.coach == null ? null : personRef(body.coach), coachSince: optionalString(body.coachSince) };
+      return { coaches: coachesOf(body.coaches) };
     },
     async listReview() {
       return reviewResponse(await request(`${houseChurchesApi.review}?status=pending`));

@@ -110,13 +110,13 @@ export const SIGNAL_LABEL: Record<HouseSignal, string> = {
 
 /** The signals a house shows on the grid and its page. Same rules as Home. */
 export function houseSignals(
-  house: Pick<HouseSummary, "memberCount" | "leaders" | "coLeaders"> & { coach?: HouseSummary["coach"] }
+  house: Pick<HouseSummary, "memberCount" | "leaders" | "coLeaders"> & { coaches?: HouseSummary["coaches"] }
 ): HouseSignal[] {
   const signals: HouseSignal[] = [];
   if (house.memberCount >= MULTIPLY_AT && house.coLeaders.length > 0) signals.push("ready");
   if (house.memberCount > 0 && house.leaders.length === 0) signals.push("no_leader");
   if (house.memberCount > 0 && house.coLeaders.length === 0) signals.push("no_co_leader");
-  if (house.memberCount > 0 && house.coach === null) signals.push("no_coach");
+  if (house.memberCount > 0 && house.coaches?.length === 0) signals.push("no_coach");
   return signals;
 }
 
@@ -140,4 +140,12 @@ export function initialsOf(name: string): string {
 /** "Wed" from "wednesday". */
 export function shortDay(day: string | null | undefined): string {
   return meetingDayLabel(day).slice(0, 3);
+}
+
+/** "Thandi Zulu", "Thandi Zulu & Pieter van Wyk", "Thandi, Pieter & Lize". */
+export function coachNames(coaches: ReadonlyArray<{ displayName: string; firstName?: string | null }>): string {
+  const names = coaches.map((coach) => coach.displayName.trim()).filter(Boolean);
+  if (names.length <= 2) return names.join(" & ");
+  const firsts = coaches.map((coach) => coach.firstName?.trim() || coach.displayName.trim().split(/\s+/)[0] || "");
+  return `${firsts.slice(0, -1).join(", ")} & ${firsts[firsts.length - 1]}`;
 }

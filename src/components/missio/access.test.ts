@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CAMPUS_LABEL,
   canAccessMissio,
+  isMissioPastor,
   classifyContactQuery,
   clampPeopleLimit,
   formatJoined,
@@ -53,9 +54,9 @@ describe("Missio pastor gate", () => {
     ).toBe(false);
   });
 
-  it("refuses a Missio admin whose currentOrg is missio, and the other non-pastor roles", () => {
-    // Any Missio role sets currentOrg to missio. Access still requires pastor.
-    for (const role of ["admin", "house_church_leader", "team_leader", "finance"] as const) {
+  it("refuses a Missio admin, team leader and finance, and lets coaches and leaders in (not as pastors)", () => {
+    // Any Missio role sets currentOrg to missio. Coaches and leaders see their own houses (M10c).
+    for (const role of ["admin", "team_leader", "finance"] as const) {
       expect(
         canAccessMissio(
           me({
@@ -65,6 +66,15 @@ describe("Missio pastor gate", () => {
           })
         )
       ).toBe(false);
+    }
+    for (const role of ["coach", "house_church_leader"] as const) {
+      const viewer = me({
+        orgs: [{ id: "org-missio", slug: "missio", name: "Missio" }],
+        rolesByOrg: { missio: [role] },
+        currentOrg: "missio",
+      });
+      expect(canAccessMissio(viewer)).toBe(true);
+      expect(isMissioPastor(viewer)).toBe(false);
     }
   });
 

@@ -41,9 +41,17 @@ export function skinForOrg(slug: string): OrgSkin {
  * still requires `rolesByOrg.missio` to include `pastor`. An FFSA role
  * never satisfies that check.
  */
+/** Pastors, coaches and house church leaders can open Missio. */
 export function canAccessMissio(me: MissioMe): boolean {
   if (me.currentOrg !== "missio") return false;
-  const roles = me.rolesByOrg.missio ?? [];
+  const roles: readonly string[] = me.rolesByOrg.missio ?? [];
+  return roles.includes("pastor") || roles.includes("coach") || roles.includes("house_church_leader");
+}
+
+/** Pastors see everything: people, follow-up, volunteers, review, placing. */
+export function isMissioPastor(me: MissioMe): boolean {
+  if (me.currentOrg !== "missio") return false;
+  const roles: readonly string[] = me.rolesByOrg.missio ?? [];
   return roles.includes("pastor");
 }
 

@@ -874,3 +874,8 @@
   gap: 8px;
   margin-top: 8px;
 }
+
+.root .addCoach {
+  justify-self: start;
+  margin-top: 6px;
+}

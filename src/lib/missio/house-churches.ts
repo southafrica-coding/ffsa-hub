@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { MISSIO_PEOPLE_ROLES, MISSIO_SLUG, requireOrgRole, type OrgAccess } from "@/lib/missio/access";
+import { MISSIO_HOUSE_ROLES, MISSIO_PEOPLE_ROLES, MISSIO_SLUG, requireOrgRole, type OrgAccess } from "@/lib/missio/access";
 import {
   fieldError,
   invalidInput,
@@ -18,6 +18,8 @@ import { contactIdsByEmailOrPhone, createNamedPerson, createPerson } from "@/lib
 import type {
   HouseChurchDetail,
   HouseChurchDetailResponse,
+  CoachRef,
+  HouseChurchAbilities,
   HouseChurchListResponse,
   HouseChurchMemberView,
   HouseChurchRole,
@@ -205,13 +207,56 @@ export function toPersonRef(contact: ContactNameRow, orgPersonId?: string | null
   return ref;
 }
 
-/**
- * Pastors see every house. A later house_church_leader grant should return
- * { mode: "houses", ids } from here and nowhere else. It does not do that yet.
- */
+/** Pastors see every house. Coaches and leaders go through houseReadAccess. */
 export function resolveHouseScope(auth: { roles: readonly string[] }): HouseScope | null {
   if (auth.roles.includes("pastor")) return { mode: "all" };
   return null;
+}
+
+export type HouseAccess = {
+  auth: OrgAccess;
+  /** Houses this user may read. */
+  scope: HouseScope;
+  /** Houses where this user may change roles and end memberships. */
+  editScope: HouseScope;
+  abilities: HouseChurchAbilities;
+};
+
+async function houseIdsFrom(auth: OrgAccess, fn: string): Promise<string[] | null> {
+  const { data, error } = await auth.supabase.rpc(fn);
+  if (error) {
+    console.error(`[missio] ${fn} failed`, error.message ?? "rpc error");
+    return null;
+  }
+  const rows = Array.isArray(data) ? data : [];
+  return rows
+    .map((row: unknown) => (typeof row === "string" ? row : (row as Record<string, unknown> | null)?.[fn]))
+    .filter((id: unknown): id is string => typeof id === "string" && isUuid(id));
+}
+
+/**
+ * Read access to house churches (board M10c). Pastors: every house.
+ * Coaches: houses they coach. Leaders and co-leaders: houses they lead.
+ * The same rule is enforced by RLS in migration 338; this narrows the
+ * queries so a page never asks for rows it can't have.
+ */
+export async function houseReadAccess(): Promise<HouseAccess | { response: NextResponse }> {
+  const auth = await requireOrgRole(MISSIO_SLUG, MISSIO_HOUSE_ROLES);
+  if ("response" in auth) return { response: auth.response };
+  if (auth.roles.includes("pastor")) {
+    return { auth, scope: { mode: "all" }, editScope: { mode: "all" }, abilities: { place: true, editMembers: true } };
+  }
+  const coached = auth.roles.includes("coach") ? await houseIdsFrom(auth, "missio_coached_house_ids") : [];
+  const led = auth.roles.includes("house_church_leader") ? await houseIdsFrom(auth, "missio_led_house_ids") : [];
+  if (coached === null || led === null) {
+    return { response: NextResponse.json({ error: "Something went wrong.", code: "server_error" }, { status: 500 }) };
+  }
+  return {
+    auth,
+    scope: { mode: "houses", ids: [...new Set([...coached, ...led])] },
+    editScope: { mode: "houses", ids: coached },
+    abilities: { place: false, editMembers: coached.length > 0 },
+  };
 }
 
 export function houseInScope(scope: HouseScope, houseId: string): boolean {
@@ -776,15 +821,13 @@ function asPersonRef(member: HouseChurchMemberView): PersonRef {
   return ref;
 }
 
-type CoachLink = { coach: PersonRef; since: string };
-
 /**
  * Open coach rows for these houses, with names. Before migration 337 is
- * applied the table is missing (42P01); houses then show no coach rather
+ * applied the table is missing (42P01); houses then show no coaches rather
  * than failing.
  */
-async function loadCoaches(auth: OrgAccess, houseIds: string[]): Promise<{ ok: true; map: Map<string, CoachLink> } | Fail> {
-  const map = new Map<string, CoachLink>();
+async function loadCoaches(auth: OrgAccess, houseIds: string[]): Promise<{ ok: true; map: Map<string, CoachRef[]> } | Fail> {
+  const map = new Map<string, CoachRef[]>();
   if (houseIds.length === 0) return { ok: true, map };
   const rows = await auth.supabase
     .from("missio_coach_assignments")
@@ -801,12 +844,17 @@ async function loadCoaches(auth: OrgAccess, houseIds: string[]): Promise<{ ok: t
   const refs = await loadRefs(auth, list.map((row) => row.coach_contact_id));
   if (isFail(refs)) return refs;
   for (const row of list) {
-    map.set(row.house_church_id, { coach: refFor(refs, row.coach_contact_id), since: row.started_at });
+    const coaches = map.get(row.house_church_id) ?? [];
+    coaches.push({ ...refFor(refs, row.coach_contact_id), since: row.started_at ?? null });
+    map.set(row.house_church_id, coaches);
+  }
+  for (const coaches of map.values()) {
+    coaches.sort((x, y) => (x.since ?? "").localeCompare(y.since ?? "") || x.displayName.localeCompare(y.displayName, "en"));
   }
   return { ok: true, map };
 }
 
-function summaryFrom(house: HouseRow, members: HouseChurchMemberView[], coach?: CoachLink): HouseChurchSummary {
+function summaryFrom(house: HouseRow, members: HouseChurchMemberView[], coaches: CoachRef[] = []): HouseChurchSummary {
   return {
     id: house.id,
     number: Number(house.number),
@@ -817,8 +865,7 @@ function summaryFrom(house: HouseRow, members: HouseChurchMemberView[], coach?: 
     memberCount: members.length,
     leaders: members.filter((member) => member.role === "leader").map(asPersonRef).sort(compareNames),
     coLeaders: members.filter((member) => member.role === "co_leader").map(asPersonRef).sort(compareNames),
-    coach: coach?.coach ?? null,
-    coachSince: coach?.since ?? null,
+    coaches,
   };
 }
 
@@ -1001,7 +1048,8 @@ async function insertMember(
 
 export async function listHouses(
   auth: OrgAccess,
-  scope: HouseScope
+  scope: HouseScope,
+  abilities: HouseChurchAbilities = { place: true, editMembers: true }
 ): Promise<{ ok: true; body: HouseChurchListResponse } | Fail> {
   let query = auth.supabase
     .from("house_churches")
@@ -1009,7 +1057,7 @@ export async function listHouses(
     .eq("org_id", auth.orgId)
     .order("number", { ascending: true });
   query = restrictHouseQuery(query, scope);
-  if (!query) return { ok: true, body: { houses: [], canWrite: true } };
+  if (!query) return { ok: true, body: { houses: [], canWrite: abilities.place, abilities } };
 
   const houses = await query;
   if (houses.error) {
@@ -1018,7 +1066,7 @@ export async function listHouses(
   }
   const houseRows = ((houses.data ?? []) as HouseRow[]).filter((house) => houseInScope(scope, house.id));
   const membersByHouse = new Map<string, HouseChurchMemberView[]>();
-  if (houseRows.length === 0) return { ok: true, body: { houses: [], canWrite: true } };
+  if (houseRows.length === 0) return { ok: true, body: { houses: [], canWrite: abilities.place, abilities } };
 
   const memberRes = await auth.supabase
     .from("house_church_members")
@@ -1057,8 +1105,9 @@ export async function listHouses(
   );
   if (!coaches.ok) return coaches;
   const body: HouseChurchListResponse = {
-    canWrite: true,
-    houses: houseRows.map((house) => summaryFrom(house, membersByHouse.get(house.id) ?? [], coaches.map.get(house.id))),
+    canWrite: abilities.place,
+    abilities,
+    houses: houseRows.map((house) => summaryFrom(house, membersByHouse.get(house.id) ?? [], coaches.map.get(house.id) ?? [])),
   };
   return { ok: true, body };
 }
@@ -1066,7 +1115,9 @@ export async function listHouses(
 export async function getHouse(
   auth: OrgAccess,
   scope: HouseScope,
-  houseId: string
+  houseId: string,
+  abilities: HouseChurchAbilities = { place: true, editMembers: true },
+  editScope?: HouseScope
 ): Promise<{ ok: true; body: HouseChurchDetailResponse } | Fail> {
   const loaded = await loadHouse(auth, scope, houseId);
   if (!loaded.ok) return loaded;
@@ -1099,56 +1150,59 @@ export async function getHouse(
   const coaches = await loadCoaches(auth, [loaded.house.id]);
   if (!coaches.ok) return coaches;
   const house: HouseChurchDetail = {
-    ...summaryFrom(loaded.house, members.filter((member) => !member.leftMissio), coaches.map.get(loaded.house.id)),
+    ...summaryFrom(loaded.house, members.filter((member) => !member.leftMissio), coaches.map.get(loaded.house.id) ?? []),
     leaderNotes: blankToNull(loaded.house.leader_notes),
     members,
   };
-  return { ok: true, body: { house, canWrite: true } };
+  const here: HouseChurchAbilities = {
+    place: abilities.place,
+    editMembers: abilities.editMembers && (!editScope || houseInScope(editScope, loaded.house.id)),
+  };
+  return { ok: true, body: { house, canWrite: here.place, abilities: here } };
 }
 
-const coachSchema = z.object({ contactId: z.string().uuid().nullable() }).strict();
+const coachSchema = z.object({ contactId: z.string().uuid(), on: z.boolean() }).strict();
 
 /**
- * Set or clear a house's coach. Ends the open row (ended_at = today) and,
- * for a new coach, inserts one. The coach must be a Missio person. Pastors
- * only; runs on the pastor's own client, so RLS is the wall.
+ * Add or remove one coach on a house. A house can have several coaches.
+ * Removing ends the open row (ended_at = today), so history stays. The
+ * coach must be a Missio person. Pastors only; runs on the pastor's own
+ * client, so RLS is the wall.
  */
 export async function setHouseCoach(
   auth: OrgAccess,
   scope: HouseScope,
   houseId: string,
   body: unknown
-): Promise<{ ok: true; body: { coach: PersonRef | null; coachSince: string | null } } | Fail> {
+): Promise<{ ok: true; body: { coaches: CoachRef[] } } | Fail> {
   const parsed = coachSchema.safeParse(body);
   if (!parsed.success) return zodFail(parsed.error);
   const loaded = await loadHouse(auth, scope, houseId);
   if (!loaded.ok) return loaded;
-  const next = parsed.data.contactId;
+  const { contactId, on } = parsed.data;
 
   const open = await auth.supabase
     .from("missio_coach_assignments")
-    .select("id, coach_contact_id, started_at")
+    .select("id, started_at")
     .eq("house_church_id", houseId)
+    .eq("coach_contact_id", contactId)
     .is("ended_at", null)
     .maybeSingle();
   if (open.error) return dbWriteError(open.error, "coach read");
-  const current = open.data as { id: string; coach_contact_id: string; started_at: string } | null;
-  if (current && current.coach_contact_id === next) {
-    const refs = await loadRefs(auth, [next]);
-    if (isFail(refs)) return refs;
-    return { ok: true, body: { coach: refFor(refs, next), coachSince: current.started_at } };
-  }
-
-  let coachRef: PersonRef | null = null;
-  if (next) {
-    const person = await requireMissioPerson(auth, next);
-    if (!person.ok) return person;
-    coachRef = toPersonRef(person.contact, person.orgPersonId);
-  }
-
+  const current = open.data as { id: string; started_at: string } | null;
   const today = todayIsoDate();
-  if (current) {
-    // A coach set today and changed today ends on the day it started.
+  let changed = false;
+
+  if (on && !current) {
+    const person = await requireMissioPerson(auth, contactId);
+    if (!person.ok) return person;
+    const inserted = await auth.supabase
+      .from("missio_coach_assignments")
+      .insert({ house_church_id: houseId, coach_contact_id: contactId, started_at: today });
+    if (inserted.error) return dbWriteError(inserted.error, "coach insert");
+    changed = true;
+  } else if (!on && current) {
+    // A coach added and removed on the same day ends on the day it started.
     const endOn = current.started_at > today ? current.started_at : today;
     const ended = await auth.supabase
       .from("missio_coach_assignments")
@@ -1156,29 +1210,24 @@ export async function setHouseCoach(
       .eq("id", current.id)
       .is("ended_at", null);
     if (ended.error) return dbWriteError(ended.error, "coach end");
-  }
-  let since: string | null = null;
-  if (next) {
-    const inserted = await auth.supabase
-      .from("missio_coach_assignments")
-      .insert({ house_church_id: houseId, coach_contact_id: next, started_at: today })
-      .select("started_at")
-      .single();
-    if (inserted.error) return dbWriteError(inserted.error, "coach insert");
-    since = (inserted.data as { started_at?: string } | null)?.started_at ?? today;
+    changed = true;
   }
 
-  const admin = adminClient();
-  if (!("error" in admin)) {
-    await audit(admin.client, {
-      userId: auth.user.id,
-      action: "missio.house_coach_set",
-      resourceType: "house_church",
-      resourceId: houseId,
-      changes: { from: current?.coach_contact_id ?? null, to: next },
-    });
+  if (changed) {
+    const admin = adminClient();
+    if (!("error" in admin)) {
+      await audit(admin.client, {
+        userId: auth.user.id,
+        action: on ? "missio.house_coach_added" : "missio.house_coach_removed",
+        resourceType: "house_church",
+        resourceId: houseId,
+        changes: { coach: contactId },
+      });
+    }
   }
-  return { ok: true, body: { coach: coachRef, coachSince: since } };
+  const coaches = await loadCoaches(auth, [houseId]);
+  if (!coaches.ok) return coaches;
+  return { ok: true, body: { coaches: coaches.map.get(houseId) ?? [] } };
 }
 
 export async function addMember(

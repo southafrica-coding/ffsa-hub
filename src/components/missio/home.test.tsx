@@ -51,8 +51,7 @@ function house(number: number, memberCount: number, leaders = 1, coLeaders = 1):
     memberCount,
     leaders: Array.from({ length: leaders }, (_, n) => person(n)),
     coLeaders: Array.from({ length: coLeaders }, (_, n) => person(10 + n)),
-    coach: null,
-    coachSince: null,
+    coaches: [],
   };
 }
 
@@ -168,10 +167,16 @@ describe("Missio home", () => {
     expect(housesCard.textContent).toContain("5houses");
   });
 
-  it("shows someone who is not a pastor only the people link, and loads nothing", async () => {
+  it("shows a leader their own houses, and none of the pastor cards", async () => {
     let called = 0;
     const spy = clients();
-    const houses = { ...spy.houses, listHouses: async () => { called += 1; return { houses: [], canWrite: false }; } } as HouseChurchesClient;
+    const houses = {
+      ...spy.houses,
+      listHouses: async () => {
+        called += 1;
+        return { houses: [{ ...house(5, 12), name: null }], canWrite: false };
+      },
+    } as HouseChurchesClient;
     const { host, root } = render(
       <MissioViewerProvider me={houseLeader}>
         <MissioHome houses={houses} followUp={spy.followUp} />
@@ -180,9 +185,10 @@ describe("Missio home", () => {
     roots.push(root);
     hosts.push(host);
     await settle();
-    expect(host.querySelector("[data-testid=home-people]")).toBeTruthy();
+    expect(host.querySelector("[data-testid=home-my-houses]")?.textContent).toContain("House 5");
+    expect(host.querySelector("[data-testid=home-people]")).toBeNull();
     expect(host.querySelector("[data-testid=home-houses-card]")).toBeNull();
     expect(host.querySelector("[data-testid=home-follow-card]")).toBeNull();
-    expect(called).toBe(0);
+    expect(called).toBe(1);
   });
 });

@@ -12,7 +12,8 @@ export type MissioOrgRole =
   | "admin"
   | "house_church_leader"
   | "team_leader"
-  | "finance";
+  | "finance"
+  | "coach";
 
 export type MissioPerson = {
   id: string;
@@ -105,7 +106,8 @@ export type MissioErrorCode =
   | "membership_not_current"
   | "member_left_missio"
   | "server_error"
-  | "method_not_allowed";
+  | "method_not_allowed"
+  | "no_login";
 
 export type HouseChurchRole = "leader" | "co_leader" | "member";
 
@@ -154,10 +156,19 @@ export type HouseChurchSummary = {
   memberCount: number;
   leaders: PersonRef[];
   coLeaders: PersonRef[];
-  /** The house's coach. Null when none is set (or before migration 337). */
-  coach: PersonRef | null;
-  /** When the current coach started. */
-  coachSince: string | null;
+  /** The house's coaches, longest-serving first. Empty when none (or before migration 337). */
+  coaches: CoachRef[];
+};
+
+/** A coach on a house, with the day they started coaching it. */
+export type CoachRef = PersonRef & { since: string | null };
+
+/** What the signed-in user may do in house churches. Pastors: everything. */
+export type HouseChurchAbilities = {
+  /** Add people, set the coach, review imported names. Pastors only. */
+  place: boolean;
+  /** Change roles and end memberships. Pastors, and coaches in houses they coach. */
+  editMembers: boolean;
 };
 
 export type HouseChurchDetail = HouseChurchSummary & {
@@ -167,12 +178,15 @@ export type HouseChurchDetail = HouseChurchSummary & {
 
 export type HouseChurchListResponse = {
   houses: HouseChurchSummary[];
-  canWrite: true;
+  /** Same as abilities.place. Kept for older clients. */
+  canWrite: boolean;
+  abilities: HouseChurchAbilities;
 };
 
 export type HouseChurchDetailResponse = {
   house: HouseChurchDetail;
-  canWrite: true;
+  canWrite: boolean;
+  abilities: HouseChurchAbilities;
 };
 
 export type ImportReviewStatus = "pending" | "matched" | "new" | "skipped";

@@ -29,8 +29,9 @@ const oak: HouseSummary = {
   coLeaders: [
     { contactId: "c-lindi", displayName: "Lindiwe Nkosi", firstName: "Lindiwe", lastName: "Nkosi" },
   ],
-  coach: { contactId: "c-thandi", displayName: "Thandi Zulu", firstName: "Thandi", lastName: "Zulu", orgPersonId: "p-thandi" },
-  coachSince: "2026-11-01",
+  coaches: [
+    { contactId: "c-thandi", displayName: "Thandi Zulu", firstName: "Thandi", lastName: "Zulu", orgPersonId: "p-thandi", since: "2026-11-01" },
+  ],
 };
 
 const numbered: HouseSummary = {
@@ -43,14 +44,13 @@ const numbered: HouseSummary = {
   memberCount: 6,
   leaders: [],
   coLeaders: [],
-  coach: null,
-  coachSince: null,
+  coaches: [],
 };
 
 function client(overrides: Partial<HouseChurchesClient> = {}): HouseChurchesClient {
   return {
     searchReviewContacts: async () => ({ matches: [] }),
-    setCoach: async () => ({ coach: null, coachSince: null }),
+    setCoach: async () => ({ coaches: [] }),
     listHouses: async () => ({ houses: [numbered, oak], canWrite: true }),
     getHouse: async () => {
       throw new Error("unused");
