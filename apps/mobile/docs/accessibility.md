@@ -215,19 +215,19 @@ Each area was audited screen by screen. Shared finance building blocks (`Row`, `
 
 Tests: `src/features/tickets/__tests__/a11y.test.tsx` (17 tests: roles, names, headers, states, `auditTappables` on loading / empty / error / success / permission-denied, scanner states).
 
-### My tickets (`app/(app)/tickets/index.tsx` → `MyTicketsScreen`, `TicketRow`, `SectionBar`, `StateViews`)
+### My tickets (`app/(app)/tickets/index.tsx` → `MyTicketsScreen`, `TicketRow`, `ListHeader`, the kit's `ListGroup` / `EmptyState` / `SkeletonList`)
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Pass | Rows are buttons whose label reads title, time, place, holder, status; hint "Opens the ticket…". Past toggle has `expanded` state. Registration rows (not tappable) are one grouped text. |
 | Headers | Fixed | Masthead and section bars were already headers. The empty state was grouped, so its title lost the header role. It's no longer grouped. |
-| Touch targets | Pass | Rows have minHeight 48 and are full width. Kit buttons are 48. |
-| Dynamic Type (2.0) | Fixed | The date box was a fixed `width: 48` and would clip at large sizes. Now `minWidth: 48`. Titles clamp to 2 lines and the place to 1 line, and the full text stays in the row label. |
+| Touch targets | Pass | Rows have minHeight 56 and are full width. Kit buttons are 50 (44 small). |
+| Dynamic Type (2.0) | Fixed | The date box was a fixed `width: 48` and would clip at large sizes. Now `minWidth: 48`. Redesign: nothing clamps any more, titles and places wrap and the row grows. |
 | Contrast | Pass | Tokens only. |
-| Status not colour alone | Pass | `StatusTag` uses an icon and words (Ready to scan / Checked in / Cancelled). |
-| Reading order | Pass | Masthead → check-in button → banners → list. |
+| Status not colour alone | Pass | `StatusTag` is the kit `StatusChip`: an icon and words (Ready to scan / Checked in / Cancelled / Confirmed / Pending / Waitlisted). |
+| Reading order | Pass | Title → check-in button → banners → list → Get tickets (a `link`, "Opens in browser"). |
 | Focus | Pass | Native stack push. The screen reader starts at the header. |
 | Announcements / live regions | Pass | Error banner is an alert. Offline/stale info banner is a polite live region. |
-| Reduce motion | n/a | Static skeleton, no animation. |
+| Reduce motion | Pass | Kit skeleton: a soft pulse, static under Reduce Motion. The title collapse appears without fading. |
 | Images / QR / camera | n/a | |
 | Decorative icons | Pass | Status icon, chevron and date box are hidden. |
 
@@ -235,11 +235,11 @@ Tests: `src/features/tickets/__tests__/a11y.test.tsx` (17 tests: roles, names, h
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Pass | Detail pairs are read as "When: …". Waiver button has a hint and shows busy while loading. |
-| Headers | Pass | Event title (title variant). |
+| Headers | Pass | Event title (the hero `LargeTitle`); back button reads "Back to My tickets". |
 | Touch targets | Pass | Kit buttons. |
 | Dynamic Type (2.0) | Pass | QR is sized from the window width. The code text wraps if needed. |
 | Contrast | Pass | QR is always ink on white with a quiet zone (needed for scanners). |
-| Status not colour alone | Fixed | A cancelled ticket's QR was only dimmed (opacity 0.25). Its label now starts "Cancelled ticket, it won't scan". The danger banner also says it. |
+| Status not colour alone | Fixed | A cancelled ticket's QR was only dimmed (now opacity 0.18). Its label starts "Cancelled ticket, it won't scan". The error banner and the status chip also say it. |
 | Reading order | Pass | Title, status, "Show this at the door", QR, details, waiver. |
 | Focus | Pass | |
 | Announcements / live regions | Pass | Waiver error is an alert. |
@@ -266,12 +266,12 @@ Tests: `src/features/tickets/__tests__/a11y.test.tsx` (17 tests: roles, names, h
 ### Door (`check-in/[eventId].tsx` → `DoorScreen`, `DoorStats`, `GuestSearch`, `VerdictCard`)
 | Check | Status | Notes |
 |---|---|---|
-| Labels, roles, state | Pass | Tally is one `summary` ("12 of 40 checked in"). Scan button has a hint. Code and name fields are labelled. Guest "Check in" buttons are named "Check in <name>". Queue "Send now" shows busy. |
+| Labels, roles, state | Pass | Tally is one `summary` ("12 of 40 checked in"). Scan button has a hint. Code and name fields are labelled. Guest "Check in" buttons are named "Check in <name>". Queue "Send now", "Clear" and "Try again" are the banners' inline actions (44pt). |
 | Headers | Pass | "Type a code" and "Find by name" are headers. |
 | Touch targets | Pass | Scan button 64. Verdict buttons minHeight 48, minWidth 96. |
 | Dynamic Type (2.0) | Pass | Numeral capped at 1.4× by the kit. The rest wraps. |
-| Contrast | Pass | Verdict looks: ink/bone, yellow/ink, bone/ink, white/ink, all from tokens. Yellow carries ink text only. |
-| Status not colour alone | Pass | Each verdict has its own icon and a title in words. "Saved, not yet confirmed" is dashed and spelled out. Checked-in guests show a check icon and "In at 18:04". |
+| Contrast | Pass | Verdict looks (redesign, mockup 5.13), all from tokens: checked in = `positive` fill with `onPositive` label (white on green 4.9:1 in light, ink on green in dark); already in = `attention` outline; don't admit = `danger` outline; saved offline = dashed ink outline; needs attention = ink outline. Outlined cards keep `text` on `raised`. |
+| Status not colour alone | Pass | Each verdict has its own icon (check / repeat / X / clock / alert), shape (fill / heavy outline / dashed) and a title in words. "Saved, not yet confirmed" is dashed and spelled out. Checked-in guests show a check icon and "In at 18:04". |
 | Reading order | Pass | Tally, banners, verdict, scan, code, search. |
 | Focus | Follow-up | Focus isn't moved to the verdict after a typed-code check-in. It relies on the announcement (device check). |
 | Announcements / live regions | Fixed | Verdicts are announced (by `use-door`) and the card is an `alert`. Fixed: guest-search results are now announced ("1 guest found" / "No guests match that name."). The search spinner said "Find by name" and now says "Searching for guests". A checked-in guest's status was read twice; it's now once, and says "Checked in" even with no time. |
@@ -284,7 +284,7 @@ Tests: `src/features/tickets/__tests__/a11y.test.tsx` (17 tests: roles, names, h
 |---|---|---|
 | Labels, roles, state | Fixed | Close and torch are named buttons. Their icons are now hidden. The torch label flips on/off. The permission-loading view was an empty, unlabelled view. It is now a `progressbar` "Starting the camera". |
 | Headers | Pass | Permission screens' titles. |
-| Touch targets | Pass | 56×56 with an 8dp hitSlop. |
+| Touch targets | Pass | 48×48 with an 8dp hitSlop. |
 | Dynamic Type (2.0) | Pass | Overlay message wraps. |
 | Contrast | Pass (kept) | Fixed ink/white chrome over a live picture: 19.8:1. Pressed fill is `textSecondary` with a white icon: 10:1. |
 | Status not colour alone | Pass | Verdict overlay as on the door. |

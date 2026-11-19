@@ -76,7 +76,7 @@ Status: **fixed** (in this branch) · **ok** (already honours the theme, checked
 | Tickets: list pull-to-refresh | White Android disc. | `refreshControlColors()`. | fixed |
 | Tickets: ticket QR | Must stay dark-on-light with a quiet zone or scanners fail. Already a white card with an ink border, ink modules, `quietZone` 8 + 16 padding, in both schemes. | — | kept |
 | Tickets: door scanner | Camera overlay is fixed ink/white (always over a live camera picture). | — | kept |
-| Tickets: verdict card, guest search spinner | Tokens; accent verdict uses ink text/border on yellow. | — | ok |
+| Tickets: verdict card, guest search spinner | Tokens; the checked-in verdict is the `positive` fill with `onPositive` (white in light, ink in dark); the others are outlines on `raised`. | — | ok |
 | Prayer: week / day / set sheet / practice / my sets | Tokens; curated band chip inverts in dark (comment in code); dashed "needs a lead" border uses text colour. | — | ok |
 | Prayer: pull-to-refresh | White Android disc. | `refreshControlColors()`. | fixed |
 | Prayer: bottom sheet | Same as finance's sheet. | — | ok |
