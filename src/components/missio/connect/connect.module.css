@@ -250,3 +250,17 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* The consent line above Send (board M5a). */
+.consent {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--sub, #5b574d);
+}
+
+.consent a {
+  color: var(--link, #2f5d50);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

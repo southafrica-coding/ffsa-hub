@@ -142,4 +142,11 @@ describe("connect card form", () => {
       });
     }
   });
+
+  it("shows the consent line above Send", () => {
+    const host = mount(<ConnectForm client={{ submit: async () => ({ ok: true }) }} />);
+    const consent = host.querySelector("[data-testid=connect-consent]");
+    expect(consent?.textContent).toContain("you can ask us to remove them anytime");
+    expect(consent?.querySelector("a")?.getAttribute("href")).toBe("/legal/consent");
+  });
 });

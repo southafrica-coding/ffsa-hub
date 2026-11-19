@@ -184,7 +184,9 @@ export function ConnectForm({ client = connectClient }: { client?: ConnectClient
           </label>
           {draft.wantsPrayer ? (
             <label>
-              Prayer request
+              <span>
+                Prayer request <span className={styles.optional}>Only our pastors will read this.</span>
+              </span>
               <textarea
                 name="prayerRequest"
                 value={draft.prayerRequest}
@@ -233,6 +235,14 @@ export function ConnectForm({ client = connectClient }: { client?: ConnectClient
               {banner}
             </p>
           ) : null}
+
+          <p className={styles.consent} data-testid="connect-consent">
+            By sending this, you’re happy for Missio to keep these details to care for you and to WhatsApp you. Only
+            our pastors and leaders see them, and you can ask us to remove them anytime.{" "}
+            <a href="/legal/consent" target="_blank" rel="noopener">
+              How we look after your details
+            </a>
+          </p>
 
           <button type="submit" disabled={pending}>
             {pending ? "Sending…" : "Send my card"}
