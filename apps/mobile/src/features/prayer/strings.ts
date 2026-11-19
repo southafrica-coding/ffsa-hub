@@ -2,7 +2,9 @@
 // come later. Voice: plain and direct, like the web's prayer room.
 
 export const strings = {
-  title: "Prayer Room",
+  // Written in sentence case: the header draws it in capitals.
+  title: "Prayer room",
+  eyebrow: "Prayer",
   segments: {
     week: "Week",
     practice: "Practice",
@@ -17,15 +19,23 @@ export const strings = {
     today: "This week",
     todayHint: "Jumps back to the current week.",
     weekOf: (label: string) => `Week of ${label}`,
-    context: (label: string, sets: number, open: number, seats: number) =>
+    weekOfThis: (label: string) => `Week of ${label}, this week`,
+    /** The current week's label: "16–20 Nov · This week". */
+    rangeThisWeek: (range: string) => `${range} · This week`,
+    summary: (sets: number, open: number, seats: number) =>
       sets === 0
-        ? `${label} · nothing booked`
-        : `${label} · ${sets} ${sets === 1 ? "set" : "sets"} · ${
+        ? "nothing booked"
+        : `${sets} ${sets === 1 ? "set" : "sets"} · ${
             open > 0 ? `${open} ${open === 1 ? "seat" : "seats"} open` : seats > 0 ? "every seat filled" : "no lineup yet"
           }`,
+    // The day strip: one word per day, priority Blocked › No lead › Invited › You.
+    markers: { blocked: "Blocked", noLead: "No lead", invited: "Invited", you: "You" },
+    dayTab: (date: string, today: boolean, marker: string | null) =>
+      [date, today ? "today" : null, marker].filter(Boolean).join(", "),
     nothingThisDay: "Nothing booked.",
     emptyTitle: "Nothing on the wall this week",
     emptyBody: "No sets are booked for this week yet. Try another week, or put a set on the wall from the website.",
+    needLeadEyebrow: "Needs a lead",
     needLead: (n: number) =>
       n === 1
         ? "1 set this week has nobody in a lead seat. It holds its slot, but it isn't live."
@@ -93,6 +103,7 @@ export const strings = {
 
   mine: {
     loading: "Loading your sets",
+    needsYou: "Needs you",
     invitations: "Invitations",
     invitationsBand: (n: number) =>
       n === 1 ? "1 invitation is waiting on your answer." : `${n} invitations are waiting on your answer.`,
@@ -105,7 +116,6 @@ export const strings = {
     more: "More on the website",
     join: "Join the prayer room, or ask to be evaluated for a seat",
     evaluator: "Open evaluator tools on the web",
-    calendarLater: "Adding sets to your phone's calendar is coming later. The website can download a calendar file today.",
   },
 
   practice: {
@@ -175,5 +185,8 @@ export const strings = {
     setRowExtra: (duration: string, lead: string | null) => `${duration}. ${lead ? `Led by ${lead}` : "No one in a lead seat yet"}`,
     bandStation: (station: string, people: string) => `${station}, ${people}`,
     bookBlockedHint: (reason: string) => `Can't book yet. ${reason}`,
+    /** Appended to a practice row: who has which station. "Taken: Drums, Sipho. Keys, you" */
+    practiceTaken: (list: string[]) => `Taken: ${list.join(". ")}`,
+    stationHolder: (station: string, who: string) => `${station}, ${who}`,
   },
 } as const;
