@@ -36,6 +36,10 @@ const TONE_ICON: Record<BannerTone, LucideIcon | null> = {
   positive: CircleCheck,
 };
 
+// The label's line is 18pt at normal size; hitSlop above and below makes 44pt.
+const ACTION_LINE = 18;
+const ACTION_HIT_SLOP = { top: (touch.floor - ACTION_LINE) / 2, bottom: (touch.floor - ACTION_LINE) / 2, left: 8, right: 8 };
+
 const isAlert = (tone: BannerTone) => tone === "error" || tone === "danger";
 
 /**
@@ -100,10 +104,11 @@ export function Banner({ tone = "info", title, children, actionLabel, onAction, 
           accessibilityState={{ busy: actionBusy, disabled: actionBusy }}
           disabled={actionBusy}
           onPress={inlineAction.onPress}
-          hitSlop={4}
+          // The 44pt target comes from hitSlop, not from the box: a 44pt box
+          // with negative margins spilled over the bottom border once the
+          // action wrapped under the text (QA pass 2, large text).
+          hitSlop={ACTION_HIT_SLOP}
           style={({ pressed }) => ({
-            minHeight: touch.floor,
-            marginVertical: -10,
             paddingHorizontal: 4,
             justifyContent: "center",
             opacity: pressed ? 0.6 : 1,
