@@ -107,7 +107,6 @@ describe("My tickets", () => {
     expect(row.props.accessibilityHint).toBe("Opens the ticket with its QR code");
     expect(screen.getByRole("header", { name: "Coming up, 1" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Run door check-in" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Get tickets. Opens in browser" })).toBeTruthy();
     const past = screen.getByRole("button", { name: "Show past events (1)" });
     expect(past.props.accessibilityState).toMatchObject({ expanded: false });
     await fireEvent.press(past);

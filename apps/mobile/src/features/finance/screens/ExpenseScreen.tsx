@@ -6,19 +6,17 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Banner, Button, LargeTitleScrollView, Sheet, SkeletonList, StatusChip, Text, TextField, Toggle, type BackAction } from "@/components";
+import { type BackAction, Banner, Bleed, Button, ChipButton, ChoiceChips, Disclosure, FieldError, LargeTitleScrollView, LoadError, NavBar, PushedPage, SelectField, Sheet, SkeletonList, StatusChip, Text, TextField, Toggle } from "@/components";
 import { useSession } from "@/auth/session-provider";
 import { announce } from "@/lib/a11y";
 import { apiFetch } from "@/lib/api-client";
 import { supabase } from "@/lib/supabase";
-import { hairline, radius, space, touch } from "@/theme/tokens";
+import { fontFamily, fontSize, hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { deleteExpense, deleteReceipt, exchangeRateToZar, listReceipts, updateExpense, userMessage } from "../api";
 import { chooseReceiptPhotos, takeReceiptPhoto, type DraftPhoto } from "../capture";
-import { ChipButton, ChoiceChips, Disclosure, FieldError, FormNavBar, SelectField } from "../components/form-parts";
 import { OutboxList } from "../components/OutboxList";
-import { Bleed, LoadError, PushedPage } from "../components/parts";
 import { loadTeam, type ReadClient, type TeamData, type TeamMoneyView } from "../data";
 import {
   PAYMENT_METHODS,
@@ -689,8 +687,21 @@ function ExpenseFormView({
   );
 
   if (isNew) {
+    // Cancel with something typed or photographed asks first (nothing here is saved yet).
+    const blank = emptyForm({ currency: view.team.currency, country: view.team.country });
+    const dirty = drafts.length > 0 || (Object.keys(form) as (keyof ExpenseForm)[]).some((k) => form[k] !== blank[k]);
+    const cancel = () => {
+      if (!dirty) {
+        router.back();
+        return;
+      }
+      Alert.alert(s.discardTitle, s.discardBody, [
+        { text: s.discardKeep, style: "cancel" },
+        { text: s.discardConfirm, style: "destructive", onPress: () => router.back() },
+      ]);
+    };
     return (
-      <FormPage title={s.newTitle} onCancel={() => router.back()}>
+      <FormPage title={s.newTitle} onCancel={cancel}>
         <Text variant="label">{s.loggingTo(view.team.team_name)}</Text>
         {body}
       </FormPage>
@@ -712,7 +723,14 @@ function FormPage({ title, onCancel, children }: { title: string; onCancel: () =
   return (
     <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ paddingHorizontal: space.gutter }}>
-        <FormNavBar title={title} cancelLabel={s.cancel} onCancel={onCancel} />
+        <NavBar
+          left={<Button label={s.cancel} variant="ghost" onPress={onCancel} />}
+          title={
+            <Text accessibilityRole="header" numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontFamily: fontFamily.bodySemibold, fontSize: fontSize.navTitle }}>
+              {title}
+            </Text>
+          }
+        />
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView

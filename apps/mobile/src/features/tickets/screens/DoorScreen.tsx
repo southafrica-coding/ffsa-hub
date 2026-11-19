@@ -35,6 +35,8 @@ type Props = {
   back?: BackAction;
   /** Trailing header action (the volunteer door's Done). */
   navRight?: ReactNode;
+  /** Leading bar content instead of a back button (the volunteer door's Done). */
+  navLeft?: ReactNode;
 };
 
 /**
@@ -43,7 +45,7 @@ type Props = {
  * Keeps the screen awake while it's open. Works offline by saving scans (clearly
  * marked "not yet confirmed") and sending them when the signal returns.
  */
-export function DoorScreen({ eventId, eventTitle, door: injected, queueOwner, intro, title = strings.checkIn.doorTitle, back, navRight }: Props) {
+export function DoorScreen({ eventId, eventTitle, door: injected, queueOwner, intro, title = strings.checkIn.doorTitle, back, navRight, navLeft }: Props) {
   useKeepAwake();
   const { colors } = useTheme();
   const online = useOnline();
@@ -53,7 +55,7 @@ export function DoorScreen({ eventId, eventTitle, door: injected, queueOwner, in
   const [code, setCode] = useState("");
   const now = useNow();
 
-  const header = { eyebrow: eventTitle ?? strings.checkIn.context, title, back, navRight, bottomInset: true };
+  const header = { eyebrow: eventTitle ?? strings.checkIn.context, title, back, navRight, navLeft, bottomInset: true };
 
   if (d.denied) {
     return (
@@ -111,6 +113,7 @@ export function DoorScreen({ eventId, eventTitle, door: injected, queueOwner, in
           testID="queue-banner"
           actionLabel={online ? strings.checkIn.queueSync : undefined}
           onAction={online ? () => void d.sync() : undefined}
+          actionBusy={d.syncing}
         >
           {[strings.checkIn.queueBody, lastTriedText({ lastTriedAt: d.lastTriedAt }, now)].filter(Boolean).join(" ")}
         </Banner>

@@ -17,6 +17,14 @@ jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock("expo-network", () => ({ useNetworkState: () => mockNet }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({ type: "dismiss" })) }));
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
+// "Get tickets" is behind a flag in web.ts (off until the Hub has a public
+// events page). These tests switch it on, except the one that checks it's off.
+let mockGetTicketsPath: string | null = "/my-events";
+jest.mock("../web", () => ({
+  get GET_TICKETS_WEB_PATH() {
+    return mockGetTicketsPath;
+  },
+}));
 jest.mock("@/lib/supabase", () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: { user: { id: "u1" } } } }) } },
 }));
@@ -38,6 +46,7 @@ beforeEach(async () => {
   mockFetch.mockReset();
   mockPush.mockReset();
   mockNet = { isConnected: true, isInternetReachable: true };
+  mockGetTicketsPath = "/my-events";
   await AsyncStorage.clear();
 });
 
@@ -99,6 +108,16 @@ describe("My tickets", () => {
     await fireEvent.press(row);
     expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://hub.example.test/my-events", expect.anything());
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("Get tickets is hidden while web.ts has no public events page (the default)", async () => {
+    mockGetTicketsPath = jest.requireActual("../web").GET_TICKETS_WEB_PATH;
+    expect(mockGetTicketsPath).toBeNull();
+    api({});
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
+    await screen.findByText("Send Night");
+    expect(screen.queryByText("Get tickets")).toBeNull();
+    expect(screen.queryByTestId("get-tickets")).toBeNull();
   });
 
   it("Get tickets waits for the list: not shown while loading or on a failed first load", async () => {

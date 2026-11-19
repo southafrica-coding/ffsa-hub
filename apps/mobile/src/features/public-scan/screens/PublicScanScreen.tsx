@@ -68,7 +68,7 @@ export function PublicScanScreen({ token: raw, fetcher = livePublicFetch }: Prop
       onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
     />
   );
-  const page = { title: strings.title, navRight: done, bottomInset: true };
+  const page = { title: strings.title, navLeft: done, bottomInset: true };
 
   const openWeb = token ? () => void openWebPage(webScanPath(token), colors) : undefined;
   const webButton = openWeb ? (
@@ -134,7 +134,7 @@ export function PublicScanScreen({ token: raw, fetcher = livePublicFetch }: Prop
       eventId={key}
       eventTitle={eventTitle}
       title={strings.title}
-      navRight={done}
+      navLeft={done}
       door={door}
       queueOwner={queueOwner}
       intro={

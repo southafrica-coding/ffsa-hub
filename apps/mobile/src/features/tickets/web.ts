@@ -1,8 +1,9 @@
 // Website pages the Tickets tab opens in the in-app browser (openWebPage).
 
 /**
- * Where "Get tickets" goes. Buying stays on the website (no checkout in the
- * app). The Hub has no public list of events yet, so this is the signed-in
- * "My events" page; change this one line when there is a better page.
+ * The "Get tickets" row (spec §7.7) stays hidden until the Hub has a public
+ * events page: /my-events sells nothing today (R2 review, 19 Nov 2026).
+ * To switch it on, set the path of that page here; the row, its strings and
+ * its tests are all in place.
  */
-export const GET_TICKETS_WEB_PATH = "/my-events";
+export const GET_TICKETS_WEB_PATH: string | null = null;
