@@ -25,6 +25,7 @@ hierarchy and the shared UI pieces changed.
 | R3 Bookings | #656 | Bookings home, the request flow, details, vehicle checks. |
 | R3 OKRs, Ministries, Staff decisions | #655 | The wall, owner pages, ministries, staff decisions. |
 | R4 Polish and QA | this | One kit (feature duplicates promoted and deleted), Training restyled, re-tap the tab to scroll up / pop, virtualised long lists, Get tickets behind a flag, discard confirm on Add expense, content fade over skeletons, Dynamic Type and contrast tests, this page. |
+| R5-1 Face ID lock | this | Optional lock (frame 1.6), off by default: Me › Settings switch, lock on cold start and after 5 minutes away, phone passcode fallback, "Sign out instead". See `src/features/lock/README.md`. |
 
 ## The kit (`@/components`)
 
@@ -225,6 +226,12 @@ go offline, scan, back online → Send now shows a spinner while sending;
 volunteer door (`/scan/<token>`): Done is on the LEFT.
 **Me**: pushed pages' compact bar; switches reachable; the keyboard in Edit
 profile; Appearance radios.
+**Face ID lock** (Expo Go on iOS is enough): the Me row only on a phone with
+Face ID / Touch ID set up; turning it on asks once (cancel leaves it off);
+kill and reopen → lock screen asks once, Cancel → waits for Unlock; Unlock
+with Face ID and with the passcode after failed tries; background 4 minutes →
+no lock, 5+ minutes → lock; the app switcher shows the mark, not content;
+Sign out instead → sign-in, and the switch is off after signing back in.
 **Bookings / Schools / History / OKRs / Ministries / Staff decisions**: section
 counts read with their titles; My attendance with a long record scrolls
 smoothly; the vehicle-check back button names the booking; the staff decision
