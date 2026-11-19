@@ -3,6 +3,8 @@
 export const meStrings = {
   context: "FFSA Hub · Me",
   fallbackTitle: "Me",
+  /** The parent name beside the back chevron on screens pushed from Me. */
+  back: "Me",
   loading: "Loading your profile",
   error: {
     title: "Couldn't load your profile",
@@ -115,6 +117,7 @@ export const meStrings = {
       removeConfirmTitle: "Remove this file?",
       removeConfirmBody: "It's deleted from FFSA Hub. You can upload a new one at any time.",
       uploading: "Uploading",
+      removing: "Removing",
       uploaded: "Uploaded.",
       removed: "Removed.",
       pdfOnFile: "A PDF is on file. Open it to check it, or replace it with a photo.",
@@ -188,6 +191,7 @@ export const meStrings = {
       providerOther: "Your provider's name",
       policyNumber: "Policy number",
       policyNumberHint: "For example 123456789.",
+      policyLine: (number: string) => `Policy ${number}`,
       expiry: "Expiry date",
       noExpiry: "This policy doesn't expire",
       noExpiryHint: "Medical schemes on the list can be open-ended. We'll ask you once a year to confirm it's still active.",
