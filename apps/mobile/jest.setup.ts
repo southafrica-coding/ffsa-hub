@@ -34,6 +34,17 @@ jest.mock("expo-crypto", () => {
   };
 });
 
+// Face ID lock: by default the phone has no biometrics (so the Me row stays
+// hidden and nothing locks). Lock tests override these per test.
+jest.mock("expo-local-authentication", () => ({
+  AuthenticationType: { FINGERPRINT: 1, FACIAL_RECOGNITION: 2, IRIS: 3 },
+  hasHardwareAsync: jest.fn(async () => false),
+  isEnrolledAsync: jest.fn(async () => false),
+  supportedAuthenticationTypesAsync: jest.fn(async () => []),
+  authenticateAsync: jest.fn(async () => ({ success: false, error: "not_available" })),
+  cancelAuthenticate: jest.fn(async () => {}),
+}));
+
 // Reanimated: one small stand-in for every test (see test/reanimated-mock.ts).
 jest.mock("react-native-reanimated", () => jest.requireActual("./test/reanimated-mock"));
 jest.mock("react-native-reanimated/mock", () => jest.requireActual("./test/reanimated-mock"));
