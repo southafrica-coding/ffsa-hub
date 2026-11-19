@@ -114,6 +114,22 @@ export default function NewRequestScreen() {
     space: { ...EMPTY_SPACE, requesterName: fullName },
     vehicle: { ...EMPTY_VEHICLE, requesterName: fullName, requesterEmail: me.me?.user.email ?? "" },
   }));
+  // Opened before the account had loaded (a cold start): fill the blanks once it
+  // arrives, never overwriting what the person has typed.
+  const email = me.me?.user.email ?? "";
+  const [seeded, setSeeded] = useState({ fullName, email });
+  if (seeded.fullName !== fullName || seeded.email !== email) {
+    setSeeded({ fullName, email });
+    setFlow((f) => ({
+      ...f,
+      space: f.space.requesterName ? f.space : { ...f.space, requesterName: fullName },
+      vehicle: {
+        ...f.vehicle,
+        requesterName: f.vehicle.requesterName || fullName,
+        requesterEmail: f.vehicle.requesterEmail || email,
+      },
+    }));
+  }
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [blocked, setBlocked] = useState<{ message: string; conflicts: Conflict[] } | null>(null);

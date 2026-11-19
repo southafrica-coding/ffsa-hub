@@ -135,6 +135,25 @@ describe("New request: a space", () => {
     expect(screen.getByRole("header", { name: strings.steps.titles.when })).toBeTruthy();
   });
 
+  it("opened before the account loaded (cold start): the name still fills in", async () => {
+    routes((_path, init) => (init.body?.dryRun ? { ok: true, autoConfirm: true, blocked: false, conflicts: [] } : {}));
+    signedInAs(["bookings.view", "bookings.request"]);
+    const ready = mockMeState;
+    mockMeState = { status: "loading", me: null, error: null, refresh: jest.fn() };
+    const r = await render(inSafeArea(<NewRequestScreen />));
+    mockMeState = ready;
+    await r.rerender(inSafeArea(<NewRequestScreen />));
+    await press("type-space");
+    await fireEvent.press(await screen.findByTestId("venue-v2"));
+    await press("step-next");
+    await press("date");
+    await press("start");
+    await press("end");
+    expect(await screen.findByTestId("space-free", {}, { timeout: 3000 })).toBeTruthy();
+    await press("step-next");
+    expect(screen.getByDisplayValue("Sam Driver")).toBeTruthy();
+  });
+
   it("free: through details and review to a confirmed booking", async () => {
     routes((path, init) => {
       if (init.body?.dryRun) return { ok: true, autoConfirm: true, blocked: false, conflicts: [] };
