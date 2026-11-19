@@ -12,6 +12,7 @@ import type {
   ResolveBody,
   ResolveResponse,
   ReviewContactMatch,
+  CoachResponse,
   ReviewContactSearchResponse,
   ReviewHouseRef,
   ReviewItem,
@@ -27,6 +28,7 @@ export const houseChurchesApi = {
   list: "/api/missio/house-churches",
   house: (id: string) => `/api/missio/house-churches/${encodeURIComponent(id)}`,
   members: (id: string) => `/api/missio/house-churches/${encodeURIComponent(id)}/members`,
+  coach: (houseId: string) => `/api/missio/house-churches/${encodeURIComponent(houseId)}/coach`,
   member: (houseId: string, contactId: string) =>
     `/api/missio/house-churches/${encodeURIComponent(houseId)}/members/${encodeURIComponent(contactId)}`,
   review: "/api/missio/house-churches/import-review",
@@ -90,6 +92,8 @@ export interface HouseChurchesClient {
   addMember(houseId: string, body: { contactId: string; role: HouseRole }): Promise<MemberMutationResponse>;
   updateMemberRole(houseId: string, contactId: string, role: HouseRole): Promise<MemberMutationResponse>;
   removeMember(houseId: string, contactId: string): Promise<{ ok: true }>;
+  /** Set or clear the house's coach. Pastors only. */
+  setCoach(houseId: string, contactId: string | null): Promise<CoachResponse>;
   listReview(): Promise<ReviewListResponse>;
   resolveReview(itemId: string, body: ResolveBody): Promise<ResolveResponse>;
   /** Name search across every contact. Pastors only, review queue only. */
@@ -238,6 +242,8 @@ function summary(value: unknown): HouseSummary {
     memberCount: row.memberCount,
     leaders: people(row.leaders),
     coLeaders: people(row.coLeaders),
+    coach: row.coach == null ? null : personRef(row.coach),
+    coachSince: optionalString(row.coachSince),
   };
 }
 
@@ -399,6 +405,13 @@ export function createHouseChurchesClient(fetchImpl: FetchLike = fetch): HouseCh
       const body = await request(houseChurchesApi.member(houseId, contactId), { method: "DELETE" });
       if (body.ok !== true) throw new MissioApiError(500, UNEXPECTED, null, "server_error");
       return { ok: true };
+    },
+    async setCoach(houseId, contactId) {
+      const body = await request(houseChurchesApi.coach(houseId), {
+        method: "PUT",
+        body: JSON.stringify({ contactId }),
+      });
+      return { coach: body.coach == null ? null : personRef(body.coach), coachSince: optionalString(body.coachSince) };
     },
     async listReview() {
       return reviewResponse(await request(`${houseChurchesApi.review}?status=pending`));

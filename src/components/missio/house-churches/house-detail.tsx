@@ -149,6 +149,22 @@ export function HouseDetailView({
     }
   }
 
+  async function setCoach(contactId: string | null) {
+    setPending(true);
+    setNotice(null);
+    try {
+      const result = await client.setCoach(houseId, contactId);
+      setLive((current) =>
+        current ? { ...current, house: { ...current.house, coach: result.coach, coachSince: result.coachSince } } : current
+      );
+      focusElement("house-coach-change");
+    } catch (caught) {
+      setNotice(caught instanceof MissioApiError ? houseErrorCopy(caught) : "That didn’t work. Try again.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   const house = live?.house ?? null;
   const canWrite = live?.canWrite ?? false;
   const members = house ? sortMembers(house.members) : [];
@@ -188,6 +204,14 @@ export function HouseDetailView({
               <h2>Leading</h2>
               <LeadingList title="Leaders" role="leader" people={house.leaders} members={house.members} />
               <LeadingList title="Co-leaders" role="co_leader" people={house.coLeaders} members={house.members} />
+              <CoachRow
+                coach={house.coach}
+                since={house.coachSince}
+                canWrite={canWrite}
+                pending={pending}
+                people={people}
+                onSet={(contactId) => void setCoach(contactId)}
+              />
             </section>
             <section className={styles.panel} data-testid="house-health">
               <h2>Health</h2>
@@ -294,6 +318,89 @@ function LeadingList({
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+function CoachRow({
+  coach,
+  since,
+  canWrite,
+  pending,
+  people,
+  onSet,
+}: {
+  coach: PersonRef | null;
+  since: string | null;
+  canWrite: boolean;
+  pending: boolean;
+  people: Pick<MissioClient, "listPeople">;
+  onSet: (contactId: string | null) => void;
+}) {
+  const [choosing, setChoosing] = useState(false);
+  const href = coach ? personHref(coach) : null;
+  return (
+    <div className={styles.leadingGroup} data-testid="house-coach">
+      <h3>Coached by</h3>
+      <div className={styles.coachLine}>
+        {coach ? (
+          <span className={styles.coachWho}>
+            <span className={styles.face} aria-hidden="true">
+              {initialsOf(coach.displayName)}
+            </span>
+            <span>
+              {href ? (
+                <Link href={href} className={styles.personLink}>
+                  {coach.displayName}
+                </Link>
+              ) : (
+                <span className={styles.leadingName}>{coach.displayName}</span>
+              )}
+              {since ? <span className={styles.leadingRole}>Coach · since {formatJoined(since)}</span> : null}
+            </span>
+          </span>
+        ) : (
+          <span className={styles.quiet}>No coach yet</span>
+        )}
+        {canWrite ? (
+          <button
+            type="button"
+            id="house-coach-change"
+            className={shell.textButton}
+            aria-expanded={choosing}
+            onClick={() => setChoosing((open) => !open)}
+          >
+            {coach ? "Change" : "Choose a coach"}
+          </button>
+        ) : null}
+      </div>
+      {canWrite && choosing ? (
+        <div className={styles.coachPick}>
+          <PeoplePicker
+            people={people}
+            pending={pending}
+            label="Search Missio people"
+            onPick={(person) => {
+              setChoosing(false);
+              onSet(person.contactId);
+            }}
+          />
+          {coach ? (
+            <button
+              type="button"
+              className={shell.ghost}
+              disabled={pending}
+              onClick={() => {
+                setChoosing(false);
+                onSet(null);
+              }}
+            >
+              Remove coach
+            </button>
+          ) : null}
+          <p className={styles.quiet}>A coach is pastoral covering for the leaders. Nothing waits on them.</p>
+        </div>
+      ) : null}
     </div>
   );
 }

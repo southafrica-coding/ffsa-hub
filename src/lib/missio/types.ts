@@ -154,6 +154,10 @@ export type HouseChurchSummary = {
   memberCount: number;
   leaders: PersonRef[];
   coLeaders: PersonRef[];
+  /** The house's coach. Null when none is set (or before migration 337). */
+  coach: PersonRef | null;
+  /** When the current coach started. */
+  coachSince: string | null;
 };
 
 export type HouseChurchDetail = HouseChurchSummary & {

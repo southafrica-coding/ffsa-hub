@@ -29,6 +29,8 @@ const oak: HouseSummary = {
   coLeaders: [
     { contactId: "c-lindi", displayName: "Lindiwe Nkosi", firstName: "Lindiwe", lastName: "Nkosi" },
   ],
+  coach: { contactId: "c-thandi", displayName: "Thandi Zulu", firstName: "Thandi", lastName: "Zulu", orgPersonId: "p-thandi" },
+  coachSince: "2026-11-01",
 };
 
 const numbered: HouseSummary = {
@@ -41,11 +43,14 @@ const numbered: HouseSummary = {
   memberCount: 6,
   leaders: [],
   coLeaders: [],
+  coach: null,
+  coachSince: null,
 };
 
 function client(overrides: Partial<HouseChurchesClient> = {}): HouseChurchesClient {
   return {
     searchReviewContacts: async () => ({ matches: [] }),
+    setCoach: async () => ({ coach: null, coachSince: null }),
     listHouses: async () => ({ houses: [numbered, oak], canWrite: true }),
     getHouse: async () => {
       throw new Error("unused");
@@ -67,6 +72,15 @@ function client(overrides: Partial<HouseChurchesClient> = {}): HouseChurchesClie
   };
 }
 
+/** Coached houses open on the map. These tests are about the grid. */
+async function toGrid(host: HTMLElement) {
+  const grid = [...host.querySelectorAll("[aria-label=View] button")].find((b) => b.textContent === "Grid") as
+    | HTMLButtonElement
+    | undefined;
+  if (grid) act(() => grid.click());
+  await settle();
+}
+
 describe("house church grid", () => {
   const roots: Array<ReturnType<typeof render>["root"]> = [];
   const hosts: HTMLElement[] = [];
@@ -83,7 +97,8 @@ describe("house church grid", () => {
   it("renders houses biggest first, with leaders, size and signals", async () => {
     const host = mount(<HouseChurchGrid client={client()} />);
     await settle();
-    expect(host.querySelector("[data-testid=house-totals]")?.textContent).toBe("2 houses · 7 members");
+    expect(host.querySelector("[data-testid=house-totals]")?.textContent).toBe("2 houses · 7 members · 1 coach");
+    await toGrid(host);
     const cards = [...host.querySelectorAll("[data-testid=house-card]")];
     expect(cards).toHaveLength(2);
     // Size, biggest first.
@@ -111,6 +126,7 @@ describe("house church grid", () => {
   it("filters by campus and needs attention, and sorts by number", async () => {
     const host = mount(<HouseChurchGrid client={client()} />);
     await settle();
+    await toGrid(host);
     const chip = (label: string) =>
       [...host.querySelectorAll("[data-testid=house-filters] button")].find((b) => b.textContent === label) as HTMLButtonElement;
     act(() => chip("Missio JHB").click());
@@ -124,7 +140,7 @@ describe("house church grid", () => {
     expect(left[0]?.textContent).toContain("House 4");
     act(() => chip("Needs attention").click());
     await act(async () => {
-      setValue(host.querySelector("[data-testid=house-filters] select") as HTMLSelectElement, "number");
+      setValue(host.querySelector("[data-testid=house-filters] label:last-of-type select") as HTMLSelectElement, "number");
     });
     await settle();
     expect(host.querySelector("[data-testid=house-card]")?.getAttribute("href")).toBe("/missio/house-churches/house-2");
@@ -145,6 +161,7 @@ describe("house church grid", () => {
   it("hides review when the pastor cannot write", async () => {
     const host = mount(<HouseChurchGrid client={client({ listHouses: async () => ({ houses: [oak], canWrite: false }) })} />);
     await settle();
+    await toGrid(host);
     expect(host.textContent).not.toContain("Review names");
     expect(host.querySelector("[data-testid=house-card]")).toBeTruthy();
   });
@@ -176,7 +193,53 @@ describe("house church grid", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(host.textContent).toContain("Oak Table");
+    expect(host.textContent).toContain("Thandi Zulu");
+  });
+
+  it("opens on the map once houses have coaches: coach, then houses, then people", async () => {
+    const host = mount(
+      <HouseChurchGrid
+        client={client({
+          getHouse: async () => ({
+            house: {
+              ...oak,
+              leaderNotes: null,
+              members: [
+                { ...oak.leaders[0]!, role: "leader", startedAt: "2026-01-01" },
+                { contactId: "c-mia", displayName: "Mia Grobler", firstName: "Mia", lastName: "Grobler", role: "member", startedAt: "2026-02-01" },
+              ],
+            },
+            canWrite: true,
+          }),
+        })}
+      />
+    );
+    await settle();
+    const map = host.querySelector("[data-testid=house-map]") as HTMLElement;
+    expect(map).toBeTruthy();
+    const coaches = [...map.querySelectorAll("[aria-label=Coaches] button")];
+    expect(coaches.map((b) => b.textContent)).toEqual([
+      expect.stringContaining("Thandi Zulu"),
+      expect.stringContaining("No coach yet"),
+    ]);
+    expect(map.textContent).toContain("Choose a coach to see their houses.");
+    act(() => (coaches[0] as HTMLButtonElement).click());
+    await settle();
+    expect(coaches[0]?.getAttribute("aria-expanded")).toBe("true");
+    const house = [...map.querySelectorAll("[aria-label='Houses coached by Thandi Zulu'] button")];
+    expect(house).toHaveLength(1);
+    expect(house[0]?.textContent).toContain("Oak Table");
+    act(() => (house[0] as HTMLButtonElement).click());
+    await settle();
+    const tray = host.querySelector("[data-testid=house-tray]") as HTMLElement;
+    expect(tray.textContent).toContain("coached by Thandi Zulu");
+    expect(tray.textContent).toContain("Mia Grobler");
+    expect(tray.querySelector("a[href='/missio/house-churches/house-2']")?.textContent).toBe("Open house");
+    // Opening the other coach closes this branch.
+    act(() => (coaches[1] as HTMLButtonElement).click());
+    await settle();
+    expect(host.querySelector("[data-testid=house-tray]")).toBeNull();
+    expect(map.textContent).toContain("House 4");
   });
 
   it("shows the pastors-only state on 403 and the sign-in state on 401", async () => {

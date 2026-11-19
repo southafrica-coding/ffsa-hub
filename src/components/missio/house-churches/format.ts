@@ -99,20 +99,24 @@ export const MULTIPLY_AT = 18;
 /** The size a house is drawn against. */
 export const HOUSE_SEATS = 24;
 
-export type HouseSignal = "ready" | "no_leader" | "no_co_leader";
+export type HouseSignal = "ready" | "no_leader" | "no_co_leader" | "no_coach";
 
 export const SIGNAL_LABEL: Record<HouseSignal, string> = {
   ready: "Ready to multiply",
   no_leader: "No leader",
   no_co_leader: "No co-leader",
+  no_coach: "No coach yet",
 };
 
 /** The signals a house shows on the grid and its page. Same rules as Home. */
-export function houseSignals(house: Pick<HouseSummary, "memberCount" | "leaders" | "coLeaders">): HouseSignal[] {
+export function houseSignals(
+  house: Pick<HouseSummary, "memberCount" | "leaders" | "coLeaders"> & { coach?: HouseSummary["coach"] }
+): HouseSignal[] {
   const signals: HouseSignal[] = [];
   if (house.memberCount >= MULTIPLY_AT && house.coLeaders.length > 0) signals.push("ready");
   if (house.memberCount > 0 && house.leaders.length === 0) signals.push("no_leader");
   if (house.memberCount > 0 && house.coLeaders.length === 0) signals.push("no_co_leader");
+  if (house.memberCount > 0 && house.coach === null) signals.push("no_coach");
   return signals;
 }
 

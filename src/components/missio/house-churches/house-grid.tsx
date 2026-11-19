@@ -17,11 +17,13 @@ import {
   shortDay,
 } from "./format";
 import { useMissioLoad } from "./load";
+import { HouseMap } from "./house-map";
 import { HouseStatus } from "./status";
 import type { HouseCampus, HouseSummary } from "./types";
 import styles from "./house-churches.module.css";
 
 type Sort = "size" | "number";
+type View = "map" | "grid";
 type CampusFilter = "" | HouseCampus;
 
 /** Grid view (board M4d). Sorted biggest first, so houses ready to multiply lead. */
@@ -32,6 +34,8 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
   const [campus, setCampus] = useState<CampusFilter>("");
   const [attention, setAttention] = useState(false);
   const [sort, setSort] = useState<Sort>("size");
+  const [coach, setCoach] = useState("");
+  const [view, setView] = useState<View | null>(null);
 
   useEffect(() => {
     if (!canWrite) {
@@ -55,14 +59,24 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
   const houses = useMemo(() => (state.phase === "ready" ? state.data.houses : []), [state]);
   const total = houses.reduce((sum, house) => sum + Math.max(0, house.memberCount), 0);
   const campuses = useMemo(() => [...new Set(houses.map((house) => house.campus))].sort(), [houses]);
+  const coaches = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const house of houses) if (house.coach) seen.set(house.coach.contactId, house.coach.displayName);
+    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1], "en"));
+  }, [houses]);
+  // The map is the default once any house has a coach; before that every
+  // house would sit under "No coach yet", so the grid is clearer.
+  const shownView: View = view ?? (coaches.length > 0 ? "map" : "grid");
   const shown = useMemo(() => {
     const list = houses.filter((house) => {
       if (campus && house.campus !== campus) return false;
       if (attention && houseSignals(house).length === 0) return false;
+      if (coach === "none" && house.coach) return false;
+      if (coach && coach !== "none" && house.coach?.contactId !== coach) return false;
       return true;
     });
     return list.sort((a, b) => (sort === "size" ? b.memberCount - a.memberCount || a.number - b.number : a.number - b.number));
-  }, [houses, campus, attention, sort]);
+  }, [houses, campus, attention, sort, coach]);
 
   return (
     <div className={`${content.page} ${styles.root}`}>
@@ -72,6 +86,7 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
           {state.phase === "ready" && houses.length > 0 ? (
             <p className={`${shell.lede} ${content.lede}`} data-testid="house-totals">
               {houses.length === 1 ? "1 house" : `${houses.length} houses`} · {total === 1 ? "1 member" : `${total} members`}
+              {coaches.length > 0 ? ` · ${coaches.length === 1 ? "1 coach" : `${coaches.length} coaches`}` : ""}
             </p>
           ) : null}
         </div>
@@ -97,6 +112,21 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
       ) : null}
 
       {state.phase === "ready" && houses.length > 0 ? (
+        <div className={styles.viewSwitch} role="group" aria-label="View">
+          <FilterChip on={shownView === "map"} onClick={() => setView("map")}>
+            Map
+          </FilterChip>
+          <FilterChip on={shownView === "grid"} onClick={() => setView("grid")}>
+            Grid
+          </FilterChip>
+        </div>
+      ) : null}
+
+      {state.phase === "ready" && houses.length > 0 && shownView === "map" ? (
+        <HouseMap houses={houses} client={client} />
+      ) : null}
+
+      {state.phase === "ready" && houses.length > 0 && shownView === "grid" ? (
         <>
           <div className={styles.toolbar} data-testid="house-filters">
             <div className={styles.toggles} role="group" aria-label="Campus">
@@ -112,6 +142,20 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
                 Needs attention
               </FilterChip>
             </div>
+            {coaches.length > 0 ? (
+              <label className={styles.sort}>
+                Coach
+                <select value={coach} onChange={(event) => setCoach(event.target.value)}>
+                  <option value="">Any coach</option>
+                  {coaches.map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                  <option value="none">No coach yet</option>
+                </select>
+              </label>
+            ) : null}
             <label className={styles.sort}>
               Sort
               <select value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
@@ -196,6 +240,7 @@ function HouseCard({ house }: { house: HouseSummary }) {
         <span className={styles.leadingName}>{leadingLine(house)}</span>
       </div>
       {house.location?.trim() ? <p className={styles.place}>{house.location.trim()}</p> : null}
+      {house.coach ? <p className={styles.place}>Coached by {house.coach.displayName}</p> : null}
       {signals.length > 0 ? (
         <div className={styles.signals}>
           {signals.map((signal) => (

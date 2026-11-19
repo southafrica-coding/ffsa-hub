@@ -51,6 +51,8 @@ function house(number: number, memberCount: number, leaders = 1, coLeaders = 1):
     memberCount,
     leaders: Array.from({ length: leaders }, (_, n) => person(n)),
     coLeaders: Array.from({ length: coLeaders }, (_, n) => person(10 + n)),
+    coach: null,
+    coachSince: null,
   };
 }
 

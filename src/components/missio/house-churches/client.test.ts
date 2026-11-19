@@ -21,6 +21,8 @@ const house: HouseSummary = {
   memberCount: 6,
   leaders: [amina],
   coLeaders: [],
+  coach: null,
+  coachSince: null,
 };
 
 const detail: HouseDetail = {

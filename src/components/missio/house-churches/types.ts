@@ -42,6 +42,14 @@ export interface HouseSummary {
   memberCount: number;
   leaders: PersonRef[];
   coLeaders: PersonRef[];
+  /** Pastoral covering for the leaders. Null when no coach is set. */
+  coach: PersonRef | null;
+  coachSince: string | null;
+}
+
+export interface CoachResponse {
+  coach: PersonRef | null;
+  coachSince: string | null;
 }
 
 export interface HouseMember extends PersonRef {

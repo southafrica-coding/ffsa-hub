@@ -38,6 +38,7 @@ export type HouseOverview = {
   readyToMultiply: number;
   noCoLeader: number;
   noLeader: number;
+  noCoach: number;
   bars: { id: string; number: number; size: number; ready: boolean }[];
 };
 
@@ -48,15 +49,17 @@ export function houseOverview(houses: HouseSummary[]): HouseOverview {
   let readyToMultiply = 0;
   let noCoLeader = 0;
   let noLeader = 0;
+  let noCoach = 0;
   const bars = sorted.map((house) => {
     people += house.memberCount;
     const ready = house.memberCount >= MULTIPLY_AT && house.coLeaders.length > 0;
     if (ready) readyToMultiply += 1;
     if (house.memberCount > 0 && house.coLeaders.length === 0) noCoLeader += 1;
     if (house.memberCount > 0 && house.leaders.length === 0) noLeader += 1;
+    if (house.memberCount > 0 && !house.coach) noCoach += 1;
     return { id: house.id, number: house.number, size: house.memberCount, ready };
   });
-  return { houses: sorted.length, people, readyToMultiply, noCoLeader, noLeader, bars };
+  return { houses: sorted.length, people, readyToMultiply, noCoLeader, noLeader, noCoach, bars };
 }
 
 type Load<T> = { state: "loading" } | { state: "ready"; data: T } | { state: "error" };
@@ -209,6 +212,9 @@ export function MissioHome({
                 ) : null}
                 {overview.noLeader > 0 ? (
                   <span className={`${content.chip} ${content.chipGold}`}>{overview.noLeader} with no leader</span>
+                ) : null}
+                {overview.noCoach > 0 ? (
+                  <span className={`${content.chip} ${content.chipGold}`}>{overview.noCoach} with no coach</span>
                 ) : null}
               </div>
               {toReview > 0 ? (

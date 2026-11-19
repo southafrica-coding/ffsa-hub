@@ -400,6 +400,7 @@ const { PATCH: patchMember, DELETE: deleteMember } = await import("./[id]/member
 const { GET: listReview } = await import("./import-review/route");
 const { POST: resolveReview } = await import("./import-review/[itemId]/resolve/route");
 const { GET: searchContacts } = await import("./import-review/contacts/route");
+const { PUT: putCoach } = await import("./[id]/coach/route");
 
 function reset() {
   state.userId = PASTOR;
@@ -688,6 +689,8 @@ describe("GET /api/missio/house-churches", () => {
           orgPersonId: "person-grace",
         },
       ],
+      coach: null,
+      coachSince: null,
     });
     expect(body.houses[0].leaderNotes).toBeUndefined();
     expect(body.houses[1].memberCount).toBe(1);
@@ -1388,6 +1391,42 @@ describe("import review", () => {
     expect(state.tables.house_church_members).toHaveLength(2);
     state.tables.missio_import_review[0].status = "skipped";
     expect((await resolve(REVIEW, { action: "link", contactId: OUTSIDE, also: true })).status).toBe(409);
+  });
+
+  it("sets, changes and clears a house's coach, keeping the history", async () => {
+    addHouse({ id: HOUSE_1, number: 3, campus: "potch" });
+    addContact({ id: ADA, first: "Ada", last: "Coach", inOrg: true, personId: "person-ada" });
+    addContact({ id: OUTSIDE, first: "Not", last: "Missio", inOrg: false });
+    state.tables.missio_coach_assignments = [];
+    const put = (body: unknown) =>
+      putCoach(
+        new Request(`http://localhost/api/missio/house-churches/${HOUSE_1}/coach`, { method: "PUT", body: JSON.stringify(body) }),
+        { params: Promise.resolve({ id: HOUSE_1 }) }
+      );
+
+    expect((await put({ contactId: OUTSIDE })).status).toBe(400);
+    expect(state.tables.missio_coach_assignments).toHaveLength(0);
+
+    const set = await put({ contactId: ADA });
+    expect(set.status).toBe(200);
+    expect((await set.json()).coach).toMatchObject({ contactId: ADA, displayName: "Ada Coach" });
+    expect(state.tables.missio_coach_assignments).toHaveLength(1);
+    expect(state.writes.find((w) => w.table === "missio_coach_assignments")?.client).toBe("user");
+
+    const list = await (await listHouses(new Request("http://localhost/api/missio/house-churches"))).json();
+    expect(list.houses[0].coach).toMatchObject({ contactId: ADA });
+    expect((await put({ contactId: ADA })).status).toBe(200);
+    expect(state.tables.missio_coach_assignments).toHaveLength(1);
+
+    const cleared = await put({ contactId: null });
+    expect((await cleared.json()).coach).toBeNull();
+    expect(state.tables.missio_coach_assignments).toHaveLength(1);
+    expect(state.tables.missio_coach_assignments[0].ended_at).toEqual(expect.any(String));
+    expect(JSON.stringify(state.tables.audit_logs)).toContain("missio.house_coach_set");
+
+    state.userId = LEADER;
+    expect((await put({ contactId: ADA })).status).toBe(403);
+    state.userId = PASTOR;
   });
 
   it("adds a contact who is not in Missio yet, then links them", async () => {

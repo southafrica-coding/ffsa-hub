@@ -54,6 +54,8 @@ const house: HouseDetail = {
   memberCount: 3,
   leaders: [leader],
   coLeaders: [coleader],
+  coach: null,
+  coachSince: null,
   leaderNotes: "Soup is on Theo this month.",
   members: [member, coleader, leader],
 };
@@ -61,6 +63,7 @@ const house: HouseDetail = {
 function client(overrides: Partial<HouseChurchesClient> = {}): HouseChurchesClient {
   return {
     searchReviewContacts: async () => ({ matches: [] }),
+    setCoach: async () => ({ coach: null, coachSince: null }),
     listHouses: async () => ({ houses: [], canWrite: true }),
     getHouse: async () => ({ house, canWrite: true }),
     addMember: async () => ({ member }),
@@ -165,6 +168,52 @@ describe("house detail", () => {
       await Promise.resolve();
     });
     expect(roles).toEqual(["c-theo:member"]);
+  });
+
+  it("chooses a coach from Missio people, then can remove them", async () => {
+    const calls: Array<string | null> = [];
+    const people: Pick<MissioClient, "listPeople"> = {
+      listPeople: async () => ({
+        rows: [{ id: "p-thandi", contactId: "c-thandi", name: "Thandi Zulu", campus: "potch", status: "active", joinedAt: null, currentStage: null }],
+        total: 1,
+      }),
+    };
+    const host = mount(
+      <HouseDetailView
+        houseId="house-2"
+        client={client({
+          setCoach: async (_houseId, contactId) => {
+            calls.push(contactId);
+            return contactId
+              ? { coach: { contactId, displayName: "Thandi Zulu", firstName: "Thandi", lastName: "Zulu", orgPersonId: "p-thandi" }, coachSince: "2026-11-19" }
+              : { coach: null, coachSince: null };
+          },
+        })}
+        people={people}
+      />
+    );
+    await settle();
+    const row = host.querySelector("[data-testid=house-coach]") as HTMLElement;
+    expect(row.textContent).toContain("No coach yet");
+    act(() => (row.querySelector("#house-coach-change") as HTMLButtonElement).click());
+    await settle();
+    const input = row.querySelector("[data-testid=people-picker] input") as HTMLInputElement;
+    setValue(input, "Thandi");
+    await settle();
+    (row.querySelector("[data-testid=people-picker]") as HTMLFormElement).requestSubmit();
+    await settle();
+    act(() => (row.querySelector("[data-testid=people-results] button") as HTMLButtonElement).click());
+    await settle();
+    expect(calls).toEqual(["c-thandi"]);
+    expect(row.textContent).toContain("Thandi Zulu");
+    expect(row.textContent).toContain("Coach · since");
+    act(() => (row.querySelector("#house-coach-change") as HTMLButtonElement).click());
+    await settle();
+    const remove = [...row.querySelectorAll("button")].find((b) => b.textContent === "Remove coach") as HTMLButtonElement;
+    act(() => remove.click());
+    await settle();
+    expect(calls).toEqual(["c-thandi", null]);
+    expect(row.textContent).toContain("No coach yet");
   });
 
   it("adds a person from the people search when writing is allowed", async () => {

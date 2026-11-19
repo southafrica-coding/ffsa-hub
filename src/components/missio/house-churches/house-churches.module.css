@@ -841,3 +841,36 @@
   white-space: nowrap;
   margin-top: 8px;
 }
+
+.viewSwitch {
+  display: inline-flex;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.coachLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.coachWho {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.coachWho > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.coachPick {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}

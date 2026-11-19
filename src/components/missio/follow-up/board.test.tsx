@@ -79,6 +79,8 @@ const house: HouseSummary = {
   memberCount: 6,
   leaders: [],
   coLeaders: [],
+  coach: null,
+  coachSince: null,
 };
 
 function pages(people: FollowUpItem[]): Record<FollowUpStage, FollowUpItem[]> {
