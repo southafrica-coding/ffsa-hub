@@ -1,23 +1,25 @@
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { Building2, Car, Speaker } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View } from "react-native";
+import { Building2, Car, Music } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useSession } from "@/auth/session-provider";
-import { Button, Masthead, Screen, Text } from "@/components";
-import { ErrorState, Skeleton } from "@/features/finance/components/ui";
-import { ListRow, StateMessage, openWebPage, useMe } from "@/features/shell";
+import { Button, EmptyState, LargeTitle, ListGroup, ListRow, SkeletonList, Text } from "@/components";
+import { openWebPage, useMe } from "@/features/shell";
 import { announce } from "@/lib/a11y";
+import { hairline, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { bookingsAccess } from "../access";
 import { listPeople, submitSpace, submitVehicle, userMessage } from "../api";
 import { bookingsFetch } from "../client";
-import { FormError } from "../components/ui";
+import { Bleed, FormError, LoadFailed } from "../components/ui";
 import { loadSpaceOptions, loadVehicles, type SpaceOptions } from "../data";
 import { back, chooseKind, next, progress, type FlowState, type RequestKind } from "../flow";
 import { EMPTY_SPACE, EMPTY_VEHICLE } from "../logic";
+import { goBackTo } from "../nav";
 import { strings } from "../strings";
 import type { Conflict, Person, Vehicle } from "../types";
 
@@ -47,6 +49,52 @@ function useLoad<T>(fn: () => Promise<T>, enabled: boolean): Load<T> {
 }
 
 const st = strings.steps;
+
+/** One bar per step, filled up to the current one. Decoration: the eyebrow says "Step 3 of 5". */
+function StepProgress({ index, total }: { index: number; total: number }) {
+  const { colors } = useTheme();
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID="step-progress" style={{ flexDirection: "row", gap: 6, marginBottom: space.xs }}>
+      {Array.from({ length: total }, (_, i) => (
+        <View key={i} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i < index ? colors.text : colors.rule }} />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * The full-height form page (frames 7.2, 7.3, 7.7–7.9): Cancel and the step
+ * bars on top, the step in a scroll view, Back / Next pinned under it. The
+ * tab bar is hidden on this route.
+ */
+function FormPage({ onCancel, progress: bars, footer, step, children }: { onCancel: () => void; progress?: ReactNode; footer?: ReactNode; step: string; children: ReactNode }) {
+  const { colors } = useTheme();
+  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
+  // A new step starts at its top.
+  useEffect(() => {
+    scroll.current?.scrollTo({ y: 0, animated: false });
+  }, [step]);
+  return (
+    <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: colors.bg }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={{ paddingHorizontal: space.gutter }}>
+          <View style={{ minHeight: touch.floor, flexDirection: "row", alignItems: "center", marginHorizontal: -space.sm }}>
+            <Button label={strings.common.cancel} variant="ghost" onPress={onCancel} testID="cancel-request" />
+          </View>
+          {bars}
+        </View>
+        <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: space.xl, gap: space.lg }}>
+          {children}
+        </ScrollView>
+        {footer ? (
+          <View style={{ flexDirection: "row", gap: space.sm, paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: space.md, borderTopWidth: hairline, borderTopColor: colors.rule, backgroundColor: colors.bg }}>
+            {footer}
+          </View>
+        ) : null}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
 
 // New request: a step at a time. Space: type → space → when → details →
 // review. Vehicle: type → dates → vehicle → drivers → details → review.
@@ -91,9 +139,11 @@ export default function NewRequestScreen() {
   };
 
   // A new step replaces the screen's content under the same Next button, so
-  // screen-reader focus doesn't move: say where the person is now.
+  // screen-reader focus doesn't move: say where the person is now. Until a
+  // kind is chosen there are no steps to count, so the eyebrow says what this is.
   const stepNow = progress(flow);
-  const stepSpoken = strings.a11y.stepChanged(st.of(stepNow.index, stepNow.total), st.titles[flow.step]);
+  const eyebrow = flow.kind ? st.of(stepNow.index, stepNow.total) : strings.home.newRequest;
+  const stepSpoken = strings.a11y.stepChanged(eyebrow, st.titles[flow.step]);
   const lastStep = useRef(flow.step);
   useEffect(() => {
     if (flow.step === lastStep.current) return;
@@ -101,11 +151,15 @@ export default function NewRequestScreen() {
     announce(stepSpoken);
   }, [flow.step, stepSpoken]);
 
+  const close = () => goBackTo(router, "/bookings");
+
   if (me.status === "loading") {
     return (
-      <Screen edges={[]}>
-        <Skeleton label={strings.common.loading} />
-      </Screen>
+      <FormPage onCancel={close} step="loading">
+        <Bleed>
+          <SkeletonList label={strings.common.loading} count={3} inset={false} />
+        </Bleed>
+      </FormPage>
     );
   }
   const canSpace = access.spaces.request;
@@ -133,7 +187,7 @@ export default function NewRequestScreen() {
     const prev = back(flow);
     setError(null);
     if (prev) setFlow(prev);
-    else router.back();
+    else close();
   }
 
   function pick(kind: RequestKind) {
@@ -183,26 +237,61 @@ export default function NewRequestScreen() {
   function body() {
     switch (flow.step) {
       case "type":
-        if (!canSpace && !canVehicle && !access.equipment.view) return <StateMessage testID="no-request" title={st.titles.type} body={strings.type.noneAllowed} />;
+        if (!canSpace && !canVehicle && !access.equipment.view) {
+          return (
+            <Bleed>
+              <EmptyState testID="no-request" title={st.titles.type} body={strings.type.noneAllowed} />
+            </Bleed>
+          );
+        }
+        // Rows only for what this account may ask for; equipment opens the website.
         return (
-          <View>
-            {canSpace ? <ListRow icon={Building2} title={strings.type.space} subtitle={strings.type.spaceSub} onPress={() => pick("space")} testID="type-space" /> : null}
-            {canVehicle ? <ListRow icon={Car} title={strings.type.vehicle} subtitle={strings.type.vehicleSub} onPress={() => pick("vehicle")} testID="type-vehicle" /> : null}
-            {access.equipment.view ? (
-              <ListRow icon={Speaker} title={strings.type.equipment} subtitle={strings.type.equipmentNotYet} trailing="web" onPress={() => void openWebPage("/bookings/equipment", colors)} testID="type-equipment" />
-            ) : null}
+          <>
+            <Bleed>
+              <ListGroup inset={false}>
+                {canSpace ? <ListRow icon={Building2} title={strings.type.space} subtitle={strings.type.spaceSub} onPress={() => pick("space")} testID="type-space" /> : null}
+                {canVehicle ? <ListRow icon={Car} title={strings.type.vehicle} subtitle={strings.type.vehicleSub} onPress={() => pick("vehicle")} testID="type-vehicle" /> : null}
+                {access.equipment.view ? (
+                  <ListRow icon={Music} title={strings.type.equipment} subtitle={strings.type.equipmentNotYet} trailing="web" onPress={() => void openWebPage("/bookings/equipment", colors)} testID="type-equipment" />
+                ) : null}
+              </ListGroup>
+            </Bleed>
             {!canSpace && !canVehicle ? <Text tone="secondary">{strings.type.noneAllowed}</Text> : null}
-          </View>
+          </>
         );
       case "space":
-        if (spaceOptions.status === "loading") return <Skeleton label={strings.space.loading} />;
-        if (spaceOptions.status === "error" || !spaceOptions.data) return <ErrorState title={st.titles.space} message={spaceOptions.message ?? strings.common.generic} onRetry={spaceOptions.retry} />;
+        if (spaceOptions.status === "loading") {
+          return (
+            <Bleed>
+              <SkeletonList label={strings.space.loading} count={3} inset={false} />
+            </Bleed>
+          );
+        }
+        if (spaceOptions.status === "error" || !spaceOptions.data) {
+          return (
+            <Bleed>
+              <LoadFailed title={st.titles.space} message={spaceOptions.message ?? strings.common.generic} onRetry={spaceOptions.retry} />
+            </Bleed>
+          );
+        }
         return <SpaceChoice options={spaceOptions.data} f={flow.space} set={setSpace} canApprove={access.spaces.approve} />;
       case "when":
         return isSpace ? <SpaceWhen f={flow.space} set={setSpace} check={effectiveCheck} /> : <VehicleWhen f={flow.vehicle} set={setVehicle} />;
       case "vehicle":
-        if (fleet.status === "loading") return <Skeleton label={strings.vehicle.loading} />;
-        if (fleet.status === "error" || !fleet.data) return <ErrorState title={st.titles.vehicle} message={fleet.message ?? strings.common.generic} onRetry={fleet.retry} />;
+        if (fleet.status === "loading") {
+          return (
+            <Bleed>
+              <SkeletonList label={strings.vehicle.loading} count={3} inset={false} />
+            </Bleed>
+          );
+        }
+        if (fleet.status === "error" || !fleet.data) {
+          return (
+            <Bleed>
+              <LoadFailed title={st.titles.vehicle} message={fleet.message ?? strings.common.generic} onRetry={fleet.retry} />
+            </Bleed>
+          );
+        }
         return <VehicleChoice fleet={fleet.data} f={flow.vehicle} set={setVehicle} check={availability} />;
       case "drivers":
         return <VehicleDrivers people={people.data ?? []} peopleState={people.status} meId={userId} f={flow.vehicle} set={setVehicle} onRetryPeople={people.retry} />;
@@ -214,23 +303,31 @@ export default function NewRequestScreen() {
   }
 
   const onReview = flow.step === "review";
+  // A blocked time can't go further: Next is off, with the reason under the clash.
+  const whenBlocked = isSpace && flow.step === "when" && spaceBlocked;
   return (
-    <Screen keyboard edges={["bottom"]}>
+    <FormPage
+      onCancel={close}
+      step={flow.step}
+      progress={flow.kind ? <StepProgress index={index} total={total} /> : null}
+      footer={
+        flow.step !== "type" ? (
+          <>
+            <Button label={st.back} variant="secondary" onPress={goBack} style={{ flex: 1 }} testID="step-back" />
+            {onReview ? (
+              <Button label={sending ? st.sending : submitLabel} loading={sending} disabled={spaceBlocked} onPress={() => void send()} style={{ flex: 2 }} testID="submit" />
+            ) : (
+              <Button label={flow.step === "details" ? st.review : st.next} disabled={whenBlocked} onPress={goNext} style={{ flex: 2 }} testID="step-next" />
+            )}
+          </>
+        ) : null
+      }
+    >
       <View accessible accessibilityRole="header" accessibilityLabel={stepSpoken}>
-        <Masthead context={st.of(index, total)} title={st.titles[flow.step]} />
+        <LargeTitle eyebrow={eyebrow} title={st.titles[flow.step]} style={{ marginBottom: -space.lg }} />
       </View>
       {body()}
-      <FormError message={error} />
-      {flow.step !== "type" ? (
-        <View style={{ flexDirection: "row", gap: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.rule }}>
-          <Button label={st.back} variant="secondary" onPress={goBack} style={{ flex: 1 }} testID="step-back" />
-          {onReview ? (
-            <Button label={sending ? st.sending : submitLabel} loading={sending} disabled={spaceBlocked} onPress={() => void send()} style={{ flex: 2 }} testID="submit" />
-          ) : (
-            <Button label={flow.step === "details" ? st.review : st.next} onPress={goNext} style={{ flex: 2 }} testID="step-next" />
-          )}
-        </View>
-      ) : null}
-    </Screen>
+      <FormError message={error ?? (whenBlocked ? strings.clash.changeToContinue : null)} />
+    </FormPage>
   );
 }
