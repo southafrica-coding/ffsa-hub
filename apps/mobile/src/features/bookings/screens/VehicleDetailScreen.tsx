@@ -1,16 +1,16 @@
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { ClipboardCheck, PenLine } from "lucide-react-native";
+import { Check, PenLine } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { Alert, RefreshControl, ScrollView, View } from "react-native";
+import { Alert, RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, Masthead, Screen, Text } from "@/components";
+import { Banner, Button, EmptyState, LargeTitleScrollView, ListGroup, ListRow, SkeletonList, Text, type BackAction } from "@/components";
 import { formatSavedAt } from "@/features/finance/cache";
-import { ErrorState, SectionBar, Skeleton, StaleNote } from "@/features/finance/components/ui";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { ListRow, StateMessage, openWebPage, useMe } from "@/features/shell";
+import { openWebPage, useMe } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
+import { hairline, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { bookingsAccess } from "../access";
@@ -18,9 +18,10 @@ import { cancelVehicle, decideVehicle, loadErrorMessage, userMessage } from "../
 import { bookingsFetch } from "../client";
 import { DecisionSheet } from "../components/DecisionSheet";
 import { QueueList } from "../components/QueueList";
-import { Field, StatusLine, useAnnounceOnIOS } from "../components/ui";
+import { Bleed, Field, FieldList, LoadFailed, PushedPage, SectionTitle, StaleNote, StatusLine, useAnnounceOnIOS } from "../components/ui";
 import { loadVehicleBooking, type VehicleDetail } from "../data";
 import { canCancel, dateRangeLabel, dayCount, purposeLabel, vehicleNames, type InspectionKind } from "../logic";
+import { goBackTo } from "../nav";
 import { useBookingsOutbox } from "../outbox/provider";
 import { forBooking, formQueued } from "../outbox/state";
 import { strings } from "../strings";
@@ -43,6 +44,10 @@ export function checkState(
   return { recorded, canRecord: opts.mayInspect && live && !recorded && !queued };
 }
 
+// A vehicle booking (frames 7.4, 7.10, 7.14): status, the details, the
+// drivers with their driving-test status, Approve / Decline for approvers,
+// then the collection and return checks with whatever is still saved on this
+// phone, and Cancel.
 export default function VehicleDetailScreen({ id }: { id: string }) {
   const router = useRouter();
   const { colors } = useTheme();
@@ -68,25 +73,27 @@ export default function VehicleDetailScreen({ id }: { id: string }) {
     errorMessage: loadErrorMessage,
   });
 
+  const back: BackAction = { label: strings.common.bookings, onPress: () => goBackTo(router, "/bookings") };
+
   if (state.status === "loading") {
     return (
-      <Screen edges={[]}>
-        <Skeleton label={d.loading} />
-      </Screen>
+      <PushedPage back={back}>
+        <SkeletonList label={d.loading} count={5} inset={false} />
+      </PushedPage>
     );
   }
   if (state.status === "error") {
     return (
-      <Screen edges={[]}>
-        <ErrorState title={d.vehicleContext} message={state.message} onRetry={retry} />
-      </Screen>
+      <PushedPage back={back}>
+        <LoadFailed title={d.vehicleContext} message={state.message} onRetry={retry} />
+      </PushedPage>
     );
   }
   if (!state.data) {
     return (
-      <Screen edges={[]}>
-        <StateMessage testID="not-found" title={d.vehicleContext} body={strings.common.notFound} />
-      </Screen>
+      <PushedPage back={back}>
+        <EmptyState testID="not-found" title={d.vehicleContext} body={strings.common.notFound} />
+      </PushedPage>
     );
   }
 
@@ -136,40 +143,50 @@ export default function VehicleDetailScreen({ id }: { id: string }) {
     ]);
   }
 
+  const showChecks = mayInspect && (b.status === "approved" || b.status === "completed");
+
   return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
+    <>
+      <LargeTitleScrollView
+        back={back}
+        eyebrow={d.vehicleContext}
+        title={b.booking_name}
+        gap={0}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
       >
-        <Masthead context={d.vehicleContext} title={b.booking_name} />
-        <StatusLine status={b.status} />
-        {state.refreshError && state.staleSince !== null ? <StaleNote message={strings.common.refreshFailed(formatSavedAt(state.staleSince))} onRetry={retry} /> : null}
-        {done ? (
-          <Banner tone="positive" testID="done">
-            {done}
-          </Banner>
-        ) : null}
+        <View style={{ flexDirection: "row", marginTop: -space.sm }}>
+          <StatusLine status={b.status} />
+        </View>
+        <Bleed style={{ gap: space.md, marginTop: space.md }}>
+          {state.refreshError && state.staleSince !== null ? <StaleNote message={strings.common.refreshFailed(formatSavedAt(state.staleSince))} onRetry={retry} /> : null}
+          {done ? (
+            <Banner tone="positive" testID="done">
+              {done}
+            </Banner>
+          ) : null}
+        </Bleed>
 
-        <View>
-          <Field label={d.dates} value={`${dateRangeLabel(b.checkout_date, b.return_date)} · ${d.days(days)}`} />
-          <Field label={d.vehicles} value={vehicleNames(b)} />
-          <Field label={d.purpose} value={b.purpose === "other" && b.purpose_note ? b.purpose_note : purposeLabel(b.purpose)} />
-          <Field label={d.destination} value={b.destination} />
-          <Field label={d.pointPerson} value={b.point_person} />
-          <Field label={d.requestedBy} value={b.requester_name} />
-          <Field label={d.whatsapp} value={b.requester_phone} />
-          <Field label={d.people} value={b.num_people != null ? String(b.num_people) : null} />
-          <Field label={d.notes} value={b.notes} />
-          <Field label={d.decisionNote} value={b.decision_note} />
+        <View style={{ marginTop: space.md }}>
+          <FieldList>
+            <Field label={d.dates} value={`${dateRangeLabel(b.checkout_date, b.return_date)} · ${d.days(days)}`} />
+            <Field label={d.vehicles} value={vehicleNames(b)} />
+            <Field label={d.purpose} value={b.purpose === "other" && b.purpose_note ? b.purpose_note : purposeLabel(b.purpose)} />
+            <Field label={d.destination} value={b.destination} />
+            <Field label={d.pointPerson} value={b.point_person} />
+            <Field label={d.requestedBy} value={b.requester_name} />
+            <Field label={d.whatsapp} value={b.requester_phone} />
+            <Field label={d.people} value={b.num_people != null ? String(b.num_people) : null} />
+            <Field label={d.notes} value={b.notes} />
+            <Field label={d.decisionNote} value={b.decision_note} />
+          </FieldList>
         </View>
 
         <View>
-          <SectionBar title={d.drivers} meta={String(b.drivers.length)} />
+          <SectionTitle title={d.drivers} meta={String(b.drivers.length)} />
           {b.drivers.length === 0 ? <Text tone="secondary">{d.noDrivers}</Text> : null}
-          {b.drivers.map((dr) => (
-            <View key={dr.id} accessible style={{ paddingVertical: 10, gap: 2, borderBottomWidth: 1, borderBottomColor: colors.rule }}>
-              <Text variant="bodyStrong">{dr.name}</Text>
+          {b.drivers.map((dr, i) => (
+            <View key={dr.id} accessible style={{ paddingVertical: 10, gap: 2, borderTopWidth: i > 0 ? hairline : 0, borderTopColor: colors.rule }}>
+              <Text variant="rowTitle">{dr.name}</Text>
               <Text variant="caption" tone="secondary">
                 {d.driverTest[dr.driving_test_status]}
               </Text>
@@ -184,27 +201,35 @@ export default function VehicleDetailScreen({ id }: { id: string }) {
         </View>
 
         {canDecide ? (
-          <View style={{ gap: 12 }}>
-            <SectionBar title={d.decisionTitle} />
-            <Text tone="secondary">{strings.decision.licenceHint}</Text>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <Button label={d.approve} onPress={() => setDecision("approved")} style={{ flex: 1 }} testID="approve" />
-              <Button label={d.decline} variant="destructive" onPress={() => setDecision("denied")} style={{ flex: 1 }} testID="decline" />
+          <View>
+            <SectionTitle title={d.decisionTitle} />
+            <View style={{ gap: space.md }}>
+              <Text tone="secondary">{strings.decision.licenceHint}</Text>
+              <View style={{ flexDirection: "row", gap: space.sm }}>
+                <Button label={d.approve} onPress={() => setDecision("approved")} style={{ flex: 1 }} testID="approve" />
+                <Button label={d.decline} variant="danger" onPress={() => setDecision("denied")} style={{ flex: 1 }} testID="decline" />
+              </View>
+              {isManager ? (
+                <Bleed>
+                  <ListGroup inset={false}>
+                    <ListRow title={d.assignOnWeb} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}`, colors)} />
+                  </ListGroup>
+                </Bleed>
+              ) : null}
             </View>
-            {isManager ? <ListRow title={d.assignOnWeb} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}`, colors)} /> : null}
           </View>
         ) : null}
 
-        {mayInspect && (b.status === "approved" || b.status === "completed") ? (
-          <View style={{ gap: 8 }}>
-            <SectionBar title={d.checksTitle} />
+        {showChecks ? (
+          <View>
+            <SectionTitle title={d.checksTitle} />
             {(["collection", "return"] as const).map((kind) => {
               const queued = formQueued(items, b.id, kind, userId);
               const c = checkState(kind, inspections, queued, { status: b.status, mayInspect });
               const label = kind === "collection" ? d.collectionLabel : d.returnLabel;
               return (
-                <View key={kind} style={{ gap: 6, paddingVertical: 6 }} testID={`check-${kind}`}>
-                  <Text variant="bodyStrong" accessibilityRole="header">
+                <View key={kind} style={{ gap: 2, paddingVertical: space.sm, borderTopWidth: hairline, borderTopColor: colors.rule }} testID={`check-${kind}`}>
+                  <Text variant="rowTitle" accessibilityRole="header">
                     {label}
                   </Text>
                   <Text tone="secondary">
@@ -214,31 +239,38 @@ export default function VehicleDetailScreen({ id }: { id: string }) {
                     <Button
                       label={kind === "collection" ? d.recordCollection : d.recordReturn}
                       variant="secondary"
-                      icon={<ClipboardCheck size={18} color={colors.text} />}
+                      icon={<Check size={20} color={colors.text} />}
                       onPress={() => router.push({ pathname: "/bookings/vehicle/[id]/[kind]", params: { id: b.id, kind } })}
+                      style={{ marginTop: space.sm }}
                       testID={`record-${kind}`}
                     />
                   ) : null}
                 </View>
               );
             })}
-            <QueueList items={queue} outbox={outbox} online={online} />
-            <ListRow icon={PenLine} title={d.agreement} subtitle={d.agreementSub} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}/agreement`, colors)} />
+            <Bleed style={{ gap: space.md, marginTop: space.sm }}>
+              <QueueList items={queue} outbox={outbox} online={online} />
+              <ListGroup inset={false}>
+                <ListRow icon={PenLine} title={d.agreement} subtitle={d.agreementSub} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}/agreement`, colors)} />
+              </ListGroup>
+            </Bleed>
           </View>
         ) : null}
 
         {cancellable ? (
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: space.sm, marginTop: showChecks ? space.md : space.xl }}>
             {actionError ? (
-              <Banner tone="danger" testID="action-error">
-                {actionError}
-              </Banner>
+              <Bleed>
+                <Banner tone="error" testID="action-error">
+                  {actionError}
+                </Banner>
+              </Bleed>
             ) : null}
             <Button label={d.cancel} variant="secondary" loading={busy} onPress={confirmCancel} testID="cancel" />
           </View>
         ) : null}
-      </ScrollView>
+      </LargeTitleScrollView>
       <DecisionSheet key={decision ?? "closed"} decision={decision} onClose={() => setDecision(null)} onConfirm={(note) => decide(note)} hint={strings.decision.licenceHint} />
-    </Screen>
+    </>
   );
 }
