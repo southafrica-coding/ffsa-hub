@@ -25,6 +25,7 @@ export type ChildInput = { firstName: string; lastName?: string; birthYear: numb
 export type HouseholdsClient = {
   list(): Promise<Household[]>;
   forPerson(personId: string): Promise<Household | null>;
+  forContact(contactId: string): Promise<Household | null>;
   create(personId: string): Promise<Household>;
   addAdult(householdId: string, personId: string, label?: string): Promise<Household>;
   addChild(householdId: string, child: ChildInput): Promise<Household>;
@@ -42,6 +43,10 @@ export const householdsClient: HouseholdsClient = {
   },
   async forPerson(personId) {
     const body = await call(`/api/missio/people/${encodeURIComponent(personId)}/household`);
+    return (body.household as Household | null) ?? null;
+  },
+  async forContact(contactId) {
+    const body = await call(`${base}?contactId=${encodeURIComponent(contactId)}`);
     return (body.household as Household | null) ?? null;
   },
   async create(personId) {

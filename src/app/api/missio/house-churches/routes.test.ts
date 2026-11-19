@@ -740,6 +740,7 @@ describe("GET /api/missio/house-churches", () => {
       meetingDay: "tuesday",
       location: "Lounge",
       memberCount: 2,
+      kidsCount: 0,
       leaders: [
         {
           contactId: ADA,

@@ -219,6 +219,14 @@ export async function householdForPerson(auth: OrgAccess, personId: string): Pro
   return one(auth, id);
 }
 
+/** The household a contact is an adult in, or null (Follow-up cards know contacts, not people). */
+export async function householdForContact(auth: OrgAccess, contactId: string): Promise<{ ok: true; household: Household | null } | Fail> {
+  const id = await householdOfContact(auth, contactId);
+  if (id !== null && typeof id !== "string") return id;
+  if (!id) return { ok: true, household: null };
+  return one(auth, id);
+}
+
 /** Start a household with this person as its first adult and main contact. */
 export async function createHousehold(auth: OrgAccess, body: unknown): Promise<{ ok: true; household: Household } | Fail> {
   const parsed = z.object({ personId: z.string().uuid() }).strict().safeParse(body);

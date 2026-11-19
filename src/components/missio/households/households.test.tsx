@@ -41,6 +41,7 @@ function stub(over: Partial<HouseholdsClient> = {}): HouseholdsClient {
   return {
     list: async () => [naidoos],
     forPerson: async () => naidoos,
+    forContact: async () => naidoos,
     create: async () => naidoos,
     addAdult: async () => naidoos,
     addChild: async () => naidoos,

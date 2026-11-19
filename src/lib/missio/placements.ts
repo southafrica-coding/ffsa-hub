@@ -173,30 +173,23 @@ async function audit(db: Db, userId: string | null, action: string, id: string, 
   if (logged.error) console.error("[missio] audit failed", logged.error.message ?? "insert failed");
 }
 
-const createSchema = z.object({ contactId: z.string().uuid(), houseId: z.string().uuid() }).strict();
+const createSchema = z
+  .object({ contactId: z.string().uuid(), houseId: z.string().uuid(), household: z.boolean().optional() })
+  .strict();
 
-/** Pastors: place someone in a house. An open placement elsewhere is cancelled (they moved). */
-export async function createPlacement(auth: OrgAccess, body: unknown, now = new Date()): Promise<{ ok: true; placement: PlacementView } | Fail> {
-  const parsed = createSchema.safeParse(body);
-  if (!parsed.success) return fail(400, "invalid_input", "Check the fields and try again.");
-  const { contactId, houseId } = parsed.data;
-  const house = await auth.supabase.from("house_churches").select("id, campus").eq("id", houseId).eq("org_id", auth.orgId).maybeSingle();
-  if (house.error) return fail(500, "server_error", "Something went wrong.");
-  if (!house.data) return fail(404, "not_found", "House not found.");
-  const db = placementAdmin();
+type HouseRef = { id: string; campus: string | null };
 
-  const contact = await db.from("contacts").select("id").eq("id", contactId).maybeSingle();
-  if (contact.error) return fail(500, "server_error", "Something went wrong.");
-  if (!contact.data) return fail(404, "not_found", "Person not found.");
+/** One adult into one house: org_people, close any other open placement, insert with fresh links. */
+async function placeOne(auth: OrgAccess, db: Db, house: HouseRef, contactId: string, now: Date): Promise<Row | Fail | "member"> {
   const member = await db
     .from("house_church_members")
     .select("id")
-    .eq("house_church_id", houseId)
+    .eq("house_church_id", house.id)
     .eq("contact_id", contactId)
     .is("ended_at", null)
     .limit(1);
   if (member.error) return fail(500, "server_error", "Something went wrong.");
-  if ((member.data ?? []).length > 0) return fail(409, "already_member", "They’re already in this house.");
+  if ((member.data ?? []).length > 0) return "member";
 
   // A placed person must be a Missio person, so joining can add the membership.
   const inOrg = await db.from("org_people").select("id").eq("org_id", auth.orgId).eq("contact_id", contactId).maybeSingle();
@@ -204,7 +197,7 @@ export async function createPlacement(auth: OrgAccess, body: unknown, now = new 
   if (!inOrg.data) {
     const added = await db
       .from("org_people")
-      .insert({ org_id: auth.orgId, contact_id: contactId, campus: (house.data as { campus: string }).campus ?? "potch", status: "active", created_by: auth.user.id });
+      .insert({ org_id: auth.orgId, contact_id: contactId, campus: house.campus ?? "potch", status: "active", created_by: auth.user.id });
     if (added.error && added.error.code !== "23505") return fail(500, "server_error", "Something went wrong.");
   }
 
@@ -214,16 +207,6 @@ export async function createPlacement(auth: OrgAccess, body: unknown, now = new 
     await db.from("missio_placements").update({ cancelled_at: now.toISOString() }).eq("id", row.id);
   }
 
-  let secretOk = true;
-  try {
-    requireAvailabilityTokenSecret();
-  } catch {
-    secretOk = false;
-  }
-  if (!secretOk) {
-    console.error("[missio] placement link secret missing");
-    return fail(500, "server_error", "Something went wrong.");
-  }
   const id = crypto.randomUUID();
   const personNonce = randomBytes(32).toString("base64url");
   const leaderNonce = randomBytes(32).toString("base64url");
@@ -232,7 +215,7 @@ export async function createPlacement(auth: OrgAccess, body: unknown, now = new 
     .insert({
       id,
       contact_id: contactId,
-      house_church_id: houseId,
+      house_church_id: house.id,
       placed_by: auth.user.id,
       placed_at: now.toISOString(),
       leader_deadline: deadline(now),
@@ -247,9 +230,76 @@ export async function createPlacement(auth: OrgAccess, body: unknown, now = new 
     console.error("[missio] placement insert failed", inserted.error?.message ?? "no row");
     return fail(500, "server_error", "Something went wrong.");
   }
-  await audit(db, auth.user.id, "missio.placement_created", id, { houseId, contactId });
-  const [view] = await shape(db, [inserted.data as Row], true, now);
-  return { ok: true, placement: withLinks(view!, inserted.data as Row) };
+  await audit(db, auth.user.id, "missio.placement_created", id, { houseId: house.id, contactId });
+  return inserted.data as Row;
+}
+
+/** The other adults in this contact's household (migration 341), and how many children. Empty before 341. */
+async function householdOf(db: Db, contactId: string): Promise<{ others: string[]; kids: number } | null> {
+  const mine = await db.from("missio_household_members").select("household_id").eq("contact_id", contactId).maybeSingle();
+  if (mine.error || !mine.data) return null;
+  const rows = await db.from("missio_household_members").select("kind, contact_id").eq("household_id", (mine.data as { household_id: string }).household_id);
+  if (rows.error) return null;
+  const list = (rows.data ?? []) as Array<{ kind: string; contact_id: string | null }>;
+  return {
+    others: list.filter((row) => row.kind === "adult" && row.contact_id && row.contact_id !== contactId).map((row) => row.contact_id!),
+    kids: list.filter((row) => row.kind === "child").length,
+  };
+}
+
+/**
+ * Pastors: place someone in a house. An open placement elsewhere is
+ * cancelled (they moved). With household: true, the other adults in their
+ * household are placed too (board M14a); children come with them.
+ */
+export async function createPlacement(
+  auth: OrgAccess,
+  body: unknown,
+  now = new Date()
+): Promise<{ ok: true; placement: PlacementView; family: { placed: number; kids: number } | null } | Fail> {
+  const parsed = createSchema.safeParse(body);
+  if (!parsed.success) return fail(400, "invalid_input", "Check the fields and try again.");
+  const { contactId, houseId } = parsed.data;
+  const house = await auth.supabase.from("house_churches").select("id, campus").eq("id", houseId).eq("org_id", auth.orgId).maybeSingle();
+  if (house.error) return fail(500, "server_error", "Something went wrong.");
+  if (!house.data) return fail(404, "not_found", "House not found.");
+  const db = placementAdmin();
+
+  const contact = await db.from("contacts").select("id").eq("id", contactId).maybeSingle();
+  if (contact.error) return fail(500, "server_error", "Something went wrong.");
+  if (!contact.data) return fail(404, "not_found", "Person not found.");
+
+  let secretOk = true;
+  try {
+    requireAvailabilityTokenSecret();
+  } catch {
+    secretOk = false;
+  }
+  if (!secretOk) {
+    console.error("[missio] placement link secret missing");
+    return fail(500, "server_error", "Something went wrong.");
+  }
+
+  const ref = house.data as HouseRef;
+  const first = await placeOne(auth, db, ref, contactId, now);
+  if (first === "member") return fail(409, "already_member", "They’re already in this house.");
+  if ("ok" in first) return first as Fail;
+
+  let family: { placed: number; kids: number } | null = null;
+  if (parsed.data.household) {
+    const household = await householdOf(db, contactId);
+    if (household) {
+      let placed = 1;
+      for (const other of household.others) {
+        const result = await placeOne(auth, db, ref, other, now);
+        if (result !== "member" && !("ok" in result)) placed += 1;
+      }
+      family = { placed, kids: household.kids };
+    }
+  }
+
+  const [view] = await shape(db, [first], true, now);
+  return { ok: true, placement: withLinks(view!, first), family };
 }
 
 /**

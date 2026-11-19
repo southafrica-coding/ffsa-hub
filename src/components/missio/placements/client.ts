@@ -20,9 +20,12 @@ async function call(url: string, init?: RequestInit) {
   return body;
 }
 
+/** How many adults were placed together, and how many children came with them. */
+export type PlacedFamily = { placed: number; kids: number };
+
 export type PlacementsClient = {
   list(): Promise<{ placements: PlacementView[]; canPlace: boolean }>;
-  create(contactId: string, houseId: string): Promise<PlacementView>;
+  create(contactId: string, houseId: string, household?: boolean): Promise<PlacementView & { family?: PlacedFamily | null }>;
   step(id: string, step: "said_hi" | "first_visit" | "joined" | "cancel"): Promise<PlacementView>;
 };
 
@@ -31,9 +34,12 @@ export const placementsClient: PlacementsClient = {
     const body = await call("/api/missio/placements");
     return { placements: (body.placements as PlacementView[]) ?? [], canPlace: body.canPlace === true };
   },
-  async create(contactId, houseId) {
-    const body = await call("/api/missio/placements", { method: "POST", body: JSON.stringify({ contactId, houseId }) });
-    return body.placement as PlacementView;
+  async create(contactId, houseId, household) {
+    const body = await call("/api/missio/placements", {
+      method: "POST",
+      body: JSON.stringify({ contactId, houseId, ...(household ? { household: true } : {}) }),
+    });
+    return { ...(body.placement as PlacementView), family: (body.family as PlacedFamily | null) ?? null };
   },
   async step(id, step) {
     const body = await call(`/api/missio/placements/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ step }) });

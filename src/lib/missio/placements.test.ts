@@ -132,3 +132,28 @@ describe("placements", () => {
     expect(open.map((row) => row.house_church_id)).toEqual([OTHER]);
   });
 });
+
+describe("placing a household", () => {
+  it("places the other adults too and counts the children", async () => {
+    tables.contacts!.push({ id: "c-kevin", first_name: "Kevin", last_name: "Dlamini", preferred_name: null, phone: null });
+    tables.missio_household_members = [
+      { id: "hm1", household_id: "hh1", kind: "adult", contact_id: SIPHO },
+      { id: "hm2", household_id: "hh1", kind: "adult", contact_id: "c-kevin" },
+      { id: "hm3", household_id: "hh1", kind: "child", contact_id: null },
+    ];
+    const result = await createPlacement(auth, { contactId: SIPHO, houseId: HOUSE, household: true }, now);
+    if (!result.ok) throw new Error(result.code);
+    expect(result.family).toEqual({ placed: 2, kids: 1 });
+    expect(tables.missio_placements!.map((row) => row.contact_id).sort()).toEqual(["c-kevin", SIPHO].sort());
+  });
+
+  it("places just the person without the flag", async () => {
+    tables.missio_household_members = [
+      { id: "hm1", household_id: "hh1", kind: "adult", contact_id: SIPHO },
+      { id: "hm2", household_id: "hh1", kind: "adult", contact_id: "c-kevin" },
+    ];
+    const result = await createPlacement(auth, { contactId: SIPHO, houseId: HOUSE }, now);
+    expect(result.ok && result.family).toBe(null);
+    expect(tables.missio_placements).toHaveLength(1);
+  });
+});

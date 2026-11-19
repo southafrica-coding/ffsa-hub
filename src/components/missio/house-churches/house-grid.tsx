@@ -14,7 +14,7 @@ import {
   houseTitle,
   initialsOf,
   leadingLine,
-  peopleCount,
+  sizeWord,
   shortDay,
 } from "./format";
 import { useMissioLoad } from "./load";
@@ -232,7 +232,7 @@ function HouseCard({ house }: { house: HouseSummary }) {
       {named ? <p className={styles.number}>House {house.number}</p> : null}
       <div className={styles.size}>
         <span className={styles.sizeCount}>{house.memberCount}</span>
-        <span className={styles.sizeLabel}>{peopleCount(house.memberCount).replace(/^\d+\s/, "")}</span>
+        <span className={styles.sizeLabel}>{sizeWord(house)}</span>
       </div>
       <SizeDots count={house.memberCount} />
       <div className={styles.leading}>

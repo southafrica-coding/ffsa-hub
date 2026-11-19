@@ -497,6 +497,7 @@ export function FollowUpBoard({
       {placing && board ? (
         <PlaceDialog
           name={placing.displayName}
+          contactId={placing.contactId}
           houses={houses}
           resolveContact={async () => {
             if (placing.contactId) return placing.contactId;

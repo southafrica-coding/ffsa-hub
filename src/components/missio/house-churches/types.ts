@@ -40,6 +40,8 @@ export interface HouseSummary {
   location: string | null;
   /** Includes leaders and co-leaders. */
   memberCount: number;
+  /** Children of households in this house. Not in memberCount; the size dots stay adults only. */
+  kidsCount?: number;
   leaders: PersonRef[];
   coLeaders: PersonRef[];
   /** Pastoral covering for the leaders. A house can have several. */
