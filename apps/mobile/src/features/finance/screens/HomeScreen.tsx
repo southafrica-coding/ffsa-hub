@@ -136,6 +136,7 @@ function TeamRow({ team, pending, onPress }: { team: HomeTeam; pending: OutboxIt
     >
       {/* The name keeps its words whole: at large text the chip goes under it (QA: "Leadershi/p"). */}
       <View
+        key={stacked ? "stacked" : "row"}
         style={
           stacked
             ? { alignItems: "flex-start", gap: space.xs }

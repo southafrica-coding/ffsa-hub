@@ -32,6 +32,8 @@ export function SectionHeader({ title, actionLabel, onAction, actionAccessibilit
   const stacked = useLargeText();
   return (
     <View
+      // New layout, new view: iOS keeps old measurements otherwise (see NeedsYouBand).
+      key={stacked ? "stacked" : "row"}
       testID={testID}
       style={{
         minHeight: touch.floor,

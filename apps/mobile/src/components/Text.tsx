@@ -1,4 +1,4 @@
-import { Text as RNText, type TextProps as RNTextProps } from "react-native";
+import { Text as RNText, useWindowDimensions, type TextProps as RNTextProps } from "react-native";
 
 import { HEADING_VARIANTS, maxFontScale, textStyle, type TextTone, type TextVariant } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
@@ -15,8 +15,13 @@ export type TextProps = RNTextProps & {
  */
 export function Text({ variant = "body", tone = "default", style, ...rest }: TextProps) {
   const { colors } = useTheme();
+  // A new native text when the text size changes. iOS keeps a text's old size
+  // until the text itself changes, so after the size went DOWN with the app
+  // open, untouched text stayed large and the band ran off the edge (QA pass 2).
+  const { fontScale } = useWindowDimensions();
   return (
     <RNText
+      key={fontScale}
       accessibilityRole={HEADING_VARIANTS.has(variant) ? "header" : undefined}
       allowFontScaling
       maxFontSizeMultiplier={maxFontScale[variant]}

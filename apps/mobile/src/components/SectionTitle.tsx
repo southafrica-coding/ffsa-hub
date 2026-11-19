@@ -27,6 +27,8 @@ export function SectionTitle({ title, meta, accessibilityLabel, tight = false, t
   const stacked = useLargeText();
   return (
     <View
+      // New layout, new view: iOS keeps old measurements otherwise (see NeedsYouBand).
+      key={stacked ? "stacked" : "row"}
       accessible
       accessibilityRole="header"
       accessibilityLabel={accessibilityLabel ?? (hasMeta ? `${title}, ${meta}` : title)}

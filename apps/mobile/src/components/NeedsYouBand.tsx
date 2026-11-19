@@ -41,6 +41,10 @@ export function NeedsYouBand({ eyebrow, text, detail, actionLabel, onAction, act
   useRegisterNeedsYouBand(true);
   return (
     <View
+      // A new band when the layout flips: iOS kept the stacked band's old
+      // measurements when the text size went down with the app open, so the
+      // text ran off the right edge (QA pass 2).
+      key={stacked ? "stacked" : "row"}
       testID={testID}
       style={{
         ...needsYouBandStyle(colors),
