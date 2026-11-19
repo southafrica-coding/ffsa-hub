@@ -19,6 +19,7 @@ import {
   MessageSquare,
   SlidersHorizontal,
   Scale,
+  FileText,
   Target,
   Megaphone,
   UserCheck,
@@ -205,6 +206,15 @@ export const SYSTEM_MODULES: ModuleDefinition[] = [
     requiredRoles: ["super_admin", "admin", "legal_admin"],
   },
   {
+    // Shown only to people on the legal_access list (see ACCESS_LIST_MODULES).
+    id: "legal-documents",
+    label: "Documents",
+    href: "/legal-documents",
+    icon: FileText,
+    description: "Legal papers, expiry dates and applications",
+    requiredRoles: [],
+  },
+  {
     id: "roles",
     label: "Roles",
     href: "/roles",
@@ -293,6 +303,15 @@ export const ROLE_ONLY_MODULES: Record<string, string> = {
 };
 
 /**
+ * Modules behind a named access list instead of roles. No role reaches
+ * them — super_admin included — and getSidebarAccess adds the id to
+ * permittedModules only for people on the list. Legal → Documents holds
+ * the legal officer's own papers and she is herself a super admin, so a
+ * role rule would show it to every admin (migration 371).
+ */
+export const ACCESS_LIST_MODULES = new Set(["legal-documents"]);
+
+/**
  * Pages that are still only a "Not built yet" placeholder. They stay
  * out of every menu for every role (admins included) so nobody lands on an
  * empty page; a direct visit redirects to the dashboard. The pages and their
@@ -330,6 +349,8 @@ export function getAccessibleModules(
   return modules.filter((mod) => {
     // Unbuilt placeholders are hidden from everyone, super_admin included.
     if (HIDDEN_FROM_NAV.has(mod.id)) return false;
+    // Named-list modules: the list alone decides, for every role.
+    if (ACCESS_LIST_MODULES.has(mod.id)) return permittedModules?.has(mod.id) ?? false;
     const onlyRole = ROLE_ONLY_MODULES[mod.id];
     if (onlyRole) return isSuperAdmin || userRoles.includes(onlyRole);
     // Always open (dashboard, prayer room)

@@ -78,6 +78,17 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     defaultEnabled: (c) => c.isAdmin,
   },
   {
+    key: "legal-documents",
+    title: "Legal papers",
+    description:
+      "FFSA's legal papers and the legal officer's own: what has expired, what needs renewing, and applications that are due. Only for people on the Documents access list.",
+    category: "Overview",
+    defaultOrder: 14,
+    fullWidth: false,
+    gate: (c) => c.hasLegalAccess,
+    defaultEnabled: (c) => c.hasLegalAccess,
+  },
+  {
     key: "staff-insurance",
     title: "Staff insurance alerts",
     description:

@@ -85,7 +85,7 @@ export async function getSidebarAccess(
     // account (is_active = false) counts for nothing. NULL stays active.
     // Global nav keeps unscoped assignments. A program-scoped schools grant
     // still lights Training; other modules stay unscoped.
-    const [userRow, roleRows] = await Promise.all([
+    const [userRow, roleRows, legal] = await Promise.all([
       readOrThrow<{ is_active: boolean | null } | null>(() =>
         supabase.from("users").select("is_active").eq("id", userId).maybeSingle()
       ),
@@ -102,9 +102,18 @@ export async function getSidebarAccess(
           .select("role_id, scope_type, scope_id, roles(name)")
           .eq("user_id", userId)
       ),
+      // Best-effort, in the same round trip: before migration 371 the
+      // function doesn't exist, and a failure must not flag the menu.
+      Promise.resolve()
+        .then(() => supabase.rpc("legal_any_access"))
+        .catch(() => null) as Promise<{ data: unknown; error: unknown } | null>,
     ]);
 
     if (!userRow || userRow.is_active === false) return result;
+
+    // Legal → Documents goes by its own named list, for every role (see
+    // ACCESS_LIST_MODULES).
+    if (legal && !legal.error && legal.data === true) result.permittedModules.add("legal-documents");
 
     const unscopedRoles = (roleRows ?? []).filter((row) =>
       grantCounts(row.scope_type, row.scope_id, undefined)

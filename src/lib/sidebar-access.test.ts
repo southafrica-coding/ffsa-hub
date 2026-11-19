@@ -34,7 +34,22 @@ describe("getSidebarAccess", () => {
     const access = await getSidebarAccess(f.client);
     expect(access.userRoles).toEqual(["super_admin"]);
     expect(access.permittedModules.size).toBe(0);
-    expect(f.queries.map((q) => q.table).sort()).toEqual(["user_roles", "users"]);
+    // The Legal → Documents list check runs for every role, super_admin included.
+    expect(f.queries.map((q) => q.table).sort()).toEqual(["rpc:legal_any_access", "user_roles", "users"]);
+  });
+
+  it("adds Legal → Documents only when the access-list check says yes", async () => {
+    const world = { roles: [{ id: "r1", name: "super_admin" }], direct: [] };
+    const yes = createFakeSupabase({
+      user: { id: "u1" },
+      resolve: (q) => (q.table === "rpc:legal_any_access" ? { data: true } : permissionWorldResolver(world)(q) ?? { data: [] }),
+    });
+    expect([...(await getSidebarAccess(yes.client)).permittedModules]).toEqual(["legal-documents"]);
+
+    const failing = client(world, { fail: (q) => q.table === "rpc:legal_any_access" });
+    const access = await getSidebarAccess(failing.client);
+    expect(access.permittedModules.has("legal-documents")).toBe(false);
+    expect(access.menuLoadFailed).toBe(false);
   });
 
   it("unions direct grants and role-bundle grants, with the bookings/users aliases", async () => {

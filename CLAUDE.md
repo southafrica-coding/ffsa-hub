@@ -251,6 +251,54 @@ Supabase runs in the cloud (no local Postgres). Migrations are applied via the S
 
 ---
 
+## Legal → Documents — standing rules
+
+FFSA's legal and compliance papers plus the legal officer's own papers, with
+expiry tracking, applications and reminders. Plan: `docs/legal-documents.md`.
+Migrations 370–375 (drafts: do not apply until Jack says so).
+
+- **The wall is a named list, not a role.** Only people on `legal_access` get in.
+  Never add `is_admin()`, `has_permission()` or a role to a `legal_*` policy, and
+  never read `legal_*` tables with `createAdminClient()` for a page — the legal
+  officer is a super admin, so a role rule would open her papers to every admin.
+  The one service-role reader is the 07:00 cron (`/api/cron/legal-reminders`),
+  which emails titles and dates to the owner only.
+- **The reviewer rows (Gideon, Jack) are temporary.** Remove them before go-live.
+- **The page lives at `/legal-documents`, never under `/legal/`** — `/legal` is a public
+  route in `src/middleware.ts` (the privacy page), so anything below it skips the
+  sign-in check. The menu entry is in `ACCESS_LIST_MODULES` (`src/config/modules.ts`):
+  only the list shows it, whatever the role.
+- **Files** go in the private `legal-documents` bucket at `<folder id>/<file id>.<ext>`
+  (CHECK in 370). Read the `legal_files` row as the user first, then sign the URL.
+- **What is read from a scan is a suggestion** (`extracted_fields`, each with
+  `confirmed`). Nothing is copied onto a document until a person ticks it and
+  presses Apply (`/api/legal/files/[id]/apply`). Claude reads a copy of the scan
+  only after the file row was read and marked pending *as the user*; never send
+  a scan for reading through the service role alone.
+- **The event log stores column names, never values**, so it can't become a second
+  copy of reference numbers.
+- **The reminder email is OFF until Gideon and Jack activate it.** It sends only
+  with `LEGAL_REMINDERS_ACTIVE=1` on production. Never turn it on, or make it
+  default on, without their word.
+- **Colour scale:** green 90 · yellow 60 · orange 30 · red 7 days (applications:
+  21 / 14 / 7 / 2 before lodge-by). Expired papers: Mon/Wed/Fri. Quiet days list
+  the next 5. Defined once in `src/lib/legal/reminders.ts`.
+- **The legal helper only drafts.** Its tools (`src/lib/legal/helper/tools.ts`) read and
+  save/update drafts, through the user's client. Never give it a tool that approves,
+  sends, deletes or edits a document. Only the owner approves, in the Drafts tab; the
+  trigger in migration 374 enforces it — don't move that rule into the app. Don't log
+  the helper's conversation to `ai_assistant_queries` (admins can read it).
+- **Background tasks run as the person who asked** (`after()` in their own request,
+  their Supabase client) — never with the service role. A task can't start tasks.
+  Keep the spending guard (`task-state.ts`: 2 working, 15 a day) unless Gideon says.
+- **Voice uses the browser only** (Web Speech API). Adding a cloud speech service is a
+  new provider, key and cost: ask Gideon first.
+- **No Google Calendar** for now. Reminders are the 07:00 email and the dashboard
+  card; the dashboard's one yellow band stays staff approvals. Reminder rules live in
+  `src/lib/legal/reminders.ts` and are shared by the email, its preview and the card.
+
+---
+
 # FFSA Hub — redesign context
 
 Redesign of the FFSA Hub (Next.js admin platform in the attached `ffsa-platform` folder)

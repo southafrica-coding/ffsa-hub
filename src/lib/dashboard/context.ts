@@ -31,13 +31,16 @@ export type DashboardContext = {
   // managers, leadership_team and admins. Same predicate the page guard uses,
   // so the dashboard cannot offer a module the page will refuse.
   hasBookingsAccess: boolean;
+  // On the Legal → Documents access list (migration 371). Never a role:
+  // super admins are not on it unless named.
+  hasLegalAccess: boolean;
 };
 
 export async function buildDashboardContext(
   supabase: SupabaseClient,
   userId: string
 ): Promise<DashboardContext> {
-  const [roleRows, isAdmin, schools, ledMinistryIds, prayer, vehicles, bookings] =
+  const [roleRows, isAdmin, schools, ledMinistryIds, prayer, vehicles, bookings, legal] =
     await Promise.all([
       supabase.from("user_roles").select("roles!inner(name)").eq("user_id", userId),
       callerIsAdmin(supabase, userId),
@@ -46,6 +49,11 @@ export async function buildDashboardContext(
       isPrayerRoomStaff(supabase, userId),
       getVehicleAccess(supabase, userId),
       hasModuleAccess(supabase, userId, "bookings"),
+      // Best-effort: before migration 371 the function doesn't exist.
+      Promise.resolve()
+        .then(() => supabase.rpc("legal_any_access"))
+        .then((r) => !r.error && r.data === true)
+        .catch(() => false),
     ]);
 
   const userRoles = new Set<string>(
@@ -76,5 +84,6 @@ export async function buildDashboardContext(
     isPrayerRoomStaff: prayer,
     isVehiclesPerson,
     hasBookingsAccess: bookings,
+    hasLegalAccess: legal,
   };
 }

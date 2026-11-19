@@ -17,6 +17,7 @@ import { getSlackLink } from "@/services/slack-links";
 import { UpcomingEventsWidget } from "./upcoming-events-widget";
 import { MyBookingsCard } from "./my-bookings-card";
 import { StaffInsuranceCard } from "./staff-insurance-card";
+import { LegalDocumentsCard } from "./legal-documents-card";
 import { VehiclesCard } from "./vehicles-card";
 import { PrayerWeekCard } from "./prayer-week-card";
 import { SchoolsCountsCard } from "./schools-counts-card";
@@ -111,6 +112,7 @@ export default async function DashboardPage() {
       <NotificationFeed initial={notifications?.notifications ?? []} />
     ),
     "staff-insurance": <StaffInsuranceCard />,
+    "legal-documents": <LegalDocumentsCard />,
 
     "upcoming-events": <UpcomingEventsWidget />,
     "my-bookings": <MyBookingsCard />,

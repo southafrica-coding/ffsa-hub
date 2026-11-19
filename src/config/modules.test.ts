@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ACCESS_LIST_MODULES,
   ADMIN_MODULES,
   HIDDEN_FROM_NAV,
   PORTAL_TABS,
@@ -49,7 +50,19 @@ describe("placeholder pages are hidden from navigation", () => {
     const visible = ids(getAccessibleModules(ADMIN_MODULES, ["super_admin"]));
     const working = ids(ADMIN_MODULES).filter((id) => !PLACEHOLDERS.includes(id));
     expect(visible).toEqual(working);
-    expect(ids(getAccessibleModules(SYSTEM_MODULES, ["super_admin"]))).toEqual(ids(SYSTEM_MODULES));
+    expect(ids(getAccessibleModules(SYSTEM_MODULES, ["super_admin"]))).toEqual(
+      ids(SYSTEM_MODULES).filter((id) => !ACCESS_LIST_MODULES.has(id))
+    );
+  });
+
+  it("shows Legal → Documents only to people on its access list, whatever their role", () => {
+    const has = (roles: string[], permitted: string[]) =>
+      ids(getAccessibleModules(SYSTEM_MODULES, roles, new Set(permitted))).includes("legal-documents");
+    expect(has(["super_admin"], [])).toBe(false);
+    expect(has(["admin"], [])).toBe(false);
+    expect(has(["legal_admin"], ["legal"])).toBe(false);
+    expect(has(["staff"], ["legal-documents"])).toBe(true);
+    expect(has(["super_admin"], ["legal-documents"])).toBe(true);
   });
 
   it("shows Staff decisions to Leadership Team and Super Admin, never to a plain admin", () => {
