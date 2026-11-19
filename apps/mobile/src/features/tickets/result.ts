@@ -2,8 +2,9 @@
 // outcome, a failure, or an offline queue into a verdict, so every door
 // (staff today, volunteer link in Phase 2) says the same thing.
 //
-// No green: status is carried by ink / bone / yellow, an icon AND words,
-// never colour alone. Read at arm's length in bright sun.
+// Status is carried by an icon AND words, never colour alone; the colours
+// (green for a confirmed check-in, amber, red) are chosen in VerdictCard from
+// the verdict's kind. Read at arm's length in bright sun.
 
 import { ApiError } from "@/lib/api";
 
@@ -21,7 +22,7 @@ export type VerdictKind =
   | "needs_attention"
   | "queued";
 
-/** ink = filled black, accent = yellow, outline = bone with heavy ink border, dashed = not confirmed. */
+/** The verdict's weight: ink = admit (filled), accent = already in, outline = heavy border, dashed = not confirmed. VerdictCard draws them. */
 export type VerdictStyle = "ink" | "accent" | "outline" | "dashed";
 export type VerdictIcon = "check" | "repeat" | "stop" | "alert" | "clock";
 export type VerdictHaptic = "success" | "warning" | "error";
