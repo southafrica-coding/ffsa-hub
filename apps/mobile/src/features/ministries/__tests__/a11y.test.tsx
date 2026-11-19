@@ -7,7 +7,7 @@ import type { ReactElement } from "react";
 import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
 import { colors } from "@/theme/tokens";
 import { themeFor } from "@/theme/use-theme";
 
@@ -89,5 +89,33 @@ describe("Ministry detail", () => {
     expect(group.backgroundColor).toBe(colors.dark.raised);
     expect(screen.getByTestId("member-__none__-m2")).toBeTruthy();
     expect(audit()).toEqual([]);
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("largest text: nothing important is capped or clipped", () => {
+  it("Ministries list", async () => {
+    const dims = atLargestText();
+    list.mockResolvedValue(ministryList({ scope: "all", canCreate: true, ministries: [ministry()] }));
+    await show(<MinistriesListScreen />);
+    await screen.findByRole("button", { name: /^Media/ });
+    // Deliberate clamp: the row's caption (people count · description) is 2 lines; the row's label reads it all.
+    expect(largeTextProblems(screen.container as never, ["4 people · Cameras and sound"])).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
+  });
+
+  it("Ministry team", async () => {
+    const dims = atLargestText();
+    one.mockResolvedValue(detail({ subcategories: [{ id: CAMS, name: "Cameras" }], roster: [member({ membershipId: "m2", name: "Bo Dube", status: "pending", categoryIds: [CAMS] })] }));
+    await show(<MinistryDetailScreen id={MEDIA} />);
+    expect(await screen.findByRole("header", { name: "Cameras, 1 person" })).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
   });
 });

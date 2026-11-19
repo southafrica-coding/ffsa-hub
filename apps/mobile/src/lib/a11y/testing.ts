@@ -74,3 +74,38 @@ export function tappableSizes(root: Node | null | undefined, flatten: (s: unknow
   if (root) walk(root);
   return out;
 }
+
+export type LargeTextProblem = { text: string; problem: string };
+
+/**
+ * Dynamic Type check for a rendered tree (design-spec §6: rows grow, titles
+ * wrap, only the big display sizes are capped). Lists visible text that
+ * opts out of the OS text size, is capped below 1.2×, or is clamped to a
+ * number of lines without being listed in `allowClamp` (by its text or
+ * testID: deliberate clamps whose full text is a tap away, like a history
+ * row). Decorative copies hidden from screen readers (the collapsed nav
+ * title) are skipped.
+ */
+export function largeTextProblems(root: Node | null | undefined, allowClamp: readonly string[] = []): LargeTextProblem[] {
+  const out: LargeTextProblem[] = [];
+  const walk = (n: Node | string) => {
+    if (typeof n === "string" || isHidden(n)) return;
+    if (n.type === "Text") {
+      const text = textOf(n).trim();
+      const testID = n.props.testID as string | undefined;
+      const max = n.props.maxFontSizeMultiplier as number | undefined;
+      if (n.props.allowFontScaling === false) out.push({ text, problem: "ignores the OS text size" });
+      else if (typeof max === "number" && max > 0 && max < 1.2) out.push({ text, problem: `capped at ${max}x` });
+      const lines = n.props.numberOfLines as number | undefined;
+      // A one-line clamp WITH a scale cap is the bar pattern (nav title, back label, tab label).
+      const barPattern = lines === 1 && typeof max === "number";
+      if (lines && !barPattern && !allowClamp.some((a) => a === text || a === testID)) {
+        out.push({ text, problem: `clamped to ${lines} line(s)` });
+      }
+      return;
+    }
+    n.children.forEach(walk);
+  };
+  if (root) walk(root);
+  return out;
+}

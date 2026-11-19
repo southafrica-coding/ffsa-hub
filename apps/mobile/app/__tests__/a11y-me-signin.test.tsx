@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { AccessibilityInfo } from "react-native";
 
 import { MeProvider } from "@/features/shell";
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
 import { supabase } from "@/lib/supabase";
@@ -51,6 +51,11 @@ beforeEach(() => {
   Object.values(mockRouter).forEach((f) => f.mockClear());
 });
 
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
 describe("Sign-in", () => {
   it("names every control once; the brand tick is hidden; the wordmark is a labelled image", async () => {
     await render(<SignInScreen />);
@@ -62,6 +67,14 @@ describe("Sign-in", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Forgot password/ })).toBeTruthy();
     expect(audit()).toEqual([]);
+  });
+
+  it("largest text: nothing on Sign-in is capped or clipped", async () => {
+    const dims = atLargestText();
+    await render(<SignInScreen />);
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
   });
 
   it("announces the first field to fix", async () => {
@@ -92,6 +105,16 @@ describe("Me", () => {
     expect(screen.getByRole("button", { name: "Appearance" }).props.accessibilityHint).toMatch(/Match phone/);
     expect(screen.getByRole("button", { name: "Sign out" }).props.accessibilityHint).toMatch(/this phone only/);
     expect(audit()).toEqual([]);
+  });
+
+  it("largest text: nothing on Me is capped or clipped", async () => {
+    const dims = atLargestText();
+    mockFetch.mockImplementation(apiRoutes({ "/api/me": makeMe() }));
+    await render(wrap(<MeScreen />));
+    expect(await screen.findByLabelText("Email: sample@example.org")).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
   });
 
   it("error: announced, retry is a named button", async () => {

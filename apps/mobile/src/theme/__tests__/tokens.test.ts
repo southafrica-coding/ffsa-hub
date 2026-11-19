@@ -88,6 +88,44 @@ describe("contrast (WCAG AA, 4.5:1 for body text)", () => {
   }
 });
 
+// R4 sweep: the pairs the redesign kit actually paints that the blocks
+// around this one don't name (fills with their labels, the focus ring, the
+// raised rows/sheets, the selected segment, scanner captions).
+describe("kit pairs, both schemes (R4)", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    const c = colors[scheme];
+    it.each([
+      ["onPositive", "positive"],
+      ["onDanger", "danger"],
+      ["onPrimary", "primary"],
+      ["onInverse", "inverse"],
+      ["onAccent", "accent"],
+      ["text", "raised"],
+      ["textSecondary", "raised"],
+      ["textTertiary", "raised"],
+      ["textTertiary", "surface"],
+      ["danger", "raised"],
+      ["positiveText", "raised"],
+      ["attention", "raised"],
+      ["text", "segmentOn"],
+      ["textSecondary", "surface"],
+    ] as const)(`${scheme}: %s on %s >= 4.5:1`, (fg, bg) => {
+      expect(contrast(c[fg], c[bg])).toBeGreaterThanOrEqual(4.5);
+    });
+    it.each([
+      ["focus", "raised"],
+      ["focus", "bg"],
+      ["ruleStrong", "raised"],
+      ["attentionBorder", "raised"],
+    ] as const)(`${scheme}: %s against %s >= 3:1 (non-text, WCAG 1.4.11)`, (fg, bg) => {
+      expect(contrast(c[fg], c[bg])).toBeGreaterThanOrEqual(3);
+    });
+    it(`${scheme}: bone captions are for black only (>= 4.5:1 on ink)`, () => {
+      expect(contrast(c.bone, palette.ink)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
 describe("dark scheme: every semantic text colour on every background it sits on", () => {
   const c = colors.dark;
   // Body-size text tones x the backgrounds the app paints (page, bone panels,
@@ -311,11 +349,8 @@ describe("component style mapping", () => {
     expect([dark.container.backgroundColor, dark.textColor]).toEqual([palette.yellow, palette.ink]);
   });
 
-  it("text buttons are underlined; legacy destructive = danger; disabled is a readable quiet block", () => {
+  it("text buttons are underlined; disabled is a readable quiet block", () => {
     expect(buttonStyle("text", colors.light, { pressed: false, disabled: false }).text.textDecorationLine).toBe("underline");
-    expect(buttonStyle("destructive", colors.light, { pressed: false, disabled: false })).toEqual(
-      buttonStyle("danger", colors.light, { pressed: false, disabled: false }),
-    );
     const off = buttonStyle("primary", colors.light, { pressed: false, disabled: true });
     expect(off.container.backgroundColor).toBe(colors.light.surface);
     expect(off.textColor).toBe(colors.light.textTertiary);
@@ -326,9 +361,6 @@ describe("component style mapping", () => {
       const band = needsYouBandStyle(colors[scheme]);
       expect(band).toMatchObject({ backgroundColor: palette.yellow, borderRadius: 8 });
       expect(band).not.toHaveProperty("borderWidth");
-      const s = bannerStyle("needsYou", colors[scheme]);
-      expect(s.container.borderWidth).toBe(0);
-      expect(s.text).toBe("onAccent");
     }
   });
 

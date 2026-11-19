@@ -6,7 +6,7 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { AccessibilityInfo, Platform } from "react-native";
 
 import type { Me } from "@/lib/api";
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
 
 import { makeMe } from "../../../../test/fixtures";
 import { DataError, loadHome, loadTeam, type HomeData, type TeamMoneyView } from "../data";
@@ -242,5 +242,45 @@ describe("Receipt viewer", () => {
   it("a refused link is an alert", async () => {
     await render(<ReceiptViewerScreen uri="https://evil.example/x.jpg" />);
     expect(screen.getByRole("alert")).toHaveTextContent(strings.viewer.loadFailed);
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("largest text: nothing is capped or clipped", () => {
+  it("My finance", async () => {
+    const dims = atLargestText();
+    mockHome.mockResolvedValue(HOME);
+    const { wrap } = makeOutbox();
+    await render(wrap(<FinanceHomeScreen />));
+    expect(await screen.findByRole("header", { name: strings.home.title })).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    noProblems();
+    dims.mockRestore();
+  });
+
+  it("Team", async () => {
+    const dims = atLargestText();
+    mockTeam.mockResolvedValue(money());
+    const { wrap } = makeOutbox();
+    await render(wrap(<TeamScreen teamId={TEAM} />));
+    expect(await screen.findByLabelText(/^Over budget: /)).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    noProblems();
+    dims.mockRestore();
+  });
+
+  it("Add expense", async () => {
+    const dims = atLargestText();
+    mockTeam.mockResolvedValue(money({ expenses: [] }));
+    const { wrap } = makeOutbox();
+    await render(wrap(<ExpenseScreen teamId={TEAM} />));
+    await screen.findByRole("button", { name: `${strings.expense.category}: ${strings.expense.categoryPlaceholder}` });
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    noProblems();
+    dims.mockRestore();
   });
 });

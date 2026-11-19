@@ -3,7 +3,7 @@ import { StyleSheet } from "react-native";
 
 import { palette } from "@/theme/tokens";
 
-import { Banner, Button, Divider, LargeTitle, Screen, Text, TextField } from "..";
+import { Banner, Button, Divider, LargeTitle, NeedsYouBand, Screen, Text, TextField } from "..";
 
 function flat(style: unknown) {
   return StyleSheet.flatten(style as never) ?? {};
@@ -72,9 +72,7 @@ describe("Banner", () => {
   it("renders the yellow needs-you band with black text", async () => {
     await render(
       <Screen>
-        <Banner tone="needsYou" title="Needs you" testID="band">
-          4 staff members are waiting on approval
-        </Banner>
+        <NeedsYouBand eyebrow="Needs you" text="4 staff members are waiting on approval" testID="band" />
       </Screen>,
     );
     expect(flat(screen.getByTestId("band").props.style).backgroundColor).toBe(palette.yellow);
@@ -97,8 +95,8 @@ describe("Banner", () => {
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     await render(
       <Screen>
-        <Banner tone="needsYou">One</Banner>
-        <Banner tone="needsYou">Two</Banner>
+        <NeedsYouBand eyebrow="Needs you" text="One" />
+        <NeedsYouBand eyebrow="Needs you" text="Two" />
       </Screen>,
     );
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("at most one per screen"));
@@ -110,11 +108,11 @@ describe("Banner", () => {
     await render(
       <>
         <Screen>
-          <Banner tone="needsYou">One</Banner>
+          <NeedsYouBand eyebrow="Needs you" text="One" />
           <Banner tone="danger">Not yellow</Banner>
         </Screen>
         <Screen>
-          <Banner tone="needsYou">Another screen</Banner>
+          <NeedsYouBand eyebrow="Needs you" text="Another screen" />
         </Screen>
       </>,
     );

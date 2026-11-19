@@ -6,14 +6,14 @@ import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 // ── One yellow band per screen ──────────────────────────────────────────────
-// NeedsYouBand (and Banner tone="needsYou") registers here; a second one on the same Screen
+// NeedsYouBand registers here; a second one on the same Screen
 // warns in development. The rule stops working if it's repeated.
 
 type BandRegistry = { register: (id: symbol) => () => void };
 
 const BandContext = createContext<BandRegistry | null>(null);
 
-/** Called by NeedsYouBand / Banner tone="needsYou" while mounted. */
+/** Called by NeedsYouBand while mounted. */
 export function useRegisterNeedsYouBand(active: boolean) {
   const registry = useContext(BandContext);
   useEffect(() => {

@@ -72,7 +72,7 @@ export default function AttendanceScreen() {
                   summary.byStatus.map((b) => `${b.label} ${b.count}`).join(", "),
                 )}
                 testID="summary"
-                style={{ gap: 2, paddingBottom: 14, borderBottomWidth: hairline, borderBottomColor: colors.text }}
+                style={{ gap: 2, paddingBottom: space.md, borderBottomWidth: hairline, borderBottomColor: colors.text }}
               >
                 <Text variant="label">{s.present}</Text>
                 <View style={{ flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", columnGap: space.md }}>

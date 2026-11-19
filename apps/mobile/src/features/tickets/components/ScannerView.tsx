@@ -143,7 +143,7 @@ export function ScannerView({ onScanned, paused, onClose, onTypeCode, overlay }:
             <View
               accessibilityLiveRegion={mountError ? "assertive" : "none"}
               accessibilityRole={mountError ? "alert" : undefined}
-              style={{ backgroundColor: palette.ink, padding: 14, borderWidth: 2, borderColor: palette.white, borderRadius: radius.card }}
+              style={{ backgroundColor: palette.ink, padding: space.lg, borderWidth: 2, borderColor: palette.white, borderRadius: radius.card }}
             >
               <Text style={{ color: palette.white }}>{mountError ? strings.camera.mountError : strings.camera.aim}</Text>
             </View>

@@ -132,17 +132,19 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
   }
 
   const b = detail.booking;
+  // Once the booking is known, Back names it, as its page is titled.
+  const backToBooking: BackAction = { ...back, label: b.booking_name };
   const mayInspect = b.requested_by === userId || access.vehicles.manage;
   if (!mayInspect) {
     return (
-      <PushedPage back={back}>
+      <PushedPage back={backToBooking}>
         <EmptyState testID="no-access" title={title} body={t.noAccess} />
       </PushedPage>
     );
   }
   if (detail.inspections.some((i) => i.kind === kind)) {
     return (
-      <PushedPage back={back}>
+      <PushedPage back={backToBooking}>
         <EmptyState testID="already" title={title} body={t.alreadyRecorded} />
       </PushedPage>
     );
@@ -223,7 +225,7 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <LargeTitleScrollView back={back} eyebrow={t.context(b.booking_name)} title={title} edges={["top", "bottom"]} gap={space.lg}>
+      <LargeTitleScrollView back={backToBooking} eyebrow={t.context(b.booking_name)} title={title} edges={["top", "bottom"]} gap={space.lg}>
         {notice ? (
           <Bleed>
             <Banner tone="positive">{notice}</Banner>

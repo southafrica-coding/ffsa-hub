@@ -413,7 +413,7 @@ describe("Detail screens: the redesign (7.4, 7.11, 7.13, 7.14)", () => {
     expect(screen.getByRole("link", { name: new RegExp(strings.inspection.terms) })).toBeTruthy();
     expect(screen.queryByTestId("truthful")).toBeNull();
     expect(screen.getByRole("button", { name: strings.inspection.submit("collection") })).toBeTruthy();
-    await fireEvent.press(screen.getByRole("button", { name: "Back to Booking" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Airport run" }));
     expect(mockRouter.back).toHaveBeenCalled();
   });
 

@@ -11,7 +11,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { MeProvider } from "@/features/shell";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
-import { auditTappables, tappableSizes } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems, tappableSizes } from "@/lib/a11y/testing";
 import { touch } from "@/theme/tokens";
 import { makeMe } from "../../../../test/fixtures";
 
@@ -280,5 +280,32 @@ describe("Prayer a11y: practice", () => {
     const time = within(await screen.findByTestId("practice-row-2026-11-04-16:00")).getByText("16:00–16:30");
     expect(flatten(time.props.style)).toMatchObject({ minWidth: 104 });
     expect(flatten(time.props.style).width).toBeUndefined();
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("Prayer a11y: largest text, nothing important capped or clipped", () => {
+  it("Week", async () => {
+    atLargestText();
+    room(WEEK);
+    await show();
+    await screen.findByText("Night watch");
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expectCleanTappables();
+  });
+
+  it("set sheet", async () => {
+    atLargestText();
+    room(WEEK);
+    await show();
+    await fireEvent.press(await screen.findByTestId("set-s1"));
+    const sheet = await screen.findByTestId("set-sheet");
+    await within(sheet).findByText("Night watch");
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expectCleanTappables();
   });
 });

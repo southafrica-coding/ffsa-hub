@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { type BackAction, Bleed, EmptyState, Freshness, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
+import { type BackAction, Bleed, EmptyState, FadeIn, Freshness, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
@@ -114,7 +114,7 @@ function Body({ data, onAttendance, onTranscript }: { data: EnrolmentData; onAtt
   const totalCredits = programme?.credit_hours || summary.creditsAttempted;
 
   return (
-    <>
+    <FadeIn style={{ gap: space.lg }}>
       <View style={{ gap: 6 }}>
         <View accessible accessibilityLabel={`${s.status}: ${status.label}`} style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm }}>
           <Text variant="label">{s.status}</Text>
@@ -142,7 +142,7 @@ function Body({ data, onAttendance, onTranscript }: { data: EnrolmentData; onAtt
           borderTopWidth: hairline,
           borderBottomWidth: hairline,
           borderColor: colors.text,
-          paddingVertical: 14,
+          paddingVertical: space.md,
         }}
       >
         {summary.gpa !== null ? (
@@ -180,7 +180,7 @@ function Body({ data, onAttendance, onTranscript }: { data: EnrolmentData; onAtt
           <ListRow icon={CalendarCheck} title={s.attendance} subtitle={strings.list.attendanceRowSub} onPress={onAttendance} testID="attendance-row" />
         </ListGroup>
       </Bleed>
-    </>
+    </FadeIn>
   );
 }
 

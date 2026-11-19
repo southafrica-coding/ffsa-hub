@@ -9,7 +9,7 @@ import { AccessibilityInfo, StyleSheet } from "react-native";
 import { MeProvider } from "@/features/shell";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
 
 import type { DoorClient } from "../api";
 import { ScannerView } from "../components/ScannerView";
@@ -255,5 +255,41 @@ describe("Scanner", () => {
     expect(screen.getByRole("button", { name: "Open Settings" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Type a code" })).toBeTruthy();
     expect(audit()).toEqual([]);
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("largest text: nothing is capped or clipped", () => {
+  it("My tickets", async () => {
+    const dims = atLargestText();
+    api();
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
+    await screen.findByRole("button", { name: /^Send Night\..*Ready to scan$/ });
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
+  });
+
+  it("Ticket", async () => {
+    const dims = atLargestText();
+    api();
+    await render(<TicketDetailScreen ticketId="t-up" />);
+    expect(await screen.findByRole("header", { name: "Send Night" })).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
+  });
+
+  it("Door", async () => {
+    const dims = atLargestText();
+    await render(<DoorScreen eventId="e1" eventTitle="Send Night" door={makeDoor()} />);
+    expect(await screen.findByRole("summary", { name: "12 of 40 checked in" })).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
   });
 });

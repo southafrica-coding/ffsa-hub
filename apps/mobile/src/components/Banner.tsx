@@ -7,7 +7,6 @@ import { bannerStyle, type BannerTone } from "@/theme/styles";
 import { touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-import { useRegisterNeedsYouBand } from "./Screen";
 import { Text } from "./Text";
 
 export type BannerProps = {
@@ -34,7 +33,6 @@ const TONE_ICON: Record<BannerTone, LucideIcon | null> = {
   danger: CircleAlert,
   queued: Clock,
   positive: CircleCheck,
-  needsYou: null,
 };
 
 const isAlert = (tone: BannerTone) => tone === "error" || tone === "danger";
@@ -44,13 +42,10 @@ const isAlert = (tone: BannerTone) => tone === "error" || tone === "danger";
  * ("Offline. Showing what was saved at 08:42."), error (danger border,
  * announced) and queued ("Saved on this phone, not yet sent"). Errors should
  * say what to do and offer Try again (actionLabel + onAction).
- *
- * tone="needsYou" still draws the yellow band for older screens; new code
- * uses NeedsYouBand.
+ * The yellow band is NeedsYouBand, not a Banner tone.
  */
 export function Banner({ tone = "info", title, children, actionLabel, onAction, actionBusy = false, action, icon, testID }: BannerProps) {
   const { colors } = useTheme();
-  useRegisterNeedsYouBand(tone === "needsYou");
   const s = bannerStyle(tone, colors);
   const alert = isAlert(tone);
   const role = alert ? "alert" : "summary";
@@ -67,12 +62,12 @@ export function Banner({ tone = "info", title, children, actionLabel, onAction, 
   const message = (
     <>
       {title ? (
-        <Text variant={tone === "needsYou" ? "eyebrow" : "sectionTitle"} tone={s.text}>
+        <Text variant="sectionTitle" tone={s.text}>
           {title}
         </Text>
       ) : null}
       {typeof children === "string" ? (
-        <Text variant={tone === "needsYou" ? "rowTitle" : "caption"} tone={s.text}>
+        <Text variant="caption" tone={s.text}>
           {children}
         </Text>
       ) : (

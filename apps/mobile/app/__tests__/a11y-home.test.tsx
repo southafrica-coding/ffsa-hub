@@ -6,7 +6,7 @@ import { render, screen } from "@testing-library/react-native";
 
 import { MeProvider } from "@/features/shell";
 import { ApiError } from "@/lib/api";
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
 import { apiFetch } from "@/lib/api-client";
 
 import { apiRoutes, makeMe } from "../../test/fixtures";
@@ -38,6 +38,11 @@ const renderHome = () =>
   );
 const noProblems = () => expect(auditTappables(screen.container as never)).toEqual([]);
 
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
 beforeEach(async () => {
   mockFetch.mockReset();
   await AsyncStorage.clear();
@@ -66,6 +71,16 @@ describe("Home accessibility", () => {
       expect(screen.getByRole("button", { name }).props.accessibilityHint).toBeTruthy();
     }
     noProblems();
+  });
+
+  it("largest text: nothing on Home is capped or clipped", async () => {
+    const dims = atLargestText();
+    mockFetch.mockImplementation(apiRoutes({ "/api/me": makeMe(), "/api/notifications": FEED }));
+    await renderHome();
+    expect(await screen.findByRole("header", { name: "Hello, Sample" })).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    noProblems();
+    dims.mockRestore();
   });
 
   it("empty: the message is a heading", async () => {

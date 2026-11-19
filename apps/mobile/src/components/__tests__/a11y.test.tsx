@@ -5,7 +5,7 @@ import { StyleSheet, View } from "react-native";
 import { auditTappables, tappableSizes } from "@/lib/a11y/testing";
 import { touch } from "@/theme/tokens";
 
-import { Banner, Button, EmptyState, LargeTitle, ListGroup, ListRow, Screen, SectionHeader, SkeletonList, Text, TextField } from "..";
+import { Banner, Button, EmptyState, NeedsYouBand, LargeTitle, ListGroup, ListRow, Screen, SectionHeader, SkeletonList, Text, TextField } from "..";
 
 const flatten = (s: unknown) => (StyleSheet.flatten(s as never) ?? {}) as Record<string, unknown>;
 
@@ -95,9 +95,7 @@ describe("kit accessibility", () => {
   it("banners: danger is an alert; needs-you is a summary read as one unit", async () => {
     await render(
       <Screen>
-        <Banner tone="needsYou" title="Needs you">
-          2 receipts are missing
-        </Banner>
+        <NeedsYouBand eyebrow="Needs you" text="2 receipts are missing" />
       </Screen>,
     );
     const band = screen.getByRole("summary");

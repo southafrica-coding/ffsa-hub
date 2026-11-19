@@ -88,7 +88,9 @@ describe("My Schools (8.1)", () => {
     expect(screen.getAllByTestId("needs-you")).toHaveLength(1);
     expect(flat(band)).toMatchObject({ backgroundColor: colors.light.accent, borderRadius: 8 });
     expect(flat(within(band).getByText(strings.list.needsYouOne("Missions School 2027"))).color).toBe(colors.light.onAccent);
-    await fireEvent.press(within(band).getByRole("button", { name: strings.list.apply }));
+    const apply = within(band).getByRole("button", { name: strings.list.apply });
+    expect(apply.props.accessibilityHint).toBe(strings.list.applyHint);
+    await fireEvent.press(apply);
     expect(openBrowser).toHaveBeenCalledWith("https://hub.example.test/my-schools/apply/p2", expect.anything());
   });
 

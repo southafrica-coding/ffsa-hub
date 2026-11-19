@@ -140,10 +140,9 @@ export const maxFontScale: Record<TextVariant, number | undefined> = {
 
 /**
  * primary / secondary / text / danger / dangerFill (design-spec §4).
- * Legacy: `ghost` (plain, no underline: sheet Close buttons) and
- * `destructive` (= danger).
+ * Plus `ghost` (plain, no underline: sheet Close buttons, Cancel in a bar).
  */
-export type ButtonVariant = "primary" | "secondary" | "text" | "danger" | "dangerFill" | "ghost" | "destructive";
+export type ButtonVariant = "primary" | "secondary" | "text" | "danger" | "dangerFill" | "ghost";
 export type ButtonSize = "default" | "small";
 
 export function buttonStyle(
@@ -199,7 +198,6 @@ export function buttonStyle(
         state.disabled ? c.textTertiary : c.text,
       );
     case "danger":
-    case "destructive":
       return out({ backgroundColor: state.pressed ? c.surface : "transparent", borderColor: c.danger }, c.danger);
     case "dangerFill":
       return out({ backgroundColor: c.danger, borderColor: c.danger, opacity: state.pressed ? 0.85 : 1 }, c.onDanger);
@@ -210,10 +208,9 @@ export function buttonStyle(
 
 /**
  * info / offline / error / queued (full 1px border + leading icon).
- * `needsYou` is THE yellow band (prefer NeedsYouBand): at most one per screen.
- * Legacy: `danger` (= error), `positive`.
+ * Also `danger` (= error) and `positive`. The yellow band is NeedsYouBand.
  */
-export type BannerTone = "info" | "offline" | "error" | "queued" | "positive" | "needsYou" | "danger";
+export type BannerTone = "info" | "offline" | "error" | "queued" | "positive" | "danger";
 
 export function bannerStyle(
   tone: BannerTone,
@@ -231,12 +228,6 @@ export function bannerStyle(
     backgroundColor: c.surface,
   };
   switch (tone) {
-    case "needsYou":
-      return {
-        container: { ...base, ...needsYouBandStyle(c), borderWidth: 0 },
-        text: "onAccent",
-        iconColor: c.onAccent,
-      };
     case "error":
     case "danger":
       return { container: { ...base, borderColor: c.danger }, text: "default", iconColor: c.danger };

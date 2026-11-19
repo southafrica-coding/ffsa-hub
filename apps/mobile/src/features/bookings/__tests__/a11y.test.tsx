@@ -6,7 +6,7 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { AccessibilityInfo, Platform, View } from "react-native";
 
 import type { MeState } from "@/features/shell";
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
 import { RadioRow } from "@/components";
 
 import { makeMe } from "../../../../test/fixtures";
@@ -262,5 +262,24 @@ describe("Bookings components", () => {
     );
     expect(screen.getByRole("alert", { name: strings.clash.blockedTitle })).toBeTruthy();
     expect(spoken()).toEqual([strings.clash.blockedTitle]);
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("largest text: nothing is capped or clipped", () => {
+  it("Bookings home", async () => {
+    const dims = atLargestText();
+    signedInAs(["bookings.view", "bookings.approve"]);
+    mine.mockResolvedValue({ spaces: [spaceBooking({ booking_date: "2099-01-10" })], vehicles: [] });
+    pending.mockResolvedValue({ spaces: [spaceBooking()], vehicles: [] });
+    await render(inSafeArea(<BookingsHomeScreen />));
+    await screen.findByText(strings.home.needsYou(1));
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    noProblems();
+    dims.mockRestore();
   });
 });

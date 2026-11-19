@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { auditTappables, tappableSizes } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems, tappableSizes } from "@/lib/a11y/testing";
 import { colors } from "@/theme/tokens";
 
 import { document, emptyHistory, history, payment } from "../__fixtures__/fixtures";
@@ -250,5 +250,25 @@ describe("My History, redesigned (frames 9.1–9.4)", () => {
     expect(within(sheet).getByRole("button", { name: strings.detail.openFile }).props.accessibilityHint).toBe(strings.detail.openFileHint);
     expect(within(sheet).getByText(strings.detail.nothingMore)).toBeTruthy();
     expect(audit()).toEqual([]);
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("My History, largest text", () => {
+  it("nothing important is capped or clipped", async () => {
+    const dims = atLargestText();
+    load.mockResolvedValue(history());
+    await show(<HistoryScreen />);
+    expect(await screen.findByText("Personal · 4 records on file")).toBeTruthy();
+    // Deliberate clamps: each record row's title and subtitle are 2 lines (imported text can be
+    // long); the row's label reads them in full and the record sheet shows every field.
+    const rowLines = ["DTS", "2019 Winter · accepted", "DTS Cape Town", "DTS · student", "ZAR 1,500.00", "School fees deposit", "Passport", "A0000000"];
+    expect(largeTextProblems(screen.container as never, rowLines)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
   });
 });

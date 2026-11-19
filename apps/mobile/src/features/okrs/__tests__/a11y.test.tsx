@@ -8,7 +8,7 @@ import type { ReactElement } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ApiError } from "@/lib/api";
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
 
 import { OWNER_ID, checkin, ownerPage, wall } from "../__fixtures__/fixtures";
 import { okrsApi } from "../client";
@@ -100,5 +100,22 @@ describe("OKR owner page and key-result sheet", () => {
     expect(screen.getByLabelText(strings.kr.commentLabel)).toBeTruthy();
     expect(screen.getByRole("button", { name: strings.kr.save })).toBeTruthy();
     expect(audit()).toEqual([]);
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("largest text: nothing is capped or clipped", () => {
+  it("OKR wall", async () => {
+    const dims = atLargestText();
+    api.loadWall.mockResolvedValue(wall({ canManageCycles: true }));
+    await show(<WallScreen cycle={null} />);
+    expect(await screen.findByRole("header", { name: /Main ministries/ })).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
   });
 });

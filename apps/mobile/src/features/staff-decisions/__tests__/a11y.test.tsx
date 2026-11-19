@@ -7,7 +7,7 @@ import type { ReactElement } from "react";
 import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
 import { colors } from "@/theme/tokens";
 import { themeFor } from "@/theme/use-theme";
 
@@ -101,5 +101,33 @@ describe("School detail", () => {
     expect(group.backgroundColor).toBe(colors.dark.raised);
     expect(StyleSheet.flatten(screen.getByTestId("needs-you").props.style).backgroundColor).toBe(colors.dark.accent);
     expect(audit()).toEqual([]);
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("largest text: nothing important is capped or clipped", () => {
+  it("Staff decisions list", async () => {
+    const dims = atLargestText();
+    list.mockResolvedValue(schoolList());
+    await show(<SchoolsListScreen />);
+    expect(await screen.findByRole("header", { name: strings.list.title })).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
+  });
+
+  it("School students", async () => {
+    const dims = atLargestText();
+    one.mockResolvedValue(detail());
+    await show(<SchoolDetailScreen programId={LT_2026} />);
+    expect(await screen.findByRole("header", { name: "Leadership Track 2026" })).toBeTruthy();
+    // Deliberate clamp: a decision note shows 3 lines; the row's spoken label carries the whole note.
+    expect(largeTextProblems(screen.container as never, ["Note: Not this year"])).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
   });
 });
