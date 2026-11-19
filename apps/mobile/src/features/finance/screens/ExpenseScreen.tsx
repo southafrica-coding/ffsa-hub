@@ -1,24 +1,24 @@
 import * as Crypto from "expo-crypto";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { Camera, ImagePlus } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Image, Pressable, Switch, View } from "react-native";
+import { Camera, Check, ImagePlus, RefreshCw, Trash2 } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Banner, Button, Divider, Masthead, Screen, Text, TextField } from "@/components";
+import { Banner, Button, LargeTitleScrollView, Sheet, SkeletonList, StatusChip, Text, TextField, Toggle, type BackAction } from "@/components";
 import { useSession } from "@/auth/session-provider";
 import { announce } from "@/lib/a11y";
 import { apiFetch } from "@/lib/api-client";
 import { supabase } from "@/lib/supabase";
-import { hairline, touch } from "@/theme/tokens";
-import { switchColors } from "@/theme/styles";
+import { hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { deleteExpense, deleteReceipt, exchangeRateToZar, listReceipts, updateExpense, userMessage } from "../api";
 import { chooseReceiptPhotos, takeReceiptPhoto, type DraftPhoto } from "../capture";
+import { ChipButton, ChoiceChips, Disclosure, FieldError, FormNavBar, SelectField } from "../components/form-parts";
 import { OutboxList } from "../components/OutboxList";
-import { Sheet } from "../components/Sheet";
-import { Chips, ErrorState, Skeleton, Tag } from "../components/ui";
+import { Bleed, LoadError, PushedPage } from "../components/parts";
 import { loadTeam, type ReadClient, type TeamData, type TeamMoneyView } from "../data";
 import {
   PAYMENT_METHODS,
@@ -55,36 +55,47 @@ export default function ExpenseScreen({ teamId, expenseId }: { teamId: string; e
   const userId = session?.user.id ?? null;
   const load = useCallback(() => loadTeam(db, teamId), [teamId]);
   const { state, retry } = useCachedLoad<TeamData>({ userId, cacheName: `team.${teamId}`, load, errorMessage: userMessage });
+  const router = useRouter();
+
+  // Before the form can be drawn (loading, error, no access): a way back and the message.
+  const shell = (children: ReactNode) =>
+    expenseId ? (
+      <PushedPage back={{ label: s.backToTeam, onPress: () => router.back() }}>{children}</PushedPage>
+    ) : (
+      <FormPage title={s.newTitle} onCancel={() => router.back()}>
+        {children}
+      </FormPage>
+    );
 
   if (state.status === "loading") {
-    return (
-      <Screen edges={["bottom"]}>
-        <Skeleton label={strings.team.loading} rows={6} />
-      </Screen>
+    return shell(
+      <Bleed>
+        <SkeletonList label={strings.team.loading} count={6} inset={false} />
+      </Bleed>,
     );
   }
   if (state.status === "error") {
-    return (
-      <Screen edges={["bottom"]}>
-        <ErrorState title={s.loadError} message={state.message} onRetry={retry} />
-      </Screen>
+    return shell(
+      <Bleed>
+        <LoadError title={s.loadError} message={state.message} onRetry={retry} />
+      </Bleed>,
     );
   }
   if (state.data.kind !== "money") {
-    return (
-      <Screen edges={["bottom"]}>
-        <Banner tone="danger" title={s.loadError}>
+    return shell(
+      <Bleed>
+        <Banner tone="error" title={s.loadError}>
           {strings.common.forbidden}
         </Banner>
-      </Screen>
+      </Bleed>,
     );
   }
   const expense = expenseId ? state.data.expenses.find((e) => e.id === expenseId) : undefined;
   if (expenseId && !expense) {
-    return (
-      <Screen edges={["bottom"]}>
-        <ErrorState title={s.loadError} message="This expense isn't there any more. It may have been deleted on the website." onRetry={retry} />
-      </Screen>
+    return shell(
+      <Bleed>
+        <LoadError title={s.loadError} message={s.gone} onRetry={retry} />
+      </Bleed>,
     );
   }
   return <ExpenseFormView view={state.data} teamId={teamId} expense={expense} userId={userId} />;
@@ -102,7 +113,8 @@ function ExpenseFormView({
   userId: string | null;
 }) {
   const router = useRouter();
-  const { colors, scheme } = useTheme();
+  const { colors } = useTheme();
+  const { fontScale, width } = useWindowDimensions();
   const { outbox, items } = useOutbox();
   const isNew = !expense;
   const canEdit = view.canEdit;
@@ -284,7 +296,7 @@ function ExpenseFormView({
         // Take it back out of the outbox, keep the photos on the form.
         await outbox.discard(expenseId, { keepFiles: true });
         handedOver.current = false;
-        setSaveError(after.lastError ?? "FFSA Hub couldn't save this expense.");
+        setSaveError(after.lastError ?? s.saveFailed);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
         return;
       }
@@ -315,7 +327,7 @@ function ExpenseFormView({
           setDeleting(true);
           try {
             await deleteExpense(apiFetch, expense.id);
-            setFlash(teamId, { tone: "positive", message: "Expense deleted." });
+            setFlash(teamId, { tone: "positive", message: s.deleted });
             router.back();
           } catch (err) {
             setSaveError(userMessage(err));
@@ -347,65 +359,60 @@ function ExpenseFormView({
 
   const openViewer = (uri: string, title: string) => router.push({ pathname: "/finance/receipt", params: { uri, title } });
   const readOnly = !canEdit;
+  // Two fields side by side, unless the text is large or the phone narrow: then they stack.
+  const sideBySide = fontScale <= 1.3 && width >= 340;
+  const pair = (a: ReactNode, b: ReactNode, weights: [number, number] = [1, 1]) =>
+    sideBySide ? (
+      <View style={{ flexDirection: "row", gap: space.md, alignItems: "flex-start" }}>
+        <View style={{ flex: weights[0], minWidth: 0 }}>{a}</View>
+        <View style={{ flex: weights[1], minWidth: 0 }}>{b}</View>
+      </View>
+    ) : (
+      <View style={{ gap: space.lg }}>
+        {a}
+        {b}
+      </View>
+    );
+  const receiptTotal = receipts.list.length + drafts.length;
 
-  return (
-    <Screen keyboard edges={["bottom"]}>
-      <Masthead context={s.loggingTo(view.team.team_name)} title={isNew ? s.newTitle : s.editTitle} />
-      {readOnly ? <Banner tone="info">{s.readOnly}</Banner> : null}
+  const body = (
+    <>
+      {readOnly ? (
+        <Bleed>
+          <Banner tone="info">{s.readOnly}</Banner>
+        </Bleed>
+      ) : null}
 
-      {/* Budget line */}
-      <View style={{ gap: 6 }}>
-        <Text variant="monoLabel" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
-          {s.category}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${s.category}: ${categoryName ?? s.categoryPlaceholder}`}
-          accessibilityHint={errors.category_id ? `${errors.category_id} Opens the list of budget lines` : "Opens the list of budget lines"}
-          accessibilityState={{ disabled: readOnly }}
-          disabled={readOnly}
-          onPress={() => setSheetOpen(true)}
-          style={({ pressed }) => ({
-            minHeight: touch.minTarget,
-            justifyContent: "center",
-            paddingHorizontal: 12,
-            borderWidth: errors.category_id ? 2 : hairline,
-            borderColor: errors.category_id ? colors.danger : colors.ruleStrong,
-            backgroundColor: pressed ? colors.surface : colors.bg,
-          })}
-        >
-          <Text tone={categoryName ? "default" : "secondary"}>{categoryName ?? s.categoryPlaceholder}</Text>
-        </Pressable>
-        {errors.category_id ? (
-          <Text variant="caption" tone="danger" accessibilityRole="alert">
-            {errors.category_id}
-          </Text>
+      <View style={{ gap: space.sm }}>
+        {pair(
+          <SelectField
+            label={s.category}
+            value={categoryName}
+            placeholder={s.categoryPlaceholder}
+            error={errors.category_id}
+            disabled={readOnly}
+            accessibilityHint={s.categoryHint}
+            onPress={() => setSheetOpen(true)}
+          />,
+          <TextField
+            label={s.date}
+            value={form.expense_date}
+            onChangeText={(v) => set("expense_date", v)}
+            error={errors.expense_date}
+            accessibilityHint={errors.expense_date ?? s.dateHint}
+            editable={!readOnly}
+            keyboardType="numbers-and-punctuation"
+            autoCorrect={false}
+            maxLength={10}
+          />,
+        )}
+        {!readOnly ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+            <ChipButton label={s.today} accessibilityHint={strings.a11y.todayHint} onPress={() => set("expense_date", todayIso())} />
+            <ChipButton label={s.yesterday} accessibilityHint={strings.a11y.yesterdayHint} onPress={() => set("expense_date", shiftIso(todayIso(), -1))} />
+          </View>
         ) : null}
       </View>
-
-      {/* Date */}
-      <TextField
-        label={s.date}
-        value={form.expense_date}
-        onChangeText={(v) => set("expense_date", v)}
-        error={errors.expense_date}
-        hint={s.dateHint}
-        editable={!readOnly}
-        keyboardType="numbers-and-punctuation"
-        autoCorrect={false}
-        maxLength={10}
-      />
-      {!readOnly ? (
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <Button label={s.today} accessibilityHint={strings.a11y.todayHint} variant="secondary" onPress={() => set("expense_date", todayIso())} />
-          <Button
-            label={s.yesterday}
-            accessibilityHint={strings.a11y.yesterdayHint}
-            variant="secondary"
-            onPress={() => set("expense_date", shiftIso(todayIso(), -1))}
-          />
-        </View>
-      ) : null}
 
       <TextField
         label={s.description}
@@ -416,7 +423,7 @@ function ExpenseFormView({
         editable={!readOnly}
       />
 
-      <Chips<PaymentMethod>
+      <ChoiceChips<PaymentMethod>
         label={s.paymentMethod}
         value={form.payment_method}
         onChange={(v) => set("payment_method", v)}
@@ -425,8 +432,8 @@ function ExpenseFormView({
       />
 
       {/* Amount + currency */}
-      <View style={{ flexDirection: "row", gap: 12, alignItems: "flex-start" }}>
-        <View style={{ flex: 2 }}>
+      <View style={{ gap: space.sm }}>
+        {pair(
           <TextField
             label={foreign ? `${s.amount} (${form.currency || "?"})` : `${s.amount} (rand)`}
             value={form.amount}
@@ -435,9 +442,7 @@ function ExpenseFormView({
             keyboardType="decimal-pad"
             placeholder="0.00"
             editable={!readOnly}
-          />
-        </View>
-        <View style={{ flex: 1 }}>
+          />,
           <TextField
             label={s.currency}
             value={form.currency}
@@ -447,24 +452,26 @@ function ExpenseFormView({
             autoCorrect={false}
             maxLength={3}
             editable={!readOnly}
-            accessibilityHint={s.currencyHint}
+            accessibilityHint={errors.currency ?? s.currencyHint}
+          />,
+          [2, 1],
+        )}
+        {!readOnly && view.team.currency !== "ZAR" ? (
+          <ChoiceChips
+            label={s.currency}
+            labelPlacement="hidden"
+            value={form.currency}
+            onChange={(v) => set("currency", v)}
+            options={[
+              { value: "ZAR", label: "ZAR" },
+              { value: view.team.currency, label: view.team.currency },
+            ]}
           />
-        </View>
+        ) : null}
       </View>
-      {!readOnly && view.team.currency !== "ZAR" ? (
-        <Chips
-          label={s.currency}
-          value={form.currency}
-          onChange={(v) => set("currency", v)}
-          options={[
-            { value: "ZAR", label: "ZAR" },
-            { value: view.team.currency, label: view.team.currency },
-          ]}
-        />
-      ) : null}
 
       {foreign ? (
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: space.md }}>
           <TextField
             label={zar.fromPull ? s.zarEstimate : cardAbroad ? s.zarFromBank : s.zarAmount}
             value={zar.fromPull ? (zar.zar === null ? "" : zar.zar.toFixed(2)) : form.zar_amount}
@@ -474,19 +481,30 @@ function ExpenseFormView({
             placeholder="0.00"
             editable={!readOnly && zar.editable}
           />
-          {pricedByPull ? <Banner tone="info">{pull ? s.pullNote(form.currency) : s.noPullNote(form.currency)}</Banner> : null}
+          {pricedByPull ? (
+            <Bleed>
+              <Banner tone="info">{pull ? s.pullNote(form.currency) : s.noPullNote(form.currency)}</Banner>
+            </Bleed>
+          ) : null}
           {!readOnly && zar.editable ? (
-            <Button label={s.useTodaysRate} variant="secondary" loading={rateBusy} onPress={useTodaysRate} />
+            <Button
+              label={s.useTodaysRate}
+              variant="secondary"
+              size="small"
+              icon={<RefreshCw size={18} color={colors.text} />}
+              loading={rateBusy}
+              onPress={useTodaysRate}
+              style={{ alignSelf: "flex-start" }}
+            />
           ) : null}
           {cardAbroad ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: touch.minTarget }}>
-              <Switch
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space.md, minHeight: touch.floor }}>
+              <Toggle
                 value={form.zar_confirmed}
                 onValueChange={(v) => set("zar_confirmed", v)}
                 disabled={readOnly}
                 accessibilityLabel={s.zarConfirmed}
                 accessibilityHint={s.zarConfirmedHint}
-                {...switchColors(colors, scheme, form.zar_confirmed)}
               />
               <View style={{ flex: 1 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                 <Text>{s.zarConfirmed}</Text>
@@ -501,117 +519,139 @@ function ExpenseFormView({
         </View>
       ) : null}
 
-      <Button
+      <Disclosure
         label={more ? s.lessDetails : s.moreDetails}
-        variant="ghost"
-        onPress={() => setMore((m) => !m)}
-        accessibilityState={{ expanded: more }}
+        expanded={more}
         accessibilityHint={strings.a11y.moreDetailsHint}
+        onPress={() => setMore((m) => !m)}
       />
       {more ? (
-        <View style={{ gap: 16 }}>
-          <TextField label={s.vendor} value={form.vendor} onChangeText={(v) => set("vendor", v)} editable={!readOnly} />
-          <TextField label={s.purchaser} value={form.purchaser} onChangeText={(v) => set("purchaser", v)} editable={!readOnly} />
-          <TextField label={s.receiptCode} value={form.receipt_code} onChangeText={(v) => set("receipt_code", v)} editable={!readOnly} placeholder="e.g. R001" />
-          <TextField label={s.country} value={form.country} onChangeText={(v) => set("country", v)} editable={!readOnly} />
+        <>
+          {pair(
+            <TextField label={s.vendor} value={form.vendor} onChangeText={(v) => set("vendor", v)} editable={!readOnly} />,
+            <TextField label={s.purchaser} value={form.purchaser} onChangeText={(v) => set("purchaser", v)} editable={!readOnly} />,
+          )}
+          {pair(
+            <TextField
+              label={s.receiptCode}
+              value={form.receipt_code}
+              onChangeText={(v) => set("receipt_code", v)}
+              editable={!readOnly}
+              placeholder={s.receiptCodePlaceholder}
+            />,
+            <TextField label={s.country} value={form.country} onChangeText={(v) => set("country", v)} editable={!readOnly} />,
+          )}
           <TextField label={s.notes} value={form.notes} onChangeText={(v) => set("notes", v)} editable={!readOnly} multiline />
-        </View>
+        </>
       ) : null}
 
-      <Divider strong />
-
       {/* Receipts */}
-      <View style={{ gap: 12 }}>
-        <Text variant="title">{s.receipts}</Text>
-
-        {receipts.status === "loading" && !isNew ? <Skeleton rows={1} label={strings.a11y.loadingReceipts} /> : null}
-        {receipts.status === "error" ? (
-          <Banner tone="danger" action={<Button label={strings.common.tryAgain} variant="secondary" onPress={fetchReceipts} />}>
-            {s.receiptsLoadError}
-          </Banner>
-        ) : null}
-
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-          {receipts.list.map((r, idx) => (
-            <Thumb
-              key={r.id}
-              uri={r.signed_url}
-              label={s.viewReceipt(idx + 1)}
-              onOpen={r.signed_url ? () => openViewer(r.signed_url as string, r.file_name) : undefined}
-              onRemove={canEdit ? () => confirmDeleteReceipt(r) : undefined}
-              removeLabel={`${s.deleteReceipt} ${idx + 1}`}
-            />
-          ))}
-          {drafts.map((d, idx) => (
-            <Thumb
-              key={d.localUri}
-              uri={d.localUri}
-              label={s.viewReceipt(idx + 1)}
-              onOpen={() => openViewer(d.localUri, d.fileName)}
-              onRemove={() => removeDraft(d)}
-              removeLabel={s.removePhoto(idx + 1)}
-            />
-          ))}
+      <View style={{ gap: space.sm }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: space.md }}>
+          <Text variant="label" accessibilityRole="header">
+            {s.receipts}
+          </Text>
+          {receiptTotal > 0 ? <Text variant="label">{s.receiptCount(receiptTotal)}</Text> : null}
         </View>
 
-        {queued.length > 0 ? <OutboxList items={queued} outbox={outbox} /> : null}
+        {receipts.status === "loading" && !isNew ? <SkeletonList count={1} label={strings.a11y.loadingReceipts} inset={false} /> : null}
+        {receipts.status === "error" ? (
+          <Bleed>
+            <Banner tone="error" actionLabel={strings.common.tryAgain} onAction={fetchReceipts}>
+              {s.receiptsLoadError}
+            </Banner>
+          </Bleed>
+        ) : null}
 
-        {errors.receipts ? (
-          <Text variant="caption" tone="danger" accessibilityRole="alert">
-            {errors.receipts}
-          </Text>
+        {receiptTotal > 0 ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+            {receipts.list.map((r, idx) => (
+              <Thumb
+                key={r.id}
+                uri={r.signed_url}
+                label={s.viewReceipt(idx + 1)}
+                onOpen={r.signed_url ? () => openViewer(r.signed_url as string, r.file_name) : undefined}
+                onRemove={canEdit ? () => confirmDeleteReceipt(r) : undefined}
+                removeLabel={`${s.deleteReceipt} ${idx + 1}`}
+              />
+            ))}
+            {drafts.map((d, idx) => (
+              <Thumb
+                key={d.localUri}
+                uri={d.localUri}
+                label={s.viewReceipt(idx + 1)}
+                onOpen={() => openViewer(d.localUri, d.fileName)}
+                onRemove={() => removeDraft(d)}
+                removeLabel={s.removePhoto(idx + 1)}
+              />
+            ))}
+          </View>
         ) : null}
-        {captureError ? (
-          <Text variant="caption" tone="danger" accessibilityRole="alert">
-            {captureError}
-          </Text>
+
+        {queued.length > 0 ? (
+          <Bleed>
+            <OutboxList items={queued} outbox={outbox} />
+          </Bleed>
         ) : null}
+
+        {errors.receipts ? <FieldError>{errors.receipts}</FieldError> : null}
+        {captureError ? <FieldError>{captureError}</FieldError> : null}
 
         {canEdit ? (
-          <View style={{ gap: 8 }}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
             <Button
               label={capturing ? strings.expense.preparingPhoto : s.takePhoto}
               accessibilityHint={s.takePhotoHint}
               icon={<Camera size={18} color={colors.text} />}
               variant="secondary"
+              size="small"
               loading={capturing}
               onPress={() => addPhotos("camera")}
+              style={{ flexGrow: 1, flexBasis: 150 }}
             />
             <Button
               label={s.chooseLibrary}
               accessibilityHint={s.chooseLibraryHint}
               icon={<ImagePlus size={18} color={colors.text} />}
               variant="secondary"
+              size="small"
               disabled={capturing}
               onPress={() => addPhotos("library")}
+              style={{ flexGrow: 1, flexBasis: 150 }}
             />
           </View>
         ) : null}
       </View>
 
       {saveError ? (
-        <Banner tone="danger" title="Not saved">
-          {saveError}
-        </Banner>
+        <Bleed>
+          <Banner tone="error" title={s.notSaved}>
+            {saveError}
+          </Banner>
+        </Bleed>
       ) : null}
 
       {canEdit ? (
-        <View style={{ gap: 12, paddingTop: 8 }}>
+        <View style={{ gap: space.sm, paddingTop: space.sm }}>
           <Button label={saving ? s.saving : isNew ? s.save : s.saveChanges} loading={saving} onPress={save} />
-          {!isNew ? <Button label={s.delete} variant="destructive" loading={deleting} onPress={confirmDelete} /> : null}
+          {!isNew ? (
+            <Button label={s.delete} variant="danger" icon={<Trash2 size={18} color={colors.danger} />} loading={deleting} onPress={confirmDelete} />
+          ) : null}
         </View>
       ) : null}
 
       {expense ? (
-        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-          <Text variant="caption" tone="secondary">{`${formatMoney(expense.zar_amount, "ZAR")} on FFSA Hub`}</Text>
-          {expense.source === "slack" ? <Tag>{s.fromSlack}</Tag> : null}
+        <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap", alignItems: "center" }}>
+          <Text variant="caption" tone="secondary">
+            {s.onHub(formatMoney(expense.zar_amount, "ZAR"))}
+          </Text>
+          {expense.source === "slack" ? <StatusChip label={s.fromSlack} variant="quiet" icon={null} /> : null}
         </View>
       ) : null}
 
       <Sheet visible={sheetOpen} title={s.categorySheetTitle} onClose={() => setSheetOpen(false)}>
         <View accessibilityRole="radiogroup" accessibilityLabel={s.category}>
-          {categories.map((c) => {
+          {categories.map((c, idx) => {
             const selected = c.id === form.category_id;
             return (
               <Pressable
@@ -625,22 +665,64 @@ function ExpenseFormView({
                 }}
                 style={({ pressed }) => ({
                   minHeight: touch.minTarget,
-                  justifyContent: "center",
-                  borderBottomWidth: hairline,
-                  borderBottomColor: colors.rule,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: space.md,
+                  paddingVertical: space.sm,
+                  borderTopWidth: idx > 0 ? hairline : 0,
+                  borderTopColor: colors.rule,
                   backgroundColor: pressed ? colors.surface : "transparent",
-                  borderLeftWidth: selected ? 3 : 0,
-                  borderLeftColor: colors.text,
-                  paddingLeft: selected ? 9 : 0,
                 })}
               >
-                <Text variant={selected ? "bodyStrong" : "body"}>{selected ? `${c.name}  ✓` : c.name}</Text>
+                {/* Chosen = bold with a tick, not colour. */}
+                <Text variant={selected ? "rowTitle" : "body"} style={{ flex: 1 }}>
+                  {c.name}
+                </Text>
+                {selected ? <Check size={20} color={colors.text} /> : null}
               </Pressable>
             );
           })}
         </View>
       </Sheet>
-    </Screen>
+    </>
+  );
+
+  if (isNew) {
+    return (
+      <FormPage title={s.newTitle} onCancel={() => router.back()}>
+        <Text variant="label">{s.loggingTo(view.team.team_name)}</Text>
+        {body}
+      </FormPage>
+    );
+  }
+  const back: BackAction = { label: view.team.team_name, onPress: () => router.back() };
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <LargeTitleScrollView back={back} eyebrow={s.loggingTo(view.team.team_name)} title={s.editTitle} tick={false}>
+        {body}
+      </LargeTitleScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+/** Add expense: a full-height pushed form with Cancel and the title in the bar (the tab bar is hidden). */
+function FormPage({ title, onCancel, children }: { title: string; onCancel: () => void; children: ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View style={{ paddingHorizontal: space.gutter }}>
+        <FormNavBar title={title} cancelLabel={s.cancel} onCancel={onCancel} />
+      </View>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.sm, paddingBottom: space.xl, gap: space.lg }}
+        >
+          {children}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -680,19 +762,27 @@ function Thumb({
 }) {
   const { colors } = useTheme();
   return (
-    <View style={{ gap: 4, minWidth: 96, maxWidth: 160, alignItems: "flex-start" }}>
+    <View style={{ alignItems: "center" }}>
       <Pressable
         accessibilityRole="imagebutton"
         accessibilityLabel={label}
-        accessibilityHint="Opens the receipt full screen"
+        accessibilityHint={s.viewReceiptHint}
         accessibilityState={{ disabled: !onOpen }}
         disabled={!onOpen}
         onPress={onOpen}
-        style={{ width: 96, height: 96, borderWidth: hairline, borderColor: colors.ruleStrong, backgroundColor: colors.surface }}
+        style={{
+          width: 72,
+          height: 72,
+          borderRadius: radius.control,
+          borderWidth: hairline,
+          borderColor: colors.rule,
+          backgroundColor: colors.surface,
+          overflow: "hidden",
+        }}
       >
         {uri ? <Image source={{ uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" accessibilityIgnoresInvertColors /> : null}
       </Pressable>
-      {onRemove ? <Button label={strings.outbox.discard} accessibilityLabel={removeLabel} variant="ghost" onPress={onRemove} /> : null}
+      {onRemove ? <Button label={strings.outbox.discard} accessibilityLabel={removeLabel} variant="text" onPress={onRemove} /> : null}
     </View>
   );
 }
