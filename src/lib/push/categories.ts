@@ -25,6 +25,10 @@ export const PUSH_CATEGORIES = {
     label: "Students who need care",
     description: "When a student you lead or walk with is flagged as needing care.",
   },
+  training_week: {
+    label: "Your week in Training",
+    description: "Monday morning, when something needs you this week (if you're not on Slack).",
+  },
 } as const;
 
 export type PushCategory = keyof typeof PUSH_CATEGORIES;
@@ -33,6 +37,7 @@ export const PUSH_KINDS = {
   booking_request: "booking_requests",
   booking_decision: "booking_updates",
   training_needs_care: "training_care",
+  training_briefing: "training_week",
 } as const satisfies Record<string, PushCategory>;
 
 export type PushKind = keyof typeof PUSH_KINDS;
@@ -49,6 +54,10 @@ const PUSH_TEXT: Record<PushKind, { title: string; body: string }> = {
   training_needs_care: {
     title: "A student needs care",
     body: "A check-in was flagged. Open FFSA Hub to see it.",
+  },
+  training_briefing: {
+    title: "Your week in Training",
+    body: "A few things need you this week. Open the Training tab to see them.",
   },
 };
 
