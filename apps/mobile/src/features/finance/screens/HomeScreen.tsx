@@ -1,18 +1,20 @@
 import { useRouter } from "expo-router";
+import { Clock, ShieldCheck, Wallet } from "lucide-react-native";
 import { useCallback } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, View } from "react-native";
 
-import { Banner, Masthead, Screen, Text } from "@/components";
+import { Banner, EmptyState, LargeTitleScrollView, ListGroup, NeedsYouBand, SkeletonList, StatusChip, Text } from "@/components";
 import { useSession } from "@/auth/session-provider";
 import { useMe } from "@/features/shell";
 import { supabase } from "@/lib/supabase";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { isFinanceStaff } from "../access";
 import { userMessage } from "../api";
 import { formatSavedAt } from "../cache";
-import { BudgetBar, EmptyState, ErrorState, Row, SectionBar, Skeleton, StaleNote, Tag } from "../components/ui";
+import { Bleed, BudgetBar, GroupRow, InfoRow, LoadError, SectionTitle, StaleNote, StatusLine } from "../components/parts";
 import { loadHome, type HomeData, type HomeTeam, type ReadClient } from "../data";
 import { budgetFigures, moneyLabel } from "../money";
 import { useOutbox } from "../outbox/provider";
@@ -21,6 +23,7 @@ import { strings } from "../strings";
 import { useCachedLoad } from "../use-cached-load";
 
 const db = supabase as unknown as ReadClient;
+const s = strings.home;
 
 export function dateRange(start: string | null, end: string | null) {
   const parts = [start, end].filter(Boolean) as string[];
@@ -45,98 +48,100 @@ export default function FinanceHomeScreen() {
 
   const mine = items.filter((i) => i.userId === userId);
   const failed = mine.filter((i) => i.status === "failed");
+  const teams = state.status === "ready" ? state.data.teams : null;
 
   return (
-    <Screen scroll={false} edges={["top"]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
-      >
-        <Masthead context={strings.home.context} title={strings.home.title} />
-
-        {!online ? <Banner tone="info">{strings.outbox.offline}</Banner> : null}
+    <LargeTitleScrollView
+      eyebrow={s.context}
+      title={s.title}
+      gap={0}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
+    >
+      <Bleed style={{ gap: space.md }}>
+        {!online ? <Banner tone="offline">{strings.outbox.offline}</Banner> : null}
 
         {/* The screen's one yellow band: only when something on this phone needs the person. */}
-        {failed.length > 0 ? (
-          <Banner tone="needsYou" title={strings.team.needsYouTitle} testID="needs-you">
-            {`${failed.length} ${failed.length === 1 ? "item" : "items"} couldn't be sent. Open the team to retry or remove ${failed.length === 1 ? "it" : "them"}.`}
-          </Banner>
-        ) : null}
+        {failed.length > 0 ? <NeedsYouBand eyebrow={strings.team.needsYouTitle} text={s.couldntSend(failed.length)} testID="needs-you" /> : null}
 
-        {state.status === "loading" ? <Skeleton label={strings.home.loading} /> : null}
+        {state.status === "loading" ? <SkeletonList label={s.loading} inset={false} /> : null}
 
-        {state.status === "error" ? <ErrorState title={strings.home.errorTitle} message={state.message} onRetry={retry} /> : null}
+        {state.status === "error" ? <LoadError title={s.errorTitle} message={state.message} onRetry={retry} /> : null}
 
         {state.status === "ready" && state.refreshError && state.staleSince !== null ? (
           <StaleNote message={strings.common.refreshFailed(formatSavedAt(state.staleSince))} onRetry={retry} />
         ) : null}
 
-        {state.status === "ready" && state.data.teams.length === 0 ? (
-          <EmptyState
-            title={strings.home.emptyTitle}
-            body={strings.home.emptyBody}
-            extra={isFinanceStaff(me) ? strings.home.emptyStaff : null}
-          />
-        ) : null}
+        {teams && teams.length === 0 ? <EmptyState icon={Wallet} title={s.emptyTitle} body={s.emptyBody} testID="empty-state" /> : null}
+      </Bleed>
 
-        {state.status === "ready" && state.data.teams.length > 0 ? (
-          <View>
-            <SectionBar
-              title={strings.home.teamsSection}
-              meta={`${state.data.teams.length} ${state.data.teams.length === 1 ? "team" : "teams"}`}
-            />
-            {state.data.teams.map((t) => (
-              <TeamRow
-                key={t.membership_id}
-                team={t}
-                pending={mine.filter((i) => i.teamId === t.team_id)}
-                onPress={() => router.push({ pathname: "/finance/[teamId]", params: { teamId: t.team_id } })}
-              />
-            ))}
-          </View>
-        ) : null}
-      </ScrollView>
-    </Screen>
+      {teams && teams.length === 0 && isFinanceStaff(me) ? (
+        <Text variant="note" style={{ marginTop: space.lg }}>
+          {s.emptyStaff}
+        </Text>
+      ) : null}
+
+      {teams && teams.length > 0 ? (
+        <>
+          <SectionTitle title={s.teamsSection} meta={s.teamCount(teams.length)} tight />
+          <Bleed>
+            <ListGroup inset={false}>
+              {teams.map((t) => (
+                <TeamRow
+                  key={t.membership_id}
+                  team={t}
+                  pending={mine.filter((i) => i.teamId === t.team_id)}
+                  onPress={() => router.push({ pathname: "/finance/[teamId]", params: { teamId: t.team_id } })}
+                />
+              ))}
+            </ListGroup>
+          </Bleed>
+
+          {/* Jack's decision (spec §1): a labelled placeholder. No link, no inbox. */}
+          <SectionTitle title={s.officeSection} />
+          <Bleed>
+            <ListGroup inset={false} testID="finance-office">
+              <InfoRow icon={ShieldCheck} title={s.officeApprovals} subtitle={s.officeApprovalsFor} meta={s.officeNotBuilt} />
+            </ListGroup>
+          </Bleed>
+        </>
+      ) : null}
+    </LargeTitleScrollView>
   );
 }
 
 function TeamRow({ team, pending, onPress }: { team: HomeTeam; pending: OutboxItem[]; onPress: () => void }) {
   const role = strings.roles[team.role] ?? team.role;
   const status = strings.status[team.status] ?? team.status;
-  const line2 = [team.program_name, team.location ?? strings.home.locationTbc, role].filter(Boolean).join(" · ");
+  const line2 = [team.program_name, team.location ?? s.locationTbc, role].filter(Boolean).join(" · ");
   const figures = team.money ? budgetFigures(team.money.budget, team.money.spent) : null;
-  const pendingText = pending.length ? `${pending.length} saved on this phone, not yet sent` : null;
+  const pendingText = pending.length ? s.pendingOnPhone(pending.length) : null;
   // Budgets and spending are stored in rand; a team abroad also spends locally.
-  const localNote = team.money && team.money.currency !== "ZAR" ? `Figures in rand · spends in ${team.money.currency}` : null;
+  const localNote = team.money && team.money.currency !== "ZAR" ? s.spendsIn(team.money.currency) : null;
   const spokenMoney = figures
     ? `${strings.team.spent} ${moneyLabel(figures.spent, "ZAR", { cents: false })} of ${moneyLabel(figures.total, "ZAR", { cents: false })}, ${strings.team.remaining} ${moneyLabel(figures.remaining, "ZAR", { cents: false })}`
-    : strings.home.noMoney;
+    : s.noMoney;
 
   return (
-    <Row
+    <GroupRow
       onPress={onPress}
       accessibilityLabel={[team.team_name, status, line2, spokenMoney, localNote, pendingText].filter(Boolean).join(". ")}
-      accessibilityHint="Opens the team's budget and expenses"
+      accessibilityHint={s.teamHint}
       testID={`team-row-${team.team_id}`}
     >
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text variant="title" numberOfLines={2}>
-            {team.team_name}
-          </Text>
-          <Text variant="monoLabel" tone="secondary">
-            {line2}
-          </Text>
-        </View>
-        <Tag>{status}</Tag>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: space.md }}>
+        <Text variant="rowTitle" style={{ flex: 1 }}>
+          {team.team_name}
+        </Text>
+        <StatusChip label={status} variant="quiet" icon={null} />
       </View>
-      {figures && team.money ? (
-        <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+      <Text variant="label">{line2}</Text>
+      {figures ? (
+        <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={{ marginTop: space.xs }}>
           <BudgetBar figures={figures} currency="ZAR" compact />
         </View>
       ) : (
-        <Text variant="caption" tone="secondary">
-          {strings.home.noMoney}
+        <Text variant="caption" tone="secondary" style={{ marginTop: space.xs }}>
+          {s.noMoney}
         </Text>
       )}
       {localNote ? (
@@ -145,10 +150,10 @@ function TeamRow({ team, pending, onPress }: { team: HomeTeam; pending: OutboxIt
         </Text>
       ) : null}
       {pendingText ? (
-        <Text variant="caption" tone="attention">
+        <StatusLine icon={Clock} tone="attention">
           {pendingText}
-        </Text>
+        </StatusLine>
       ) : null}
-    </Row>
+    </GroupRow>
   );
 }
