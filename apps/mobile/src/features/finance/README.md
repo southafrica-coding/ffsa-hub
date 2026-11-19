@@ -44,7 +44,12 @@ Phase 1, slice 2. Mirrors the website's `/my-finance` and outreach team pages.
 - At most one yellow band per screen: unsent items that failed (My finance),
   expenses missing a receipt (team). Neither has a button.
 - "Finance office · Approvals" on My finance is a labelled placeholder: no
-  link, no inbox.
+  link, no inbox. It shows for team members and for finance staff
+  (`isFinanceStaff` in `access.ts`) even when they're on no team.
+- Team: the expense rows (leaders) and the roster (members) are a
+  virtualised list (kit `LargeTitleList` + `ListGroupItem`), so a team with
+  hundreds of expenses scrolls smoothly; everything above the rows is the
+  list header.
 
 ## Follow-ups
 

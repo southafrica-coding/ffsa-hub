@@ -3,7 +3,7 @@ import { Clock, ShieldCheck, Wallet } from "lucide-react-native";
 import { useCallback } from "react";
 import { RefreshControl, View } from "react-native";
 
-import { Banner, EmptyState, LargeTitleScrollView, ListGroup, NeedsYouBand, SkeletonList, StatusChip, Text } from "@/components";
+import { Banner, Bleed, EmptyState, GroupRow, InfoRow, LargeTitleScrollView, ListGroup, LoadError, NeedsYouBand, SectionTitle, SkeletonList, StaleNote, StatusChip, StatusLine, Text } from "@/components";
 import { useSession } from "@/auth/session-provider";
 import { useMe } from "@/features/shell";
 import { supabase } from "@/lib/supabase";
@@ -14,7 +14,7 @@ import { useTheme } from "@/theme/use-theme";
 import { isFinanceStaff } from "../access";
 import { userMessage } from "../api";
 import { formatSavedAt } from "../cache";
-import { Bleed, BudgetBar, GroupRow, InfoRow, LoadError, SectionTitle, StaleNote, StatusLine } from "../components/parts";
+import { BudgetBar } from "../components/parts";
 import { loadHome, type HomeData, type HomeTeam, type ReadClient } from "../data";
 import { budgetFigures, moneyLabel } from "../money";
 import { useOutbox } from "../outbox/provider";
@@ -95,8 +95,13 @@ export default function FinanceHomeScreen() {
               ))}
             </ListGroup>
           </Bleed>
+        </>
+      ) : null}
 
-          {/* Jack's decision (spec §1): a labelled placeholder. No link, no inbox. */}
+      {/* Jack's decision (spec §1): a labelled placeholder. No link, no inbox.
+          Team members see it, and so does the finance office even on no team. */}
+      {teams && (teams.length > 0 || isFinanceStaff(me)) ? (
+        <>
           <SectionTitle title={s.officeSection} />
           <Bleed>
             <ListGroup inset={false} testID="finance-office">
