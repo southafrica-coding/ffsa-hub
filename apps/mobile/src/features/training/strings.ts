@@ -6,6 +6,8 @@ import type { SectionId, TrainingRole } from "./logic";
 
 export const strings = {
   switcherLabel: "Training sections",
+  /** The tab's name: the back label on a student's record. */
+  back: "Training",
   loading: "Loading Training",
   scope: {
     director: "All schools",

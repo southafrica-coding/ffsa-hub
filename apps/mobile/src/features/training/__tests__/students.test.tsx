@@ -21,6 +21,7 @@ jest.mock("expo-router", () => ({
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
 jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "signedIn", session: { user: { id: "daniel" } } }) }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../api", () => ({ ...jest.requireActual("../api"), getStudents: jest.fn(), getStudent: jest.fn(), saveCheckin: jest.fn(), takeCare: jest.fn() }));
 
 const METRICS = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
@@ -85,7 +86,7 @@ describe("Students list", () => {
     await waitFor(() => expect(screen.getByText("Grace Mwangi")).toBeTruthy());
     expect(screen.getByLabelText("Grace Mwangi, Needs care")).toBeTruthy();
     expect(screen.getByText("No check-in")).toBeTruthy();
-    await fireEvent.press(screen.getByTestId("training-filter-no_checkin"));
+    await fireEvent.press(screen.getByRole("radio", { name: "No check-in 1" }));
     expect(screen.queryByText("Grace Mwangi")).toBeNull();
     expect(screen.getByText("Sipho Dlamini")).toBeTruthy();
   });
@@ -125,9 +126,9 @@ describe("Student record", () => {
   it("I'll take it calls the API and reloads", async () => {
     (takeCare as jest.Mock).mockResolvedValue(undefined);
     await show(<StudentScreen id="e-grace" />);
-    await waitFor(() => screen.getByTestId("training-care-take"));
+    await waitFor(() => screen.getByRole("button", { name: strings.record.careTake }));
     const before = (getStudent as jest.Mock).mock.calls.length;
-    await fireEvent.press(screen.getByTestId("training-care-take"));
+    await fireEvent.press(screen.getByRole("button", { name: strings.record.careTake }));
     await waitFor(() => expect(takeCare).toHaveBeenCalledWith(expect.anything(), "c1"));
     await waitFor(() => expect((getStudent as jest.Mock).mock.calls.length).toBeGreaterThan(before));
   });

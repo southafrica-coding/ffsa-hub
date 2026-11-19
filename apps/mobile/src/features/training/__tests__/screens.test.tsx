@@ -20,6 +20,7 @@ jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn(), back: jes
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
 jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "signedIn", session: { user: { id: "kim" } } }) }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../today", () => ({
   ...jest.requireActual("../today"),
   getToday: jest.fn(async () => ({ weekOf: "2026-11-23", isoWeek: "2026-W48", items: [], band: null, open: 0 })),
@@ -55,8 +56,8 @@ describe("TrainingScreen", () => {
     await show(<TrainingScreen now={NOW} />);
     const tabs = screen.getAllByRole("tab");
     expect(tabs.map((t) => t.props.accessibilityLabel)).toEqual(["Today", "Students", "Applicants", "Grades"]);
-    expect(screen.getByTestId("training-section-today").props.accessibilityState).toMatchObject({ selected: true });
-    expect(screen.getByText("MON 23 NOV · YOUR SCHOOL")).toBeTruthy();
+    expect(screen.getByTestId("segment-today").props.accessibilityState).toMatchObject({ selected: true });
+    expect(screen.getByText("MON 23 NOV · Your school")).toBeTruthy();
     expect(screen.getByText("Your week, Kim")).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId("training-today-clear")).toBeTruthy());
   });
@@ -64,8 +65,8 @@ describe("TrainingScreen", () => {
   it("switching section changes the masthead and offers the website", async () => {
     mockMe = { status: "ready", me: leader() };
     await show(<TrainingScreen now={NOW} />);
-    await fireEvent.press(screen.getByTestId("training-section-grades"));
-    expect(screen.getByTestId("training-section-grades").props.accessibilityState).toMatchObject({ selected: true });
+    await fireEvent.press(screen.getByTestId("segment-grades"));
+    expect(screen.getByTestId("segment-grades").props.accessibilityState).toMatchObject({ selected: true });
     expect(screen.getByTestId("training-empty-grades")).toBeTruthy();
     await fireEvent.press(screen.getByText(strings.openWeb));
     expect(shell.openWebPage).toHaveBeenCalledWith("/schools", expect.anything());
@@ -75,7 +76,7 @@ describe("TrainingScreen", () => {
     mockMe = { status: "ready", me: walker() };
     await show(<TrainingScreen now={NOW} />);
     expect(screen.getAllByRole("tab").map((t) => t.props.accessibilityLabel)).toEqual(["Today", "My students", "Grades"]);
-    expect(screen.getByText("MON 23 NOV · YOUR STUDENTS")).toBeTruthy();
+    expect(screen.getByText("MON 23 NOV · Your students")).toBeTruthy();
   });
 
   it("reached without access (a deep link), it says who Training is for", async () => {

@@ -13,6 +13,7 @@ jest.mock("expo-router", () => ({ useRouter: () => mockRouter }));
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
 jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "signedIn", session: { user: { id: "kim" } } }) }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("../today", () => ({ ...jest.requireActual("../today"), getToday: jest.fn(), setTodayDone: jest.fn() }));
 

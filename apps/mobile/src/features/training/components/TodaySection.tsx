@@ -1,15 +1,14 @@
 import { useRouter } from "expo-router";
-import { ChevronRight, SunMedium } from "lucide-react-native";
+import { Check, ChevronRight, SunMedium } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, Text } from "@/components";
-import { ErrorState, Skeleton } from "@/features/finance/components/ui";
+import { Bleed, EmptyState, FadeIn, FieldError, Freshness, ListGroup, LoadError, NeedsYouBand, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { openWebPage, SectionBar, setTabBadge as updateTabBadge, StateMessage } from "@/features/shell";
+import { openWebPage, setTabBadge as updateTabBadge } from "@/features/shell";
 import { apiFetch } from "@/lib/api-client";
-import { hairline, touch } from "@/theme/tokens";
+import { radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { loadErrorMessage } from "../api";
@@ -50,12 +49,31 @@ export function TodaySection({ onOpenStudents }: { onOpenStudents: (filter: Stud
     [router, onOpenStudents, colors],
   );
 
-  if (state.status === "loading" && !data) return <Skeleton label={t.loading} />;
-  if (state.status === "error" && !data) return <ErrorState title={t.errorTitle} message={state.message} onRetry={retry} />;
+  if (state.status === "loading" && !data) {
+    return (
+      <Bleed>
+        <SkeletonList label={t.loading} inset={false} />
+      </Bleed>
+    );
+  }
+  if (state.status === "error" && !data) {
+    return (
+      <Bleed>
+        <LoadError testID="training-today-error" title={t.errorTitle} message={state.message} onRetry={retry} />
+      </Bleed>
+    );
+  }
   if (!data) return null;
 
   if (data.items.length === 0) {
-    return <StateMessage testID="training-today-clear" icon={SunMedium} title={t.clearTitle} body={t.clearBody} />;
+    return (
+      <FadeIn style={{ gap: space.lg }}>
+        <Freshness state={state} onRetry={retry} bleed />
+        <Bleed>
+          <EmptyState testID="training-today-clear" icon={SunMedium} title={t.clearTitle} body={t.clearBody} />
+        </Bleed>
+      </FadeIn>
+    );
   }
 
   const band = data.items.find((i) => i.key === data.band) ?? null;
@@ -74,62 +92,75 @@ export function TodaySection({ onOpenStudents }: { onOpenStudents: (filter: Stud
   }
 
   return (
-    <View style={{ gap: 12 }}>
+    <FadeIn style={{ gap: space.lg }}>
+      <Freshness state={state} onRetry={retry} bleed />
       {band ? (
-        <Banner
-          tone="needsYou"
-          title={t.bandTitle}
-          testID="training-today-band"
-          action={<Button label={t.open} variant="secondary" onPress={() => open(band.target)} testID="training-today-band-open" />}
-        >
-          {`${band.title} · ${band.meta}`}
-        </Banner>
-      ) : null}
-      <SectionBar label={t.listTitle(data.open)} />
-      {tickError ? (
-        <Text tone="danger" accessibilityLiveRegion="polite">
-          {tickError}
-        </Text>
+        <Bleed>
+          <NeedsYouBand
+            testID="training-today-band"
+            eyebrow={t.bandTitle}
+            text={`${band.title} · ${band.meta}`}
+            actionLabel={t.open}
+            actionAccessibilityLabel={`${t.open}: ${band.title}`}
+            onAction={() => open(band.target)}
+          />
+        </Bleed>
       ) : null}
       <View>
-        {data.items.map((item) => (
-          <TodayRow key={item.key} item={item} onTick={() => tick(item)} onOpen={() => open(item.target)} />
-        ))}
+        <SectionTitle title={t.listTitle(data.open)} tight />
+        {tickError ? (
+          <View accessibilityLiveRegion="polite" style={{ paddingBottom: space.sm }}>
+            <FieldError>{tickError}</FieldError>
+          </View>
+        ) : null}
+        <Bleed>
+          <ListGroup inset={false}>
+            {data.items.map((item) => (
+              <TodayRow key={item.key} item={item} onTick={() => tick(item)} onOpen={() => open(item.target)} />
+            ))}
+          </ListGroup>
+        </Bleed>
       </View>
-    </View>
+    </FadeIn>
   );
 }
 
+/** A tick box (done for the week) and the line that opens the work: two separate targets. */
 function TodayRow({ item, onTick, onOpen }: { item: TodayItem; onTick: () => void; onOpen: () => void }) {
   const { colors } = useTheme();
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        borderBottomWidth: hairline,
-        borderBottomColor: colors.rule,
-        opacity: item.done ? 0.55 : 1,
-      }}
-    >
+    <View style={{ flexDirection: "row", alignItems: "stretch", opacity: item.done ? 0.6 : 1 }}>
       <Pressable
         testID={`training-today-tick-${item.key}`}
         accessibilityRole="checkbox"
         accessibilityLabel={t.tickLabel(item.title)}
         accessibilityState={{ checked: item.done }}
         onPress={onTick}
-        hitSlop={4}
-        style={{ width: touch.minTarget, minHeight: touch.minTarget, alignItems: "center", justifyContent: "center" }}
+        style={({ pressed }) => ({
+          width: touch.minTarget + space.sm,
+          minHeight: touch.minTarget,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingLeft: space.xs,
+          backgroundColor: pressed ? colors.surfaceStrong : "transparent",
+        })}
       >
         <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
           style={{
             width: 22,
             height: 22,
-            borderWidth: 2,
-            borderColor: colors.text,
-            backgroundColor: item.done ? colors.inverse : "transparent",
+            borderRadius: radius.control,
+            borderWidth: 1.5,
+            borderColor: item.done ? colors.primary : colors.ruleStrong,
+            backgroundColor: item.done ? colors.primary : "transparent",
+            alignItems: "center",
+            justifyContent: "center",
           }}
-        />
+        >
+          {item.done ? <Check size={14} color={colors.onPrimary} strokeWidth={3} /> : null}
+        </View>
       </Pressable>
       <Pressable
         testID={`training-today-open-${item.key}`}
@@ -139,17 +170,17 @@ function TodayRow({ item, onTick, onOpen }: { item: TodayItem; onTick: () => voi
         onPress={onOpen}
         style={({ pressed }) => ({
           flex: 1,
-          minHeight: 64,
+          minHeight: 56,
           flexDirection: "row",
           alignItems: "center",
-          gap: 8,
+          gap: space.md,
           paddingVertical: 10,
-          paddingRight: 4,
-          backgroundColor: pressed ? colors.surface : "transparent",
+          paddingRight: space.md,
+          backgroundColor: pressed ? colors.surfaceStrong : "transparent",
         })}
       >
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text variant="bodyStrong" style={item.done ? { textDecorationLine: "line-through" } : undefined}>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text variant="rowTitle" style={item.done ? { textDecorationLine: "line-through" } : undefined}>
             {item.title}
           </Text>
           <Text variant="caption" tone="secondary">
@@ -157,7 +188,7 @@ function TodayRow({ item, onTick, onOpen }: { item: TodayItem; onTick: () => voi
           </Text>
         </View>
         <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <ChevronRight size={20} color={colors.textSecondary} />
+          <ChevronRight size={18} color={colors.textTertiary} />
         </View>
       </Pressable>
     </View>
