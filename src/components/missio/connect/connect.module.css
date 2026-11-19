@@ -264,3 +264,45 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Two-step card (board M5a). */
+.help {
+  margin: -8px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--quiet, #6e685b);
+}
+
+.group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.group .help {
+  margin: -4px 0 4px;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.pair .choice {
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 6px;
+}
+
+.page h1.stepTitle {
+  font-size: 32px !important;
+}
+
+.page h1.stepTitle:focus {
+  outline: none;
+}
+
+.form button.quiet {
+  margin-top: 0;
+}

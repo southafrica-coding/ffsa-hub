@@ -10,10 +10,17 @@ import { cleanup, render, setValue, settle } from "../house-churches/test-render
 
 const css = readFileSync(path.join(process.cwd(), "src/components/missio/connect/connect.module.css"), "utf8");
 
-function fill(form: HTMLFormElement) {
+/** Screen one, Next, then screen two. */
+async function fill(form: HTMLFormElement) {
   act(() => {
     setValue(form.querySelector("input[name=name]") as HTMLInputElement, "Lerato Mokoena");
     setValue(form.querySelector("input[name=phone]") as HTMLInputElement, "0825550142");
+  });
+  await act(async () => {
+    form.requestSubmit();
+    await Promise.resolve();
+  });
+  act(() => {
     (form.querySelector("input[value=first_time]") as HTMLInputElement).click();
   });
 }
@@ -56,10 +63,12 @@ describe("connect card form", () => {
     expect(trap.getAttribute("autocomplete")).toBe("off");
     expect(trap.getAttribute("aria-hidden")).toBe("true");
     expect(form.querySelector("input[name=email]")).toBeNull();
-    expect(form.querySelector("[role=radiogroup] label")?.querySelector("input")).toBeTruthy();
-    expect(form.textContent).toContain("Anything else (optional)");
+    expect(form.textContent).toContain("So we can WhatsApp you. Nothing else.");
     setValue(trap, "https://spam.example");
-    fill(form);
+    await fill(form);
+    expect(form.querySelector("[role=radiogroup] label")?.querySelector("input")).toBeTruthy();
+    expect(form.textContent).toContain("Anything we can pray about?");
+    act(() => (form.querySelector("input[name=wantsHouseChurch][value=yes]") as HTMLInputElement).click());
     await act(async () => {
       form.requestSubmit();
       await Promise.resolve();
@@ -67,10 +76,11 @@ describe("connect card form", () => {
     await settle();
     expect(sent.current?.website).toBe("");
     expect(sent.current?.name).toBe("Lerato Mokoena");
+    expect(sent.current?.wantsHouseChurch).toBe(true);
+    expect(sent.current?.wantsPrayer).toBe(false);
     const thanks = host.querySelector("[data-connect=thanks]") as HTMLElement;
-    expect(thanks.textContent).toContain("Thanks for connecting with us");
-    expect(thanks.textContent).toContain("We’re glad you’re here.");
-    expect(thanks.textContent).toContain("Someone from Missio will be in touch this week.");
+    expect(thanks.textContent).toContain("Thank you.");
+    expect(thanks.textContent).toContain("we’ll help you find a house church near you");
     expect(thanks.textContent).not.toContain("Lerato");
     expect(thanks.textContent).not.toContain("082");
   });
@@ -94,6 +104,26 @@ describe("connect card form", () => {
     expect(called).toBe(false);
     expect(host.textContent).toContain("Enter your name.");
     expect(host.textContent).toContain("Enter a phone number.");
+    expect(form.getAttribute("data-step")).toBe("1");
+
+    act(() => {
+      setValue(form.querySelector("input[name=name]") as HTMLInputElement, "Naledi Mokoena");
+      setValue(form.querySelector("input[name=phone]") as HTMLInputElement, "082 555 01");
+    });
+    await act(async () => {
+      form.requestSubmit();
+    });
+    expect(host.textContent).toContain("That’s 8 digits. A South African cellphone number has 10.");
+
+    act(() => setValue(form.querySelector("input[name=phone]") as HTMLInputElement, "082 555 0142"));
+    await act(async () => {
+      form.requestSubmit();
+    });
+    expect(form.getAttribute("data-step")).toBe("2");
+    await act(async () => {
+      form.requestSubmit();
+    });
+    expect(called).toBe(false);
     expect(host.textContent).toContain("Choose one.");
   });
 
@@ -127,7 +157,7 @@ describe("connect card form", () => {
         />
       );
       const form = host.querySelector("form") as HTMLFormElement;
-      fill(form);
+      await fill(form);
       await act(async () => {
         form.requestSubmit();
         await Promise.resolve();
@@ -143,8 +173,9 @@ describe("connect card form", () => {
     }
   });
 
-  it("shows the consent line above Send", () => {
+  it("shows the consent line above Send", async () => {
     const host = mount(<ConnectForm client={{ submit: async () => ({ ok: true }) }} />);
+    await fill(host.querySelector("form") as HTMLFormElement);
     const consent = host.querySelector("[data-testid=connect-consent]");
     expect(consent?.textContent).toContain("you can ask us to remove them anytime");
     expect(consent?.querySelector("a")?.getAttribute("href")).toBe("/legal/consent");

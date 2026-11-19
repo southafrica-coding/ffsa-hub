@@ -7,6 +7,14 @@ export function phoneLooksOk(value: string): boolean {
   return digits.length >= 7 && digits.length <= 15 && /^[+\d\s().-]+$/.test(value.trim());
 }
 
+/** A local number (082…) with the wrong digit count, so the error can say how many. */
+function localDigits(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^0[\d\s()-]*$/.test(trimmed)) return null;
+  const count = trimmed.replace(/\D/g, "").length;
+  return count === 10 ? null : count;
+}
+
 export function validateConnect(draft: ConnectDraft): ConnectFieldErrors {
   const errors: ConnectFieldErrors = {};
   const name = draft.name.trim();
@@ -15,6 +23,7 @@ export function validateConnect(draft: ConnectDraft): ConnectFieldErrors {
 
   const phone = draft.phone.trim();
   if (!phone) errors.phone = "Enter a phone number.";
+  else if (localDigits(phone) != null) errors.phone = `That’s ${localDigits(phone)} digits. A South African cellphone number has 10.`;
   else if (!phoneLooksOk(phone)) errors.phone = "That phone number doesn’t look right.";
 
   if (!VISIT.has(draft.visitType)) errors.visitType = "Choose one.";
