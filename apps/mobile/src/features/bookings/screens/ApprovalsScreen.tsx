@@ -1,29 +1,30 @@
 import { useRouter } from "expo-router";
-import { ClipboardCheck } from "lucide-react-native";
-import { useCallback, useMemo } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { Check } from "lucide-react-native";
+import { useCallback, useMemo, type ReactNode } from "react";
+import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Masthead, Screen } from "@/components";
+import { EmptyState, LargeTitleScrollView, ListGroup, SkeletonList, type BackAction } from "@/components";
 import { formatSavedAt } from "@/features/finance/cache";
-import { ErrorState, SectionBar, Skeleton, StaleNote } from "@/features/finance/components/ui";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { StateMessage, useMe } from "@/features/shell";
+import { useMe } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { bookingsAccess } from "../access";
 import { loadErrorMessage } from "../api";
-import { BookingRow } from "../components/ui";
+import { Bleed, BookingRow, LoadFailed, SectionTitle, StaleNote } from "../components/ui";
 import { loadPending, type Pending } from "../data";
 import { spaceItem, vehicleItem, type BookingItem } from "../logic";
+import { goBackTo } from "../nav";
 import { strings } from "../strings";
 
 const a = strings.approvals;
 
-// "Waiting for you": every pending space and vehicle request this person
-// may decide, soonest first (the web's two request queues). No yellow band:
-// the whole screen is the queue, so a band would point at itself (as on web).
+// "Waiting for you" (frame 7.6): every pending space and vehicle request this
+// person may decide, soonest first (the web's two request queues). No yellow
+// band: the whole screen is the queue, so a band would point at itself.
 export default function ApprovalsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -44,20 +45,31 @@ export default function ApprovalsScreen() {
     errorMessage: loadErrorMessage,
   });
 
+  const back: BackAction = { label: strings.common.bookings, onPress: () => goBackTo(router, "/bookings") };
+  const page = (children: ReactNode, refreshable = false) => (
+    <LargeTitleScrollView
+      back={back}
+      eyebrow={a.context}
+      title={a.title}
+      gap={0}
+      refreshControl={refreshable ? <RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} /> : undefined}
+    >
+      {children}
+    </LargeTitleScrollView>
+  );
+
   if (me.status === "loading") {
-    return (
-      <Screen edges={[]}>
-        <Masthead context={a.context} title={a.title} />
-        <Skeleton label={a.loading} />
-      </Screen>
+    return page(
+      <Bleed>
+        <SkeletonList label={a.loading} count={4} inset={false} />
+      </Bleed>,
     );
   }
   if (!access.approver) {
-    return (
-      <Screen edges={[]}>
-        <Masthead context={a.context} title={a.title} />
-        <StateMessage testID="no-access" title={a.noAccessTitle} body={a.noAccessBody} />
-      </Screen>
+    return page(
+      <Bleed>
+        <EmptyState testID="no-access" title={a.noAccessTitle} body={a.noAccessBody} />
+      </Bleed>,
     );
   }
 
@@ -68,40 +80,43 @@ export default function ApprovalsScreen() {
   const spaces = state.status === "ready" ? state.data.spaces : [];
   const vehicles = state.status === "ready" ? state.data.vehicles : [];
 
-  return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
-      >
-        <Masthead context={a.context} title={a.title} />
-        {state.status === "loading" ? <Skeleton label={a.loading} /> : null}
-        {state.status === "error" ? <ErrorState title={a.title} message={state.message} onRetry={retry} /> : null}
+  return page(
+    <>
+      <Bleed style={{ gap: space.md }}>
+        {state.status === "loading" ? <SkeletonList label={a.loading} count={4} inset={false} /> : null}
+        {state.status === "error" ? <LoadFailed title={a.title} message={state.message} onRetry={retry} /> : null}
         {state.status === "ready" && state.refreshError && state.staleSince !== null ? (
           <StaleNote message={strings.common.refreshFailed(formatSavedAt(state.staleSince))} onRetry={retry} />
         ) : null}
-        {state.status === "ready" && spaces.length + vehicles.length === 0 ? (
-          <StateMessage testID="empty" icon={ClipboardCheck} title={a.emptyTitle} body={a.empty} />
-        ) : null}
-        {spaces.length > 0 ? (
-          <View>
-            <SectionBar title={a.spaces} meta={String(spaces.length)} />
-            {spaces.map((b) => {
-              const item = spaceItem(b);
-              return <BookingRow key={b.id} item={{ ...item, place: `${item.place} · ${a.requestedBy(b.requester_name)}` }} onPress={() => open(item)} />;
-            })}
-          </View>
-        ) : null}
-        {vehicles.length > 0 ? (
-          <View>
-            <SectionBar title={a.vehicles} meta={String(vehicles.length)} />
-            {vehicles.map((b) => {
-              const item = vehicleItem(b);
-              return <BookingRow key={b.id} item={{ ...item, place: `${item.place} · ${a.requestedBy(b.requester_name)}` }} onPress={() => open(item)} />;
-            })}
-          </View>
-        ) : null}
-      </ScrollView>
-    </Screen>
+        {state.status === "ready" && spaces.length + vehicles.length === 0 ? <EmptyState testID="empty" icon={Check} title={a.emptyTitle} body={a.empty} /> : null}
+      </Bleed>
+      {spaces.length > 0 ? (
+        <View>
+          <SectionTitle title={a.spaces} meta={String(spaces.length)} />
+          <Bleed>
+            <ListGroup inset={false}>
+              {spaces.map((b) => {
+                const item = spaceItem(b);
+                return <BookingRow key={b.id} item={{ ...item, place: `${item.place} · ${a.requestedBy(b.requester_name)}` }} onPress={() => open(item)} />;
+              })}
+            </ListGroup>
+          </Bleed>
+        </View>
+      ) : null}
+      {vehicles.length > 0 ? (
+        <View>
+          <SectionTitle title={a.vehicles} meta={String(vehicles.length)} />
+          <Bleed>
+            <ListGroup inset={false}>
+              {vehicles.map((b) => {
+                const item = vehicleItem(b);
+                return <BookingRow key={b.id} item={{ ...item, place: `${item.place} · ${a.requestedBy(b.requester_name)}` }} onPress={() => open(item)} />;
+              })}
+            </ListGroup>
+          </Bleed>
+        </View>
+      ) : null}
+    </>,
+    true,
   );
 }
