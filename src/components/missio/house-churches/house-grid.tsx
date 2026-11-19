@@ -91,11 +91,18 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
             </p>
           ) : null}
         </div>
-        {canWrite ? (
-          <Link href="/missio/house-churches/review" className={`${shell.ghost} ${styles.reviewButton}`} data-testid="review-names">
-            {reviewCount != null && reviewCount > 0 ? `Review names (${reviewCount})` : "Review names"}
-          </Link>
-        ) : null}
+        <div className={styles.headLinks}>
+          {state.phase === "ready" && houses.length > 0 ? (
+            <Link href="/missio/house-churches/feedback" className={`${shell.ghost} ${styles.reviewButton}`} data-testid="feedback-link">
+              Weekly feedback
+            </Link>
+          ) : null}
+          {canWrite ? (
+            <Link href="/missio/house-churches/review" className={`${shell.ghost} ${styles.reviewButton}`} data-testid="review-names">
+              {reviewCount != null && reviewCount > 0 ? `Review names (${reviewCount})` : "Review names"}
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {state.phase === "loading" ? (

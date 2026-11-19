@@ -879,3 +879,14 @@
   justify-self: start;
   margin-top: 6px;
 }
+
+.headLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.feedbackSlot {
+  margin-top: 16px;
+}

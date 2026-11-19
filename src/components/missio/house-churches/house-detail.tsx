@@ -23,6 +23,7 @@ import {
 } from "./format";
 import { SizeDots } from "./house-grid";
 import { PersonCardDialog } from "../person-card";
+import { HouseFeedbackPanel } from "../feedback/history";
 import { useMissioLoad } from "./load";
 import { PeoplePicker } from "./people-picker";
 import { AllHousesLink, CampusTag } from "./present";
@@ -228,6 +229,10 @@ export function HouseDetailView({
               <SizeDots count={house.memberCount} />
               <HealthNote house={house} />
             </section>
+          </div>
+
+          <div className={styles.feedbackSlot}>
+            <HouseFeedbackPanel houseId={house.id} client={client} canRotate={canWrite} />
           </div>
 
           {house.leaderNotes?.trim() ? (
