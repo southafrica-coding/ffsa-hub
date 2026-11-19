@@ -8,7 +8,7 @@ import { Children, type ReactNode } from "react";
 import { View } from "react-native";
 import { Pressable } from "@/components/Pressable";
 
-import { ChoiceSegments, ListRow, StatusChip, Text } from "@/components";
+import { ChoiceSegments, ListRow, StatusChip, Text, useLargeText } from "@/components";
 import { useAnnounceOnIOS } from "@/lib/a11y";
 import type { ChipVariant } from "@/theme/styles";
 import { fontFamily, hairline, radius, space, touch } from "@/theme/tokens";
@@ -52,25 +52,41 @@ export function BookingRow({ item, onPress }: { item: BookingItem; onPress: () =
 
 /**
  * A label on the left and its value on the right, read as one unit. The
- * value drops under the label when the two don't fit (long text, large type).
+ * value drops under the label when the two don't fit (long text), and always
+ * sits under it at large text, left-aligned and full width (QA pass 2:
+ * "Auditoriu/m" squeezed into a right-hand column).
  */
 export function Field({ label, value }: { label: string; value: string | null | undefined }) {
+  const stacked = useLargeText();
   if (!value) return null;
   return (
     <View
+      // New layout, new view: iOS keeps old measurements otherwise (see NeedsYouBand).
+      key={stacked ? "stacked" : "row"}
       accessible
       accessibilityLabel={`${label}: ${value}`}
-      style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", columnGap: space.lg, rowGap: 2, paddingVertical: 3 }}
+      style={
+        stacked
+          ? { gap: 2, paddingVertical: 3 }
+          : { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", columnGap: space.lg, rowGap: 2, paddingVertical: 3 }
+      }
     >
       <Text variant="note" style={{ fontFamily: fontFamily.body }}>
         {label}
       </Text>
-      <Text variant="note" tone="default" style={{ fontFamily: fontFamily.bodyMedium, flexGrow: 1, flexShrink: 1, textAlign: "right" }}>
+      <Text
+        variant="note"
+        tone="default"
+        style={stacked ? { fontFamily: fontFamily.bodyMedium } : { fontFamily: fontFamily.bodyMedium, flexGrow: 1, flexShrink: 1, minWidth: FIELD_VALUE_MIN, textAlign: "right" }}
+      >
         {value}
       </Text>
     </View>
   );
 }
+
+// Below this the value wraps under its label instead of being squeezed.
+const FIELD_VALUE_MIN = 120;
 
 /** The column of Fields. */
 export function FieldList({ children }: { children: ReactNode }) {

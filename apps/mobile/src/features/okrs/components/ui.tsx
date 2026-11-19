@@ -9,7 +9,7 @@ import { Children, useState, type ReactNode } from "react";
 import { View, useWindowDimensions } from "react-native";
 import { Pressable } from "@/components/Pressable";
 
-import { Freshness as KitFreshness, ListGroup, RadioRow, Sheet, StatusChip, Text, type FreshnessState, type StatusChipProps } from "@/components";
+import { Freshness as KitFreshness, isLargeText, ListGroup, RadioRow, Sheet, StatusChip, Text, type FreshnessState, type StatusChipProps } from "@/components";
 import { hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -78,15 +78,18 @@ export function Figure({
 /**
  * The figures between two ink rules. Two columns on the wall; `four` puts a
  * group's four short figures on one line, falling back to two columns once
- * the text is large enough that four labels would no longer fit.
+ * the text is large enough that four labels would no longer fit, and one
+ * column at large text (QA pass 2: "Objectiv/es" in half the width).
  */
 export function FigureStrip({ children, four = false }: { children: ReactNode; four?: boolean }) {
   const { colors } = useTheme();
   const { fontScale } = useWindowDimensions();
-  const columns = four && fontScale <= 1.15 ? 4 : 2;
+  const columns = figureColumns(fontScale, four);
   const gap = columns === 4 ? space.sm : space.lg;
   return (
     <View
+      // New layout, new view: iOS keeps old measurements otherwise (see NeedsYouBand).
+      key={columns}
       style={{
         flexDirection: "row",
         flexWrap: "wrap",
@@ -100,12 +103,20 @@ export function FigureStrip({ children, four = false }: { children: ReactNode; f
     >
       {Children.toArray(children).map((child, i) => (
         // Basis below an even share, then grow: the gaps never push a cell to the next line.
-        <View key={i} style={{ flexGrow: 1, flexShrink: 1, flexBasis: columns === 4 ? "20%" : "40%", minWidth: 0 }}>
+        <View key={i} style={{ flexGrow: 1, flexShrink: 1, flexBasis: FIGURE_BASIS[columns], minWidth: 0 }}>
           {child}
         </View>
       ))}
     </View>
   );
+}
+
+// Basis per column count: below an even share, so the gaps fit.
+const FIGURE_BASIS = { 1: "100%", 2: "40%", 4: "20%" } as const;
+
+export function figureColumns(fontScale: number, four: boolean): 1 | 2 | 4 {
+  if (isLargeText(fontScale)) return 1;
+  return four && fontScale <= 1.15 ? 4 : 2;
 }
 
 /** A plain progress track. Decorative: the caption beside it says the figure in words. */

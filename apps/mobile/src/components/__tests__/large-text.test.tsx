@@ -1,13 +1,15 @@
-import { render, screen } from "@testing-library/react-native";
+import { act, render, screen } from "@testing-library/react-native";
 import * as RN from "react-native";
 import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { Field, FieldList } from "@/features/bookings/components/ui";
+import { Figure, FigureStrip } from "@/features/okrs/components/ui";
 import { wordBreakRisks } from "@/lib/a11y/testing";
 
 import { eyebrowTickOffset } from "../LargeTitle";
 import { SEGMENT_LABEL_MAX_SCALE, segmentShare } from "../SegmentedControl";
-import { Banner, ChoiceSegments, GroupRow, InfoRow, LargeTitle, ListGroup, ListRow, NeedsYouBand, SectionHeader, SectionTitle, SegmentedControl, StatusChip } from "..";
+import { Banner, ChoiceSegments, GroupRow, InfoRow, LargeTitle, ListGroup, ListRow, NeedsYouBand, SectionHeader, SectionTitle, SegmentedControl, StatusChip, Text } from "..";
 
 // Text never breaks inside a word (QA visual pass, Nov 2026: "Tod/ay",
 // "Need/s you", "Leadershi/p"). The test renderer has no layout, so this
@@ -73,6 +75,82 @@ describe("large text: words stay whole across the kit", () => {
   });
 });
 
+// Feature pieces with the same side-by-side shape (QA pass 2: "Auditoriu/m",
+// "13 Aug / 2027 – 14", "Objectiv/es").
+function Features() {
+  return (
+    <RN.View>
+      <FieldList>
+        <Field label="Space" value="Auditorium · FFSA Building" />
+        <Field label="When" value="13 Aug 2027 – 14 Aug 2027" />
+        <Field label="People" value="Ashlyn Janzen/Sarah" />
+      </FieldList>
+      <FigureStrip four>
+        <Figure label="Objectives" value={4} />
+        <Figure label="Key results" value={11} />
+        <Figure label="Complete" value={5} />
+        <Figure label="Stuck" value={1} tone="danger" />
+      </FigureStrip>
+    </RN.View>
+  );
+}
+
+describe("large text: words stay whole in feature pieces", () => {
+  it.each([2, 3])("at fontScale %s the booking fields and OKR figures keep words whole", async (scale) => {
+    atScale(scale);
+    await renderKit(<Features />);
+    expect(wordBreakRisks(screen.toJSON() as never, flatten)).toEqual([]);
+  });
+});
+
+// The text size can change while the app is open, both ways (QA pass 2: after
+// going back down, the band kept its stacked layout and its text ran off the
+// right edge). Each piece takes the layout for the current size, as a new view
+// so iOS measures it afresh.
+describe("large text: the text size changes while the app is open", () => {
+  const ui = (
+    <RN.View>
+      <NeedsYouBand eyebrow="Needs you" text="43 students haven't had a check-in" actionLabel="Open" onAction={noop} testID="band" />
+      <SectionHeader title="Needs you (11)" actionLabel="Mark all read" onAction={noop} testID="sh" />
+      <SectionTitle title="Outreach teams" meta="1 team" testID="st" />
+      <Features />
+    </RN.View>
+  );
+  const direction = (testID: string) => StyleSheet.flatten(screen.getByTestId(testID).props.style).flexDirection;
+
+  // The real path: iOS sends a Dimensions change and useWindowDimensions re-renders.
+  const textSize = async (fontScale: number) => {
+    const window = { width: 390, height: 844, scale: 3, fontScale };
+    await act(async () => RN.Dimensions.set({ window, screen: window }));
+  };
+  afterEach(() => RN.Dimensions.set({ window: { width: 750, height: 1334, scale: 2, fontScale: 2 }, screen: { width: 750, height: 1334, scale: 2, fontScale: 2 } }));
+
+  it("1 → 2 → 1: each piece re-lays out, and is a new view each time", async () => {
+    await textSize(1);
+    await renderKit(ui);
+    const first = screen.getByTestId("band");
+    expect(["band", "sh", "st"].map(direction)).toEqual(["row", "row", "row"]);
+
+    await textSize(2);
+    const large = screen.getByTestId("band");
+    expect(["band", "sh", "st"].map(direction)).toEqual(["column", "column", "column"]);
+    expect(large).not.toBe(first);
+    expect(wordBreakRisks(screen.toJSON() as never, flatten)).toEqual([]);
+
+    await textSize(1);
+    expect(["band", "sh", "st"].map(direction)).toEqual(["row", "row", "row"]);
+    expect(screen.getByTestId("band")).not.toBe(large);
+  });
+
+  it("every kit Text is a new native text after a change, so none keeps the old size", async () => {
+    await textSize(2);
+    await renderKit(<Text>Copies your own visa and health insurance details.</Text>);
+    const before = screen.getByText(/Copies your own/);
+    await textSize(1);
+    expect(screen.getByText(/Copies your own/)).not.toBe(before);
+  });
+});
+
 describe("SegmentedControl", () => {
   const items = [
     { key: "today", label: "Today" },
@@ -129,6 +207,22 @@ describe("NeedsYouBand", () => {
     atScale(scale);
     await renderKit(<NeedsYouBand eyebrow="Needs you" text="11 things need you" actionLabel="Open" onAction={noop} testID="band" />);
     expect(StyleSheet.flatten(screen.getByTestId("band").props.style)).toMatchObject({ flexDirection: direction });
+  });
+});
+
+describe("Banner", () => {
+  it("the action keeps a 44pt target from hitSlop, with no negative margin to spill over the border", async () => {
+    atScale(3.1);
+    await renderKit(
+      <Banner tone="error" actionLabel="Try again" onAction={noop}>
+        {"This ministry has been removed."}
+      </Banner>,
+    );
+    const action = screen.getByRole("button", { name: "Try again" });
+    const st = StyleSheet.flatten(action.props.style) as RN.ViewStyle;
+    expect([st.margin, st.marginVertical, st.marginTop, st.marginBottom].filter((m) => typeof m === "number" && m < 0)).toEqual([]);
+    const slop = action.props.hitSlop as RN.Insets;
+    expect(18 + (slop.top ?? 0) + (slop.bottom ?? 0)).toBeGreaterThanOrEqual(44);
   });
 });
 

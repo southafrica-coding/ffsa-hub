@@ -1,6 +1,6 @@
 // The OKR pieces the kit doesn't have: status chips keep their word, bars
 // are clamped and hidden from screen readers, the figure strip falls back to
-// two columns at large text, and everything is drawn from the theme.
+// two columns, then one at large text, and everything is drawn from the theme.
 
 import { render, screen } from "@testing-library/react-native";
 import { Dimensions, StyleSheet, Text } from "react-native";
@@ -77,9 +77,15 @@ describe("Figure and FigureStrip", () => {
     expect(basisOf("f1")).toBe("20%");
   });
 
-  it("at large text the four fall back to two columns, so labels never break mid-word", async () => {
-    jest.spyOn(Dimensions, "get").mockReturnValue(dimensions(1.6));
+  it("a little larger, the four fall back to two columns, so labels never break mid-word", async () => {
+    jest.spyOn(Dimensions, "get").mockReturnValue(dimensions(1.25));
     await render(four);
     expect(basisOf("f1")).toBe("40%");
+  });
+
+  it.each([1.6, 3])("at large text (fontScale %s) every figure gets the full width (QA: \"Objectiv/es\")", async (scale) => {
+    jest.spyOn(Dimensions, "get").mockReturnValue(dimensions(scale));
+    await render(four);
+    expect(basisOf("f1")).toBe("100%");
   });
 });
