@@ -854,7 +854,45 @@ async function loadCoaches(auth: OrgAccess, houseIds: string[]): Promise<{ ok: t
   return { ok: true, map };
 }
 
-function summaryFrom(house: HouseRow, members: HouseChurchMemberView[], coaches: CoachRef[] = []): HouseChurchSummary {
+/**
+ * Children per house (board M14a): children of households with an adult who
+ * is a current member. Best effort: before migration 341, or when the read
+ * fails, houses show no kids rather than failing.
+ */
+async function loadKids(auth: OrgAccess, membersByHouse: Map<string, string[]>): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  const contactIds = [...new Set([...membersByHouse.values()].flat())];
+  if (contactIds.length === 0) return counts;
+  try {
+    const adults = await auth.supabase
+      .from("missio_household_members")
+      .select("household_id, contact_id")
+      .eq("kind", "adult")
+      .in("contact_id", contactIds);
+    if (adults.error || !adults.data) return counts;
+    const adultRows = adults.data as Array<{ household_id: string; contact_id: string }>;
+    if (adultRows.length === 0) return counts;
+    const kids = await auth.supabase
+      .from("missio_household_members")
+      .select("household_id")
+      .eq("kind", "child")
+      .in("household_id", [...new Set(adultRows.map((row) => row.household_id))]);
+    if (kids.error || !kids.data) return counts;
+    const perHousehold = new Map<string, number>();
+    for (const row of kids.data as Array<{ household_id: string }>) perHousehold.set(row.household_id, (perHousehold.get(row.household_id) ?? 0) + 1);
+    const householdOf = new Map(adultRows.map((row) => [row.contact_id, row.household_id]));
+    for (const [houseId, contacts] of membersByHouse) {
+      const households = new Set(contacts.map((id) => householdOf.get(id)).filter((id): id is string => Boolean(id)));
+      const total = [...households].reduce((sum, id) => sum + (perHousehold.get(id) ?? 0), 0);
+      if (total > 0) counts.set(houseId, total);
+    }
+  } catch (error) {
+    console.error("[missio] kids count failed", error instanceof Error ? error.message : "unknown");
+  }
+  return counts;
+}
+
+function summaryFrom(house: HouseRow, members: HouseChurchMemberView[], coaches: CoachRef[] = [], kidsCount = 0): HouseChurchSummary {
   return {
     id: house.id,
     number: Number(house.number),
@@ -863,6 +901,7 @@ function summaryFrom(house: HouseRow, members: HouseChurchMemberView[], coaches:
     meetingDay: blankToNull(house.meeting_day),
     location: blankToNull(house.location),
     memberCount: members.length,
+    kidsCount,
     leaders: members.filter((member) => member.role === "leader").map(asPersonRef).sort(compareNames),
     coLeaders: members.filter((member) => member.role === "co_leader").map(asPersonRef).sort(compareNames),
     coaches,
@@ -1104,10 +1143,16 @@ export async function listHouses(
     houseRows.map((house) => house.id)
   );
   if (!coaches.ok) return coaches;
+  const kids = await loadKids(
+    auth,
+    new Map([...membersByHouse].map(([houseId, list]) => [houseId, list.map((member) => member.contactId)]))
+  );
   const body: HouseChurchListResponse = {
     canWrite: abilities.place,
     abilities,
-    houses: houseRows.map((house) => summaryFrom(house, membersByHouse.get(house.id) ?? [], coaches.map.get(house.id) ?? [])),
+    houses: houseRows.map((house) =>
+      summaryFrom(house, membersByHouse.get(house.id) ?? [], coaches.map.get(house.id) ?? [], kids.get(house.id) ?? 0)
+    ),
   };
   return { ok: true, body };
 }
@@ -1149,8 +1194,10 @@ export async function getHouse(
   ].sort(compareMembers);
   const coaches = await loadCoaches(auth, [loaded.house.id]);
   if (!coaches.ok) return coaches;
+  const current = members.filter((member) => !member.leftMissio);
+  const kids = await loadKids(auth, new Map([[loaded.house.id, current.map((member) => member.contactId)]]));
   const house: HouseChurchDetail = {
-    ...summaryFrom(loaded.house, members.filter((member) => !member.leftMissio), coaches.map.get(loaded.house.id) ?? []),
+    ...summaryFrom(loaded.house, current, coaches.map.get(loaded.house.id) ?? [], kids.get(loaded.house.id) ?? 0),
     leaderNotes: blankToNull(loaded.house.leader_notes),
     members,
   };

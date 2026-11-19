@@ -252,6 +252,7 @@ function summary(value: unknown): HouseSummary {
     meetingDay: optionalString(row.meetingDay),
     location: optionalString(row.location),
     memberCount: row.memberCount,
+    kidsCount: typeof row.kidsCount === "number" ? row.kidsCount : 0,
     leaders: people(row.leaders),
     coLeaders: people(row.coLeaders),
     coaches: coachesOf(row.coaches),

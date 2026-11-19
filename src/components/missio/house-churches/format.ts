@@ -36,6 +36,16 @@ export function peopleCount(count: number): string {
   return safe === 1 ? "1 person" : `${safe} people`;
 }
 
+/**
+ * The word after a house's size: "people", or "adults · 3 kids" when
+ * families with children are in it (board M14a). Kids aren't in the count.
+ */
+export function sizeWord(house: { memberCount: number; kidsCount?: number }): string {
+  const kids = Math.max(0, Math.trunc(house.kidsCount ?? 0));
+  if (kids === 0) return peopleCount(house.memberCount).replace(/^\d+\s/, "");
+  return `${house.memberCount === 1 ? "adult" : "adults"} · ${kids} ${kids === 1 ? "kid" : "kids"}`;
+}
+
 export function nameList(people: PersonRef[]): string {
   const names = people.map((person) => person.displayName.trim()).filter(Boolean);
   if (names.length === 0) return "No one yet";

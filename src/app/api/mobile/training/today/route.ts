@@ -14,6 +14,11 @@ import {
 import {
   buildToday,
   isoWeek,
+  mapApplications,
+  mapOverdue,
+  mapReferences,
+  mapUngraded,
+  programName,
   type LateReference,
   type OpenApplication,
   type OverdueCharge,
@@ -40,9 +45,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type Prog = { name: string | null } | Array<{ name: string | null }> | null;
-const progName = (p: Prog) => (Array.isArray(p) ? p[0]?.name : p?.name) ?? "";
-const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
 const fail = (message: string) =>
   NextResponse.json({ error: "server_error", message }, { status: 500, headers: NO_STORE });
 
@@ -108,77 +110,10 @@ export async function GET() {
     ]);
     // These are extras: a read the caller may not make (or a table that
     // isn't there) drops that line, it never fails Today.
-    if (!apps.error) {
-      applications = ((apps.data ?? []) as Array<{ program_id: string; status: string; submitted_at: string; programs: Prog }>).map((a) => ({
-        programId: a.program_id,
-        programName: progName(a.programs),
-        status: a.status,
-        submittedAt: a.submitted_at,
-      }));
-    }
-    if (!refs.error) {
-      type RefRow = {
-        created_at: string;
-        email_sent_at: string | null;
-        application: { program_id: string; status: string; removed_at: string | null; programs: Prog } | null;
-      };
-      references = ((refs.data ?? []) as RefRow[])
-        .map((r) => ({ ...r, application: one(r.application) }))
-        .filter((r) => r.application && !r.application.removed_at && r.application.status === "waiting_for_references")
-        .map((r) => ({
-          programId: r.application!.program_id,
-          programName: progName(r.application!.programs),
-          since: r.email_sent_at ?? r.created_at,
-        }));
-    }
-    if (!arrivals.error && !grades.error) {
-      type Arr = {
-        enrollment_id: string;
-        billing_course_id: string;
-        course: { id: string; code: string | null; name: string | null; end_date: string | null; graded: boolean; program_id: string } | null;
-      };
-      const graded = new Set(
-        ((grades.data ?? []) as Array<{ enrollment_id: string; course_id: string; letter_grade: string | null }>)
-          .filter((g) => g.letter_grade)
-          .map((g) => `${g.enrollment_id}:${g.course_id}`)
-      );
-      const byCourse = new Map<string, UngradedCourse>();
-      for (const a of (arrivals.data ?? []) as Arr[]) {
-        const c = one(a.course);
-        if (!c || !c.graded || !c.end_date || c.end_date >= today) continue;
-        const u = byCourse.get(c.id) ?? {
-          programId: c.program_id,
-          courseCode: c.code ?? "",
-          courseName: c.name ?? "",
-          endDate: c.end_date,
-          ungraded: 0,
-          arrived: 0,
-        };
-        u.arrived += 1;
-        if (!graded.has(`${a.enrollment_id}:${c.id}`)) u.ungraded += 1;
-        byCourse.set(c.id, u);
-      }
-      ungraded = [...byCourse.values()];
-    }
-    if (!charges.error) {
-      type Charge = {
-        amount_zar: number | string;
-        amount_paid_zar: number | string | null;
-        status: string;
-        sent_at: string | null;
-        plan: { program_id: string; enrollment_id: string | null; programs: Prog } | null;
-      };
-      overdue = ((charges.data ?? []) as Charge[])
-        .map((c) => ({ ...c, plan: one(c.plan) }))
-        // An unsent draft hasn't reached the student (same rule as my-school-fees).
-        .filter((c) => c.plan && !(c.status === "generated" && !c.sent_at))
-        .map((c) => ({
-          programId: c.plan!.program_id,
-          programName: progName(c.plan!.programs),
-          owed: Math.max(0, (Number(c.amount_zar) || 0) - (Number(c.amount_paid_zar) || 0)),
-          enrollmentId: c.plan!.enrollment_id,
-        }));
-    }
+    if (!apps.error) applications = mapApplications(apps.data ?? []);
+    if (!refs.error) references = mapReferences(refs.data ?? []);
+    if (!arrivals.error && !grades.error) ungraded = mapUngraded(arrivals.data ?? [], grades.data ?? [], today);
+    if (!charges.error) overdue = mapOverdue(charges.data ?? []);
   }
 
   const careRows = (care.data ?? []) as Array<{ id: string; enrollment_id: string; by_user_id: string; created_at: string }>;
@@ -194,7 +129,7 @@ export async function GET() {
       enrollmentId: r.id,
       userId: r.user_id,
       programId: r.program_id,
-      programName: progName(r.programs),
+      programName: programName(r.programs),
       status: r.status,
       walkingWithMe: mine.has(r.id),
       lastWeekOf: lastWeek.get(r.id) ?? null,

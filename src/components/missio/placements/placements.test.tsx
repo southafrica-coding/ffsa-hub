@@ -149,3 +149,54 @@ describe("no-login pages", () => {
     expect(sent).toEqual([{ step: "said_hi" }]);
   });
 });
+
+describe("placing a household", () => {
+  it("offers the whole household, shows the new size and sends one family message", async () => {
+    const created: unknown[] = [];
+    mount(
+      <PlaceDialog
+        name="Yolanda Pillay"
+        contactId="c-yolanda"
+        resolveContact={async () => "c-yolanda"}
+        households={{
+          forContact: async () => ({
+            id: "hh",
+            title: "The Pillays",
+            name: null,
+            mainContactId: "c-yolanda",
+            greeting: "Hi Yolanda & Kevin",
+            adults: [
+              { memberId: "a1", contactId: "c-yolanda", personId: null, name: "Yolanda Pillay", firstName: "Yolanda", label: null, main: true, houses: [] },
+              { memberId: "a2", contactId: "c-kevin", personId: null, name: "Kevin Pillay", firstName: "Kevin", label: null, main: false, houses: [] },
+            ],
+            children: [{ memberId: "k1", firstName: "Aria", lastName: "Pillay", birthYear: 2019 }],
+          }),
+        }}
+        houses={{
+          listHouses: async () =>
+            ({
+              houses: [{ id: "h12", number: 12, name: null, meetingDay: "thursday", memberCount: 10, kidsCount: 2, leaders: [], coLeaders: [], coaches: [] }],
+            }) as never,
+        }}
+        placements={{
+          create: async (contactId, houseId, household) => {
+            created.push([contactId, houseId, household]);
+            return { ...view({ person: { contactId: "c-yolanda", name: "Yolanda Pillay", phone: "082" } }), family: { placed: 2, kids: 1 } };
+          },
+        }}
+        onClose={() => undefined}
+        onPlaced={() => undefined}
+      />
+    );
+    await settle();
+    expect(inDoc().querySelector("[data-testid=place-family]")?.textContent).toContain("Aria Pillay child · 2019");
+    act(() => (inDoc().querySelector("[role=radio]") as HTMLButtonElement).click());
+    expect(inDoc().querySelector("[data-testid=place-size]")?.textContent).toContain("House 12 goes from 10 to 12 adults · 3 kids");
+    const place = [...inDoc().querySelectorAll("button")].find((b) => b.textContent === "Place 3 in House 12") as HTMLButtonElement;
+    await act(async () => place.click());
+    await settle();
+    expect(created).toEqual([["c-yolanda", "h12", true]]);
+    expect(inDoc().querySelector("[data-testid=msg-person]")?.textContent).toMatch(/^Hi Yolanda & Kevin 👋.*kids are welcome/);
+    expect(inDoc().querySelector("[data-testid=msg-leader]")?.textContent).toContain("The Pillays (2 adults, 1 kid) are joining House 5");
+  });
+});

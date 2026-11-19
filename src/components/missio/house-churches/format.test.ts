@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { houseTitle, meetingDayLabel, peopleCount, reviewReasons, sortHouses, sortMembers } from "./format";
+import { houseTitle, meetingDayLabel, peopleCount, sizeWord, reviewReasons, sortHouses, sortMembers } from "./format";
 
 describe("house church formatting", () => {
   it("uses House N when the name is missing", () => {
@@ -53,5 +53,14 @@ describe("house church formatting", () => {
     expect(reviewReasons({ kind: "first_only", matchType: "first_only" })).toEqual(["First name only"]);
     expect(reviewReasons({ kind: null, matchType: null })).toEqual([]);
     expect(reviewReasons({ kind: "widget", matchType: "partial" })).toEqual(["Partial name"]);
+  });
+});
+
+describe("sizeWord", () => {
+  it("says adults and kids when families with children are in the house", () => {
+    expect(sizeWord({ memberCount: 9 })).toBe("people");
+    expect(sizeWord({ memberCount: 1, kidsCount: 0 })).toBe("person");
+    expect(sizeWord({ memberCount: 12, kidsCount: 3 })).toBe("adults · 3 kids");
+    expect(sizeWord({ memberCount: 1, kidsCount: 1 })).toBe("adult · 1 kid");
   });
 });

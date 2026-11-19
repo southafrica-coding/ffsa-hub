@@ -14,6 +14,8 @@ export function missioFixedCopy(code: string | null | undefined, retryAfterSecon
       return "We couldn’t find that.";
     case "already_member":
       return "Already in this house.";
+    case "in_other_household":
+      return "They’re already in another household. Take them out of that one first.";
     case "already_resolved":
       return "Someone else already updated this.";
     case "membership_not_current":

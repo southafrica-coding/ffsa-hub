@@ -34,7 +34,7 @@ describe("GET /api/devices/preferences", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.muted).toEqual(["booking_requests"]);
-    expect(json.categories.map((c: { key: string }) => c.key)).toEqual(["booking_requests", "booking_updates", "training_care"]);
+    expect(json.categories.map((c: { key: string }) => c.key)).toEqual(["booking_requests", "booking_updates", "training_care", "training_week"]);
     expect(filterArg(h.user.ops[0], "eq", "user_id")).toBe("u1");
   });
 

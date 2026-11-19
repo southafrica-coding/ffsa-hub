@@ -36,5 +36,5 @@ export async function POST(request: Request) {
   }
   const result = await createPlacement(auth, body);
   if (!result.ok) return json({ error: result.error, code: result.code }, result.status);
-  return json({ placement: result.placement }, 201);
+  return json({ placement: result.placement, family: result.family }, 201);
 }

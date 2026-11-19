@@ -254,3 +254,75 @@ export function buildToday(input: {
   };
 }
 
+
+// ── Row shaping shared by the Today route (RLS client) and the Monday
+//    briefing cron (service role, scoped by hand). Same rules for both. ──
+
+type Prog = { name: string | null } | Array<{ name: string | null }> | null;
+const progName = (p: Prog) => (Array.isArray(p) ? p[0]?.name : p?.name) ?? "";
+const firstOf = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
+
+export function mapApplications(rows: unknown[]): OpenApplication[] {
+  return (rows as Array<{ program_id: string; status: string; submitted_at: string; programs: Prog }>).map((a) => ({
+    programId: a.program_id,
+    programName: progName(a.programs),
+    status: a.status,
+    submittedAt: a.submitted_at,
+  }));
+}
+
+type RefApp = { program_id: string; status: string; removed_at: string | null; programs: Prog };
+export function mapReferences(rows: unknown[]): LateReference[] {
+  return (rows as Array<{ created_at: string; email_sent_at: string | null; application: RefApp | RefApp[] | null }>)
+    .map((r) => ({ ...r, application: firstOf(r.application) }))
+    .filter((r) => r.application && !r.application.removed_at && r.application.status === "waiting_for_references")
+    .map((r) => ({
+      programId: r.application!.program_id,
+      programName: progName(r.application!.programs),
+      since: r.email_sent_at ?? r.created_at,
+    }));
+}
+
+type ArrCourse = { id: string; code: string | null; name: string | null; end_date: string | null; graded: boolean; program_id: string };
+export function mapUngraded(arrivals: unknown[], grades: unknown[], today: string): UngradedCourse[] {
+  const graded = new Set(
+    (grades as Array<{ enrollment_id: string; course_id: string; letter_grade: string | null }>)
+      .filter((g) => g.letter_grade)
+      .map((g) => `${g.enrollment_id}:${g.course_id}`)
+  );
+  const byCourse = new Map<string, UngradedCourse>();
+  for (const a of arrivals as Array<{ enrollment_id: string; course: ArrCourse | ArrCourse[] | null }>) {
+    const c = firstOf(a.course);
+    if (!c || !c.graded || !c.end_date || c.end_date >= today) continue;
+    const u = byCourse.get(c.id) ?? {
+      programId: c.program_id,
+      courseCode: c.code ?? "",
+      courseName: c.name ?? "",
+      endDate: c.end_date,
+      ungraded: 0,
+      arrived: 0,
+    };
+    u.arrived += 1;
+    if (!graded.has(`${a.enrollment_id}:${c.id}`)) u.ungraded += 1;
+    byCourse.set(c.id, u);
+  }
+  return [...byCourse.values()];
+}
+
+type Plan = { program_id: string; enrollment_id: string | null; programs: Prog };
+export function mapOverdue(rows: unknown[]): OverdueCharge[] {
+  return (rows as Array<{ amount_zar: number | string; amount_paid_zar: number | string | null; status: string; sent_at: string | null; plan: Plan | Plan[] | null }>)
+    .map((c) => ({ ...c, plan: firstOf(c.plan) }))
+    // An unsent draft hasn't reached the student (same rule as my-school-fees).
+    .filter((c) => c.plan && !(c.status === "generated" && !c.sent_at))
+    .map((c) => ({
+      programId: c.plan!.program_id,
+      programName: progName(c.plan!.programs),
+      owed: Math.max(0, (Number(c.amount_zar) || 0) - (Number(c.amount_paid_zar) || 0)),
+      enrollmentId: c.plan!.enrollment_id,
+    }));
+}
+
+export function programName(p: Prog): string {
+  return progName(p);
+}
