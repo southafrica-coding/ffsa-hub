@@ -46,7 +46,7 @@ function Kit() {
       <ChoiceSegments label="Accepted?" options={[{ value: "yes", label: "Accepted" }, { value: "no", label: "Not accepted" }]} value={null} onChange={noop} />
       <SectionHeader title="Needs you (11)" actionLabel="Mark all read" onAction={noop} />
       <SectionTitle title="Outreach teams" meta="1 team" />
-      <GroupRow onPress={noop}>
+      <GroupRow onPress={noop} accessibilityLabel="Approvals">
         <InfoRow title="Approvals" subtitle="For Coreen Steyn and the finance office" meta="Not built yet" />
       </GroupRow>
       <ListGroup>
