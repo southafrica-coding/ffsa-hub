@@ -1,10 +1,9 @@
+import { useRouter } from "expo-router";
 import { UsersRound } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { ScrollView } from "react-native";
 
-import { Masthead, Screen } from "@/components";
-import { Skeleton } from "@/features/finance/components/ui";
-import { StateMessage } from "@/features/shell";
+import { EmptyState, LargeTitleScrollView, SkeletonList } from "@/components";
+import { Bleed } from "@/features/finance/components/parts";
 
 import { useMinistriesAccess } from "../shortcut";
 import { strings } from "../strings";
@@ -21,14 +20,14 @@ export function MinistriesGate({ children }: { children: ReactNode }) {
   if (access === "checking") {
     return (
       <GateFrame>
-        <Skeleton label={s.checking} />
+        <SkeletonList label={s.checking} count={4} inset={false} />
       </GateFrame>
     );
   }
   if (access === "notAllowed") {
     return (
       <GateFrame>
-        <StateMessage testID="ministries-not-allowed" icon={UsersRound} title={s.title} body={s.body} />
+        <EmptyState testID="ministries-not-allowed" icon={UsersRound} title={s.title} body={s.body} />
       </GateFrame>
     );
   }
@@ -36,12 +35,14 @@ export function MinistriesGate({ children }: { children: ReactNode }) {
 }
 
 function GateFrame({ children }: { children: ReactNode }) {
+  const router = useRouter();
   return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}>
-        <Masthead context={strings.list.context} title={strings.list.title} />
-        {children}
-      </ScrollView>
-    </Screen>
+    <LargeTitleScrollView
+      back={{ label: strings.common.home, onPress: () => router.navigate("/") }}
+      eyebrow={strings.list.context}
+      title={strings.list.title}
+    >
+      <Bleed>{children}</Bleed>
+    </LargeTitleScrollView>
   );
 }

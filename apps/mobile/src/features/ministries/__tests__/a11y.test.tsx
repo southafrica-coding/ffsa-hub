@@ -78,13 +78,15 @@ describe("Ministry detail", () => {
     expect(audit()).toEqual([]);
   });
 
-  it("dark mode: rows use the dark theme's rule colour (no hard-coded colours)", async () => {
+  it("dark mode: the team list uses the dark theme's colours (no hard-coded colours)", async () => {
     mockScheme = "dark";
     expect(themeFor("dark").colors.rule).toBe(colors.dark.rule);
     one.mockResolvedValue(detail({ canManage: false }));
     await show(<MinistryDetailScreen id={MEDIA} />);
-    const row = await screen.findByTestId("member-__none__-m2");
-    expect(StyleSheet.flatten(row.props.style).borderBottomColor).toBe(colors.dark.rule);
+    const group = StyleSheet.flatten((await screen.findByTestId("group-__none__")).props.style);
+    expect(group.borderColor).toBe(colors.dark.rule);
+    expect(group.backgroundColor).toBe(colors.dark.raised);
+    expect(screen.getByTestId("member-__none__-m2")).toBeTruthy();
     expect(audit()).toEqual([]);
   });
 });

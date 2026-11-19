@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { UsersRound } from "lucide-react-native";
 
-import { ListRow } from "@/features/shell";
+import { ListRow } from "@/components";
 
 import { useMinistriesShortcut } from "./shortcut";
 import { strings } from "./strings";

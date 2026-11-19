@@ -1,19 +1,20 @@
 import { useRouter } from "expo-router";
 import { Plus, UsersRound } from "lucide-react-native";
 import { useCallback } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Masthead, Screen, Text } from "@/components";
-import { ErrorState, Row, SectionBar, Skeleton } from "@/features/finance/components/ui";
+import { EmptyState, LargeTitleScrollView, ListGroup, ListRow, SkeletonList, StatusChip, Text } from "@/components";
+import { Bleed, GroupRow, LoadError } from "@/features/finance/components/parts";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { Chevron, Freshness, StatusTag } from "@/features/schools/components/ui";
-import { ListRow, StateMessage, openWebPage } from "@/features/shell";
+import { openWebPage } from "@/features/shell";
 import { apiFetch } from "@/lib/api-client";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { getMinistries, loadErrorMessage, type MinistryList, type MinistryListItem } from "../api";
+import { Freshness, SectionCount } from "../components/ui";
 import { listSections } from "../logic";
 import { strings } from "../strings";
 
@@ -43,67 +44,76 @@ export default function MinistriesListScreen() {
   const { sections, showHeadings } = listSections(data?.ministries ?? []);
 
   return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
-      >
-        <Masthead context={data ? s.contextCount(data.ministries.length, data.scope === "led") : s.context} title={s.title} />
-
-        {state.status === "loading" ? <Skeleton label={s.loading} /> : null}
+    <LargeTitleScrollView
+      // Ministries is reached from Home (it isn't a tab), so the list goes back to Home.
+      back={{ label: strings.common.home, onPress: () => router.navigate("/") }}
+      eyebrow={data ? s.contextCount(data.ministries.length, data.scope === "led") : s.context}
+      title={s.title}
+      gap={0}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
+    >
+      <Bleed>
+        {state.status === "loading" ? <SkeletonList label={s.loading} count={5} inset={false} /> : null}
         {forbidden ? (
-          <StateMessage testID="forbidden" icon={UsersRound} title={strings.gate.title} body={strings.common.forbidden} />
+          <EmptyState testID="forbidden" icon={UsersRound} title={strings.gate.title} body={strings.common.forbidden} />
         ) : state.status === "error" ? (
-          <ErrorState title={s.errorTitle} message={state.message} onRetry={retry} />
+          <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
         ) : null}
-        <Freshness state={state} onRetry={retry} />
+        {state.status === "ready" && state.staleSince !== null ? (
+          <View style={{ marginBottom: space.md }}>
+            <Freshness state={state} onRetry={retry} />
+          </View>
+        ) : null}
+        {data && data.ministries.length === 0 ? <EmptyState testID="empty" icon={UsersRound} title={s.emptyTitle} body={s.emptyBody} /> : null}
+      </Bleed>
 
-        {data ? (
-          <View>
-            {data.ministries.length === 0 ? (
-              <StateMessage testID="empty" icon={UsersRound} title={s.emptyTitle} body={s.emptyBody} />
-            ) : (
-              sections.map((section) => (
-                <View key={section.type}>
-                  {showHeadings ? <SectionBar title={section.label} meta={String(section.items.length)} /> : null}
+      {data
+        ? sections.map((section, i) => (
+            <View key={section.type}>
+              {showHeadings ? <SectionCount title={section.label} count={section.items.length} tight={i === 0} /> : null}
+              <Bleed>
+                <ListGroup inset={false}>
                   {section.items.map((m) => (
                     <MinistryRow key={m.id} ministry={m} onPress={() => router.push({ pathname: "/ministries/[id]", params: { id: m.id } })} />
                   ))}
-                </View>
-              ))
-            )}
-            {data.canCreate ? (
-              <ListRow
-                icon={Plus}
-                title={s.create}
-                subtitle={s.createSub}
-                trailing="web"
-                accessibilityHint={s.createHint}
-                onPress={() => void openWebPage("/ministry", colors)}
-                testID="create-ministry"
-              />
-            ) : null}
-          </View>
-        ) : null}
-      </ScrollView>
-    </Screen>
+                </ListGroup>
+              </Bleed>
+            </View>
+          ))
+        : null}
+
+      {data?.canCreate ? (
+        <Bleed style={{ marginTop: space.lg }}>
+          <ListGroup inset={false}>
+            <ListRow
+              icon={Plus}
+              title={s.create}
+              subtitle={s.createSub}
+              trailing="web"
+              accessibilityHint={s.createHint}
+              onPress={() => void openWebPage("/ministry", colors)}
+              testID="create-ministry"
+            />
+          </ListGroup>
+        </Bleed>
+      ) : null}
+    </LargeTitleScrollView>
   );
 }
 
 function MinistryRow({ ministry: m, onPress }: { ministry: MinistryListItem; onPress: () => void }) {
   const people = s.people(m.peopleCount);
   return (
-    <Row onPress={onPress} accessibilityLabel={s.rowA11y(m.name, people, !m.isActive, m.description)} accessibilityHint={s.rowHint} testID={`ministry-${m.id}`}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text variant="title">{m.name}</Text>
-          <Text variant="caption" tone="secondary" numberOfLines={2}>
-            {m.description ? `${people} · ${m.description}` : people}
-          </Text>
-          {!m.isActive ? <StatusTag label={s.retired} tone="default" testID={`retired-${m.id}`} /> : null}
+    <GroupRow onPress={onPress} accessibilityLabel={s.rowA11y(m.name, people, !m.isActive, m.description)} accessibilityHint={s.rowHint} testID={`ministry-${m.id}`}>
+      <Text variant="rowTitle">{m.name}</Text>
+      <Text variant="caption" tone="secondary" numberOfLines={2}>
+        {m.description ? `${people} · ${m.description}` : people}
+      </Text>
+      {!m.isActive ? (
+        <View style={{ marginTop: space.xs }}>
+          <StatusChip label={s.retired} variant="quiet" icon={null} testID={`retired-${m.id}`} />
         </View>
-        <Chevron />
-      </View>
-    </Row>
+      ) : null}
+    </GroupRow>
   );
 }

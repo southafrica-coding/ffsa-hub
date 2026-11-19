@@ -27,3 +27,5 @@ Routes: `app/(app)/ministries/` — a hidden route of the signed-in tabs (not in
 **Stays on the website** (via `openWebPage`): creating a ministry (admins), adding/removing people, leaders, point leaders, categories, editing the ministry, staff search and staff profiles.
 
 **Offline.** The last good copy of each screen is kept with finance's `useCachedLoad` (encrypted store, per user). The shortcut's answer is remembered per user (`ffsa.ministries.access.v1:<userId>`); admins and Leadership Team are known from `/api/me` without asking.
+
+**Look (redesign R3, frames 11.1–11.6).** Both screens draw their own `LargeTitle` header (the stack has no native header). Lists are kit `ListGroup`s; role words are `StatusChip`s (only Pending carries an icon); the band is the kit `NeedsYouBand` with no button, because Approve sits on the pending person's row. `components/ui.tsx` holds the two pieces the kit lacks (a section title with its count in a chip, the saved-copy note).
