@@ -125,17 +125,13 @@ exports[`Lock screen dark: page and tile from the theme (yellow is a fill, ink o
               accessibilityRole="header"
               allowFontScaling={true}
               style={
-                [
-                  {
-                    "color": "#F4F2EA",
-                    "fontFamily": "Roboto_600SemiBold",
-                    "fontSize": 16,
-                    "lineHeight": 24,
-                  },
-                  {
-                    "textAlign": "center",
-                  },
-                ]
+                {
+                  "color": "#F4F2EA",
+                  "fontFamily": "Roboto_600SemiBold",
+                  "fontSize": 16,
+                  "lineHeight": 24,
+                  "textAlign": "center",
+                }
               }
             >
               FFSA Hub is locked
@@ -144,17 +140,13 @@ exports[`Lock screen dark: page and tile from the theme (yellow is a fill, ink o
               accessibilityLabel="Signed in as Gabriël, gabriel@example.com"
               allowFontScaling={true}
               style={
-                [
-                  {
-                    "color": "#C7C3B5",
-                    "fontFamily": "Roboto_400Regular",
-                    "fontSize": 13,
-                    "lineHeight": 18,
-                  },
-                  {
-                    "textAlign": "center",
-                  },
-                ]
+                {
+                  "color": "#C7C3B5",
+                  "fontFamily": "Roboto_400Regular",
+                  "fontSize": 13,
+                  "lineHeight": 18,
+                  "textAlign": "center",
+                }
               }
             >
               Gabriël · gabriel@example.com
@@ -204,23 +196,19 @@ exports[`Lock screen dark: page and tile from the theme (yellow is a fill, ink o
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
             style={
-              [
-                {
-                  "alignItems": "center",
-                  "backgroundColor": "#FFB801",
-                  "borderColor": "transparent",
-                  "borderRadius": 6,
-                  "borderWidth": 1,
-                  "flexDirection": "row",
-                  "gap": 8,
-                  "justifyContent": "center",
-                  "minHeight": 50,
-                  "minWidth": 48,
-                  "paddingHorizontal": 16,
-                },
-                null,
-                undefined,
-              ]
+              {
+                "alignItems": "center",
+                "backgroundColor": "#FFB801",
+                "borderColor": "transparent",
+                "borderRadius": 6,
+                "borderWidth": 1,
+                "flexDirection": "row",
+                "gap": 8,
+                "justifyContent": "center",
+                "minHeight": 50,
+                "minWidth": 48,
+                "paddingHorizontal": 16,
+              }
             }
             testID="lock-unlock"
           >
@@ -443,18 +431,14 @@ exports[`Lock screen dark: page and tile from the theme (yellow is a fill, ink o
             <Text
               allowFontScaling={true}
               style={
-                [
-                  {
-                    "color": "#0A0A0A",
-                    "fontFamily": "Roboto_700Bold",
-                    "fontSize": 16,
-                    "lineHeight": 22,
-                    "textAlign": "center",
-                  },
-                  {
-                    "flexShrink": 1,
-                  },
-                ]
+                {
+                  "color": "#0A0A0A",
+                  "flexShrink": 1,
+                  "fontFamily": "Roboto_700Bold",
+                  "fontSize": 16,
+                  "lineHeight": 22,
+                  "textAlign": "center",
+                }
               }
             >
               Unlock
@@ -495,42 +479,34 @@ exports[`Lock screen dark: page and tile from the theme (yellow is a fill, ink o
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
             style={
-              [
-                {
-                  "alignItems": "center",
-                  "backgroundColor": "transparent",
-                  "borderColor": "transparent",
-                  "borderRadius": 6,
-                  "borderWidth": 1,
-                  "flexDirection": "row",
-                  "gap": 8,
-                  "justifyContent": "center",
-                  "minHeight": 44,
-                  "minWidth": 48,
-                  "paddingHorizontal": 8,
-                },
-                null,
-                undefined,
-              ]
+              {
+                "alignItems": "center",
+                "backgroundColor": "transparent",
+                "borderColor": "transparent",
+                "borderRadius": 6,
+                "borderWidth": 1,
+                "flexDirection": "row",
+                "gap": 8,
+                "justifyContent": "center",
+                "minHeight": 44,
+                "minWidth": 48,
+                "paddingHorizontal": 8,
+              }
             }
             testID="lock-sign-out"
           >
             <Text
               allowFontScaling={true}
               style={
-                [
-                  {
-                    "color": "#F4F2EA",
-                    "fontFamily": "Roboto_600SemiBold",
-                    "fontSize": 15,
-                    "lineHeight": 22,
-                    "textAlign": "center",
-                    "textDecorationLine": "underline",
-                  },
-                  {
-                    "flexShrink": 1,
-                  },
-                ]
+                {
+                  "color": "#F4F2EA",
+                  "flexShrink": 1,
+                  "fontFamily": "Roboto_600SemiBold",
+                  "fontSize": 15,
+                  "lineHeight": 22,
+                  "textAlign": "center",
+                  "textDecorationLine": "underline",
+                }
               }
             >
               Sign out instead
@@ -668,17 +644,13 @@ exports[`Lock screen light: page and tile from the theme (yellow is a fill, ink 
               accessibilityRole="header"
               allowFontScaling={true}
               style={
-                [
-                  {
-                    "color": "#0A0A0A",
-                    "fontFamily": "Roboto_600SemiBold",
-                    "fontSize": 16,
-                    "lineHeight": 24,
-                  },
-                  {
-                    "textAlign": "center",
-                  },
-                ]
+                {
+                  "color": "#0A0A0A",
+                  "fontFamily": "Roboto_600SemiBold",
+                  "fontSize": 16,
+                  "lineHeight": 24,
+                  "textAlign": "center",
+                }
               }
             >
               FFSA Hub is locked
@@ -687,17 +659,13 @@ exports[`Lock screen light: page and tile from the theme (yellow is a fill, ink 
               accessibilityLabel="Signed in as Gabriël, gabriel@example.com"
               allowFontScaling={true}
               style={
-                [
-                  {
-                    "color": "#55524A",
-                    "fontFamily": "Roboto_400Regular",
-                    "fontSize": 13,
-                    "lineHeight": 18,
-                  },
-                  {
-                    "textAlign": "center",
-                  },
-                ]
+                {
+                  "color": "#55524A",
+                  "fontFamily": "Roboto_400Regular",
+                  "fontSize": 13,
+                  "lineHeight": 18,
+                  "textAlign": "center",
+                }
               }
             >
               Gabriël · gabriel@example.com
@@ -747,23 +715,19 @@ exports[`Lock screen light: page and tile from the theme (yellow is a fill, ink 
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
             style={
-              [
-                {
-                  "alignItems": "center",
-                  "backgroundColor": "#0A0A0A",
-                  "borderColor": "transparent",
-                  "borderRadius": 6,
-                  "borderWidth": 1,
-                  "flexDirection": "row",
-                  "gap": 8,
-                  "justifyContent": "center",
-                  "minHeight": 50,
-                  "minWidth": 48,
-                  "paddingHorizontal": 16,
-                },
-                null,
-                undefined,
-              ]
+              {
+                "alignItems": "center",
+                "backgroundColor": "#0A0A0A",
+                "borderColor": "transparent",
+                "borderRadius": 6,
+                "borderWidth": 1,
+                "flexDirection": "row",
+                "gap": 8,
+                "justifyContent": "center",
+                "minHeight": 50,
+                "minWidth": 48,
+                "paddingHorizontal": 16,
+              }
             }
             testID="lock-unlock"
           >
@@ -986,18 +950,14 @@ exports[`Lock screen light: page and tile from the theme (yellow is a fill, ink 
             <Text
               allowFontScaling={true}
               style={
-                [
-                  {
-                    "color": "#FFFFFF",
-                    "fontFamily": "Roboto_700Bold",
-                    "fontSize": 16,
-                    "lineHeight": 22,
-                    "textAlign": "center",
-                  },
-                  {
-                    "flexShrink": 1,
-                  },
-                ]
+                {
+                  "color": "#FFFFFF",
+                  "flexShrink": 1,
+                  "fontFamily": "Roboto_700Bold",
+                  "fontSize": 16,
+                  "lineHeight": 22,
+                  "textAlign": "center",
+                }
               }
             >
               Unlock
@@ -1038,42 +998,34 @@ exports[`Lock screen light: page and tile from the theme (yellow is a fill, ink 
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
             style={
-              [
-                {
-                  "alignItems": "center",
-                  "backgroundColor": "transparent",
-                  "borderColor": "transparent",
-                  "borderRadius": 6,
-                  "borderWidth": 1,
-                  "flexDirection": "row",
-                  "gap": 8,
-                  "justifyContent": "center",
-                  "minHeight": 44,
-                  "minWidth": 48,
-                  "paddingHorizontal": 8,
-                },
-                null,
-                undefined,
-              ]
+              {
+                "alignItems": "center",
+                "backgroundColor": "transparent",
+                "borderColor": "transparent",
+                "borderRadius": 6,
+                "borderWidth": 1,
+                "flexDirection": "row",
+                "gap": 8,
+                "justifyContent": "center",
+                "minHeight": 44,
+                "minWidth": 48,
+                "paddingHorizontal": 8,
+              }
             }
             testID="lock-sign-out"
           >
             <Text
               allowFontScaling={true}
               style={
-                [
-                  {
-                    "color": "#0A0A0A",
-                    "fontFamily": "Roboto_600SemiBold",
-                    "fontSize": 15,
-                    "lineHeight": 22,
-                    "textAlign": "center",
-                    "textDecorationLine": "underline",
-                  },
-                  {
-                    "flexShrink": 1,
-                  },
-                ]
+                {
+                  "color": "#0A0A0A",
+                  "flexShrink": 1,
+                  "fontFamily": "Roboto_600SemiBold",
+                  "fontSize": 15,
+                  "lineHeight": 22,
+                  "textAlign": "center",
+                  "textDecorationLine": "underline",
+                }
               }
             >
               Sign out instead
