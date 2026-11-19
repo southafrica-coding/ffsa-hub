@@ -122,29 +122,76 @@ describe("follow-up board", () => {
     expect(leratoCard.querySelector("a[href='tel:0825550142']")).toBeTruthy();
     expect(leratoCard.querySelector("a[href='https://wa.me/27825550142']")).toBeTruthy();
     expect(leratoCard.textContent).not.toContain("secret@");
-    expect(leratoCard.textContent).toContain("First time");
+    expect(leratoCard.textContent).toContain("16 Nov 2026 · first time");
     expect(leratoCard.textContent).toContain("Wants a house church");
     expect(leratoCard.textContent).toContain("Wants prayer");
     const siphoCard = cards[1] as HTMLElement;
     expect(siphoCard.querySelector("a")).toBeNull();
-    expect(siphoCard.textContent).toContain("Phone isn’t shown here yet.");
+    expect(siphoCard.textContent).toContain("Chris");
     expect(siphoCard.textContent).not.toContain("secret@example.com");
     expect(siphoCard.querySelector("button")?.textContent).toBe(sipho.displayName);
+    expect(leratoCard.textContent).toContain("Assign");
+    expect(leratoCard.textContent).toContain("Next stage");
     const stages = host.querySelector("[aria-label=Stage]") as HTMLElement;
     expect(stages.textContent).toContain("New");
     expect(stages.textContent).toContain("Joined");
     expect(stages.textContent).toContain("2");
-    expect(host.textContent).toContain("Not in a house yet.");
+    expect(host.querySelector("[data-testid=follow-up-lede]")?.textContent).toBe("2 people not in a house yet.");
   });
 
-  it("shows Joined only after asking for people who joined", async () => {
+  it("moves a card on with Next stage", async () => {
+    const people = [lerato, sipho];
+    const calls: string[] = [];
+    const host = mount(
+      <FollowUpBoard
+        client={client({
+          list: async (query) => ({ people: pages(people)[query.stage], canWrite: true }),
+          setStage: async (key, body) => {
+            calls.push(`${key}:${body.stage}`);
+            people[0] = { ...lerato, stage: body.stage };
+            return {
+              person: people[0],
+              entry: { id: "e", kind: "stage_change", fromStage: "new", toStage: body.stage, body: null, by: null, at: "2026-11-16T10:00:00.000Z" },
+            };
+          },
+        })}
+      />
+    );
+    await settle();
+    act(() => (host.querySelector("#follow-up-next-r_response-1") as HTMLButtonElement).click());
+    await settle();
+    expect(calls).toEqual(["r_response-1:contacted"]);
+    expect(host.textContent).not.toContain("Lerato Mokoena");
+    const contacted = [...host.querySelectorAll("[aria-label=Stage] button")].find((b) => b.textContent?.includes("Contacted"));
+    expect(contacted?.textContent).toContain("1");
+  });
+
+  it("shows Joined as its own tab, and an empty state there", async () => {
     const host = mount(<FollowUpBoard client={client()} />);
     await settle();
-    const link = host.querySelector("a[href='/missio/follow-up?stage=joined']") as HTMLAnchorElement;
-    act(() => link.click());
+    const joined = [...host.querySelectorAll("[aria-label=Stage] button")].find((b) => b.textContent?.includes("Joined")) as HTMLButtonElement;
+    act(() => joined.click());
     await settle();
-    expect(host.querySelector("[aria-label=Stage]")?.textContent).toContain("Joined");
-    expect(host.textContent).toContain("In a house.");
+    expect(joined.getAttribute("aria-pressed")).toBe("true");
+    expect(host.textContent).toContain("No one has joined a house from follow-up yet.");
+  });
+
+  it("shows four columns on a wide screen", async () => {
+    vi.stubGlobal("matchMedia", (media: string) => ({
+      matches: media.includes("1100px"),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    try {
+      const host = mount(<FollowUpBoard client={client()} />);
+      await settle();
+      expect(host.querySelector("[data-testid=follow-up-columns]")).toBeTruthy();
+      expect(host.querySelectorAll("[data-testid=follow-up-columns] section")).toHaveLength(4);
+      expect(host.querySelectorAll("[data-testid=follow-up-list-new] [data-testid=follow-up-card]")).toHaveLength(2);
+      expect(host.textContent).toContain("Moves here by itself when someone is added to a house.");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("uses the pastors-only card for 401 and 403 and never the server sentence", async () => {
@@ -385,15 +432,18 @@ describe("follow-up board", () => {
       />
     );
     await settle();
-    const review = host.querySelector("[data-testid=needs-review]") as HTMLElement;
-    expect(review.textContent).toContain("Needs review");
-    expect(review.textContent).toContain("Possible match: Naledi Khumalo");
-    expect(review.textContent).not.toContain("083");
+    const panel = host.querySelector("[data-testid=needs-review-panel]") as HTMLElement;
+    expect(panel.textContent).toContain("Needs review · 1");
+    const review = panel.querySelector("[data-testid=needs-review]") as HTMLElement;
+    expect(review.textContent).toContain("In People");
+    expect(review.textContent).toContain("Naledi Khumalo");
+    // The card's own phone shows; the suggested contact's never does.
+    expect(review.textContent).toContain("083 555 0199");
     expect(host.textContent).not.toContain("Should stay hidden");
-    const confirm = [...review.querySelectorAll("button")].find((item) => item.textContent === "Confirm") as HTMLButtonElement;
+    const confirm = [...review.querySelectorAll("button")].find((item) => item.textContent === "Confirm, it’s Naledi") as HTMLButtonElement;
     act(() => confirm.click());
     await settle();
-    expect(host.textContent).not.toContain("Possible match:");
+    expect(host.querySelector("[data-testid=needs-review-panel]")).toBeNull();
     expect(host.textContent).toContain("Naledi Khumalo");
   });
 
@@ -410,8 +460,9 @@ describe("follow-up board", () => {
     );
     await settle();
     const review = host.querySelector("[data-testid=needs-review]") as HTMLElement;
-    expect(review.textContent).toBe("Needs review");
+    expect(review.textContent).toContain("No one suggested yet.");
     expect(review.querySelector("button")).toBeNull();
+    expect(host.querySelector("[data-testid=follow-up-card]")?.textContent).toContain("Needs review");
   });
 
   it("says someone already sorted a match and refetches", async () => {
@@ -434,7 +485,7 @@ describe("follow-up board", () => {
     );
     await settle();
     const before = calls;
-    const confirm = [...host.querySelectorAll("button")].find((item) => item.textContent === "Confirm") as HTMLButtonElement;
+    const confirm = [...host.querySelectorAll("button")].find((item) => item.textContent?.startsWith("Confirm")) as HTMLButtonElement;
     act(() => confirm.click());
     await settle();
     expect(host.textContent).toContain("Someone already sorted this one.");

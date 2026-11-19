@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { MissioApiError, missioClient, type MissioClient } from "../api";
 import { missioFixedCopy, matchActionCopy, shouldRefetch } from "../errors";
 import { houseChurchesClient, type HouseChurchesClient } from "../house-churches/client";
@@ -32,9 +31,9 @@ export function resetMatchReviewSession() {
 }
 
 type Board = {
-  people: FollowUpItem[];
+  /** Every stage's list, so the desktop board can show all four columns. */
+  lists: Record<FollowUpStage, FollowUpItem[]>;
   canWrite: boolean;
-  counts: Record<FollowUpStage, number>;
   leaders: PersonRef[];
   stage: FollowUpStage;
   leader: string;
@@ -47,24 +46,49 @@ async function fetchBoard(client: FollowUpClient, stage: FollowUpStage, leader: 
     Promise.all(stages.map((item) => client.list({ stage: item, leader: leaderQuery }))),
     client.leaders(),
   ]);
-  const counts: Record<FollowUpStage, number> = { new: 0, contacted: 0, visited_house: 0, joined: 0 };
+  const byStage: Record<FollowUpStage, FollowUpItem[]> = { new: [], contacted: [], visited_house: [], joined: [] };
   let active: FollowUpListResponse | null = null;
   for (let index = 0; index < stages.length; index += 1) {
     const item = stages[index];
     const page = lists[index];
     if (!item || !page) continue;
-    counts[item] = page.people.length;
+    byStage[item] = page.people;
     if (item === stage) active = page;
   }
   if (!active) throw new MissioApiError(500, "", null, "server_error");
   return {
-    people: active.people,
+    lists: byStage,
     canWrite: active.canWrite,
-    counts,
     leaders: leaderPage.leaders,
     stage,
     leader,
   };
+}
+
+/** Desktop shows the four stages side by side; phones get one stage at a time. */
+function useWide(): boolean {
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(min-width: 1100px)");
+    const update = () => setWide(query.matches);
+    update();
+    query.addEventListener?.("change", update);
+    return () => query.removeEventListener?.("change", update);
+  }, []);
+  return wide;
+}
+
+const NEXT_STAGE: Partial<Record<FollowUpStage, FollowUpStage>> = { new: "contacted", contacted: "visited_house" };
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters = parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : (parts[0] ?? "?").slice(0, 2);
+  return letters.toUpperCase();
+}
+
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name;
 }
 
 function nextFocusId(people: FollowUpItem[], index: number): string {
@@ -94,6 +118,7 @@ export function FollowUpBoard({
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
   const [declineHidden, setDeclineHidden] = useState(declineHiddenForSession);
+  const wide = useWide();
   const requestId = useRef(0);
   const focusN = useRef(0);
 
@@ -144,8 +169,38 @@ export function FollowUpBoard({
     setFocus({ id, n: focusN.current });
   }
 
-  function applyPeople(people: FollowUpItem[]) {
-    setBoard((current) => (current ? { ...current, people } : current));
+  /** Put a changed person where they now belong, or drop them if the filter hides them. */
+  function place(person: FollowUpItem, keep: boolean) {
+    setBoard((current) => {
+      if (!current) return current;
+      const lists = { ...current.lists };
+      let placed = false;
+      for (const item of STAGES) {
+        lists[item] = lists[item].flatMap((row) => {
+          if (row.key !== person.key) return [row];
+          if (keep && item === person.stage) {
+            placed = true;
+            return [person];
+          }
+          return [];
+        });
+      }
+      if (keep && !placed) lists[person.stage] = [person, ...lists[person.stage]];
+      return { ...current, lists };
+    });
+  }
+
+  function drop(key: string) {
+    setBoard((current) => {
+      if (!current) return current;
+      const lists = { ...current.lists };
+      for (const item of STAGES) lists[item] = lists[item].filter((row) => row.key !== key);
+      return { ...current, lists };
+    });
+  }
+
+  function listOf(person: FollowUpItem): FollowUpItem[] {
+    return board?.lists[person.stage] ?? [];
   }
 
   function writeCopy(caught: unknown): string {
@@ -158,10 +213,14 @@ export function FollowUpBoard({
     setNotice(null);
     try {
       const result = await client.setStage(person.key, { stage: next });
-      const stays = next === stage && leaderMatches(result.person.assignedLeader?.contactId ?? null, leader);
-      const people = board.people;
-      applyPeople(stays ? people.map((item) => (item.key === person.key ? result.person : item)) : people.filter((item) => item.key !== person.key));
-      focusOn(stays ? `follow-up-stage-${person.key}` : nextFocusId(people, index));
+      const matches = leaderMatches(result.person.assignedLeader?.contactId ?? null, leader);
+      const stays = (wide || next === stage) && matches;
+      const people = listOf(person);
+      place(result.person, matches);
+      // On a phone the person leaves this tab, so their sheet closes with them.
+      if (!stays && openKey === person.key) setOpenKey(null);
+      const here = openKey === person.key ? `follow-up-stage-${person.key}` : `follow-up-open-${person.key}`;
+      focusOn(stays ? here : nextFocusId(people, index));
       void load(true);
       return true;
     } catch (caught) {
@@ -179,10 +238,13 @@ export function FollowUpBoard({
     setNotice(null);
     try {
       const result = await client.setLeader(person.key, leaderContactId);
-      const stays = result.person.stage === stage && leaderMatches(result.person.assignedLeader?.contactId ?? null, leader);
-      const people = board.people;
-      applyPeople(stays ? people.map((item) => (item.key === person.key ? result.person : item)) : people.filter((item) => item.key !== person.key));
-      focusOn(stays ? `follow-up-leader-${person.key}` : nextFocusId(people, index));
+      const matches = leaderMatches(result.person.assignedLeader?.contactId ?? null, leader);
+      const stays = (wide || result.person.stage === stage) && matches;
+      const people = listOf(person);
+      place(result.person, matches);
+      if (!stays && openKey === person.key) setOpenKey(null);
+      const here = openKey === person.key ? `follow-up-leader-${person.key}` : `follow-up-open-${person.key}`;
+      focusOn(stays ? here : nextFocusId(people, index));
       void load(true);
       return true;
     } catch (caught) {
@@ -198,9 +260,7 @@ export function FollowUpBoard({
     setNotice(null);
     try {
       const result = await client.confirmMatch(person.key);
-      if (result.person) {
-        applyPeople((board?.people ?? []).map((item) => (item.key === person.key ? result.person! : item)));
-      }
+      if (result.person) place(result.person, true);
       focusOn(`follow-up-open-${person.key}`);
       void load(true);
     } catch (caught) {
@@ -212,9 +272,7 @@ export function FollowUpBoard({
     setNotice(null);
     try {
       const result = await client.declineMatch(person.key);
-      if (result.person) {
-        applyPeople((board?.people ?? []).map((item) => (item.key === person.key ? result.person! : item)));
-      }
+      if (result.person) place(result.person, true);
       focusOn(`follow-up-open-${person.key}`);
       void load(true);
     } catch (caught) {
@@ -240,19 +298,39 @@ export function FollowUpBoard({
 
   function added(person: FollowUpItem, index: number) {
     setAddingKey(null);
-    if (board && stage !== "joined") {
-      applyPeople(board.people.filter((item) => item.key !== person.key));
-      focusOn(nextFocusId(board.people, index));
+    if (board && person.stage !== "joined") {
+      const people = listOf(person);
+      drop(person.key);
+      focusOn(nextFocusId(people, index));
     } else {
       focusOn(`follow-up-add-${person.key}`);
     }
     void load(true);
   }
 
-  const openPerson = board?.people.find((item) => item.key === openKey) ?? null;
-  const adding = board?.people.find((item) => item.key === addingKey) ?? null;
-  const countsReady = board != null && board.stage === stage && board.leader === leader;
+  const everyone = board ? STAGES.flatMap((item) => board.lists[item]) : [];
+  const openPerson = everyone.find((item) => item.key === openKey) ?? null;
+  const adding = everyone.find((item) => item.key === addingKey) ?? null;
+  const countsReady = board != null && board.leader === leader && (wide || board.stage === stage);
   const showPeople = countsReady && !listPending;
+  const counts = (item: FollowUpStage) => board?.lists[item].length ?? 0;
+  const waiting = counts("new") + counts("contacted") + counts("visited_house");
+  const reviews = board
+    ? (["new", "contacted", "visited_house"] as const).flatMap((item) =>
+        board.lists[item].filter((person) => person.matchStatus === "pending_confirm")
+      )
+    : [];
+  const indexIn = (person: FollowUpItem) => listOf(person).findIndex((item) => item.key === person.key);
+  const card = (person: FollowUpItem) => (
+    <PersonCard
+      key={person.key}
+      person={person}
+      canWrite={board?.canWrite ?? false}
+      onOpen={() => setOpenKey(person.key)}
+      onAdd={() => setAddingKey(person.key)}
+      onNext={(next) => void changeStage(person, next, indexIn(person))}
+    />
+  );
 
   const denied = accessStatus(fatal);
   if (denied) {
@@ -278,35 +356,14 @@ export function FollowUpBoard({
 
   return (
     <div className={`${content.page} ${styles.root}`}>
-      <p className={`${shell.eyebrow} ${content.eyebrow}`}>After a service</p>
-      <h1 className={content.title}>Follow-up</h1>
-      <p className={`${shell.lede} ${content.lede}`}>{stage === "joined" ? "In a house." : "Not in a house yet."}</p>
-
-      <div className={styles.filters} id="follow-up-filters">
-        <div className={styles.chipRow} role="group" aria-label="Stage">
-          <div className={styles.chips}>
-          {STAGES.map((item) => {
-            const selected = item === stage;
-            const count = countsReady ? board?.counts[item] : null;
-            return (
-              <button
-                key={item}
-                type="button"
-                className={`${styles.chip} ${selected ? styles.chipOn : ""}`}
-                aria-pressed={selected}
-                onClick={() => {
-                  setStage(item);
-                  setNotice(null);
-                }}
-              >
-                {STAGE_LABEL[item]}
-                {count != null ? <span className={styles.count}>{count}</span> : null}
-              </button>
-            );
-          })}
-          </div>
+      <div className={styles.head}>
+        <div>
+          <h1 className={content.title}>Follow-up</h1>
+          <p className={`${shell.lede} ${content.lede}`} data-testid="follow-up-lede">
+            {countsReady ? `${waiting} ${waiting === 1 ? "person" : "people"} not in a house yet.` : "Not in a house yet."}
+          </p>
         </div>
-        <label className={styles.leaderFilter}>
+        <label className={styles.leaderFilter} id="follow-up-filters">
           Leader
           <select
             aria-label="Leader"
@@ -326,48 +383,93 @@ export function FollowUpBoard({
           </select>
         </label>
       </div>
-      {stage !== "joined" ? (
-        <p className={styles.joinedLink}>
-          <Link
-            href="/missio/follow-up?stage=joined"
-            className={styles.joined}
-            onClick={(event) => {
-              event.preventDefault();
-              setStage("joined");
-            }}
-          >
-            People who joined
-          </Link>
-        </p>
-      ) : null}
 
       {notice ? (
         <p className={styles.notice} role="alert">
           {notice}
         </p>
       ) : null}
+
+      {showPeople && reviews.length > 0 ? (
+        <section className={styles.review} data-testid="needs-review-panel" aria-labelledby="follow-up-review-heading">
+          <h2 id="follow-up-review-heading">Needs review · {reviews.length}</h2>
+          <p className={styles.reviewLede}>These connect cards share a phone number with someone already in People.</p>
+          <ul className={styles.reviewList}>
+            {reviews.map((person) => (
+              <ReviewCard
+                key={person.key}
+                person={person}
+                canWrite={board?.canWrite ?? false}
+                declineHidden={declineHidden}
+                onConfirm={() => void confirmMatch(person)}
+                onDecline={() => void declineMatch(person)}
+              />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {!wide ? (
+        <div className={styles.tabs} role="group" aria-label="Stage">
+          {STAGES.map((item) => {
+            const selected = item === stage;
+            return (
+              <button
+                key={item}
+                type="button"
+                className={`${styles.tab} ${selected ? styles.tabOn : ""}`}
+                aria-pressed={selected}
+                onClick={() => {
+                  setStage(item);
+                  setNotice(null);
+                }}
+              >
+                <span className={styles.tabCount}>{countsReady ? counts(item) : "–"}</span>
+                <span>{item === "visited_house" ? "Visited" : STAGE_LABEL[item]}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
       {booting && !board ? (
         <p className={shell.state} role="status">
           Loading follow-up…
         </p>
       ) : null}
-      {showPeople && board && board.people.length === 0 ? <p className={styles.meta}>No one in this list.</p> : null}
       {listPending && board ? <p role="status">Loading this list…</p> : null}
-      {showPeople && board && board.people.length > 0 ? (
-        <ul className={styles.list} data-testid="follow-up-list">
-          {board.people.map((person) => (
-            <PersonCard
-              key={person.key}
-              person={person}
-              canWrite={board.canWrite}
-              onOpen={() => setOpenKey(person.key)}
-              onAdd={() => setAddingKey(person.key)}
-              onConfirm={() => void confirmMatch(person)}
-              onDecline={() => void declineMatch(person)}
-              declineHidden={declineHidden}
-            />
+
+      {showPeople && board && !wide ? (
+        board.lists[stage].length === 0 ? (
+          <EmptyStage stage={stage} />
+        ) : (
+          <ul className={styles.list} data-testid="follow-up-list">
+            {board.lists[stage].map(card)}
+          </ul>
+        )
+      ) : null}
+
+      {showPeople && board && wide ? (
+        <div className={styles.columns} data-testid="follow-up-columns" aria-label="Stage">
+          {STAGES.map((item) => (
+            <section key={item} className={styles.column} aria-labelledby={`follow-up-col-${item}`}>
+              <h2 id={`follow-up-col-${item}`} className={styles.columnHead}>
+                <span>{STAGE_LABEL[item]}</span>
+                <span className={styles.columnCount}>{counts(item)}</span>
+              </h2>
+              {item === "joined" ? (
+                <p className={styles.columnNote}>Moves here by itself when someone is added to a house.</p>
+              ) : null}
+              {board.lists[item].length === 0 ? (
+                <p className={styles.columnEmpty}>No one here.</p>
+              ) : (
+                <ul className={styles.list} data-testid={`follow-up-list-${item}`}>
+                  {board.lists[item].map(card)}
+                </ul>
+              )}
+            </section>
           ))}
-        </ul>
+        </div>
       ) : null}
 
       {openPerson ? (
@@ -380,8 +482,8 @@ export function FollowUpBoard({
             setOpenKey(null);
             focusOn(`follow-up-open-${openPerson.key}`);
           }}
-          onStage={(next) => changeStage(openPerson, next, board?.people.findIndex((item) => item.key === openPerson.key) ?? 0)}
-          onLeader={(next) => changeLeader(openPerson, next, board?.people.findIndex((item) => item.key === openPerson.key) ?? 0)}
+          onStage={(next) => changeStage(openPerson, next, indexIn(openPerson))}
+          onLeader={(next) => changeLeader(openPerson, next, indexIn(openPerson))}
         />
       ) : null}
       {adding && board ? (
@@ -394,7 +496,7 @@ export function FollowUpBoard({
             setAddingKey(null);
             focusOn(`follow-up-add-${adding.key}`);
           }}
-          onAdded={() => added(adding, board.people.findIndex((item) => item.key === adding.key))}
+          onAdded={() => added(adding, indexIn(adding))}
           onConflict={() => {
             setAddingKey(null);
             setNotice(missioFixedCopy("already_resolved"));
@@ -407,76 +509,163 @@ export function FollowUpBoard({
   );
 }
 
+function EmptyStage({ stage }: { stage: FollowUpStage }) {
+  if (stage === "joined") return <p className={styles.empty}>No one has joined a house from follow-up yet.</p>;
+  if (stage !== "new") return <p className={styles.empty}>No one in {STAGE_LABEL[stage].toLowerCase()} right now.</p>;
+  return (
+    <div className={styles.empty} data-testid="follow-up-empty">
+      <p className={styles.emptyTitle}>No new connect cards.</p>
+      <p>New connect cards from Sunday will show up here.</p>
+    </div>
+  );
+}
+
 function PersonCard({
   person,
   canWrite,
   onOpen,
   onAdd,
-  onConfirm,
-  onDecline,
-  declineHidden,
+  onNext,
 }: {
   person: FollowUpItem;
   canWrite: boolean;
   onOpen: () => void;
   onAdd: () => void;
-  onConfirm: () => void;
-  onDecline: () => void;
-  declineHidden: boolean;
+  onNext: (next: FollowUpStage) => void;
 }) {
   const hasPhone = Boolean(person.phone?.trim());
   const phone = telHref(person.phone);
   const whatsApp = whatsAppHref(person.phone);
   const when = formatWhen(person.submittedAt);
-  const meta = [person.visitType ? VISIT_LABEL[person.visitType] : null, when].filter(Boolean).join(" · ");
+  const meta = [when, person.visitType ? VISIT_LABEL[person.visitType].toLowerCase() : null].filter(Boolean).join(" · ");
   const reviewing = person.matchStatus === "pending_confirm";
-  const suggestion = reviewing ? person.suggestedContact : null;
+  const next = NEXT_STAGE[person.stage];
+  const leaderName = person.assignedLeader?.displayName ?? null;
 
   return (
-    <li className={styles.card} data-testid="follow-up-card">
-      <button type="button" className={styles.name} id={`follow-up-open-${person.key}`} onClick={onOpen}>
-        {person.displayName}
-      </button>
-      {meta ? <p className={styles.meta}>{meta}</p> : null}
-      {person.wantsHouseChurch || person.wantsPrayer ? (
-        <div className={styles.badges}>
-          {person.wantsHouseChurch ? <span className={styles.badge}>Wants a house church</span> : null}
-          {person.wantsPrayer ? <span className={styles.badge}>Wants prayer</span> : null}
+    <li className={styles.card} data-testid="follow-up-card" data-stage={person.stage}>
+      <div className={styles.cardTop}>
+        <span className={styles.avatar} aria-hidden="true">
+          {initials(person.displayName)}
+        </span>
+        <div className={styles.cardText}>
+          <button type="button" className={styles.name} id={`follow-up-open-${person.key}`} onClick={onOpen}>
+            {person.displayName}
+          </button>
+          {meta ? <p className={styles.meta}>{meta}</p> : null}
         </div>
-      ) : null}
-      <p className={styles.meta}>{person.assignedLeader ? `Leader · ${person.assignedLeader.displayName}` : "No leader yet"}</p>
-      {reviewing ? (
-        <div className={styles.confirm} data-testid="needs-review">
-          <p>Needs review</p>
-          {suggestion ? <p>Possible match: {suggestion.displayName}</p> : null}
-          {suggestion && canWrite ? (
-            <div className={styles.actions}>
-              <button type="button" className={styles.secondary} onClick={onConfirm}>
-                Confirm
-              </button>
-              {declineHidden ? null : (
-                <button type="button" className={styles.secondary} onClick={onDecline}>
-                  Not this person
-                </button>
-              )}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      <div className={styles.actions}>
-        {hasPhone && phone ? <a className={styles.secondary} href={phone}>Call</a> : null}
-        {hasPhone && whatsApp ? (
-          <a className={styles.secondary} href={whatsApp} target="_blank" rel="noreferrer">
-            WhatsApp
-          </a>
+      </div>
+      <div className={styles.badges}>
+        {person.wantsHouseChurch ? <span className={`${styles.badge} ${styles.badgeHouse}`}>Wants a house church</span> : null}
+        {person.wantsHouseChurch === false ? <span className={`${styles.badge} ${styles.badgeQuiet}`}>Not yet</span> : null}
+        {person.wantsPrayer ? <span className={styles.badge}>Wants prayer</span> : null}
+        {reviewing ? <span className={`${styles.badge} ${styles.badgeReview}`}>Needs review</span> : null}
+      </div>
+      <div className={styles.cardFoot}>
+        {leaderName ? (
+          <span className={styles.leader} title={`Leader · ${leaderName}`}>
+            <span className={styles.leaderDot} aria-hidden="true">
+              {initials(leaderName)}
+            </span>
+            <span>
+              <span className={shell.visuallyHidden}>Leader · </span>
+              {firstName(leaderName)}
+            </span>
+          </span>
+        ) : canWrite && person.stage !== "joined" ? (
+          <button type="button" id={`follow-up-assign-${person.key}`} className={styles.secondary} onClick={onOpen}>
+            Assign
+          </button>
+        ) : (
+          <span className={styles.muted}>No leader yet</span>
+        )}
+        {canWrite && next ? (
+          <button
+            type="button"
+            id={`follow-up-next-${person.key}`}
+            className={styles.secondary}
+            onClick={() => onNext(next)}
+          >
+            Next stage
+          </button>
         ) : null}
-        {!hasPhone ? <p className={styles.muted}>Phone isn’t shown here yet.</p> : null}
-        {canWrite ? (
-          <button type="button" id={`follow-up-add-${person.key}`} className={styles.secondary} onClick={onAdd}>
+        {canWrite && person.stage !== "joined" ? (
+          <button
+            type="button"
+            id={`follow-up-add-${person.key}`}
+            className={person.stage === "visited_house" ? styles.primaryButton : styles.secondary}
+            onClick={onAdd}
+          >
             Add to a house
           </button>
         ) : null}
       </div>
+      {hasPhone && (phone || whatsApp) ? (
+        <div className={styles.reach}>
+          {phone ? <a href={phone}>Call</a> : null}
+          {whatsApp ? (
+            <a href={whatsApp} target="_blank" rel="noreferrer">
+              WhatsApp
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+function ReviewCard({
+  person,
+  canWrite,
+  declineHidden,
+  onConfirm,
+  onDecline,
+}: {
+  person: FollowUpItem;
+  canWrite: boolean;
+  declineHidden: boolean;
+  onConfirm: () => void;
+  onDecline: () => void;
+}) {
+  const suggestion = person.suggestedContact;
+  const when = formatWhen(person.submittedAt);
+  const meta = [
+    person.visitType ? VISIT_LABEL[person.visitType] : null,
+    person.wantsHouseChurch ? "wants a house church" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <li className={styles.compare} data-testid="needs-review">
+      <div className={styles.compareSide}>
+        <p className={styles.compareLabel}>Connect card{when ? ` · ${when}` : ""}</p>
+        <p className={styles.compareName}>{person.displayName}</p>
+        {person.phone ? <p className={styles.meta}>{person.phone}</p> : null}
+        {meta ? <p className={styles.meta}>{meta}</p> : null}
+      </div>
+      <span className={styles.compareMark} aria-hidden="true">
+        =?
+      </span>
+      <div className={styles.compareSide}>
+        <p className={styles.compareLabel}>In People</p>
+        {suggestion ? (
+          <p className={styles.compareName}>{suggestion.displayName}</p>
+        ) : (
+          <p className={styles.muted}>No one suggested yet.</p>
+        )}
+      </div>
+      {suggestion && canWrite ? (
+        <div className={styles.compareActions}>
+          <button type="button" className={styles.primaryButton} onClick={onConfirm}>
+            Confirm, it’s {firstName(suggestion.displayName)}
+          </button>
+          {declineHidden ? null : (
+            <button type="button" className={styles.secondary} onClick={onDecline}>
+              Not this person
+            </button>
+          )}
+        </div>
+      ) : null}
     </li>
   );
 }
