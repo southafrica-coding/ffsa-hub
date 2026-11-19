@@ -3,10 +3,10 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Camera, Image as ImageIcon } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, View } from "react-native";
+import { View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { type BackAction, Banner, Bleed, Button, ChoiceChips, EmptyState, LargeTitleScrollView, ListGroup, ListRow, LoadFailed, PushedPage, SectionTitle, SkeletonList, Text, TextField } from "@/components";
+import { type BackAction, Banner, Bleed, Button, ChoiceChips, EmptyState, LargeTitleScrollView, ListGroup, ListRow, LoadFailed, PushedPage, SectionTitle, SkeletonList, Text, TextField, KeyboardAvoidingView } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage, useMe } from "@/features/shell";
 import { announce } from "@/lib/a11y";
@@ -224,7 +224,7 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
   const odometer = <TextField label={t.mileage} value={f.mileage} onChangeText={(v) => set({ mileage: v.replace(/[^\d]/g, "") })} keyboardType="number-pad" testID="mileage" />;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }}>
       <LargeTitleScrollView back={backToBooking} eyebrow={t.context(b.booking_name)} title={title} edges={["top", "bottom"]} gap={space.lg}>
         {notice ? (
           <Bleed>

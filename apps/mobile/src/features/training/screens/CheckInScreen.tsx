@@ -1,10 +1,10 @@
 import { useRouter } from "expo-router";
 import { Check } from "lucide-react-native";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, View } from "react-native";
+import { View } from "react-native";
 import { Pressable } from "@/components/Pressable";
 
-import { Bleed, Button, ChoiceChips, FieldError, LargeTitleScrollView, Text, TextField } from "@/components";
+import { Bleed, Button, ChoiceChips, FieldError, LargeTitleScrollView, Text, TextField, KeyboardAvoidingView } from "@/components";
 import { apiFetch } from "@/lib/api-client";
 import { hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -49,7 +49,7 @@ export default function CheckInScreen({ id, name }: { id: string; name: string }
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }}>
       <LargeTitleScrollView
         back={{ label: name || strings.back, onPress: () => router.back() }}
         eyebrow={c.context}

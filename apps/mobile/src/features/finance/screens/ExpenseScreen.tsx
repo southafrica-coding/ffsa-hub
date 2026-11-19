@@ -3,11 +3,11 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Camera, Check, ImagePlus, RefreshCw, Trash2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, View, useWindowDimensions } from "react-native";
+import { Alert, Image, ScrollView, View, useWindowDimensions } from "react-native";
 import { Pressable } from "@/components/Pressable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { type BackAction, Banner, Bleed, Button, ChipButton, ChoiceChips, Disclosure, FieldError, LargeTitleScrollView, LoadError, NavBar, PushedPage, SelectField, Sheet, SkeletonList, StatusChip, Text, TextField, Toggle } from "@/components";
+import { type BackAction, Banner, Bleed, Button, ChipButton, ChoiceChips, Disclosure, FieldError, LargeTitleScrollView, LoadError, NavBar, PushedPage, SelectField, Sheet, SkeletonList, StatusChip, Text, TextField, Toggle, KeyboardAvoidingView } from "@/components";
 import { useSession } from "@/auth/session-provider";
 import { announce } from "@/lib/a11y";
 import { apiFetch } from "@/lib/api-client";
@@ -710,7 +710,7 @@ function ExpenseFormView({
   }
   const back: BackAction = { label: view.team.team_name, onPress: () => router.back() };
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }}>
       <LargeTitleScrollView back={back} eyebrow={s.loggingTo(view.team.team_name)} title={s.editTitle} tick={false}>
         {body}
       </LargeTitleScrollView>
@@ -733,7 +733,7 @@ function FormPage({ title, onCancel, children }: { title: string; onCancel: () =
           }
         />
       </View>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.sm, paddingBottom: space.xl, gap: space.lg }}

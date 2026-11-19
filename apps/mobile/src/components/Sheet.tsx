@@ -1,6 +1,7 @@
 import { X } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, View } from "react-native";
+import { Modal, ScrollView, View } from "react-native";
+import { KeyboardAvoidingView } from "./KeyboardAvoidingView";
 import { Pressable } from "./Pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -45,7 +46,7 @@ export function Sheet({ visible, title, subtitle, subtitleAccessibilityLabel, on
   const reduceMotion = useReduceMotion();
   return (
     <Modal visible={visible} transparent animationType={reduceMotion ? "fade" : "slide"} onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }}>
         <Pressable
           // Hidden from screen readers: the × and the back gesture do the same job.
           accessibilityRole="button"

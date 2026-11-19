@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, View, type ViewStyle } from "react-native";
+import { ScrollView, View, type ViewStyle } from "react-native";
+import { KeyboardAvoidingView } from "./KeyboardAvoidingView";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
 import { space } from "@/theme/tokens";
@@ -77,7 +78,7 @@ export function Screen({ children, scroll = true, keyboard = false, edges = ["to
     <BandContext.Provider value={registry}>
       <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: colors.bg }}>
         {keyboard ? (
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <KeyboardAvoidingView style={{ flex: 1 }}>
             {body}
           </KeyboardAvoidingView>
         ) : (
