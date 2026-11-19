@@ -710,3 +710,11 @@
 .column .leader {
   min-height: 36px;
 }
+
+.placementsLink {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-text);
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MissioApiError, missioClient, type MissioClient } from "../api";
@@ -11,6 +12,7 @@ import content from "../content.module.css";
 import shell from "../shell.module.css";
 import { followUpClient, type FollowUpClient } from "./client";
 import { AddHouseDialog } from "./add-house";
+import { PlaceDialog } from "../placements/place-dialog";
 import { TimelineSheet } from "./timeline-sheet";
 import {
   STAGE_LABEL,
@@ -116,6 +118,7 @@ export function FollowUpBoard({
   const [notice, setNotice] = useState<string | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [addingKey, setAddingKey] = useState<string | null>(null);
+  const [placingKey, setPlacingKey] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
   const [declineHidden, setDeclineHidden] = useState(declineHiddenForSession);
   const wide = useWide();
@@ -311,6 +314,7 @@ export function FollowUpBoard({
   const everyone = board ? STAGES.flatMap((item) => board.lists[item]) : [];
   const openPerson = everyone.find((item) => item.key === openKey) ?? null;
   const adding = everyone.find((item) => item.key === addingKey) ?? null;
+  const placing = everyone.find((item) => item.key === placingKey) ?? null;
   const countsReady = board != null && board.leader === leader && (wide || board.stage === stage);
   const showPeople = countsReady && !listPending;
   const counts = (item: FollowUpStage) => board?.lists[item].length ?? 0;
@@ -328,6 +332,7 @@ export function FollowUpBoard({
       canWrite={board?.canWrite ?? false}
       onOpen={() => setOpenKey(person.key)}
       onAdd={() => setAddingKey(person.key)}
+      onPlace={() => setPlacingKey(person.key)}
       onNext={(next) => void changeStage(person, next, indexIn(person))}
     />
   );
@@ -359,6 +364,9 @@ export function FollowUpBoard({
       <div className={styles.head}>
         <div>
           <h1 className={content.title}>Follow-up</h1>
+          <Link href="/missio/follow-up/placements" className={styles.placementsLink}>
+            Placements →
+          </Link>
           <p className={`${shell.lede} ${content.lede}`} data-testid="follow-up-lede">
             {countsReady ? `${waiting} ${waiting === 1 ? "person" : "people"} not in a house yet.` : "Not in a house yet."}
           </p>
@@ -486,6 +494,25 @@ export function FollowUpBoard({
           onLeader={(next) => changeLeader(openPerson, next, indexIn(openPerson))}
         />
       ) : null}
+      {placing && board ? (
+        <PlaceDialog
+          name={placing.displayName}
+          houses={houses}
+          resolveContact={async () => {
+            if (placing.contactId) return placing.contactId;
+            const created = await client.createContact(placing.key);
+            if (!created.person.contactId) throw new MissioApiError(500, "", null, "server_error");
+            return created.person.contactId;
+          }}
+          onClose={() => {
+            const key = placing.key;
+            setPlacingKey(null);
+            focusOn(`follow-up-open-${key}`);
+            void load(true);
+          }}
+          onPlaced={() => undefined}
+        />
+      ) : null}
       {adding && board ? (
         <AddHouseDialog
           person={adding}
@@ -525,12 +552,14 @@ function PersonCard({
   canWrite,
   onOpen,
   onAdd,
+  onPlace,
   onNext,
 }: {
   person: FollowUpItem;
   canWrite: boolean;
   onOpen: () => void;
   onAdd: () => void;
+  onPlace: () => void;
   onNext: (next: FollowUpStage) => void;
 }) {
   const hasPhone = Boolean(person.phone?.trim());
@@ -587,6 +616,11 @@ function PersonCard({
             onClick={() => onNext(next)}
           >
             Next stage
+          </button>
+        ) : null}
+        {canWrite && (person.stage === "new" || person.stage === "contacted") ? (
+          <button type="button" id={`follow-up-place-${person.key}`} className={styles.primaryButton} onClick={onPlace}>
+            Place in a house
           </button>
         ) : null}
         {canWrite && person.stage !== "joined" ? (
