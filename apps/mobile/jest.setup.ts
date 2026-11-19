@@ -34,6 +34,19 @@ jest.mock("expo-crypto", () => {
   };
 });
 
+// NativeWind's interop, as on a device. It wraps View, Text, Pressable, … and
+// rebuilds their `style`, but skips registering them when NODE_ENV is "test",
+// so tests used to see React Native's components untouched. That hid the
+// Pressable bug (a function `style` became {} on the phone, #668). Register
+// them here, so every test renders what the phone renders. (Quietly: reading
+// ImageBackground from react-native logs a deprecation warning.)
+{
+  const warn = console.warn;
+  console.warn = () => {};
+  require("react-native-css-interop/dist/runtime/components");
+  console.warn = warn;
+}
+
 // Reanimated: one small stand-in for every test (see test/reanimated-mock.ts).
 jest.mock("react-native-reanimated", () => jest.requireActual("./test/reanimated-mock"));
 jest.mock("react-native-reanimated/mock", () => jest.requireActual("./test/reanimated-mock"));
