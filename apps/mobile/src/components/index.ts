@@ -28,6 +28,7 @@ export { kitStrings } from "./strings";
 export { Text, type TextProps } from "./Text";
 export { TextField, type TextFieldProps } from "./TextField";
 export { Toggle, type ToggleProps } from "./Toggle";
+export { useScrollToTopOnTabPress, useTabReselect } from "./useTabReselect";
 export { WebHint } from "./WebHint";
 export { LargeTitleList, type LargeTitleListProps } from "./LargeTitleList";
 export { ListGroupItem, type ListGroupItemProps } from "./ListGroupItem";

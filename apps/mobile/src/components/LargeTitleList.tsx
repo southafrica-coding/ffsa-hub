@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode } from "react";
+import { useRef, useState, type ReactElement, type ReactNode } from "react";
 import { FlatList, View, type ListRenderItem, type RefreshControlProps, type ViewStyle } from "react-native";
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
@@ -9,6 +9,7 @@ import { useTheme } from "@/theme/use-theme";
 
 import { LargeTitle, NavBar, type LargeTitleProps } from "./LargeTitle";
 import { NeedsYouBandScope } from "./Screen";
+import { useScrollToTopOnTabPress } from "./useTabReselect";
 
 // Reanimated's FlatList, typed as React Native's so the generic row type survives.
 const AnimatedFlatList = Animated.FlatList as unknown as typeof FlatList;
@@ -57,6 +58,8 @@ export function LargeTitleList<T>({
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
   });
+  const listRef = useRef<unknown>(null);
+  useScrollToTopOnTabPress(listRef, () => scrollY.value);
   const collapsed = useAnimatedStyle(() => {
     const y = scrollY.value;
     const opacity = reduceMotion ? (y >= titleBottom ? 1 : 0) : interpolate(y, [titleBottom * 0.6, titleBottom], [0, 1], Extrapolation.CLAMP);
@@ -75,15 +78,15 @@ export function LargeTitleList<T>({
       {titleHeader.title}
     </Animated.Text>
   );
-  const pushed = Boolean(titleHeader.back || titleHeader.navRight);
-  const { back, navRight, ...titleProps } = titleHeader;
+  const pushed = Boolean(titleHeader.back || titleHeader.navRight || titleHeader.navLeft);
+  const { back, navRight, navLeft, ...titleProps } = titleHeader;
 
   return (
     <NeedsYouBandScope>
       <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: colors.bg }}>
         {pushed ? (
           <View style={{ paddingHorizontal: space.gutter, backgroundColor: colors.bg }}>
-            <NavBar back={back} right={navRight} title={navTitle} />
+            <NavBar back={back} left={navLeft} right={navRight} title={navTitle} />
             <Animated.View
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
@@ -114,6 +117,7 @@ export function LargeTitleList<T>({
           </Animated.View>
         )}
         <AnimatedFlatList
+          ref={listRef as never}
           testID={testID}
           data={data}
           renderItem={renderItem}

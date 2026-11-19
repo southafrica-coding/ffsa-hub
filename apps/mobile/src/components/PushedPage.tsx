@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View, type ViewStyle } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
@@ -9,6 +9,7 @@ import { useTheme } from "@/theme/use-theme";
 import { NavBar, type BackAction } from "./LargeTitle";
 import { NeedsYouBandScope } from "./Screen";
 import { Text } from "./Text";
+import { useScrollToTopOnTabPress } from "./useTabReselect";
 
 /**
  * Lists, bands and banners sit 16pt from the edge while text sits on the
@@ -45,6 +46,9 @@ export type PushedPageProps = {
 export function PushedPage({ back, title, children, refreshing, onRefresh, tabBarHidden = false, gap = space.lg, testID }: PushedPageProps) {
   const { colors } = useTheme();
   const [scrolled, setScrolled] = useState(false);
+  const scrollRef = useRef<unknown>(null);
+  const offset = useRef(0);
+  useScrollToTopOnTabPress(scrollRef, () => offset.current);
   const edges: Edge[] = tabBarHidden ? ["top", "bottom"] : ["top"];
 
   return (
@@ -75,10 +79,12 @@ export function PushedPage({ back, title, children, refreshing, onRefresh, tabBa
         />
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <ScrollView
+            ref={scrollRef as never}
             keyboardShouldPersistTaps="handled"
             scrollEventThrottle={32}
             onScroll={(e) => {
-              const now = e.nativeEvent.contentOffset.y > 2;
+              offset.current = e.nativeEvent.contentOffset.y;
+              const now = offset.current > 2;
               if (now !== scrolled) setScrolled(now);
             }}
             contentContainerStyle={{ flexGrow: 1, paddingHorizontal: space.gutter, paddingTop: space.sm, paddingBottom: space.xxl, gap }}
