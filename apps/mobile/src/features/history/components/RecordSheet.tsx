@@ -1,8 +1,8 @@
+import { ArrowUpRight } from "lucide-react-native";
 import { View } from "react-native";
 
-import { Button, Text } from "@/components";
-import { Sheet } from "@/features/finance/components/Sheet";
-import { hairline } from "@/theme/tokens";
+import { Button, Sheet, Text } from "@/components";
+import { hairline, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import type { HistoryRecord } from "../logic";
@@ -11,10 +11,10 @@ import { strings } from "../strings";
 const s = strings.detail;
 
 /**
- * One record in full: what the web keeps behind its disclosure. The raw
- * import payload can be twenty fields wide, so it lives here rather than on
- * the list row. A document's file opens in the in-app browser; nothing is
- * downloaded into the app.
+ * One record in full (frames 9.2, 9.3): what the web keeps behind its
+ * disclosure. The raw import payload can be twenty fields wide, so it lives
+ * here rather than on the list row. A document's file opens in the in-app
+ * browser; nothing is downloaded into the app.
  */
 export function RecordSheet({
   record,
@@ -27,14 +27,14 @@ export function RecordSheet({
 }) {
   const { colors } = useTheme();
   return (
-    <Sheet visible={record !== null} title={record?.title ?? ""} onClose={onClose}>
+    <Sheet visible={record !== null} title={record?.title ?? ""} onClose={onClose} closeLabel={s.close}>
       {record ? (
-        <View style={{ gap: 16, paddingVertical: 8 }} testID="record-sheet">
+        <View style={{ gap: space.lg }} testID="record-sheet">
           {record.subtitle || record.date ? (
-            <View style={{ gap: 4 }}>
+            <View style={{ gap: space.xs }}>
               {record.subtitle ? <Text tone="secondary">{record.subtitle}</Text> : null}
               {record.date ? (
-                <Text variant="bodyStrong" style={{ fontVariant: ["tabular-nums"] }}>
+                <Text variant="rowTitle" style={{ fontVariant: ["tabular-nums"] }}>
                   {`${record.dateLabel} ${record.date}`}
                 </Text>
               ) : null}
@@ -45,6 +45,7 @@ export function RecordSheet({
             <Button
               label={s.openFile}
               variant="secondary"
+              icon={<ArrowUpRight size={20} color={colors.text} />}
               accessibilityHint={s.openFileHint}
               onPress={() => onOpenFile(record.fileUrl!)}
               testID="open-file"
@@ -53,7 +54,7 @@ export function RecordSheet({
 
           {record.details.length > 0 ? (
             <View>
-              <Text variant="monoLabel" tone="secondary" accessibilityRole="header" style={{ marginBottom: 4 }}>
+              <Text variant="label" accessibilityRole="header" style={{ marginBottom: space.xs }}>
                 {s.more}
               </Text>
               {record.details.map((d, i) => (
@@ -62,7 +63,7 @@ export function RecordSheet({
                   key={`${i}-${d.label}`}
                   accessible
                   accessibilityLabel={`${d.label}: ${d.value === s.empty ? "blank" : d.value}`}
-                  style={{ paddingVertical: 8, gap: 2, borderBottomWidth: hairline, borderBottomColor: colors.rule }}
+                  style={{ paddingVertical: space.sm, gap: 2, borderBottomWidth: hairline, borderBottomColor: colors.rule }}
                 >
                   <Text variant="caption" tone="secondary">
                     {d.label}

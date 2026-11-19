@@ -4,10 +4,10 @@ import type { ReactElement } from "react";
 import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, tappableSizes } from "@/lib/a11y/testing";
 import { colors } from "@/theme/tokens";
 
-import { document, emptyHistory, history } from "../__fixtures__/fixtures";
+import { document, emptyHistory, history, payment } from "../__fixtures__/fixtures";
 import { DataError, loadHistory } from "../data";
 import HistoryScreen from "../screens/HistoryScreen";
 import { strings } from "../strings";
@@ -17,6 +17,8 @@ jest.mock("@/theme/use-theme", () => {
   const actual = jest.requireActual("@/theme/use-theme");
   return { ...actual, useTheme: () => actual.themeFor(mockScheme) };
 });
+const mockRouter = { push: jest.fn(), back: jest.fn(), navigate: jest.fn() };
+jest.mock("expo-router", () => ({ useRouter: () => mockRouter }));
 jest.mock("@/lib/supabase", () => ({ supabase: {} }));
 jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "signedIn", session: { user: { id: "user-1" } } }) }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
@@ -37,6 +39,7 @@ beforeEach(() => {
   [load, openBrowser].forEach((m) => m.mockReset());
   cache.readCache.mockReset().mockResolvedValue(null);
   cache.writeCache.mockClear();
+  Object.values(mockRouter).forEach((f) => f.mockReset());
 });
 
 describe("My History", () => {
@@ -148,13 +151,103 @@ describe("My History", () => {
     expect(cache.readCache).toHaveBeenCalledWith("user-1", "history.list");
   });
 
-  it("dark mode: section bars and the sheet use the dark tokens", async () => {
+  it("dark mode: the page, the list groups and the sheet use the dark tokens", async () => {
     mockScheme = "dark";
     load.mockResolvedValue(history());
     await show(<HistoryScreen />);
-    const bar = within(await screen.findByTestId("section-applications")).getByRole("header", { name: "Applications, 1" });
-    expect(StyleSheet.flatten(bar.props.style).backgroundColor).toBe(colors.dark.inverse);
+    const title = await screen.findByRole("header", { name: s.title });
+    expect(StyleSheet.flatten(title.props.style).color).toBe(colors.dark.text);
+    const group = screen.getByTestId("record-applications-a1").parent!;
+    expect(StyleSheet.flatten(group.props.style)).toMatchObject({ backgroundColor: colors.dark.raised, borderColor: colors.dark.rule, borderRadius: 8 });
     await fireEvent.press(screen.getByTestId("record-applications-a1"));
     expect(screen.getByTestId("record-sheet")).toBeTruthy();
+  });
+});
+
+describe("My History, redesigned (frames 9.1–9.4)", () => {
+  it("header: the eyebrow, the intro under the title, and Back goes to Home", async () => {
+    load.mockResolvedValue(history());
+    await show(<HistoryScreen />);
+    expect(await screen.findByText("Personal · 4 records on file")).toBeTruthy();
+    expect(screen.getByRole("header", { name: s.title })).toBeTruthy();
+    expect(screen.getByText(s.intro)).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Home" }));
+    expect(mockRouter.navigate).toHaveBeenCalledWith("/");
+  });
+
+  it("sections: the count sits in a chip beside a sentence-case title, and empty sections are hidden", async () => {
+    load.mockResolvedValue(history({ payments: [payment(), payment({ id: "p2", amount: 12450 })], documents: [] }));
+    await show(<HistoryScreen />);
+    const payments = await screen.findByTestId("section-payments");
+    expect(within(payments).getByRole("header", { name: "Payments, 2" })).toBeTruthy();
+    expect(within(payments).getByText("Payments")).toBeTruthy();
+    expect(within(payments).getByText("2")).toBeTruthy();
+    expect(screen.queryByTestId("section-documents")).toBeNull();
+  });
+
+  it("rows: payments keep the imported currency text with cents; the labelled date shows beside it", async () => {
+    load.mockResolvedValue(history({ payments: [payment({ amount: 12450 })] }));
+    await show(<HistoryScreen />);
+    const row = await screen.findByTestId("record-payments-p1");
+    expect(within(row).getByText("ZAR 12,450.00")).toBeTruthy();
+    expect(within(row).getByText("School fees deposit")).toBeTruthy();
+    expect(within(row).getByText(strings.dateLabel.payments)).toBeTruthy();
+    expect(within(row).getByText("2 Apr 2019")).toBeTruthy();
+    expect(row.props.accessibilityLabel).toBe("ZAR 12,450.00. School fees deposit. Paid 2 Apr 2019");
+  });
+
+  it("rows: a document with no expiry shows no date", async () => {
+    load.mockResolvedValue(history({ documents: [document({ expires_at: null, identifier: null })] }));
+    await show(<HistoryScreen />);
+    const row = await screen.findByTestId("record-documents-d1");
+    expect(within(row).getByText("Passport")).toBeTruthy();
+    expect(within(row).queryByText(strings.dateLabel.documents)).toBeNull();
+  });
+
+  it("rows are at least 44pt tall and every one opens its record", async () => {
+    load.mockResolvedValue(history());
+    await show(<HistoryScreen />);
+    await screen.findByTestId("record-applications-a1");
+    const rows = tappableSizes(screen.container as never, StyleSheet.flatten as never).filter((t) => t.testID?.startsWith("record-"));
+    expect(rows).toHaveLength(4);
+    for (const r of rows) expect(r.minHeight).toBeGreaterThanOrEqual(44);
+  });
+
+  it("empty: a calm card with a heading, no sections", async () => {
+    load.mockResolvedValue(emptyHistory());
+    await show(<HistoryScreen />);
+    expect(await screen.findByRole("header", { name: s.emptyTitle })).toBeTruthy();
+    expect(screen.getByTestId("empty")).toBeTruthy();
+    expect(audit()).toEqual([]);
+  });
+
+  it("error: an alert that says what to do, with Try again", async () => {
+    load.mockRejectedValue(new DataError(strings.common.network));
+    await show(<HistoryScreen />);
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByRole("button", { name: strings.common.tryAgain })).toBeTruthy();
+  });
+
+  it("record sheet, payment: title, description, 'Paid …' and the imported fields", async () => {
+    load.mockResolvedValue(history());
+    await show(<HistoryScreen />);
+    await fireEvent.press(await screen.findByTestId("record-payments-p1"));
+    expect(screen.getAllByRole("header", { name: "ZAR 1,500.00" }).length).toBeGreaterThan(0);
+    const sheet = screen.getByTestId("record-sheet");
+    expect(within(sheet).getByText("School fees deposit")).toBeTruthy();
+    expect(within(sheet).getByText("Paid 2 Apr 2019")).toBeTruthy();
+    expect(within(sheet).getByRole("header", { name: strings.detail.more })).toBeTruthy();
+    expect(within(sheet).getByLabelText("Reference: INV-1")).toBeTruthy();
+  });
+
+  it("record sheet, document: Open file says where it opens, then 'no other details'", async () => {
+    load.mockResolvedValue(history());
+    await show(<HistoryScreen />);
+    await fireEvent.press(await screen.findByTestId("record-documents-d1"));
+    const sheet = screen.getByTestId("record-sheet");
+    expect(within(sheet).getByText("Expires 31 Jan 2029")).toBeTruthy();
+    expect(within(sheet).getByRole("button", { name: strings.detail.openFile }).props.accessibilityHint).toBe(strings.detail.openFileHint);
+    expect(within(sheet).getByText(strings.detail.nothingMore)).toBeTruthy();
+    expect(audit()).toEqual([]);
   });
 });

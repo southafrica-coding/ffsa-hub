@@ -1,13 +1,16 @@
+import { useRouter } from "expo-router";
+import { History as HistoryIcon } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Masthead, Screen, Text } from "@/components";
-import { formatSavedAt } from "@/features/finance/cache";
-import { EmptyState, ErrorState, Row, SectionBar, Skeleton, StaleNote } from "@/features/finance/components/ui";
-import { useCachedLoad, type LoadState } from "@/features/finance/use-cached-load";
+import { EmptyState, LargeTitleScrollView, ListGroup, SkeletonList, Text } from "@/components";
+import { useCachedLoad } from "@/features/finance/use-cached-load";
+// The pieces My Schools and My History share until the kit has them.
+import { Bleed, Freshness, GroupRow, LoadError, SectionCount } from "@/features/schools/components/parts";
 import { openWebPage } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { RecordSheet } from "../components/RecordSheet";
@@ -18,11 +21,12 @@ import type { History } from "../types";
 
 const s = strings.list;
 
-// My History: records on file from past applications, schools, payments and
-// documents (the website's /my-history). Read-only, open to every signed-in
-// person; tapping a row opens the full record in a sheet. No yellow band:
-// nothing here asks anything of the person.
+// My History (frames 9.1, 9.4): records on file from past applications,
+// schools, payments and documents (the website's /my-history). Read-only,
+// open to every signed-in person; tapping a row opens the full record in a
+// sheet. No yellow band: nothing here asks anything of the person.
 export default function HistoryScreen() {
+  const router = useRouter();
   const { colors } = useTheme();
   const { session } = useSession();
   const userId = session?.user?.id ?? null;
@@ -41,42 +45,71 @@ export default function HistoryScreen() {
   const sections = data ? toSections(data) : [];
 
   return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
+    <>
+      <LargeTitleScrollView
+        eyebrow={total === null ? s.context : `${s.context} · ${s.records(total)}`}
+        title={s.title}
+        subtitle={s.intro}
+        // My History is reached from Home (it isn't a tab), so it goes back to Home.
+        back={{ label: strings.common.home, onPress: () => router.navigate("/") }}
+        contentContainerStyle={{ flexGrow: 1 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
       >
-        <Masthead context={total === null ? s.context : `${s.context} · ${s.records(total)}`} title={s.title} />
-        <Text tone="secondary">{s.intro}</Text>
-
-        {state.status === "loading" ? <Skeleton label={s.loading} /> : null}
-        {state.status === "error" ? <ErrorState title={s.errorTitle} message={state.message} onRetry={retry} /> : null}
+        {state.status === "loading" ? (
+          <Bleed>
+            <SkeletonList label={s.loading} count={4} inset={false} />
+          </Bleed>
+        ) : null}
+        {state.status === "error" ? (
+          <Bleed>
+            <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
+          </Bleed>
+        ) : null}
         <Freshness state={state} onRetry={retry} />
 
-        {data && total === 0 ? <EmptyState title={s.emptyTitle} body={s.emptyBody} /> : null}
+        {data && total === 0 ? (
+          <Bleed>
+            <ListGroup inset={false}>
+              <EmptyState testID="empty" card={false} icon={HistoryIcon} title={s.emptyTitle} body={s.emptyBody} />
+            </ListGroup>
+          </Bleed>
+        ) : null}
 
-        {sections.map((section) => (
-          <View key={section.kind} testID={`section-${section.kind}`}>
-            <SectionBar title={section.title} meta={String(section.records.length)} />
-            {section.records.map((r) => (
-              <RecordRow key={r.key} record={r} onPress={() => setOpen(r)} />
+        {sections.length > 0 ? (
+          <View>
+            {sections.map((section, i) => (
+              <View key={section.kind} testID={`section-${section.kind}`}>
+                <SectionCount title={section.title} meta={String(section.records.length)} tight={i === 0} />
+                <Bleed>
+                  <ListGroup inset={false}>
+                    {section.records.map((r) => (
+                      <RecordRow key={r.key} record={r} onPress={() => setOpen(r)} />
+                    ))}
+                  </ListGroup>
+                </Bleed>
+              </View>
             ))}
           </View>
-        ))}
-      </ScrollView>
+        ) : null}
+      </LargeTitleScrollView>
 
       <RecordSheet record={open} onClose={() => setOpen(null)} onOpenFile={(url) => void openWebPage(url, colors)} />
-    </Screen>
+    </>
   );
 }
 
-/** Two lines closed (title, subtitle), the date on the right; it wraps under at large text sizes. */
+/**
+ * Title and subtitle, with the labelled date on the right. A date range
+ * (Training attended) is too wide for that, so it sits underneath; any date
+ * wraps under at large text sizes.
+ */
 function RecordRow({ record: r, onPress }: { record: HistoryRecord; onPress: () => void }) {
+  const below = r.kind === "enrollments";
   return (
-    <Row onPress={onPress} accessibilityLabel={recordA11yLabel(r)} accessibilityHint={s.rowHint} testID={`record-${r.key}`}>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", columnGap: 12, rowGap: 4 }}>
-        <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 180, gap: 4 }}>
-          <Text variant="bodyStrong" numberOfLines={2}>
+    <GroupRow onPress={onPress} accessibilityLabel={recordA11yLabel(r)} accessibilityHint={s.rowHint} testID={`record-${r.key}`}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: space.md, rowGap: space.xs }}>
+        <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: below ? "100%" : 150, gap: 2 }}>
+          <Text variant="rowTitle" numberOfLines={2}>
             {r.title}
           </Text>
           {r.subtitle ? (
@@ -86,28 +119,14 @@ function RecordRow({ record: r, onPress }: { record: HistoryRecord; onPress: () 
           ) : null}
         </View>
         {r.date ? (
-          <View style={{ gap: 2 }}>
-            <Text variant="monoLabel" tone="secondary">
-              {r.dateLabel}
-            </Text>
+          <View style={below ? { flexDirection: "row", flexWrap: "wrap", columnGap: 6 } : { alignItems: "flex-end" }}>
+            <Text variant="label">{r.dateLabel}</Text>
             <Text variant="caption" style={{ fontVariant: ["tabular-nums"] }}>
               {r.date}
             </Text>
           </View>
         ) : null}
       </View>
-    </Row>
-  );
-}
-
-/** When what's on screen is the copy saved on this phone: "Last updated …", or the stale note with a retry. */
-function Freshness({ state, onRetry }: { state: LoadState<History>; onRetry: () => void }) {
-  if (state.status !== "ready" || state.staleSince === null) return null;
-  const when = formatSavedAt(state.staleSince);
-  if (state.refreshError) return <StaleNote message={strings.common.refreshFailed(when)} onRetry={onRetry} />;
-  return (
-    <Text variant="caption" tone="secondary" testID="last-updated">
-      {strings.common.lastUpdated(when)}
-    </Text>
+    </GroupRow>
   );
 }
