@@ -6,7 +6,8 @@
 import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { ChevronDown, X } from "lucide-react-native";
 import { useState } from "react";
-import { Platform, Pressable, View } from "react-native";
+import { Platform, View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Button, Sheet, Text } from "@/components";
 import { hairline, radius, touch } from "@/theme/tokens";

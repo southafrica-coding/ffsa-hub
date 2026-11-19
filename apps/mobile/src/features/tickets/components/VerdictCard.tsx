@@ -1,5 +1,6 @@
 import { Check, Clock, RefreshCw, TriangleAlert, X, type LucideIcon } from "lucide-react-native";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Text } from "@/components";
 import { fontFamily, fontSize, radius, space, touch, type SemanticColors } from "@/theme/tokens";

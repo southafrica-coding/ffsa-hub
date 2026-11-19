@@ -1,5 +1,6 @@
 import { ChevronRight, Clock, Ticket as TicketIcon, type LucideIcon } from "lucide-react-native";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { StatusChip, Text } from "@/components";
 import type { ChipVariant } from "@/theme/styles";

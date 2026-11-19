@@ -1,5 +1,6 @@
 import type { BottomTabBarProps } from "expo-router/js-tabs";
-import { Pressable, Text as RNText, View } from "react-native";
+import { Text as RNText, View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { selectionHaptic } from "@/components";
 import { fontFamily, fontSize, hairline, touch } from "@/theme/tokens";

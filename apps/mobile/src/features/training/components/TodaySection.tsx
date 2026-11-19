@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
 import { Check, ChevronRight, SunMedium } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { useSession } from "@/auth/session-provider";
 import { Bleed, EmptyState, FadeIn, FieldError, Freshness, ListGroup, LoadError, NeedsYouBand, SectionTitle, SkeletonList, Text } from "@/components";

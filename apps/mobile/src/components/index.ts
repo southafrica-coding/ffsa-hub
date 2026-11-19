@@ -3,6 +3,7 @@
 export { Banner, type BannerProps } from "./Banner";
 export { Button, type ButtonProps } from "./Button";
 export { Divider } from "./Divider";
+export { Pressable, type PressableProps } from "./Pressable";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { CONTENT_FADE_MS, FadeIn } from "./FadeIn";
 export { ChipButton, ChoiceChips, Disclosure, FieldError, SelectField } from "./FormControls";

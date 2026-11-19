@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck, Clock, CloudOff, Info, type LucideIcon } from "lucide-react-native";
 import { useEffect, type ReactNode } from "react";
-import { ActivityIndicator, Platform, Pressable, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
+import { Pressable } from "./Pressable";
 
 import { announce, announcement } from "@/lib/a11y/announce";
 import { bannerStyle, type BannerTone } from "@/theme/styles";

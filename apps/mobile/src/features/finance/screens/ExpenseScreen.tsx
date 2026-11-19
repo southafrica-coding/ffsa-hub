@@ -3,7 +3,8 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Camera, Check, ImagePlus, RefreshCw, Trash2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, View, useWindowDimensions } from "react-native";
+import { Pressable } from "@/components/Pressable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { type BackAction, Banner, Bleed, Button, ChipButton, ChoiceChips, Disclosure, FieldError, LargeTitleScrollView, LoadError, NavBar, PushedPage, SelectField, Sheet, SkeletonList, StatusChip, Text, TextField, Toggle } from "@/components";

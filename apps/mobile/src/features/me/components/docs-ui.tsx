@@ -6,7 +6,8 @@ import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { Check } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Banner, EmptyState, SelectField, Sheet, Text, TextField, Toggle } from "@/components";
 import { ServerRefusal } from "@/features/bookings/http";

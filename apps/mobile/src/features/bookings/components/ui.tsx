@@ -5,7 +5,8 @@
 
 import { Building2, Car, Check, CircleAlert, Clock, Repeat, TriangleAlert, X, type LucideIcon } from "lucide-react-native";
 import { Children, type ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { ChoiceSegments, ListRow, StatusChip, Text } from "@/components";
 import { useAnnounceOnIOS } from "@/lib/a11y";

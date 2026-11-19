@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Banner, Button, Sheet, Text, selectionHaptic } from "@/components";
 import { fontFamily, hairline, radius, space, touch } from "@/theme/tokens";

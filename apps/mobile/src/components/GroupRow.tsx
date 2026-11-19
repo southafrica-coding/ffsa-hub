@@ -1,6 +1,7 @@
 import { ChevronRight, type LucideIcon } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { Pressable, View, type ViewStyle } from "react-native";
+import { View, type ViewStyle } from "react-native";
+import { Pressable } from "./Pressable";
 
 import type { TextTone } from "@/theme/styles";
 import { fontFamily, hairline, radius, space } from "@/theme/tokens";

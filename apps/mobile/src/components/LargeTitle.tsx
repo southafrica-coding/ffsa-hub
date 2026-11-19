@@ -1,6 +1,7 @@
 import { ChevronLeft } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { Pressable, View, type ViewStyle } from "react-native";
+import { View, type ViewStyle } from "react-native";
+import { Pressable } from "./Pressable";
 
 import { fontFamily, fontSize, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";

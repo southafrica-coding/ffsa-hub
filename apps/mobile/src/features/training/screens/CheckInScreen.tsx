@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
 import { Check } from "lucide-react-native";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, View } from "react-native";
+import { KeyboardAvoidingView, Platform, View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Bleed, Button, ChoiceChips, FieldError, LargeTitleScrollView, Text, TextField } from "@/components";
 import { apiFetch } from "@/lib/api-client";

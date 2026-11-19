@@ -8,7 +8,8 @@ import {
   UserPlus,
   type LucideIcon,
 } from "lucide-react-native";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Text, WebHint } from "@/components";
 import { fontFamily, fontSize, hairline, radius, space } from "@/theme/tokens";

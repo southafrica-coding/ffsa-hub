@@ -1,7 +1,8 @@
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import { Camera, Flashlight, FlashlightOff, X } from "lucide-react-native";
 import { useState, type ReactNode } from "react";
-import { Linking, Pressable, View } from "react-native";
+import { Linking, View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Button, Text } from "@/components";
