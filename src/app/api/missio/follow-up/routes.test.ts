@@ -490,8 +490,8 @@ describe("missio follow-up", () => {
     expect(await res.json()).toEqual({ error: "Not authorized", code: "forbidden" });
   });
 
-  it("lists people with effective stage, and hides directory phone and email on contact rows", async () => {
-    expect(FOLLOWUP_LIST_INCLUDES_CONTACT_PII).toBe(false);
+  it("lists people with effective stage, shows the contact's phone, and never lists email", async () => {
+    expect(FOLLOWUP_LIST_INCLUDES_CONTACT_PII).toBe(true);
     const res = await listPeople(new Request("https://hub.test/api/missio/follow-up"));
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -503,13 +503,12 @@ describe("missio follow-up", () => {
       contactId: VEE,
       connectResponseId: CARD_VEE,
       followupId: FOLLOW,
-      phone: null,
+      phone: "+27111111111",
       email: null,
       visitType: "been_a_while",
       stage: "contacted",
       assignedLeader: { contactId: ADA, displayName: "Ada Leader" },
     });
-    expect(JSON.stringify(vee)).not.toContain("+27111111111");
     expect(JSON.stringify(vee)).not.toContain("vee@directory.test");
     expect(JSON.stringify(vee)).not.toContain("+27222222222");
     expect(card).toMatchObject({

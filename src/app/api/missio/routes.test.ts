@@ -921,7 +921,11 @@ describe("POST /api/missio/people", () => {
     const otherOrg = token(JANE, "jane@gmail.com", { orgId: FFSA });
     const expired = token(JANE, "jane@gmail.com", { nowSeconds: 1_000 });
     const valid = token(JANE, "jane@gmail.com");
-    const tampered = `${valid.slice(0, -1)}${valid.endsWith("a") ? "b" : "a"}`;
+    // Change a character in the middle of the signature. The last base64url
+    // character can carry unused bits, so changing it sometimes decodes to
+    // the same bytes and the test flickered.
+    const at = valid.length - 6;
+    const tampered = `${valid.slice(0, at)}${valid[at] === "a" ? "b" : "a"}${valid.slice(at + 1)}`;
     const plain = createHash("sha256").update(`${PASTOR}|${JANE}|jane@gmail.com`).digest("base64url");
     for (const matchToken of [otherUser, otherOrg, expired, tampered, `v1.9999999999.${plain}`]) {
       const res = await post({ matchToken, matchedBy: { email: "jane@gmail.com" } });

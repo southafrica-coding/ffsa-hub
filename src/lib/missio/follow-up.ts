@@ -56,12 +56,11 @@ const CARD_COLUMNS =
 const HISTORY_COLUMNS = "id, followup_id, from_stage, to_stage, changed_by, changed_at, notes, kind, connect_response_id";
 
 /**
- * Until Jack decides, the follow-up list shows the card phone only.
- * false: r_ rows return the card's raw phone. c_ rows return null phone.
- *        email is null on every row. The view has no email column.
- * true: reserved for a later decision. This branch is the one place to flip.
+ * Jack decided (19 Nov 2026) that Missio pastors see a person's phone in
+ * full, so the follow-up list shows the contact's phone on c_ rows too.
+ * r_ rows keep the card's phone. Email is still never listed.
  */
-export const FOLLOWUP_LIST_INCLUDES_CONTACT_PII = false;
+export const FOLLOWUP_LIST_INCLUDES_CONTACT_PII = true;
 
 const EXISTS_USE_SEARCH = {
   error: "This person already exists. Search by their email or phone to add them.",
@@ -225,10 +224,14 @@ function keyFor(source: FollowupSource, contactId: string | null, connectRespons
   return null;
 }
 
-function listPii(source: FollowupSource, cardPhone: string | null): { phone: string | null; email: string | null } {
-  const phone = source === "connect_response" ? cardPhone : null;
-  if (!FOLLOWUP_LIST_INCLUDES_CONTACT_PII) return { phone, email: null };
-  return { phone, email: null };
+function listPii(
+  source: FollowupSource,
+  cardPhone: string | null,
+  contactPhone: string | null = null
+): { phone: string | null; email: string | null } {
+  if (source === "connect_response") return { phone: cardPhone, email: null };
+  if (!FOLLOWUP_LIST_INCLUDES_CONTACT_PII) return { phone: null, email: null };
+  return { phone: contactPhone, email: null };
 }
 
 function toPerson(args: {
@@ -237,6 +240,8 @@ function toPerson(args: {
   connectResponseId: string | null;
   displayName: string;
   viewPhone: string | null;
+  /** The contact's own phone, for c_ rows. */
+  contactPhone?: string | null;
   card: CardRow | null;
   followup: FollowupRow | null;
   leader: PersonRef | null;
@@ -248,7 +253,7 @@ function toPerson(args: {
   const key = keyFor(args.source, args.contactId, args.connectResponseId);
   if (!key) return null;
   const stage = asStage(args.followup?.effective_stage) ?? asStage(args.followup?.stage) ?? "new";
-  const pii = listPii(args.source, args.viewPhone);
+  const pii = listPii(args.source, args.viewPhone, args.contactPhone ?? null);
   return {
     key,
     source: args.source,
@@ -368,6 +373,24 @@ async function loadPersonRefs(auth: OrgAccess, contactIds: string[]): Promise<{ 
   return { map };
 }
 
+/** Phones for c_ rows. Service role, after the pastor check that made `auth`. */
+async function loadContactPhones(contactIds: string[]): Promise<{ map: Map<string, string> } | Fail> {
+  const map = new Map<string, string>();
+  const ids = [...new Set(contactIds)];
+  if (!FOLLOWUP_LIST_INCLUDES_CONTACT_PII || ids.length === 0) return { map };
+  const admin = adminClient();
+  if ("error" in admin) return serverError("follow-up phones");
+  for (let i = 0; i < ids.length; i += 100) {
+    const found = await admin.client.from("contacts").select("id, phone").in("id", ids.slice(i, i + 100));
+    if (found.error) return fromDb(found.error, "follow-up phones");
+    for (const row of (found.data ?? []) as Array<{ id?: string; phone?: string | null }>) {
+      const phone = row.phone?.trim();
+      if (row.id && phone) map.set(row.id, phone);
+    }
+  }
+  return { map };
+}
+
 function leaderRef(map: Map<string, PersonRef>, contactId: string | null): PersonRef | null {
   if (!contactId) return null;
   return map.get(contactId) ?? { contactId, displayName: "", firstName: null, lastName: null };
@@ -378,7 +401,8 @@ function personFrom(
   card: CardRow | null,
   followup: FollowupRow | null,
   leaders: Map<string, PersonRef>,
-  suggestionNames: Map<string, string>
+  suggestionNames: Map<string, string>,
+  contactPhones: Map<string, string> = new Map()
 ): FollowupPerson | null {
   const source: FollowupSource | null =
     view.source === "contact" || view.source === "connect_response" ? view.source : null;
@@ -393,6 +417,7 @@ function personFrom(
     connectResponseId: view.connect_response_id,
     displayName: blank(view.display_name) ?? blank(card?.name) ?? "",
     viewPhone: view.phone,
+    contactPhone: view.contact_id ? contactPhones.get(view.contact_id) ?? null : null,
     card,
     followup,
     leader: leaderRef(leaders, followup?.assigned_leader_contact_id ?? null),
@@ -452,6 +477,10 @@ export async function listFollowups(
     [...cards.map.values()].map((card) => pendingSuggestion(card)).filter((id): id is string => Boolean(id))
   );
   if (isFail(suggestions)) return suggestions;
+  const phones = await loadContactPhones(
+    views.filter((view) => view.source === "contact" && view.contact_id).map((view) => view.contact_id as string)
+  );
+  if (isFail(phones)) return phones;
 
   let people = views
     .map((view) =>
@@ -460,7 +489,8 @@ export async function listFollowups(
         view.connect_response_id ? cards.map.get(view.connect_response_id) ?? null : null,
         followupFor(view, followups.rows),
         leaders.map,
-        suggestions.names
+        suggestions.names,
+        phones.map
       )
     )
     .filter((person): person is FollowupPerson => Boolean(person));
