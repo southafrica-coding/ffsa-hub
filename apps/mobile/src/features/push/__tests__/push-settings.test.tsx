@@ -123,8 +123,12 @@ describe("Me > Notifications: push section", () => {
     const requests = await screen.findByRole("switch", { name: "Booking requests to approve" });
     expect(requests.props.accessibilityState).toMatchObject({ checked: true });
     expect(screen.getByRole("switch", { name: "Your bookings" }).props.accessibilityState).toMatchObject({ checked: false });
-    // The Slack settings keep their own section below.
-    expect(screen.getByText("Slack messages")).toBeTruthy();
+    // Sections are sentence-case headings; the screen is named in the bar.
+    for (const name of ["Notifications", "Push notifications", "What to notify me about", "Slack messages"]) {
+      expect(screen.getByRole("header", { name })).toBeTruthy();
+    }
+    expect(screen.getByText("When someone asks to book a space you approve.", { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByText(/Notifications only say what kind of thing is waiting/)).toBeTruthy();
   });
 
   it("toggling a category saves the whole list (PUT /api/devices/preferences)", async () => {
@@ -165,6 +169,7 @@ describe("Me > Notifications: push section", () => {
       checked: false,
     });
     expect(screen.queryByRole("switch", { name: "Your bookings" })).toBeNull();
+    expect(screen.queryByRole("header", { name: "What to notify me about" })).toBeNull();
     expect(mockPhone.asked).toBe(0);
   });
 

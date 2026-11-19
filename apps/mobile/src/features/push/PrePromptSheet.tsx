@@ -1,9 +1,7 @@
-import { BellRing } from "lucide-react-native";
 import { View } from "react-native";
 
-import { Button, Text } from "@/components";
-import { Sheet } from "@/features/finance/components/Sheet";
-import { useTheme } from "@/theme/use-theme";
+import { Button, Sheet, Text } from "@/components";
+import { BulletList } from "@/features/me/components/me-kit";
 
 import { pushStrings } from "./strings";
 
@@ -12,8 +10,8 @@ const s = pushStrings.prePrompt;
 /**
  * Our own explanation before the phone's permission prompt (which can only
  * be shown once). "Not now" leaves everything off and we don't ask again for
- * a month. Reuses Finance's bottom sheet (backdrop / back gesture close it,
- * screen-reader focus stays inside, reduce motion respected).
+ * a month. The kit's bottom sheet: backdrop / back gesture close it,
+ * screen-reader focus stays inside, reduce motion respected.
  */
 export function PrePromptSheet({
   visible,
@@ -24,23 +22,19 @@ export function PrePromptSheet({
   onAccept: () => void;
   onDecline: () => void;
 }) {
-  const { colors } = useTheme();
   return (
     <Sheet visible={visible} title={s.title} onClose={onDecline}>
-      <View style={{ gap: 12, paddingVertical: 8 }} testID="push-pre-prompt">
-        <BellRing size={28} color={colors.text} accessibilityElementsHidden importantForAccessibility="no" />
+      <View style={{ gap: 12 }} testID="push-pre-prompt">
         <Text>{s.lead}</Text>
-        <View style={{ gap: 6 }}>
-          {s.examples.map((line) => (
-            <Text key={line} accessibilityLabel={line}>
-              {`•  ${line}`}
-            </Text>
-          ))}
+        <BulletList items={s.examples} />
+        <View style={{ gap: 8 }}>
+          <Text variant="caption" tone="secondary">
+            {s.privacy}
+          </Text>
+          <Text variant="caption" tone="secondary">
+            {s.later}
+          </Text>
         </View>
-        <Text tone="secondary">{s.privacy}</Text>
-        <Text variant="caption" tone="secondary">
-          {s.later}
-        </Text>
         <View style={{ gap: 8, paddingTop: 4 }}>
           <Button label={s.accept} onPress={onAccept} accessibilityHint={s.acceptHint} />
           <Button label={s.decline} variant="secondary" onPress={onDecline} />

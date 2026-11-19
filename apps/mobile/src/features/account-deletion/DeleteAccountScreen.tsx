@@ -1,11 +1,13 @@
 import * as Haptics from "expo-haptics";
+import { Globe } from "lucide-react-native";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { View } from "react-native";
 
-import { Banner, Button, Screen, Text, TextField } from "@/components";
-import { Sheet } from "@/features/finance/components/Sheet";
+import { Banner, Button, ListRow, Sheet, StatusChip, Text, TextField } from "@/components";
+import { BulletList, Group, GroupSkeleton, InfoCard, Section } from "@/features/me/components/me-kit";
+import { MePage } from "@/features/me/components/MePage";
 import { ACCOUNT_DELETION_URL } from "@/features/me/links";
-import { ListRow, SectionBar, SkeletonRows, openWebPage } from "@/features/shell";
+import { openWebPage } from "@/features/shell";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
 import { useTheme } from "@/theme/use-theme";
@@ -25,19 +27,6 @@ import { FALLBACK_CONTACT_EMAIL, strings as s } from "./strings";
 // out. Nothing to show here.
 function isSignOut(err: unknown) {
   return err instanceof ApiError && (err.kind === "unauthenticated" || err.kind === "deactivated");
-}
-
-function Bullets({ items }: { items: readonly string[] }) {
-  return (
-    <View style={{ gap: 8 }}>
-      {items.map((item) => (
-        <View key={item} style={{ flexDirection: "row", gap: 8 }} accessible accessibilityLabel={item}>
-          <Text aria-hidden>•</Text>
-          <Text style={{ flex: 1 }}>{item}</Text>
-        </View>
-      ))}
-    </View>
-  );
 }
 
 // Me → Request account deletion. Explains what happens and what is kept,
@@ -116,130 +105,148 @@ export function DeleteAccountScreen() {
   const errorText = (kind: ErrorKind) => s.errors[kind](contact);
   const busy = isBusy(state);
 
+  const requested = state.kind === "requested";
+  const requestedDate = requested ? formatRequestedDate(state.request.requestedAt) : "";
+
   return (
-    <Screen edges={["bottom"]} scroll={false} keyboard contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
-        contentInsetAdjustmentBehavior="automatic"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={colors.text} colors={[colors.text]} />
-        }
-      >
-        <Text>{s.intro}</Text>
-
-        <SectionBar label={s.deleteHeading} />
-        <Bullets items={s.deleteItems} />
-
-        <SectionBar label={s.keepHeading} />
-        <Text>{s.keepIntro}</Text>
-        <Bullets items={s.keepItems} />
-
-        <SectionBar label={s.requestHeading} />
-        <Text tone="secondary">{s.staysActive}</Text>
-
-        {state.kind === "loading" ? <SkeletonRows count={2} label={s.loading} /> : null}
-
-        {state.kind === "loadError" ? (
-          <Banner
-            testID="deletion-load-error"
-            tone="danger"
-            title={s.loadErrorTitle}
-            action={
+    <MePage title={s.title} refreshing={refreshing} onRefresh={() => void refresh()}>
+      <View style={{ gap: 16 }}>
+        {requested ? (
+          <View testID="deletion-requested" style={{ gap: 12 }}>
+            <InfoCard>
+              <StatusChip label={s.requested.title} variant="positive" />
+              <Text>{requestedDate ? s.requested.body(requestedDate) : s.requested.bodyNoDate}</Text>
+              {state.request.recorded ? null : (
+                <Text variant="caption" tone="secondary">
+                  {s.requested.emailedOnly}
+                </Text>
+              )}
+              {state.justSent ? (
+                <Text variant="caption" tone="secondary">
+                  {s.requested.sentNow}
+                </Text>
+              ) : null}
               <Button
-                label={s.retry}
+                testID="deletion-cancel"
+                label={s.requested.cancel}
                 variant="secondary"
-                onPress={() => {
+                size="small"
+                accessibilityHint={s.requested.cancelHint}
+                disabled={busy}
+                onPress={() => dispatch({ type: "openCancel" })}
+                style={{ alignSelf: "flex-start" }}
+              />
+            </InfoCard>
+            {state.error ? (
+              <Banner testID="deletion-error" tone="error" title={s.cancelErrorTitle}>
+                {errorText(state.error)}
+              </Banner>
+            ) : null}
+          </View>
+        ) : null}
+
+        <View style={{ gap: 8 }}>
+          <Text>{s.intro}</Text>
+          <Text variant="caption" tone="secondary">
+            {s.staysActive}
+          </Text>
+        </View>
+
+        <View style={{ gap: 6 }}>
+          <Text variant="sectionTitle" accessibilityRole="header">
+            {s.deleteHeading}
+          </Text>
+          <BulletList items={s.deleteItems} />
+        </View>
+
+        <View style={{ gap: 6 }}>
+          <Text variant="sectionTitle" accessibilityRole="header">
+            {s.keepHeading}
+          </Text>
+          <Text variant="caption" tone="secondary">
+            {s.keepIntro}
+          </Text>
+          <BulletList items={s.keepItems} />
+        </View>
+      </View>
+
+      {requested ? null : (
+        <>
+          <Section title={s.requestHeading} />
+          <View style={{ gap: 16 }}>
+            {state.kind === "loading" ? <GroupSkeleton count={2} label={s.loading} /> : null}
+
+            {state.kind === "loadError" ? (
+              <Banner
+                testID="deletion-load-error"
+                tone="error"
+                title={s.loadErrorTitle}
+                actionLabel={s.retry}
+                onAction={() => {
                   dispatch({ type: "load" });
                   setAttempt((n) => n + 1);
                 }}
-              />
-            }
-          >
-            {errorText(state.error)}
-          </Banner>
-        ) : null}
-
-        {state.kind === "none" ? (
-          <View testID="deletion-none" style={{ gap: 16 }}>
-            {state.error ? (
-              <Banner testID="deletion-error" tone="danger" title={s.errorTitle}>
+              >
                 {errorText(state.error)}
               </Banner>
             ) : null}
-            <TextField
-              testID="deletion-reason"
-              label={s.reason.label}
-              hint={s.reason.hint}
-              placeholder={s.reason.placeholder}
-              value={reason}
-              onChangeText={setReason}
-              maxLength={1000}
-              multiline
-              editable={!busy}
-              textAlignVertical="top"
-              style={{ minHeight: 96 }}
-            />
-            <Button
-              testID="deletion-request"
-              label={s.request.button}
-              variant="destructive"
-              accessibilityHint={s.request.hint}
-              disabled={busy}
-              onPress={() => dispatch({ type: "openConfirm" })}
-            />
-          </View>
-        ) : null}
 
-        {state.kind === "requested" ? (
-          <View testID="deletion-requested" style={{ gap: 16 }}>
-            <Banner tone="positive" title={s.requested.title}>
-              <View style={{ gap: 4 }}>
-                <Text>
-                  {formatRequestedDate(state.request.requestedAt)
-                    ? s.requested.body(formatRequestedDate(state.request.requestedAt))
-                    : s.requested.bodyNoDate}
-                </Text>
-                {state.request.recorded ? null : <Text>{s.requested.emailedOnly}</Text>}
-                {state.justSent ? <Text>{s.requested.sentNow}</Text> : null}
+            {state.kind === "none" ? (
+              <View testID="deletion-none" style={{ gap: 16 }}>
+                {state.error ? (
+                  <Banner testID="deletion-error" tone="error" title={s.errorTitle}>
+                    {errorText(state.error)}
+                  </Banner>
+                ) : null}
+                <TextField
+                  testID="deletion-reason"
+                  label={s.reason.label}
+                  hint={s.reason.hint}
+                  placeholder={s.reason.placeholder}
+                  value={reason}
+                  onChangeText={setReason}
+                  maxLength={1000}
+                  multiline
+                  editable={!busy}
+                  textAlignVertical="top"
+                  style={{ minHeight: 96 }}
+                />
+                <Button
+                  testID="deletion-request"
+                  label={s.request.button}
+                  variant="danger"
+                  accessibilityHint={s.request.hint}
+                  disabled={busy}
+                  onPress={() => dispatch({ type: "openConfirm" })}
+                />
               </View>
-            </Banner>
-            {state.error ? (
-              <Banner testID="deletion-error" tone="danger" title={s.cancelErrorTitle}>
-                {errorText(state.error)}
-              </Banner>
             ) : null}
-            <Button
-              testID="deletion-cancel"
-              label={s.requested.cancel}
-              variant="secondary"
-              accessibilityHint={s.requested.cancelHint}
-              disabled={busy}
-              onPress={() => dispatch({ type: "openCancel" })}
-            />
           </View>
-        ) : null}
+        </>
+      )}
 
+      <Group style={{ marginTop: 16 }}>
         <ListRow
           testID="deletion-web"
+          icon={Globe}
           title={s.web.title}
           subtitle={s.web.subtitle}
           trailing="web"
           onPress={() => void openWebPage(ACCOUNT_DELETION_URL, colors)}
         />
-      </ScrollView>
+      </Group>
 
       <Sheet
         visible={state.kind === "none" && (state.step === "confirming" || state.step === "requesting")}
         title={s.confirm.title}
         onClose={() => dispatch({ type: "closeConfirm" })}
       >
-        <View style={{ gap: 16, paddingVertical: 8 }}>
-          <Text>{s.confirm.body}</Text>
+        <Text tone="secondary">{s.confirm.body}</Text>
+        <View style={{ gap: 8 }}>
           <Button
             testID="deletion-confirm"
             label={s.confirm.yes}
-            variant="destructive"
+            variant="dangerFill"
             accessibilityHint={s.confirm.yesHint}
             loading={state.kind === "none" && state.step === "requesting"}
             onPress={() => void submit()}
@@ -253,8 +260,8 @@ export function DeleteAccountScreen() {
         title={s.cancelConfirm.title}
         onClose={() => dispatch({ type: "closeCancel" })}
       >
-        <View style={{ gap: 16, paddingVertical: 8 }}>
-          <Text>{s.cancelConfirm.body}</Text>
+        <Text tone="secondary">{s.cancelConfirm.body}</Text>
+        <View style={{ gap: 8 }}>
           <Button
             testID="deletion-cancel-confirm"
             label={s.cancelConfirm.yes}
@@ -265,6 +272,6 @@ export function DeleteAccountScreen() {
           <Button label={s.cancelConfirm.no} variant="secondary" disabled={busy} onPress={() => dispatch({ type: "closeCancel" })} />
         </View>
       </Sheet>
-    </Screen>
+    </MePage>
   );
 }

@@ -84,6 +84,50 @@ describe("DeleteAccountScreen", () => {
     expect(button.props.accessibilityHint).toBe(s.request.hint);
   });
 
+  it("is a pushed screen named 'Delete account', and the reason stops at 1000 characters", async () => {
+    server({ get: { request: null } });
+    await show();
+    expect(screen.getByRole("header", { name: s.title })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Back to Me" })).toBeTruthy();
+    for (const heading of [s.deleteHeading, s.keepHeading, s.requestHeading]) {
+      expect(screen.getByRole("header", { name: heading })).toBeTruthy();
+    }
+    const reason = await screen.findByTestId("deletion-reason");
+    expect(reason.props.maxLength).toBe(1000);
+    expect(screen.getByText(s.reason.hint)).toBeTruthy();
+  });
+
+  it("the confirm sheet says what happens, with the two answers", async () => {
+    server({ get: { request: null } });
+    await show();
+    await fireEvent.press(await screen.findByTestId("deletion-request"));
+    expect(await screen.findByText(s.confirm.body)).toBeTruthy();
+    expect(screen.getByRole("button", { name: s.confirm.yes }).props.accessibilityHint).toBe(s.confirm.yesHint);
+    expect(screen.getByRole("button", { name: s.confirm.no })).toBeTruthy();
+  });
+
+  it("requested: a 'Request sent' chip (a word, not colour alone); the form is gone but the explanation stays", async () => {
+    server({ get: { request: OPEN } });
+    await show();
+    expect(await screen.findByLabelText(s.requested.title)).toBeTruthy();
+    expect(screen.getByText(s.staysActive)).toBeTruthy();
+    expect(screen.getByText(s.keepItems[0])).toBeTruthy();
+    expect(screen.queryByRole("header", { name: s.requestHeading })).toBeNull();
+    expect(screen.getByTestId("deletion-web")).toBeTruthy();
+  });
+
+  it("cancel confirm sheet: 'Keep your account?' with Go back sending nothing", async () => {
+    server({ get: { request: OPEN }, del: { request: null, cancelled: true } });
+    await show();
+    await fireEvent.press(await screen.findByTestId("deletion-cancel"));
+    expect(await screen.findByText(s.cancelConfirm.title)).toBeTruthy();
+    expect(screen.getByText(s.cancelConfirm.body)).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: s.cancelConfirm.no }));
+    await waitFor(() => expect(screen.queryByTestId("deletion-cancel-confirm")).toBeNull());
+    expect(calls("DELETE")).toHaveLength(0);
+    expect(screen.getByTestId("deletion-requested")).toBeTruthy();
+  });
+
   it("two steps: the first tap only opens the confirm sheet; Go back sends nothing", async () => {
     server({ get: { request: null } });
     await show();

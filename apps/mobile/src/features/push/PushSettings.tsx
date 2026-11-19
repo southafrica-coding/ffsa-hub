@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Switch, View } from "react-native";
+import { View } from "react-native";
 
-import { Banner, Button, Text } from "@/components";
-import { SectionBar, SkeletonRows } from "@/features/shell";
+import { Banner, Text } from "@/components";
+import { Group, GroupSkeleton, Section, SwitchRow } from "@/features/me/components/me-kit";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
-import { hairline, touch } from "@/theme/tokens";
-import { useTheme } from "@/theme/use-theme";
 
 import { getPushPrefs, isPushNotEnabled, savePushPrefs, type PushPrefs } from "./api";
 import type { PushStatus } from "./logic";
@@ -35,63 +33,7 @@ export function statusText(status: PushStatus): string {
   }
 }
 
-function SwitchRow({
-  testID,
-  label,
-  description,
-  value,
-  disabled,
-  busy,
-  onChange,
-}: {
-  testID: string;
-  label: string;
-  description?: string;
-  value: boolean;
-  disabled?: boolean;
-  busy?: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={{
-        minHeight: touch.minTarget + 16,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingVertical: 12,
-        borderBottomWidth: hairline,
-        borderBottomColor: colors.rule,
-      }}
-    >
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="bodyStrong">{label}</Text>
-        {description ? (
-          <Text variant="caption" tone="secondary">
-            {description}
-          </Text>
-        ) : null}
-        <Text variant="monoLabel" tone="secondary">
-          {value ? s.categories.on : s.categories.off}
-        </Text>
-      </View>
-      <Switch
-        testID={testID}
-        accessibilityRole="switch"
-        accessibilityLabel={label}
-        accessibilityHint={description || undefined}
-        accessibilityState={{ checked: value, disabled: !!disabled, busy: !!busy }}
-        value={value}
-        disabled={disabled}
-        onValueChange={onChange}
-        trackColor={{ false: colors.ruleStrong, true: colors.text }}
-        thumbColor={colors.bg}
-        ios_backgroundColor={colors.ruleStrong}
-      />
-    </View>
-  );
-}
+const STATE_WORDS = { on: s.categories.on, off: s.categories.off };
 
 type Prefs = { state: "loading" } | { state: "error" } | { state: "hidden" } | { state: "ready"; prefs: PushPrefs };
 
@@ -139,43 +81,43 @@ function CategorySwitches() {
 
   if (load.state === "hidden") return null;
   return (
-    <View style={{ gap: 8 }}>
-      <Text variant="monoLabel" tone="secondary" accessibilityRole="header">
-        {s.categories.title}
-      </Text>
-      {load.state === "loading" ? <SkeletonRows count={2} label={s.categories.loading} /> : null}
-      {load.state === "error" ? (
-        <Banner
-          tone="danger"
-          action={
-            <Button
-              label={s.categories.retry}
-              variant="secondary"
-              onPress={() => {
-                setLoad({ state: "loading" });
-                setAttempt((n) => n + 1);
-              }}
-            />
-          }
-        >
-          {s.categories.error}
-        </Banner>
-      ) : null}
-      {saveError ? <Banner tone="danger">{s.categories.saveError}</Banner> : null}
-      {load.state === "ready"
-        ? load.prefs.categories.map((c) => (
-            <SwitchRow
-              key={c.key}
-              testID={`push-cat-${c.key}`}
-              label={c.label}
-              description={c.description}
-              value={!load.prefs.muted.includes(c.key)}
-              disabled={saving !== null}
-              busy={saving === c.key}
-              onChange={(v) => void toggle(c.key, v)}
-            />
-          ))
-        : null}
+    <View>
+      <Section title={s.categories.title} />
+      <View style={{ gap: 12 }}>
+        {load.state === "loading" ? <GroupSkeleton count={2} label={s.categories.loading} /> : null}
+        {load.state === "error" ? (
+          <Banner
+            tone="error"
+            actionLabel={s.categories.retry}
+            onAction={() => {
+              setLoad({ state: "loading" });
+              setAttempt((n) => n + 1);
+            }}
+          >
+            {s.categories.error}
+          </Banner>
+        ) : null}
+        {saveError ? <Banner tone="error">{s.categories.saveError}</Banner> : null}
+        {load.state === "ready" && load.prefs.categories.length > 0 ? (
+          <Group>
+            {load.prefs.categories.map((c) => (
+              <SwitchRow
+                key={c.key}
+                testID={`push-cat-${c.key}`}
+                label={c.label}
+                description={c.description}
+                value={!load.prefs.muted.includes(c.key)}
+                stateWords={STATE_WORDS}
+                disabled={saving !== null}
+                busy={saving === c.key}
+                onChange={(v) => void toggle(c.key, v)}
+              />
+            ))}
+          </Group>
+        ) : null}
+        {/* What a push shows on a lock screen (the pre-prompt's own wording). */}
+        {load.state === "ready" ? <Text variant="note">{s.prePrompt.privacy}</Text> : null}
+      </View>
     </View>
   );
 }
@@ -195,55 +137,46 @@ export function PushSettings() {
   const switchOn = status === "on" || status === "blocked" || (status === "error" && push.enabled === true);
 
   return (
-    <View testID="push-settings" style={{ gap: 12 }}>
-      <SectionBar label={s.section} />
+    <View testID="push-settings">
+      <Section title={s.section} tight />
+      <View style={{ gap: 12 }}>
+        {unavailable ? (
+          <Banner testID="push-unavailable" tone="info" title={statusText(status)}>
+            {status === "unsupported" ? s.status.unsupportedBody : s.status.notEnabledBody}
+          </Banner>
+        ) : (
+          <>
+            <Group>
+              <SwitchRow
+                testID="push-master"
+                label={s.master.label}
+                description={s.master.hint}
+                value={switchOn}
+                stateWords={STATE_WORDS}
+                disabled={busy || status === "loading"}
+                busy={busy || status === "loading"}
+                onChange={(v) => void push.setEnabled(v)}
+              />
+            </Group>
+            <View accessible accessibilityLabel={`${s.status.label}: ${statusText(status)}`} style={{ gap: 2 }}>
+              <Text variant="label">{s.status.label}</Text>
+              <Text testID="push-status">{statusText(status)}</Text>
+            </View>
+          </>
+        )}
 
-      {unavailable ? (
-        <Banner testID="push-unavailable" tone="info" title={statusText(status)}>
-          {status === "unsupported" ? s.status.unsupportedBody : s.status.notEnabledBody}
-        </Banner>
-      ) : (
-        <View>
-          <SwitchRow
-            testID="push-master"
-            label={s.master.label}
-            description={s.master.hint}
-            value={switchOn}
-            disabled={busy || status === "loading"}
-            busy={busy || status === "loading"}
-            onChange={(v) => void push.setEnabled(v)}
-          />
-          <View
-            accessible
-            accessibilityLabel={`${s.status.label}: ${statusText(status)}`}
-            style={{ paddingVertical: 8, gap: 2 }}
-          >
-            <Text variant="monoLabel" tone="secondary">
-              {s.status.label}
-            </Text>
-            <Text testID="push-status">{statusText(status)}</Text>
-          </View>
-        </View>
-      )}
+        {status === "blocked" ? (
+          <Banner tone="info" actionLabel={s.status.openSettings} onAction={push.openSettings}>
+            {s.status.blockedBody}
+          </Banner>
+        ) : null}
 
-      {status === "blocked" ? (
-        <Banner
-          tone="info"
-          action={<Button label={s.status.openSettings} variant="secondary" onPress={push.openSettings} />}
-        >
-          {s.status.blockedBody}
-        </Banner>
-      ) : null}
-
-      {status === "error" ? (
-        <Banner
-          tone="danger"
-          title={s.status.error}
-          action={<Button label={s.status.retry} variant="secondary" onPress={push.retry} />}
-        >
-          {s.status.errorBody}
-        </Banner>
-      ) : null}
+        {status === "error" ? (
+          <Banner tone="error" title={s.status.error} actionLabel={s.status.retry} onAction={push.retry}>
+            {s.status.errorBody}
+          </Banner>
+        ) : null}
+      </View>
 
       {status === "on" ? <CategorySwitches /> : null}
     </View>
