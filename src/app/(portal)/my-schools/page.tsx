@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEnrollmentsByUser, getResponsesByUser } from "@/services/schools";
+import { getOpenVisaCaseForUser } from "@/services/visas";
+import { VISA_STATUS_LABEL, type VisaStatus } from "@/lib/visas/status";
 import Link from "next/link";
 import {
   Masthead,
@@ -107,6 +109,7 @@ export default async function MySchoolsPage() {
   const userId = user.id;
   const { data: enrollments } = await getEnrollmentsByUser(supabase, userId);
   const { data: myResponses } = await getResponsesByUser(supabase, userId);
+  const { data: visaCase } = await getOpenVisaCaseForUser(supabase, userId);
 
   const { data: openPrograms } = await supabase
     .from("programs")
@@ -150,6 +153,25 @@ export default async function MySchoolsPage() {
             ? `Applications are open for ${notYetApplied[0].name}`
             : `${notYetApplied.length} schools are open for applications`}
         </NeedsYou>
+      )}
+
+      {/* Visa: only for someone with an open visa case. */}
+      {visaCase && (
+        <section>
+          <SectionBar title="Visa" />
+          <Link
+            href="/my-schools/visa"
+            className="flex min-h-[48px] items-center justify-between gap-4 border-b border-rule px-5 py-3.5 hover:bg-bone md:px-8"
+          >
+            <div className="min-w-0">
+              <div className="truncate font-display text-[17px] font-black uppercase leading-none text-ink">Your visa</div>
+              <div className="mono-label mt-1.5 truncate">
+                {VISA_STATUS_LABEL[(visaCase as { status: VisaStatus }).status]}
+              </div>
+            </div>
+            <span className="mono-label">Open</span>
+          </Link>
+        </section>
       )}
 
       {/* Open applications */}

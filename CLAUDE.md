@@ -251,6 +251,19 @@ Supabase runs in the cloud (no local Postgres). Migrations are applied via the S
 
 ---
 
+## Visas — standing rules
+
+Visa applications for international students, linked to school applications. Migrations 360+ (`360_visa_schema`, `361_visa_rls`, `362_visa_seed`); rules in `src/lib/visas/`; data access in `src/services/visas.ts`. Built in small steps, each a draft PR from a `visa-*` branch.
+
+- **Every change to the visa process updates the FFSA Visa Process Guide** (a shared doc; ask Gideon for the link) and adds a dated line to its What's new. A visa change isn't done until the guide matches it.
+- **Roles:** legal (the visa officer) holds `visas.manage`, granted globally, and approves, signs and manages everything; a `visas.manage` grant scoped to a program manages only cases covering it. RLS and APIs check `has_permission_for(key, program_id)`; plain `has_permission()` is only for module visibility. School leaders hold `visas.follow_up`, **granted scoped to their program**, and only see cases covering their schools. Students see their own case. Nobody else sees anything.
+- **Status moves go through SECURITY DEFINER functions** that check the actor and the case's status, never through direct table updates by leaders or students.
+- **One case per student per stay.** The stay runs from the first school's arrival day to the last school's departure day (`computeStay`). Over 90 days always needs a visa, even for a visa-exempt passport (`visaNeed`).
+- **Passport data:** passport numbers stay on `users` / `household_members` (RLS "own row + admins", never widened; staff read them only through the visa API after a scoped `visas.*` check) and are never copied into visa tables, URLs, emails, logs or `visa_case_events.detail`. Files live in the private `visa-documents` bucket at `<case id>/<document id>.<ext>` (enforced by a CHECK), downloaded only through a checked route that logs the download and signs a short-lived URL.
+- **The repo is public:** no real student data, letters or names in code, seeds, tests or fixtures. Document types and letter wording are draft until legal confirms them, and legal edits them in the Hub, not in migrations.
+
+---
+
 # FFSA Hub — redesign context
 
 Redesign of the FFSA Hub (Next.js admin platform in the attached `ffsa-platform` folder)

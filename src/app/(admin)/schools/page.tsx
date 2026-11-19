@@ -8,6 +8,7 @@ import {
 } from "@/lib/schools/program-staff-access";
 import { adminNotesByResponse } from "@/lib/schools/admin-notes";
 import { getPrograms } from "@/services/schools";
+import { getVisaAccess } from "@/lib/visas/access";
 import { Masthead, NeedsYou, NeedsYouAction, Chip } from "@/components/ffsa";
 import { ProgramsTable, type ProgramStats } from "./programs-table";
 import { ApplicantPipeline, type NextIntake, type PipelineRow } from "./applicant-pipeline";
@@ -69,11 +70,13 @@ export default async function SchoolsPage({
 
   // Module access, or a program_staff seat (migration 304). Staff with no
   // other schools grant only see the schools they staff.
-  const [access, programsResult] = await Promise.all([
+  const [access, programsResult, visaAccess] = await Promise.all([
     canOpenSchools(supabase, user.id),
     getPrograms(supabase, { status: statusFilter }),
+    getVisaAccess(supabase, user.id),
   ]);
-  if (!access.open) redirect("/dashboard");
+  // Visa-only staff (legal, say) reach Training through their visas.* grant.
+  if (!access.open) redirect(visaAccess.open ? "/schools/visas" : "/dashboard");
   const { data: programs, error, count } = programsResult;
 
   if (error) {
@@ -221,6 +224,11 @@ export default async function SchoolsPage({
             <Chip active={statusFilter === key}>{label}</Chip>
           </Link>
         ))}
+        {visaAccess.open && (
+          <Link href="/schools/visas" className="ml-auto">
+            <Chip>Visas</Chip>
+          </Link>
+        )}
       </div>
 
       <div className="px-5 py-6 md:px-8 md:py-7">
