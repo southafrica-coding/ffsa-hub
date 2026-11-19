@@ -4,8 +4,7 @@ import { useCallback } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { EmptyState, LargeTitleScrollView, ListGroup, ListRow, SkeletonList, StatusChip, Text } from "@/components";
-import { Bleed, GroupRow, LoadError } from "@/features/finance/components/parts";
+import { Bleed, EmptyState, Freshness, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, SectionTitle, SkeletonList, StatusChip, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage } from "@/features/shell";
 import { apiFetch } from "@/lib/api-client";
@@ -14,7 +13,6 @@ import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { getMinistries, loadErrorMessage, type MinistryList, type MinistryListItem } from "../api";
-import { Freshness, SectionCount } from "../components/ui";
 import { listSections } from "../logic";
 import { strings } from "../strings";
 
@@ -70,7 +68,7 @@ export default function MinistriesListScreen() {
       {data
         ? sections.map((section, i) => (
             <View key={section.type}>
-              {showHeadings ? <SectionCount title={section.label} count={section.items.length} tight={i === 0} /> : null}
+              {showHeadings ? <SectionTitle title={section.label} meta={section.items.length} tight={i === 0} /> : null}
               <Bleed>
                 <ListGroup inset={false}>
                   {section.items.map((m) => (

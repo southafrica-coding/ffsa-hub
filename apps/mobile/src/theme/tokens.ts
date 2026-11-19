@@ -234,7 +234,6 @@ export const fontSize = {
   body: 16,
   navTitle: 16,
   sheetTitle: 17,
-  title: 20,
   kpi: 24,
   pageTitle: 28,
   hero: 34,

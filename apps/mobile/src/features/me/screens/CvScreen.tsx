@@ -8,7 +8,7 @@ import { useState } from "react";
 import { View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, EmptyState, ListRow, Text, TextField } from "@/components";
+import { Banner, Button, EmptyState, ListRow, StaticRow, Text, TextField } from "@/components";
 import { openWebPage, useMe } from "@/features/shell";
 import { announce } from "@/lib/a11y";
 import { ApiError } from "@/lib/api";
@@ -16,7 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/theme/use-theme";
 
 import { DocScreen, errorText, Intro, LoadGate, ReadField, successTap, useLoad } from "../components/docs-ui";
-import { BlockLabel, Group, Section, StaticRow } from "../components/me-kit";
+import { BlockLabel, Group, Section } from "../components/me-kit";
 import { getCv, saveEssence, type CvEntry } from "../docs-api";
 import { formatDate, isStaff } from "../docs-logic";
 import { profileFetch } from "../http";

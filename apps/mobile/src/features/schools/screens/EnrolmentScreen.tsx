@@ -4,14 +4,14 @@ import { useCallback } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { EmptyState, LargeTitleScrollView, ListGroup, ListRow, SkeletonList, Text, type BackAction } from "@/components";
+import { type BackAction, Bleed, EmptyState, Freshness, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
 import { hairline, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-import { Bleed, Figure, Freshness, GroupRow, LoadError, SectionCount, StatusTag } from "../components/parts";
+import { Figure, StatusTag } from "../components/parts";
 import { loadEnrolment, loadErrorMessage, type EnrolmentData } from "../data";
 import {
   courseTiming,
@@ -94,7 +94,7 @@ export default function EnrolmentScreen({ id }: { id: string | undefined }) {
           <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
         </Bleed>
       ) : null}
-      <Freshness state={state} onRetry={retry} />
+      <Freshness state={state} onRetry={retry} bleed />
 
       {data && e ? <Body data={data} onAttendance={() => router.push("/schools/attendance")} onTranscript={() => void openWebPage(`/my-schools/${e.id}`, colors)} /> : null}
     </LargeTitleScrollView>
@@ -158,7 +158,7 @@ function Body({ data, onAttendance, onTranscript }: { data: EnrolmentData; onAtt
       </View>
 
       <View>
-        <SectionCount title={s.courses} meta={String(summary.courses.length)} tight />
+        <SectionTitle title={s.courses} meta={String(summary.courses.length)} tight />
         {summary.courses.length === 0 ? (
           <Text tone="secondary" style={{ paddingVertical: space.sm }}>
             {s.noCourses}

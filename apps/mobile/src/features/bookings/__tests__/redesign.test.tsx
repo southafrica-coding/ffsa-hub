@@ -6,10 +6,11 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 
 import { palette } from "@/theme/tokens";
+import { LoadFailed, RadioRow, SectionTitle, StaleNote } from "@/components";
 
 import { DecisionSheet } from "../components/DecisionSheet";
 import { QueueList } from "../components/QueueList";
-import { BookingRow, ChoiceRow, CheckRow, Field, FieldList, HintLine, LoadFailed, Panel, SectionTitle, StaleNote, StatusLine, YesNo } from "../components/ui";
+import { BookingRow, CheckRow, Field, FieldList, HintLine, Panel, StatusLine, YesNo } from "../components/ui";
 import type { BookingItem } from "../logic";
 import type { BookingsOutbox } from "../outbox/runner";
 import { newFormItem } from "../outbox/state";
@@ -155,11 +156,11 @@ describe.each(["light", "dark"] as const)("Bookings pieces (%s)", (scheme) => {
     expect(flat(screen.getByRole("checkbox", { name: "Fuel full" }).props.style).minHeight).toBeGreaterThanOrEqual(44);
   });
 
-  it("ChoiceRow is at least a list row tall", async () => {
+  it("RadioRow is at least a list row tall", async () => {
     await render(
-      <ChoiceRow selected={false} accessibilityLabel="Main hall" onPress={() => {}} testID="c">
+      <RadioRow mark="leading" checked={false} accessibilityLabel="Main hall" onPress={() => {}} testID="c">
         <></>
-      </ChoiceRow>,
+      </RadioRow>,
     );
     expect(flat(screen.getByTestId("c").props.style).minHeight).toBeGreaterThanOrEqual(56);
   });

@@ -4,10 +4,9 @@ import { useCallback, useState } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { EmptyState, LargeTitleScrollView, ListGroup, SkeletonList, Text } from "@/components";
+import { Bleed, EmptyState, Freshness, GroupRow, LargeTitleScrollView, ListGroup, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 // The pieces My Schools and My History share until the kit has them.
-import { Bleed, Freshness, GroupRow, LoadError, SectionCount } from "@/features/schools/components/parts";
 import { openWebPage } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
 import { space } from "@/theme/tokens";
@@ -65,7 +64,7 @@ export default function HistoryScreen() {
             <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
           </Bleed>
         ) : null}
-        <Freshness state={state} onRetry={retry} />
+        <Freshness state={state} onRetry={retry} bleed />
 
         {data && total === 0 ? (
           <Bleed>
@@ -79,7 +78,7 @@ export default function HistoryScreen() {
           <View>
             {sections.map((section, i) => (
               <View key={section.kind} testID={`section-${section.kind}`}>
-                <SectionCount title={section.title} meta={String(section.records.length)} tight={i === 0} />
+                <SectionTitle title={section.title} meta={String(section.records.length)} tight={i === 0} />
                 <Bleed>
                   <ListGroup inset={false}>
                     {section.records.map((r) => (

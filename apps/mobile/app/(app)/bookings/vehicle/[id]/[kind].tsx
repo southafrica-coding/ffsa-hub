@@ -1,7 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { EmptyState } from "@/components";
-import { PushedPage } from "@/features/bookings/components/ui";
+import { EmptyState, PushedPage } from "@/components";
 import { strings } from "@/features/bookings/strings";
 import InspectionScreen from "@/features/bookings/screens/InspectionScreen";
 

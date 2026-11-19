@@ -2,9 +2,9 @@ import { BellOff } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 
-import { Banner, EmptyState, Text } from "@/components";
+import { Banner, EmptyState, SwitchRow, Text } from "@/components";
 import { getPrefs, savePrefs, toggleMuted, type Prefs } from "@/features/me/api";
-import { Group, GroupSkeleton, GROUP_BLEED, Section, SwitchRow } from "@/features/me/components/me-kit";
+import { Group, GroupSkeleton, GROUP_BLEED, Section } from "@/features/me/components/me-kit";
 import { MePage } from "@/features/me/components/MePage";
 import { meStrings } from "@/features/me/strings";
 import { PushSettings, pushStrings } from "@/features/push";

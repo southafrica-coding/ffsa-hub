@@ -2,8 +2,7 @@ import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
 import { Alert, Platform, View } from "react-native";
 
-import { Button, Sheet, Text, TextField } from "@/components";
-import { ChoiceChips, FieldError } from "@/features/finance/components/form-parts";
+import { Button, ChoiceChips, ChoiceSegments, FieldError, Sheet, Text, TextField } from "@/components";
 import { announce } from "@/lib/a11y";
 import { apiFetch } from "@/lib/api-client";
 import { space } from "@/theme/tokens";
@@ -12,7 +11,6 @@ import { actionErrorMessage, makeStaff, recordDecision, type DepartmentOption, t
 import { decisionProblem, departmentLabel, initialDepartmentSelection, offerMakeStaffAfterSave } from "../logic";
 import { strings } from "../strings";
 
-import { ChoiceSegments } from "./ui";
 
 const sh = strings.sheet;
 

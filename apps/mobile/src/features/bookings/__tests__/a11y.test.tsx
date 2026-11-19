@@ -7,12 +7,13 @@ import { AccessibilityInfo, Platform, View } from "react-native";
 
 import type { MeState } from "@/features/shell";
 import { auditTappables } from "@/lib/a11y/testing";
+import { RadioRow } from "@/components";
 
 import { makeMe } from "../../../../test/fixtures";
 import { bookingsFetch } from "../client";
 import { ConflictList } from "../components/ConflictList";
 import { DateTimeField } from "../components/DateTimeField";
-import { CheckRow, ChoiceRow, FormError, StatusLine } from "../components/ui";
+import { CheckRow, FormError, StatusLine } from "../components/ui";
 import { loadMine, loadPending, loadSpaceBooking, loadSpaceOptions, loadVehicleBooking } from "../data";
 import ApprovalsScreen from "../screens/ApprovalsScreen";
 import BookingsHomeScreen from "../screens/BookingsHomeScreen";
@@ -35,6 +36,7 @@ jest.mock("@react-native-community/datetimepicker", () => ({ __esModule: true, d
 let mockMeState: MeState = { status: "loading", me: null, error: null, refresh: jest.fn() };
 jest.mock("@/features/shell", () => ({ ...jest.requireActual("@/features/shell"), useMe: () => mockMeState }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../data", () => ({
   ...jest.requireActual("../data"),
   loadMine: jest.fn(),
@@ -215,12 +217,12 @@ describe("Bookings components", () => {
     expect(screen.getByRole("checkbox", { name: "Quantum" }).props.accessibilityState).toEqual({ checked: false, disabled: true });
   });
 
-  it("ChoiceRow is a radio with checked + selected", async () => {
+  it("RadioRow is a radio with checked + selected", async () => {
     await render(
       <View accessibilityRole="radiogroup">
-        <ChoiceRow selected accessibilityLabel="Main hall" onPress={() => {}}>
+        <RadioRow mark="leading" checked accessibilityLabel="Main hall" onPress={() => {}}>
           <View />
-        </ChoiceRow>
+        </RadioRow>
       </View>,
     );
     expect(screen.getByRole("radio", { name: "Main hall" }).props.accessibilityState).toEqual({ checked: true, selected: true });

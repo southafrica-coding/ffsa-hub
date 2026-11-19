@@ -23,6 +23,7 @@ jest.mock("@/lib/supabase", () => ({ supabase: {} }));
 jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "signedIn", session: { user: { id: "user-1" } } }) }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../data", () => ({ ...jest.requireActual("../data"), loadHistory: jest.fn() }));
 
 const load = loadHistory as jest.Mock;

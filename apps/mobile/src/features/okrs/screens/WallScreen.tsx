@@ -4,8 +4,7 @@ import { useCallback } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { EmptyState, LargeTitleScrollView, ListGroup, ListRow, SkeletonList, Text, type BackAction } from "@/components";
-import { Bleed, GroupRow, LoadError, SectionTitle } from "@/features/finance/components/parts";
+import { type BackAction, Bleed, EmptyState, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
@@ -13,7 +12,7 @@ import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { okrsApi } from "../client";
-import { CycleSwitcher, Figure, FigureStrip, Freshness, StatusTag } from "../components/ui";
+import { CycleSwitcher, Figure, FigureStrip, StatusTag, Freshness } from "../components/ui";
 import { cacheName, loadErrorMessage, statusTally, webPath } from "../logic";
 import { strings } from "../strings";
 import type { OwnerSummary, Wall } from "../types";

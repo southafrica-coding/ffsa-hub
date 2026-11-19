@@ -2,8 +2,7 @@ import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 
-import { Button, ListGroup, ListRow, Sheet, Text, TextField } from "@/components";
-import { ChoiceChips, FieldError } from "@/features/finance/components/form-parts";
+import { Button, ChoiceChips, FieldError, ListGroup, ListRow, Sheet, Text, TextField } from "@/components";
 import { timeAgo } from "@/features/home/feed-logic";
 import { announce } from "@/lib/a11y";
 import { hairline, radius, space } from "@/theme/tokens";

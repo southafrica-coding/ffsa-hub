@@ -19,6 +19,7 @@ jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "sign
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("expo-haptics", () => ({ notificationAsync: jest.fn(async () => {}), NotificationFeedbackType: { Success: "success" } }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../api", () => ({ ...jest.requireActual("../api"), getSchools: jest.fn(), getSchool: jest.fn(), recordDecision: jest.fn(), makeStaff: jest.fn() }));
 
 const list = getSchools as jest.Mock;

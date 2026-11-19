@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { render, screen } from "@testing-library/react-native";
 import type { ReactElement } from "react";
 import { Text } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -6,7 +6,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { Me } from "@/lib/api";
 
 import { makeMe } from "../../../../test/fixtures";
-import { StaffDecisionsHomeShortcut } from "../HomeShortcut";
+import { useStaffDecisionsAccess } from "../access";
 import { StaffDecisionsGate } from "../screens/StaffDecisionsGate";
 import { strings } from "../strings";
 
@@ -15,7 +15,6 @@ jest.mock("expo-router", () => ({ useRouter: () => mockRouter }));
 let mockMe: Me | null = null;
 let mockMeStatus: "loading" | "ready" | "error" = "ready";
 jest.mock("@/features/shell", () => ({
-  ...jest.requireActual("@/features/shell/ui"),
   ...jest.requireActual("@/features/shell/access"),
   useMe: () => ({ status: mockMeStatus, me: mockMe, error: null, refresh: jest.fn() }),
 }));
@@ -31,28 +30,30 @@ beforeEach(() => {
   mockMeStatus = "ready";
 });
 
-describe("Home shortcut", () => {
-  it("Leadership Team: shown, opens /staff-decisions", async () => {
-    await render(<StaffDecisionsHomeShortcut />);
-    await fireEvent.press(screen.getByRole("button", { name: strings.shortcut.title }));
-    expect(mockRouter.navigate).toHaveBeenCalledWith("/staff-decisions");
+// Home draws the shortcut row itself from this hook (app/__tests__/home*.test.tsx).
+describe("useStaffDecisionsAccess (the Home shortcut gate)", () => {
+  const Probe = () => <Text testID="access">{useStaffDecisionsAccess()}</Text>;
+
+  it("Leadership Team: allowed", async () => {
+    await render(<Probe />);
+    expect(screen.getByTestId("access")).toHaveTextContent("allowed");
   });
 
-  it.each(["admin", "super_admin", "staff"])("%s without leadership_team: hidden", async (name) => {
+  it.each(["admin", "super_admin", "staff"])("%s without leadership_team: not allowed", async (name) => {
     mockMe = makeMe({ roles: [role(name)] });
-    await render(<StaffDecisionsHomeShortcut />);
-    expect(screen.queryByTestId("shortcut-staff-decisions")).toBeNull();
+    await render(<Probe />);
+    expect(screen.getByTestId("access")).toHaveTextContent("notAllowed");
   });
 
-  it("hidden while /api/me loads, and when it couldn't be read", async () => {
+  it("checking while /api/me loads, unknown when it couldn't be read", async () => {
     mockMe = null;
     mockMeStatus = "loading";
-    const view = await render(<StaffDecisionsHomeShortcut />);
-    expect(screen.queryByTestId("shortcut-staff-decisions")).toBeNull();
+    const view = await render(<Probe />);
+    expect(screen.getByTestId("access")).toHaveTextContent("checking");
     await view.unmount();
     mockMeStatus = "error";
-    await render(<StaffDecisionsHomeShortcut />);
-    expect(screen.queryByTestId("shortcut-staff-decisions")).toBeNull();
+    await render(<Probe />);
+    expect(screen.getByTestId("access")).toHaveTextContent("unknown");
   });
 });
 

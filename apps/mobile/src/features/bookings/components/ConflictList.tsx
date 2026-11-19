@@ -2,6 +2,7 @@ import { TriangleAlert, X } from "lucide-react-native";
 import { View } from "react-native";
 
 import { Text } from "@/components";
+import { useAnnounceOnIOS } from "@/lib/a11y";
 import { hairline, radius } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -9,7 +10,6 @@ import { humanDate } from "../logic";
 import { strings } from "../strings";
 import type { Conflict } from "../types";
 
-import { useAnnounceOnIOS } from "./ui";
 
 const SHOW = 8;
 

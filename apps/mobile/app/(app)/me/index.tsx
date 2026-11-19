@@ -16,10 +16,10 @@ import {
 import { useState } from "react";
 import { View } from "react-native";
 
-import { Banner, Button, LargeTitleScrollView, ListRow, StatusChip, Text } from "@/components";
+import { Banner, Button, LargeTitleScrollView, ListRow, StaticRow, StatusChip, Text } from "@/components";
 import { AppearanceIcon, appearanceStrings, useAppearance } from "@/features/appearance";
 import { clearFeedCaches } from "@/features/home/feed-cache";
-import { Group, GroupSkeleton, Section, StaticRow } from "@/features/me/components/me-kit";
+import { Group, GroupSkeleton, Section } from "@/features/me/components/me-kit";
 import { isStaff } from "@/features/me/docs-logic";
 import { ACCOUNT_DELETION_ROUTE, DOC_ROUTES, FULL_PROFILE_PATH, PRIVACY_POLICY_PATH } from "@/features/me/links";
 import { meStrings as s } from "@/features/me/strings";

@@ -1,72 +1,20 @@
-// Small building blocks for the Bookings screens (frames 7.1–7.14), built
-// from the kit (src/components) and tokens only. What the kit doesn't have
-// yet lives here and is listed in the PR under "Kit follow-ups".
+// Bookings' own building blocks (frames 7.1–7.14): the status chip mapping,
+// the booking row, label/value pairs, inline hints, checkboxes and the
+// yes/no question. The general pieces (bleed, pushed page, section title,
+// load states, radio rows) live in src/components.
 
 import { Building2, Car, Check, CircleAlert, Clock, Repeat, TriangleAlert, X, type LucideIcon } from "lucide-react-native";
-import { Children, useEffect, type ReactNode } from "react";
-import { Platform, Pressable, ScrollView, View, type ViewStyle } from "react-native";
-import { SafeAreaView, type Edge } from "react-native-safe-area-context";
+import { Children, type ReactNode } from "react";
+import { Pressable, View } from "react-native";
 
-import { Banner, EmptyState, ListRow, NavBar, StatusChip, Text, type BackAction } from "@/components";
-import { announce } from "@/lib/a11y";
+import { ChoiceSegments, ListRow, StatusChip, Text } from "@/components";
+import { useAnnounceOnIOS } from "@/lib/a11y";
 import type { ChipVariant } from "@/theme/styles";
 import { fontFamily, hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { dateRangeLabel, statusInfo, type AnyStatus, type BookingItem, type StatusIcon, type StatusTone } from "../logic";
 import { strings } from "../strings";
-
-// ── Layout ──────────────────────────────────────────────────────────────────
-
-/**
- * Lists, bands and banners sit 16pt from the edge while text sits on the
- * 20pt gutter (mockups). Screens pad by the gutter, so cards bleed out by 4.
- */
-export function Bleed({ children, style }: { children: ReactNode; style?: ViewStyle }) {
-  return <View style={[{ marginHorizontal: space.inset - space.gutter }, style]}>{children}</View>;
-}
-
-/** A pushed page before its title is known (loading, error, not found): back bar + padded body. */
-export function PushedPage({ back, children, edges = ["top"] }: { back: BackAction; children: ReactNode; edges?: Edge[] }) {
-  const { colors } = useTheme();
-  return (
-    <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View style={{ paddingHorizontal: space.gutter }}>
-        <NavBar back={back} />
-      </View>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: space.inset, paddingTop: space.sm, paddingBottom: space.xl, gap: space.lg }}>{children}</ScrollView>
-    </SafeAreaView>
-  );
-}
-
-/** Section title with a count on the right ("Upcoming · 2"), read as one heading. */
-export function SectionTitle({ title, meta, tight = false }: { title: string; meta?: string; tight?: boolean }) {
-  return (
-    <View
-      accessible
-      accessibilityRole="header"
-      accessibilityLabel={meta ? `${title}, ${meta}` : title}
-      style={{
-        minHeight: touch.floor,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: space.md,
-        paddingTop: tight ? space.md : space.xl,
-        paddingBottom: space.sm,
-      }}
-    >
-      <Text variant="sectionTitle" style={{ flexShrink: 1 }}>
-        {title}
-      </Text>
-      {meta ? (
-        <Text variant="label" style={{ fontVariant: ["tabular-nums"] }}>
-          {meta}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
 
 // ── Status: a chip with an icon AND the word, never colour alone ────────────
 
@@ -149,17 +97,6 @@ export function HintLine({ tone, children, testID }: { tone: "ok" | "warn" | "ba
   );
 }
 
-/**
- * Speaks a message on iOS each time it changes to something new. Android
- * reads accessibilityLiveRegion instead (iOS ignores live regions), so pair
- * this with a live region on the visible text to cover both, once each.
- */
-export function useAnnounceOnIOS(message: string | null | undefined) {
-  useEffect(() => {
-    if (message && Platform.OS === "ios") announce(message);
-  }, [message]);
-}
-
 /** Inline error under a form, announced when it appears. */
 export function FormError({ message }: { message: string | null }) {
   const { colors } = useTheme();
@@ -181,26 +118,6 @@ export function FormError({ message }: { message: string | null }) {
         {message}
       </Text>
     </View>
-  );
-}
-
-/** A list that failed to load (frame 13.2): what happened, and Try again. */
-export function LoadFailed({ title, message, onRetry }: { title: string; message: string; onRetry: () => void }) {
-  // Android reads the live region; iOS needs it spoken.
-  useAnnounceOnIOS(message);
-  return (
-    <View accessibilityLiveRegion="polite" testID="load-failed">
-      <EmptyState icon={TriangleAlert} title={title} body={message} actionLabel={strings.common.tryAgain} onAction={onRetry} />
-    </View>
-  );
-}
-
-/** The saved copy is showing because a refresh failed or the phone is offline. */
-export function StaleNote({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <Banner tone="offline" actionLabel={strings.common.tryAgain} onAction={onRetry} testID="stale-note">
-      {message}
-    </Banner>
   );
 }
 
@@ -272,68 +189,19 @@ export function CheckRow({
   );
 }
 
-/** A required yes/no question as a two-part segmented radio; null means unanswered. */
+/** A required yes/no question: the kit's ChoiceSegments with booleans; null means unanswered. */
 export function YesNo({ label, hint, value, onChange }: { label: string; hint?: string; value: boolean | null; onChange: (v: boolean) => void }) {
-  const { colors } = useTheme();
-  const options = [
-    { on: true, label: strings.inspection.yes },
-    { on: false, label: strings.inspection.no },
-  ];
   return (
-    <View style={{ gap: 2 }}>
-      {/* Read on its own (iOS doesn't speak a radiogroup's label), then each radio. */}
-      <Text accessibilityRole="header">{label}</Text>
-      {hint ? (
-        <Text variant="caption" tone="secondary">
-          {hint}
-        </Text>
-      ) : null}
-      <View
-        accessibilityRole="radiogroup"
-        accessibilityLabel={label}
-        style={{
-          marginTop: 6,
-          flexDirection: "row",
-          gap: 3,
-          padding: 3,
-          backgroundColor: colors.surface,
-          borderWidth: hairline,
-          borderColor: colors.rule,
-          borderRadius: radius.card,
-        }}
-      >
-        {options.map((o) => {
-          const selected = value === o.on;
-          return (
-            <Pressable
-              key={o.label}
-              accessibilityRole="radio"
-              accessibilityLabel={o.label}
-              accessibilityState={{ selected, checked: selected }}
-              onPress={() => onChange(o.on)}
-              style={({ pressed }) => ({
-                flex: 1,
-                minHeight: touch.floor,
-                paddingVertical: 6,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: radius.control,
-                borderWidth: hairline,
-                borderColor: selected ? colors.rule : "transparent",
-                // Chosen = raised + bold + a yellow underline: never colour alone.
-                borderBottomWidth: selected ? 2 : hairline,
-                borderBottomColor: selected ? colors.accent : "transparent",
-                backgroundColor: selected ? colors.segmentOn : pressed ? colors.surfaceStrong : "transparent",
-              })}
-            >
-              <Text style={{ fontFamily: selected ? fontFamily.bodyBold : fontFamily.bodyMedium, fontSize: 14, lineHeight: 20, color: selected ? colors.text : colors.textSecondary }}>
-                {o.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
+    <ChoiceSegments
+      label={label}
+      hint={hint}
+      options={[
+        { value: "yes", label: strings.inspection.yes },
+        { value: "no", label: strings.inspection.no },
+      ]}
+      value={value === null ? null : value ? "yes" : "no"}
+      onChange={(v) => onChange(v === "yes")}
+    />
   );
 }
 
@@ -375,58 +243,5 @@ export function ToggleRow({ label, children }: { label: string; children: ReactN
       </Text>
       {children}
     </View>
-  );
-}
-
-/**
- * A row in a single-choice list (a space, say): a radio for screen readers
- * and a drawn radio dot. Put it inside a radiogroup (a kit ListGroup works).
- */
-export function ChoiceRow({
-  children,
-  selected,
-  onPress,
-  accessibilityLabel,
-  testID,
-}: {
-  children: ReactNode;
-  selected: boolean;
-  onPress: () => void;
-  accessibilityLabel: string;
-  testID?: string;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ checked: selected, selected }}
-      onPress={onPress}
-      testID={testID}
-      style={({ pressed }) => ({
-        minHeight: 56,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: space.md,
-        paddingVertical: 10,
-        paddingLeft: space.lg,
-        paddingRight: space.md,
-        backgroundColor: pressed ? colors.surfaceStrong : "transparent",
-      })}
-    >
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          // Chosen = a thick ring (ink in light, yellow in dark), as the mockups draw it.
-          borderWidth: selected ? 7 : 1.5,
-          borderColor: selected ? colors.primary : colors.ruleStrong,
-        }}
-      />
-      <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
-    </Pressable>
   );
 }

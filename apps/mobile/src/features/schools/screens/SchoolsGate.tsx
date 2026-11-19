@@ -2,11 +2,10 @@ import { useRouter } from "expo-router";
 import { ArrowUpRight, GraduationCap } from "lucide-react-native";
 import type { ReactNode } from "react";
 
-import { Button, EmptyState, LargeTitleScrollView, ListGroup, SkeletonList } from "@/components";
+import { Bleed, Button, EmptyState, LargeTitleScrollView, ListGroup, SkeletonList } from "@/components";
 import { openWebPage } from "@/features/shell";
 import { useTheme } from "@/theme/use-theme";
 
-import { Bleed } from "../components/parts";
 import { useSchoolsAccess } from "../shortcut";
 import { strings } from "../strings";
 

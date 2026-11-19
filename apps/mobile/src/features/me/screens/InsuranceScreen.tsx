@@ -13,7 +13,7 @@ import { useState } from "react";
 import { View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, NeedsYouBand, StatusChip, Text, TextField } from "@/components";
+import { Banner, Button, NeedsYouBand, StaticRow, StatusChip, Text, TextField } from "@/components";
 import { DateTimeField } from "@/features/bookings/components/DateTimeField";
 import { announce } from "@/lib/a11y";
 import { ApiError } from "@/lib/api";
@@ -59,7 +59,7 @@ import {
   type Option,
   type PolicyDraft,
 } from "../docs-logic";
-import { Group, GROUP_BLEED, Section, StaticRow } from "../components/me-kit";
+import { Group, GROUP_BLEED, Section } from "../components/me-kit";
 import { profileFetch } from "../http";
 import { meStrings } from "../strings";
 

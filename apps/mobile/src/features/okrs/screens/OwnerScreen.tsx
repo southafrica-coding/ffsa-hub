@@ -3,8 +3,7 @@ import { useCallback, useState } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, EmptyState, LargeTitleScrollView, ListGroup, ListRow, SkeletonList, Text, type BackAction } from "@/components";
-import { Bleed, GroupRow, LoadError, PushedPage, SectionTitle } from "@/features/finance/components/parts";
+import { type BackAction, Banner, Bleed, EmptyState, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, PushedPage, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { timeAgo } from "@/features/home/feed-logic";
 import { openWebPage } from "@/features/shell";
@@ -13,7 +12,7 @@ import { hairline, radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { okrsApi } from "../client";
-import { Bar, CycleSwitcher, Figure, FigureStrip, Freshness, StatusTag } from "../components/ui";
+import { Bar, CycleSwitcher, Figure, FigureStrip, StatusTag, Freshness } from "../components/ui";
 import { cacheName, isNotFound, loadErrorMessage, statusLabel, webPath } from "../logic";
 import { strings } from "../strings";
 import type { KeyResult, Objective, OwnerPage } from "../types";

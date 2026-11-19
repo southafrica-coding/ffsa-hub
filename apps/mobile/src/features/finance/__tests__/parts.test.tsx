@@ -1,5 +1,5 @@
-// The finance-local pieces built for the redesign (components/parts.tsx,
-// components/form-parts.tsx): each one in its states, in light and dark.
+// The pieces first built for Finance's redesign, in their states, light and
+// dark. Most now live in the kit (src/components); BudgetBar stays here.
 
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
@@ -7,9 +7,9 @@ import { ShieldCheck } from "lucide-react-native";
 
 import { auditTappables, tappableSizes } from "@/lib/a11y/testing";
 import { colors, touch } from "@/theme/tokens";
+import { Button, ChipButton, ChoiceChips, Disclosure, FieldError, GroupRow, InfoRow, LoadError, NavBar, SectionTitle, SelectField, StaleNote, StatusLine, Text } from "@/components";
 
-import { ChipButton, ChoiceChips, Disclosure, FieldError, FormNavBar, SelectField } from "../components/form-parts";
-import { BudgetBar, GroupRow, InfoRow, LoadError, SectionTitle, StaleNote, StatusLine } from "../components/parts";
+import { BudgetBar } from "../components/parts";
 import { budgetFigures, formatMoney } from "../money";
 import { strings } from "../strings";
 
@@ -179,9 +179,14 @@ describe("form parts", () => {
     expect(onPress).toHaveBeenCalled();
   });
 
-  it("FormNavBar: Cancel and a heading", async () => {
+  it("NavBar with a leading Cancel (the Add expense bar): Cancel and a heading", async () => {
     const onCancel = jest.fn();
-    await render(<FormNavBar title="Add expense" cancelLabel="Cancel" onCancel={onCancel} />);
+    await render(
+      <NavBar
+        left={<Button label="Cancel" variant="ghost" onPress={onCancel} />}
+        title={<Text accessibilityRole="header">Add expense</Text>}
+      />,
+    );
     expect(screen.getByRole("header", { name: "Add expense" })).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalled();

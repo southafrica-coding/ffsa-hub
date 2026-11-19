@@ -19,6 +19,7 @@ jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 let mockMeState: MeState = { status: "loading", me: null, error: null, refresh: jest.fn() };
 jest.mock("@/features/shell", () => ({ ...jest.requireActual("@/features/shell"), useMe: () => mockMeState }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../data", () => ({ ...jest.requireActual("../data"), loadMine: jest.fn(), loadPending: jest.fn() }));
 jest.mock("../client", () => ({ bookingsFetch: jest.fn() }));
 let mockOutbox: FakeOutbox;

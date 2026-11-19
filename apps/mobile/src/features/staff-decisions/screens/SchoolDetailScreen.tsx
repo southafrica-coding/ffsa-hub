@@ -4,8 +4,7 @@ import { useCallback, useState } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Button, EmptyState, LargeTitleScrollView, ListGroup, ListRow, NeedsYouBand, SectionHeader, SkeletonList, StatusChip, Text } from "@/components";
-import { Bleed, LoadError } from "@/features/finance/components/parts";
+import { Bleed, Button, EmptyState, Freshness, LargeTitleScrollView, ListGroup, ListRow, LoadError, NeedsYouBand, SectionHeader, SkeletonList, StatusChip, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage } from "@/features/shell";
 import { apiFetch } from "@/lib/api-client";
@@ -15,7 +14,6 @@ import { useTheme } from "@/theme/use-theme";
 
 import { getSchool, loadErrorMessage, type SchoolDetail, type StaffDecisionRow } from "../api";
 import { DecisionSheet, type SheetStep } from "../components/DecisionSheet";
-import { Freshness } from "../components/ui";
 import { canMakeStaff, decidedLine, decisionWord, isUuid, needsDecisionCount, rowA11yLabel } from "../logic";
 import { strings } from "../strings";
 

@@ -2,8 +2,7 @@ import { useRouter } from "expo-router";
 import { Lock } from "lucide-react-native";
 import type { ReactNode } from "react";
 
-import { EmptyState, LargeTitleScrollView, SkeletonList } from "@/components";
-import { Bleed } from "@/features/finance/components/parts";
+import { Bleed, EmptyState, LargeTitleScrollView, SkeletonList } from "@/components";
 
 import { useStaffDecisionsAccess } from "../access";
 import { strings } from "../strings";

@@ -9,7 +9,6 @@ export const strings = {
     week: "Week",
     practice: "Practice",
     mine: "My sets",
-    a11yHint: (n: number, total: number) => `Section ${n} of ${total}`,
   },
 
   week: {

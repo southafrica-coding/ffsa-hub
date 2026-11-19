@@ -23,6 +23,7 @@ jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
 jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "signedIn", session: { user: { id: "user-1" } } }) }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../api", () => ({ ...jest.requireActual("../api"), getSchools: jest.fn(), getSchool: jest.fn() }));
 let mockScheme: "light" | "dark" = "light";
 jest.mock("@/theme/use-theme", () => ({ ...jest.requireActual("@/theme/use-theme"), useTheme: () => jest.requireActual("@/theme/use-theme").themeFor(mockScheme) }));

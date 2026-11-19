@@ -6,8 +6,7 @@ import { useCallback, useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, EmptyState, LargeTitleScrollView, ListGroup, ListRow, SkeletonList, Text, TextField, type BackAction } from "@/components";
-import { ChoiceChips } from "@/features/finance/components/form-parts";
+import { type BackAction, Banner, Bleed, Button, ChoiceChips, EmptyState, LargeTitleScrollView, ListGroup, ListRow, LoadFailed, PushedPage, SectionTitle, SkeletonList, Text, TextField } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage, useMe } from "@/features/shell";
 import { announce } from "@/lib/a11y";
@@ -19,7 +18,7 @@ import { loadErrorMessage } from "../api";
 import { chooseVehiclePhotos, takeVehiclePhoto, type DraftPhoto } from "../capture";
 import { DateTimeField } from "../components/DateTimeField";
 import { QueueList } from "../components/QueueList";
-import { Bleed, CheckRow, FormError, LoadFailed, Panel, PushedPage, SectionTitle, YesNo } from "../components/ui";
+import { CheckRow, FormError, Panel, YesNo } from "../components/ui";
 import { loadVehicleBooking, type VehicleDetail } from "../data";
 import {
   DAMAGE_PANELS,

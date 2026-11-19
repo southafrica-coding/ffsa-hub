@@ -1,12 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { render, screen, waitFor } from "@testing-library/react-native";
 import { Text } from "react-native";
 
 import type { Me } from "@/lib/api";
 
 import { makeMe } from "../../../../test/fixtures";
 import { getMinistriesAccess } from "../api";
-import { MinistriesHomeShortcut } from "../HomeShortcut";
 import { accessFlagKey, useMinistriesAccess, useMinistriesShortcut } from "../shortcut";
 
 const mockRouter = { navigate: jest.fn() };
@@ -17,7 +16,6 @@ jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "sign
 let mockMe: Me | null = null;
 let mockMeStatus: "loading" | "ready" | "error" = "ready";
 jest.mock("@/features/shell", () => ({
-  ...jest.requireActual("@/features/shell/ui"),
   useMe: () => ({ status: mockMeStatus, me: mockMe, error: null, refresh: jest.fn() }),
 }));
 jest.mock("../api", () => ({ getMinistriesAccess: jest.fn() }));
@@ -90,22 +88,5 @@ describe("useMinistriesShortcut / useMinistriesAccess", () => {
     probe.mockReturnValue(new Promise(() => undefined));
     await render(<Probe />);
     expect(out()).toHaveTextContent("hidden checking");
-  });
-});
-
-describe("Home shortcut row", () => {
-  it("renders nothing until allowed, then opens /ministries", async () => {
-    probe.mockResolvedValue(true);
-    await render(<MinistriesHomeShortcut />);
-    const row = await screen.findByRole("button", { name: "Ministries" });
-    await fireEvent.press(row);
-    expect(mockRouter.navigate).toHaveBeenCalledWith("/ministries");
-  });
-
-  it("stays hidden for someone without access", async () => {
-    probe.mockResolvedValue(false);
-    await render(<MinistriesHomeShortcut />);
-    await waitFor(() => expect(probe).toHaveBeenCalled());
-    expect(screen.queryByTestId("shortcut-ministries")).toBeNull();
   });
 });

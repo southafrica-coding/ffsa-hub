@@ -4,15 +4,15 @@
 
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
-import { Check, ChevronDown, CircleAlert } from "lucide-react-native";
+import { Check } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, Pressable, View } from "react-native";
 
-import { Banner, EmptyState, Sheet, Text, TextField, Toggle } from "@/components";
+import { Banner, EmptyState, SelectField, Sheet, Text, TextField, Toggle } from "@/components";
 import { ServerRefusal } from "@/features/bookings/http";
 import { ApiError } from "@/lib/api";
 import { getEnv } from "@/lib/env";
-import { fontFamily, hairline, radius, space, touch } from "@/theme/tokens";
+import { space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { isAllowedSignedUrl } from "../docs-logic";
@@ -142,48 +142,19 @@ export function OptionField({
   const list = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
   return (
     <View style={{ gap: 6 }}>
-      <Text variant="label" accessibilityElementsHidden importantForAccessibility="no">
-        {label}
-      </Text>
-      <Pressable
+      <SelectField
         testID={testID}
-        accessibilityRole="button"
+        label={label}
+        value={value ? shown : undefined}
+        placeholder={d.choose(label)}
+        error={error}
         accessibilityLabel={`${label}: ${shown}`}
-        accessibilityHint={error ?? d.chooseHint}
+        accessibilityHint={d.chooseHint}
         onPress={() => {
           setFilter("");
           setOpen(true);
         }}
-        style={({ pressed }) => ({
-          minHeight: touch.minTarget,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: space.sm,
-          paddingHorizontal: space.md,
-          borderWidth: error ? 2 : hairline,
-          borderColor: error ? colors.danger : colors.ruleStrong,
-          borderRadius: radius.control,
-          backgroundColor: pressed ? colors.surface : colors.raised,
-        })}
-      >
-        {/* Empty: the placeholder says what to do ("Choose gender"); screen readers hear "Gender: Not set". */}
-        <Text tone={value ? "default" : "quiet"} style={{ flex: 1, paddingVertical: space.sm }}>
-          {value ? shown : d.choose(label)}
-        </Text>
-        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <ChevronDown size={18} color={colors.textTertiary} />
-        </View>
-      </Pressable>
-      {error ? (
-        <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start" }}>
-          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ paddingTop: 2 }}>
-            <CircleAlert size={14} color={colors.danger} />
-          </View>
-          <Text variant="caption" tone="danger" accessibilityRole="alert" style={{ flex: 1, fontFamily: fontFamily.bodyMedium }}>
-            {error}
-          </Text>
-        </View>
-      ) : null}
+      />
       <Sheet visible={open} title={d.choose(label)} onClose={() => setOpen(false)}>
         {searchable ? <TextField label={label} value={filter} onChangeText={setFilter} autoCorrect={false} autoCapitalize="none" /> : null}
         <Group style={{ marginHorizontal: 0 }}>

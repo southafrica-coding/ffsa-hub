@@ -30,6 +30,7 @@ jest.mock("@react-native-community/datetimepicker", () => ({ __esModule: true, d
 let mockMeState: MeState;
 jest.mock("@/features/shell", () => ({ ...jest.requireActual("@/features/shell"), useMe: () => mockMeState }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../data", () => ({ ...jest.requireActual("../data"), loadSpaceBooking: jest.fn(), loadVehicleBooking: jest.fn() }));
 jest.mock("../client", () => ({ bookingsFetch: jest.fn() }));
 jest.mock("../capture", () => ({

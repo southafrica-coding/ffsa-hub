@@ -23,6 +23,7 @@ jest.mock("expo-haptics", () => ({
 }));
 jest.mock("@/lib/a11y", () => ({ ...jest.requireActual("@/lib/a11y"), announce: jest.fn() }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../client", () => ({
   okrsApi: { loadWall: jest.fn(), loadOwner: jest.fn(), loadCheckins: jest.fn(), postCheckin: jest.fn() },
 }));

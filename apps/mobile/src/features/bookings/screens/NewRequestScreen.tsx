@@ -6,7 +6,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useSession } from "@/auth/session-provider";
-import { Button, EmptyState, LargeTitle, ListGroup, ListRow, SkeletonList, Text } from "@/components";
+import { Bleed, Button, EmptyState, LargeTitle, ListGroup, ListRow, LoadFailed, SkeletonList, Text } from "@/components";
 import { openWebPage, useMe } from "@/features/shell";
 import { announce } from "@/lib/a11y";
 import { hairline, space, touch } from "@/theme/tokens";
@@ -15,7 +15,7 @@ import { useTheme } from "@/theme/use-theme";
 import { bookingsAccess } from "../access";
 import { listPeople, submitSpace, submitVehicle, userMessage } from "../api";
 import { bookingsFetch } from "../client";
-import { Bleed, FormError, LoadFailed } from "../components/ui";
+import { FormError } from "../components/ui";
 import { loadSpaceOptions, loadVehicles, type SpaceOptions } from "../data";
 import { back, chooseKind, next, progress, type FlowState, type RequestKind } from "../flow";
 import { EMPTY_SPACE, EMPTY_VEHICLE } from "../logic";

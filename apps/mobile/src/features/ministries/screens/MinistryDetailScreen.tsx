@@ -5,8 +5,7 @@ import { useCallback, useState } from "react";
 import { Alert, RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, EmptyState, LargeTitleScrollView, ListGroup, ListRow, NeedsYouBand, SkeletonList, StatusChip, Text } from "@/components";
-import { Bleed, LoadError } from "@/features/finance/components/parts";
+import { Banner, Bleed, Button, EmptyState, Freshness, LargeTitleScrollView, ListGroup, ListRow, LoadError, NeedsYouBand, SectionTitle, SkeletonList, StatusChip, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage } from "@/features/shell";
 import { announce } from "@/lib/a11y";
@@ -16,7 +15,6 @@ import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { approveMember, getMinistry, isForbidden, loadErrorMessage, type MinistryDetail, type RosterMember } from "../api";
-import { Freshness, SectionCount } from "../components/ui";
 import { detailContext, isUuid, memberA11yLabel, memberBadges, pendingMembers, rosterGroups } from "../logic";
 import { strings } from "../strings";
 
@@ -163,7 +161,7 @@ function Team({
   const groups = rosterGroups(detail);
   return (
     <View>
-      <SectionCount title={s.team} count={detail.roster.length} tight />
+      <SectionTitle title={s.team} meta={detail.roster.length} tight />
       {detail.roster.length === 0 ? (
         <Text tone="secondary" style={{ paddingVertical: space.sm }} testID="empty-team">
           {s.emptyTeam}

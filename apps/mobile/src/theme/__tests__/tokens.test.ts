@@ -262,18 +262,16 @@ describe("component style mapping", () => {
 
   it("caps only the title, hero, eyebrow and mono codes; titles are Roboto 900 at -0.01em", () => {
     const capsVariants = variants.filter((v) => textVariants[v].textTransform === "uppercase").sort();
-    expect(capsVariants).toEqual(["display", "eyebrow", "hero", "monoLabel", "pageTitle", "title"]);
+    expect(capsVariants).toEqual(["eyebrow", "hero", "monoLabel", "pageTitle"]);
     expect(textStyle("pageTitle", "default", colors.light)).toMatchObject({
       fontFamily: "Roboto_900Black",
       letterSpacing: -0.28,
     });
     expect(textStyle("kpi", "default", colors.light).fontVariant).toEqual(["tabular-nums"]);
-    expect(textStyle("numeral", "default", colors.light).fontVariant).toEqual(["tabular-nums"]);
   });
 
-  it("legacy names still render: display = pageTitle, bodyStrong = Roboto 500", () => {
-    expect(textVariants.display).toEqual(textVariants.pageTitle);
-    expect(textVariants.bodyStrong.fontFamily).toBe(fontFamily.bodyMedium);
+  it("the legacy aliases (display, title, numeral, bodyStrong) are gone", () => {
+    for (const old of ["display", "title", "numeral", "bodyStrong"]) expect(old in textVariants).toBe(false);
   });
 
   it("body text follows the OS font size fully; only display sizes are capped", () => {

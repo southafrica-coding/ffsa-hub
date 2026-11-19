@@ -6,9 +6,9 @@ import { Check, Clock } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 
-import { Banner, ListGroup, ListRow, StatusChip, Text, TextField, Toggle } from "@/components";
-import { ChoiceChips } from "@/features/finance/components/form-parts";
+import { Banner, Bleed, ChoiceChips, ListGroup, ListRow, RadioRow, StatusChip, Text, TextField, Toggle } from "@/components";
 import { openWebPage } from "@/features/shell";
+import { useAnnounceOnIOS } from "@/lib/a11y";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -16,7 +16,7 @@ import { checkSpace, userMessage, type SpaceCheck } from "../api";
 import { bookingsFetch } from "../client";
 import { ConflictList } from "../components/ConflictList";
 import { DateTimeField } from "../components/DateTimeField";
-import { Bleed, ChoiceRow, Field, FieldList, HintLine, ToggleRow, useAnnounceOnIOS } from "../components/ui";
+import { Field, FieldList, HintLine, ToggleRow } from "../components/ui";
 import type { SpaceOptions } from "../data";
 import { approvalNote, dateRangeLabel, spaceWhenError, timeRangeLabel, todayISO, type SpaceForm } from "../logic";
 import { strings } from "../strings";
@@ -82,9 +82,10 @@ export function SpaceChoice({ options, f, set, canApprove }: { options: SpaceOpt
             const selected = v.id === f.venueId;
             const detail = [v.building, v.capacity ? strings.space.capacity(v.capacity) : null].filter(Boolean).join(" · ");
             return (
-              <ChoiceRow
+              <RadioRow
                 key={v.id}
-                selected={selected}
+                mark="leading"
+                checked={selected}
                 onPress={() => set({ venueId: v.id })}
                 accessibilityLabel={[v.name, v.building, v.capacity ? strings.space.capacity(v.capacity) : null, v.requires_approval ? strings.space.needsApproval : strings.space.instant]
                   .filter(Boolean)
@@ -107,7 +108,7 @@ export function SpaceChoice({ options, f, set, canApprove }: { options: SpaceOpt
                     <StatusChip label={strings.space.instant} variant="quiet" icon={Check} />
                   )}
                 </View>
-              </ChoiceRow>
+              </RadioRow>
             );
           })}
         </ListGroup>

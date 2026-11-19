@@ -133,6 +133,7 @@ export function SetSheet({
       subtitle={
         set ? `${dayLabel(set.set_date)} · ${timeRange(set.start_time, set.end_time)} · ${durationLabel(set.start_time, set.end_time)}` : undefined
       }
+      subtitleAccessibilityLabel={set ? `${spokenDate(set.set_date)}, ${spokenTimeRange(set.start_time, set.end_time)}` : undefined}
       onClose={onClose}
       closeLabel={strings.set.close}
       testID="set-sheet"

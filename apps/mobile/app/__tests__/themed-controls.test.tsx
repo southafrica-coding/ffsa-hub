@@ -36,6 +36,7 @@ jest.mock("expo-router", () => ({ useRouter: () => ({ navigate: jest.fn(), push:
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("@/features/schools/shortcut", () => ({ useSchoolsShortcut: () => false }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("@/features/schools/data", () => ({
   ...jest.requireActual("@/features/schools/data"),
   loadSchools: jest.fn(),

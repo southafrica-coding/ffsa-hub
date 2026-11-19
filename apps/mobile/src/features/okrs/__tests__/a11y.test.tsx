@@ -22,6 +22,7 @@ jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "sign
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("expo-haptics", () => ({ notificationAsync: jest.fn(async () => undefined), NotificationFeedbackType: { Success: "s", Error: "e" } }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../client", () => ({
   okrsApi: { loadWall: jest.fn(), loadOwner: jest.fn(), loadCheckins: jest.fn(), postCheckin: jest.fn() },
 }));

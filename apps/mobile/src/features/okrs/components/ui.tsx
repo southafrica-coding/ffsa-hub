@@ -8,10 +8,7 @@ import { ChevronDown, ChevronRight, Clock, TriangleAlert, type LucideIcon } from
 import { Children, useState, type ReactNode } from "react";
 import { Pressable, View, useWindowDimensions } from "react-native";
 
-import { ListGroup, Sheet, StatusChip, Text, type StatusChipProps } from "@/components";
-import { formatSavedAt } from "@/features/finance/cache";
-import { StaleNote } from "@/features/finance/components/parts";
-import type { LoadState } from "@/features/finance/use-cached-load";
+import { Freshness as KitFreshness, ListGroup, RadioRow, Sheet, StatusChip, Text, type FreshnessState, type StatusChipProps } from "@/components";
 import { hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -198,36 +195,17 @@ export function CycleSwitcher({
               const label = c.isCurrent ? strings.cycle.current(c.name) : c.name;
               const range = strings.cycle.dates(formatDay(c.startsOn), formatDay(c.endsOn));
               return (
-                <Pressable
+                <RadioRow
                   key={c.id}
                   testID={`cycle-${c.slug}`}
-                  accessibilityRole="radio"
-                  accessibilityLabel={label}
-                  accessibilityHint={range}
-                  accessibilityState={{ selected, checked: selected }}
+                  label={label}
+                  body={range}
+                  checked={selected}
                   onPress={() => {
                     setOpen(false);
                     if (!selected) onChange(c.slug);
                   }}
-                  style={({ pressed }) => ({
-                    minHeight: 56,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: space.md,
-                    paddingVertical: 10,
-                    paddingLeft: space.lg,
-                    paddingRight: space.md,
-                    backgroundColor: pressed ? colors.surfaceStrong : "transparent",
-                  })}
-                >
-                  <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                    <Text variant="rowTitle">{label}</Text>
-                    <Text variant="caption" tone="secondary">
-                      {range}
-                    </Text>
-                  </View>
-                  <RadioMark selected={selected} />
-                </Pressable>
+                />
               );
             })}
           </ListGroup>
@@ -237,53 +215,20 @@ export function CycleSwitcher({
   );
 }
 
-/** The radio circle: a ring, filled with an ink dot when chosen (the row says so in words too). */
-function RadioMark({ selected }: { selected: boolean }) {
-  const { colors } = useTheme();
-  return (
-    <View
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      style={{
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        alignItems: "center",
-        justifyContent: "center",
-        borderWidth: selected ? 2 : hairline,
-        borderColor: selected ? colors.text : colors.ruleStrong,
-      }}
-    >
-      {selected ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.text }} /> : null}
-    </View>
-  );
-}
-
 // ── Saved copy ──────────────────────────────────────────────────────────────
 
 /**
- * When what's on screen is the copy saved on this phone: a quiet
- * "Last updated" line, or the offline note with a retry if a refresh failed
- * (frame 13.3). `checkinsNote` adds that check-ins need a signal.
+ * The kit's saved-copy note (frame 13.3); `checkinsNote` adds that
+ * check-ins need a signal.
  */
-export function Freshness<T>({ state, onRetry, checkinsNote = false }: { state: LoadState<T>; onRetry: () => void; checkinsNote?: boolean }) {
-  if (state.status !== "ready" || state.staleSince === null) return null;
-  const when = formatSavedAt(state.staleSince);
-  if (state.refreshError) {
-    return (
-      <View style={{ gap: space.sm }}>
-        <StaleNote message={strings.common.refreshFailed(when)} onRetry={onRetry} />
-        {checkinsNote ? (
-          <Text variant="note" testID="checkins-need-signal" style={{ paddingHorizontal: space.xs }}>
-            {strings.common.checkinsNeedSignal}
-          </Text>
-        ) : null}
-      </View>
-    );
-  }
+export function Freshness({ state, onRetry, checkinsNote = false }: { state: FreshnessState; onRetry: () => void; checkinsNote?: boolean }) {
   return (
-    <Text variant="caption" tone="secondary" testID="last-updated">
-      {strings.common.lastUpdated(when)}
-    </Text>
+    <KitFreshness state={state} onRetry={onRetry}>
+      {checkinsNote ? (
+        <Text variant="note" testID="checkins-need-signal" style={{ paddingHorizontal: space.xs }}>
+          {strings.common.checkinsNeedSignal}
+        </Text>
+      ) : null}
+    </KitFreshness>
   );
 }

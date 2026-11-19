@@ -7,11 +7,11 @@ import type { ReactElement } from "react";
 import { Text as RNText } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { NeedsYouBand } from "@/components";
+import { NeedsYouBand, RadioRow, StaticRow, SwitchRow } from "@/components";
 import { auditTappables } from "@/lib/a11y/testing";
 import { colors } from "@/theme/tokens";
 
-import { BulletList, Group, GROUP_BLEED, InfoCard, RadioRow, StaticRow, SwitchRow } from "../components/me-kit";
+import { BulletList, Group, GROUP_BLEED, InfoCard } from "../components/me-kit";
 import { MePage } from "../components/MePage";
 
 const mockRouter = { back: jest.fn(), push: jest.fn(), navigate: jest.fn() };

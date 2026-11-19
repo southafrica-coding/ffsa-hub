@@ -3,14 +3,15 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 
-import { Text } from "@/components";
+import { Freshness, GroupRow, LoadError, SectionTitle, Text } from "@/components";
 import type { LoadState } from "@/features/finance/use-cached-load";
 import { colors } from "@/theme/tokens";
 
-import { DateBlock, Figure, Freshness, GroupRow, LoadError, SectionCount, StatusTag } from "../components/parts";
+import { DateBlock, Figure, StatusTag } from "../components/parts";
 import { strings } from "../strings";
 
 jest.mock("@/features/finance/cache", () => ({ formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 
 const flat = (node: { props: { style?: unknown } }) => StyleSheet.flatten(node.props.style as never) as Record<string, unknown>;
 const ready = (o: Partial<Extract<LoadState<number>, { status: "ready" }>>): LoadState<number> =>
@@ -31,9 +32,9 @@ describe("StatusTag", () => {
   });
 });
 
-describe("SectionCount", () => {
+describe("SectionTitle", () => {
   it("is one heading that reads the title and the count", async () => {
-    await render(<SectionCount title="Courses" meta="4" />);
+    await render(<SectionTitle title="Courses" meta="4" />);
     const header = screen.getByRole("header", { name: "Courses, 4" });
     expect(flat(header).minHeight).toBeGreaterThanOrEqual(44);
     expect(screen.getByText("Courses")).toBeTruthy();

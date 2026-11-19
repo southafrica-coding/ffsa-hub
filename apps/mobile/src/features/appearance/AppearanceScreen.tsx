@@ -2,8 +2,8 @@ import * as Haptics from "expo-haptics";
 import { useState } from "react";
 import { View } from "react-native";
 
-import { Banner, Text } from "@/components";
-import { Group, GroupSkeleton, GROUP_BLEED, RadioRow } from "@/features/me/components/me-kit";
+import { Banner, RadioRow, Text } from "@/components";
+import { Group, GroupSkeleton, GROUP_BLEED } from "@/features/me/components/me-kit";
 import { MePage } from "@/features/me/components/MePage";
 import { useTheme } from "@/theme/use-theme";
 

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 
-import { Banner, Text } from "@/components";
-import { Group, GroupSkeleton, Section, SwitchRow } from "@/features/me/components/me-kit";
+import { Banner, SwitchRow, Text } from "@/components";
+import { Group, GroupSkeleton, Section } from "@/features/me/components/me-kit";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
 
