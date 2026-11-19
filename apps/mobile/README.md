@@ -10,7 +10,7 @@ It is an **independent app**: its own `package.json`, lockfile, `node_modules`, 
 
 - Sign-in (email + password), session restored on launch.
 - **Bottom tab bar**: Home · Finance · Prayer · Tickets · Me.
-- **Home**: the "needs you" feed (`GET /api/notifications`, the same items as the web dashboard), one yellow band when something is unread, grouped list (Needs you / Earlier), mark read, pull-to-refresh, offline copy, shortcuts.
+- **Home**: the "needs you" feed (`GET /api/notifications`, the same items as the web dashboard), one yellow band when something is unread, grouped list (Needs you / Earlier), mark read, pull-to-refresh, offline copy, shortcuts (redesigned in R2: `LargeTitleScrollView`, the band and skeleton in `src/features/home/ui.tsx`, shortcuts as a kit `ListGroup`).
 - **Finance** (my finance, receipt capture, offline outbox), **Prayer** (week, set sheet, practice, my sets) and **Tickets** (my tickets, staff door check-in).
 - **Bookings** (spaces, vehicles, approvals, collect/return photos) and **My Schools** (enrolments, attendance, read-only): not tabs, opened from Home's shortcuts.
 - **Me**: name, email, roles; edit name and phone; notification settings; **Appearance** (Match phone / Light / Dark); **Documents** (household, driver's licence, passport photo, health insurance, and the staff CV for staff: `src/features/me/screens/`); a "More on the website" link and the privacy policy; app version; sign out (this phone only).

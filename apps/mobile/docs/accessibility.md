@@ -116,15 +116,15 @@ Each area was audited screen by screen. Shared finance building blocks (`Row`, `
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Pass | Rows are `button`/`link` with one label: "Unread. Title. Body. 2h ago. Opens in browser". Band's Open says which item ("Open: …"); Mark all read says how many. Shortcuts are kit `ListRow`s (subtitle in hint). |
-| Headers | Pass | Masthead greeting, section bars (Needs you (n) / Earlier / Shortcuts), empty and no-access titles. |
-| Touch targets | Pass | Rows 64dp min; BarAction 40dp + 4dp slop; ListRow 56dp. |
-| Dynamic Type (2.0) | Pass | No fixed text heights; body caption capped at 3 lines visually but the full body is in the row's label. |
+| Headers | Pass | `LargeTitle` greeting, section headers (Needs you (n) / Earlier / Shortcuts), empty and no-access titles. |
+| Touch targets | Pass | Feed rows 60pt min; Mark all read and the band's Open 44pt; shortcut rows 56pt. |
+| Dynamic Type (2.0) | Pass | No fixed text heights; rows grow and nothing is clipped (the 3-line cap on the body is gone). The greeting is capped at 1.4×. |
 | Contrast | Pass | Tokens only (refresh colours are the follow-ups slice's line). |
 | Status not colour alone | Pass | Unread = bold title + filled icon box + the word "Unread" in the label. |
-| Reading order | Pass | Masthead → offline/stale notice → band → list → shortcuts. |
+| Reading order | Pass | Title → offline/stale notice → band → list → shortcuts. The band reads as one element ("Needs you. 3 things need you. <title>"), then its Open button. |
 | Focus | Pass | No sheets; navigation hands focus to the next screen's header. |
-| Announcements / live regions | Pass | Danger/offline banners are kit live regions. |
-| Reduce motion | n/a | Nothing animates. |
+| Announcements / live regions | Pass | Danger/offline banners are kit live regions. The loading skeleton is one `progressbar` ("Loading your notifications"). |
+| Reduce motion | Pass | The skeleton pulse is static and the collapsing title appears without a fade under Reduce Motion (kit). |
 | Images / camera | n/a | — |
 | Decorative icons | Fixed | Notification kind icon box was `importantForAccessibility="no"` only; now also hidden on iOS. |
 
@@ -565,12 +565,12 @@ the visible text's `accessibilityLiveRegion`, so each platform hears it once.
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Pass | Fields labelled by the kit `TextField`; show/hide password button; "Sign in" button reports busy/disabled; "Forgot password?" is a link that says it opens the browser. |
-| Headers | Pass | "Sign in" is a header (display text). |
+| Headers | Pass | "Sign in" is a header (`LargeTitle hero`). |
 | Touch targets | Pass | Fields and button 48dp; forgot-password link `minHeight` 48. |
-| Dynamic Type (2.0) | Pass | Body text unlimited, display capped at 1.4; no fixed text heights. Wordmark is an image (fixed 220×26, fine). |
+| Dynamic Type (2.0) | Pass | Body text unlimited, hero title capped at 1.3; no fixed text heights. Wordmark is an image (fixed 220×26, fine). |
 | Contrast | Pass | Tokens only (see contrast test). |
 | Status not colour alone | Pass | Errors are words in a danger banner / under the field. |
-| Reading order | Pass | Wordmark, heading, intro, banner, fields, error, button, link. |
+| Reading order | Pass | Wordmark, eyebrow, heading, intro, banner, fields, error, cooldown, button, link. |
 | Focus | Pass | Email "next" moves to password. Focus isn't moved to the error; it is announced instead. |
 | Announcements / live regions | Fixed | The first field error is announced (`announce()`). A failed sign-in is a danger `Banner`, which now announces itself on iOS too (kit fix). Cooldown text is a polite live region. |
 | Reduce motion | n/a | No motion. |
