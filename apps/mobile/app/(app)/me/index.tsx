@@ -18,15 +18,14 @@ import { View } from "react-native";
 
 import { Banner, Button, FadeIn, LargeTitleScrollView, ListRow, StaticRow, StatusChip, Text } from "@/components";
 import { AppearanceIcon, appearanceStrings, useAppearance } from "@/features/appearance";
-import { clearFeedCaches } from "@/features/home/feed-cache";
+import { LockSettingRow } from "@/features/lock";
 import { Group, GroupSkeleton, Section } from "@/features/me/components/me-kit";
 import { isStaff } from "@/features/me/docs-logic";
 import { ACCOUNT_DELETION_ROUTE, DOC_ROUTES, FULL_PROFILE_PATH, PRIVACY_POLICY_PATH } from "@/features/me/links";
+import { signOutOfThisPhone } from "@/features/me/sign-out";
 import { meStrings as s } from "@/features/me/strings";
-import { unregisterPushOnSignOut } from "@/features/push";
 import { openWebPage, roleLabels, useMe } from "@/features/shell";
 import { displayName } from "@/lib/api";
-import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/theme/use-theme";
 
 function fullName(first: string | null | undefined, last: string | null | undefined) {
@@ -44,12 +43,8 @@ export default function MeScreen() {
 
   async function signOut() {
     setSigningOut(true);
-    // Stop pushes to this phone while the session can still say so (bounded).
-    await unregisterPushOnSignOut();
-    // Saved Home items belong to this person: don't leave them on the phone.
-    await clearFeedCaches();
-    // This device only: signing out on the phone shouldn't end web sessions.
-    await supabase.auth.signOut({ scope: "local" });
+    // The same cleanup as the lock screen's "Sign out instead".
+    await signOutOfThisPhone();
     setSigningOut(false);
   }
 
@@ -135,6 +130,8 @@ export default function MeScreen() {
           subtitle={appearanceStrings.summary(appearance.preference, scheme)}
           onPress={() => router.push("/me/appearance")}
         />
+        {/* Only on phones with Face ID / Touch ID / a fingerprint set up. */}
+        <LockSettingRow />
       </Group>
 
       <Section title={s.sections.about} />

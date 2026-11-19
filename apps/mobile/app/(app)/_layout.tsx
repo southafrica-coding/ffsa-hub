@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router/js-tabs";
 
+import { LockGate } from "@/features/lock";
 import { getOutbox } from "@/features/finance/outbox/live";
 import { OutboxProvider } from "@/features/finance/outbox/provider";
 import { PushProvider } from "@/features/push";
@@ -20,6 +21,9 @@ import { useTheme } from "@/theme/use-theme";
 // even if Finance is never opened. This layout only exists while signed in,
 // and the outbox reads the session's user on every run, so it stays tied to
 // the signed-in person exactly as before.
+//
+// LockGate (Face ID lock, off unless turned on in Me › Settings) covers the
+// whole area, tab bar included, while locked.
 export default function AppLayout() {
   const { colors } = useTheme();
   return (
@@ -27,6 +31,7 @@ export default function AppLayout() {
       <PushProvider>
       <TrainingBadge />
       <OutboxProvider outbox={getOutbox()}>
+      <LockGate>
         <Tabs
           tabBar={(props) => <TabBar {...props} />}
           screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg } }}
@@ -44,6 +49,7 @@ export default function AppLayout() {
           <Tabs.Screen name="ministries" options={{ href: null }} />
           <Tabs.Screen name="staff-decisions" options={{ href: null }} />
         </Tabs>
+      </LockGate>
       </OutboxProvider>
       </PushProvider>
     </MeProvider>
