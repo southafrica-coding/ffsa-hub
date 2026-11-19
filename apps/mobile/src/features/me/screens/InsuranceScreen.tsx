@@ -8,17 +8,17 @@
 //     (DELETE /api/profile/insurance-policies/[id])
 // The server re-checks every rule (provider, dates, open-ended eligibility).
 
+import { Pencil, Plus } from "lucide-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, Text, TextField } from "@/components";
+import { Banner, Button, NeedsYouBand, StatusChip, Text, TextField } from "@/components";
 import { DateTimeField } from "@/features/bookings/components/DateTimeField";
-import { SectionBar } from "@/features/shell";
 import { announce } from "@/lib/a11y";
 import { ApiError } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
-import { hairline } from "@/theme/tokens";
+import type { TextTone } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 import {
@@ -28,7 +28,6 @@ import {
   Intro,
   LoadGate,
   OptionField,
-  ReadField,
   successTap,
   ToggleRow,
   useLoad,
@@ -60,6 +59,7 @@ import {
   type Option,
   type PolicyDraft,
 } from "../docs-logic";
+import { Group, GROUP_BLEED, Section, StaticRow } from "../components/me-kit";
 import { profileFetch } from "../http";
 import { meStrings } from "../strings";
 
@@ -132,7 +132,7 @@ function PolicyForm({
   }
 
   return (
-    <View style={{ gap: 14 }} testID={testID}>
+    <View style={{ gap: 16 }} testID={testID}>
       <OptionField label={s.provider} value={draft.choice} options={choices} onChange={(v) => set("choice", v)} error={errors.provider} />
       {draft.choice === "other" ? (
         <TextField label={s.providerOther} value={draft.other} onChangeText={(v) => set("other", v)} error={errors.other} autoCapitalize="words" />
@@ -147,40 +147,47 @@ function PolicyForm({
         importantForAutofill="no"
       />
       {canBeOpen ? <ToggleRow label={s.noExpiry} hint={s.noExpiryHint} value={draft.noExpiry} onChange={(v) => set("noExpiry", v)} /> : null}
-      {!open ? <DateTimeField mode="date" label={s.expiry} value={draft.expiry} onChange={(v) => set("expiry", v)} /> : null}
-      {!open && errors.expiry ? (
-        <Text tone="danger" accessibilityRole="alert">
-          {errors.expiry}
-        </Text>
+      {!open ? (
+        <View style={{ gap: 6 }}>
+          <DateTimeField mode="date" label={s.expiry} value={draft.expiry} onChange={(v) => set("expiry", v)} />
+          {errors.expiry ? (
+            <Text variant="caption" tone="danger" accessibilityRole="alert">
+              {errors.expiry}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
       {error ? (
-        <Banner tone="danger" title={s.saveError}>
+        <Banner tone="error" title={s.saveError}>
           {error}
         </Banner>
       ) : null}
       <View style={{ flexDirection: "row", gap: 8 }}>
         <Button label={saveLabel} onPress={() => void submit()} loading={saving} style={{ flex: 1 }} />
-        <Button label={d.cancel} variant="ghost" onPress={onCancel} disabled={saving} />
+        <Button label={d.cancel} variant="secondary" onPress={onCancel} disabled={saving} />
       </View>
     </View>
   );
 }
 
-function statusLine(p: InsuranceRow): string {
+/** The current policy's state in words, with a tone that only backs the words up. */
+function statusLine(p: InsuranceRow): { text: string; tone: TextTone } {
   const st = insuranceStatus(p);
   switch (st.state) {
     case "no_expiry":
-      return s.status.no_expiry;
+      return { text: s.status.no_expiry, tone: "default" };
     case "missing":
-      return s.status.missing;
+      return { text: s.status.missing, tone: "default" };
     case "expired":
-      return s.status.expired(formatDate(st.expiryDate));
+      return { text: s.status.expired(formatDate(st.expiryDate)), tone: "danger" };
     case "expiring":
-      return s.status.expiring(formatDate(st.expiryDate), st.daysLeft ?? 0);
+      return { text: s.status.expiring(formatDate(st.expiryDate), st.daysLeft ?? 0), tone: "attention" };
     default:
-      return s.status.ok(formatDate(st.expiryDate));
+      return { text: s.status.ok(formatDate(st.expiryDate)), tone: "default" };
   }
 }
+
+const policyLine = (number: string | null | undefined) => (number ? s.policyLine(number) : `${s.policyNumber}: ${d.notSet}`);
 
 export function InsuranceScreen() {
   const { session } = useSession();
@@ -231,8 +238,10 @@ export function InsuranceScreen() {
   const deletable = data ? deletablePolicyIds(data.history, curId) : new Set<string>();
   const hasCurrent = !!data?.current.provider && data.current.provider.toLowerCase() !== "none";
 
+  const current = data && hasCurrent ? statusLine(data.current) : null;
+
   return (
-    <DocScreen refreshing={load.refreshing} onRefresh={load.refresh}>
+    <DocScreen title={s.title} refreshing={load.refreshing} onRefresh={load.refresh}>
       <Intro>{s.intro}</Intro>
       <LoadGate load={load} loadingLabel={s.loading} errorTitle={s.loadErrorTitle} />
 
@@ -240,33 +249,31 @@ export function InsuranceScreen() {
         <>
           {/* The one yellow band on this screen, only when the data calls for it. */}
           {band ? (
-            <Banner
-              tone="needsYou"
-              title={s.needsYou.title}
-              testID="insurance-needs-you"
-              action={
-                band.confirm ? (
-                  <Button
-                    label={s.confirm}
-                    variant="secondary"
-                    loading={busy === "confirm"}
-                    onPress={() => void act("confirm", () => confirmInsurance(profileFetch), s.confirmed, s.saveError)}
-                  />
-                ) : undefined
-              }
-            >
-              {band.text}
-            </Banner>
+            <View style={{ marginHorizontal: GROUP_BLEED }}>
+              <NeedsYouBand
+                testID="insurance-needs-you"
+                eyebrow={s.needsYou.title}
+                text={band.text}
+                actionLabel={band.confirm ? s.confirm : undefined}
+                onAction={
+                  band.confirm
+                    ? () => {
+                        if (busy === null) void act("confirm", () => confirmInsurance(profileFetch), s.confirmed, s.saveError);
+                      }
+                    : undefined
+                }
+              />
+            </View>
           ) : null}
 
           {actionError ? (
-            <Banner tone="danger" title={s.saveError}>
+            <Banner tone="error" title={s.saveError}>
               {actionError}
             </Banner>
           ) : null}
 
-          <View style={{ gap: 14 }}>
-            <SectionBar label={s.current} />
+          <View>
+            <Section title={s.current} tight />
             {editing === "current" ? (
               <PolicyForm
                 testID="current-form"
@@ -280,28 +287,41 @@ export function InsuranceScreen() {
                 }}
               />
             ) : (
-              <>
-                {hasCurrent ? (
-                  <>
-                    <ReadField label={s.provider} value={providerLabel(data.current.provider, options)} />
-                    <ReadField label={s.policyNumber} value={data.current.policyNumber || d.notSet} />
-                    <ReadField label={s.expiry} value={statusLine(data.current)} />
-                    {data.current.noExpiry && data.current.confirmedAt ? (
-                      <Text variant="caption" tone="secondary">
-                        {s.lastConfirmed(formatDate(data.current.confirmedAt))}
-                      </Text>
-                    ) : null}
-                  </>
+              <View style={{ gap: 12 }}>
+                {current ? (
+                  <Group>
+                    <StaticRow
+                      testID="current-policy"
+                      title={providerLabel(data.current.provider, options)}
+                      subtitle={policyLine(data.current.policyNumber)}
+                      note={current.text}
+                      noteTone={current.tone}
+                      extra={
+                        data.current.noExpiry && data.current.confirmedAt ? s.lastConfirmed(formatDate(data.current.confirmedAt)) : undefined
+                      }
+                      accessibilityLabel={[
+                        `${s.provider}: ${providerLabel(data.current.provider, options)}`,
+                        `${s.policyNumber}: ${data.current.policyNumber || d.notSet}`,
+                        `${s.expiry}: ${current.text}`,
+                      ].join(". ")}
+                    />
+                  </Group>
                 ) : (
                   <Text tone="secondary">{s.none}</Text>
                 )}
-                <Button label={s.edit} variant="secondary" onPress={() => setEditing("current")} disabled={editing !== null} />
-              </>
+                <Button
+                  label={s.edit}
+                  variant="secondary"
+                  icon={<Pencil size={20} color={colors.text} />}
+                  onPress={() => setEditing("current")}
+                  disabled={editing !== null}
+                />
+              </View>
             )}
           </View>
 
-          <View style={{ gap: 14 }}>
-            <SectionBar label={s.next} />
+          <View>
+            <Section title={s.next} tight />
             {data.current.noExpiry ? (
               <Text tone="secondary">{s.nextNotAllowed}</Text>
             ) : editing === "next" ? (
@@ -318,99 +338,115 @@ export function InsuranceScreen() {
                 }}
               />
             ) : (
-              <>
+              <View style={{ gap: 12 }}>
                 <Text tone="secondary">{s.nextIntro}</Text>
                 {data.next ? (
                   <>
-                    <ReadField label={s.provider} value={providerLabel(data.next.provider, options)} />
-                    <ReadField label={s.policyNumber} value={data.next.policyNumber || d.notSet} />
-                    <ReadField
-                      label={s.expiry}
-                      value={data.next.noExpiry ? s.noExpiryShort : formatDate(data.next.expiryDate)}
-                    />
-                    {data.current.expiryDate ? (
-                      <Text variant="caption" tone="secondary">
-                        {s.nextTakesOver(formatDate(data.current.expiryDate))}
-                      </Text>
-                    ) : null}
+                    <Group>
+                      <StaticRow
+                        testID="next-policy"
+                        title={providerLabel(data.next.provider, options)}
+                        subtitle={[
+                          policyLine(data.next.policyNumber),
+                          data.next.noExpiry ? s.noExpiryShort : s.status.ok(formatDate(data.next.expiryDate)),
+                        ].join(" · ")}
+                        note={data.current.expiryDate ? s.nextTakesOver(formatDate(data.current.expiryDate)) : undefined}
+                        accessibilityLabel={[
+                          `${s.provider}: ${providerLabel(data.next.provider, options)}`,
+                          `${s.policyNumber}: ${data.next.policyNumber || d.notSet}`,
+                          `${s.expiry}: ${data.next.noExpiry ? s.noExpiryShort : formatDate(data.next.expiryDate)}`,
+                          data.current.expiryDate ? s.nextTakesOver(formatDate(data.current.expiryDate)) : null,
+                        ]
+                          .filter(Boolean)
+                          .join(". ")}
+                      />
+                    </Group>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      <Button
+                        label={s.replaceNext}
+                        variant="secondary"
+                        size="small"
+                        onPress={() => setEditing("next")}
+                        disabled={editing !== null}
+                        style={{ flexGrow: 1, flexBasis: "40%" }}
+                      />
+                      <Button
+                        label={s.removeNext}
+                        variant="danger"
+                        size="small"
+                        loading={busy === "remove-next"}
+                        disabled={busy !== null || editing !== null}
+                        onPress={() =>
+                          void (async () => {
+                            if (await confirmDestructive(s.removeNextConfirm, "", s.removeNext)) {
+                              await act("remove-next", () => removeNextPolicy(profileFetch), d.file.removed, s.saveError);
+                            }
+                          })()
+                        }
+                        style={{ flexGrow: 1, flexBasis: "40%" }}
+                      />
+                    </View>
                   </>
                 ) : (
-                  <Text>{s.nextNone}</Text>
+                  <>
+                    <Text>{s.nextNone}</Text>
+                    <Button
+                      label={s.addNext}
+                      variant="secondary"
+                      icon={<Plus size={20} color={colors.text} />}
+                      onPress={() => setEditing("next")}
+                      disabled={editing !== null}
+                    />
+                  </>
                 )}
-                <Button
-                  label={data.next ? s.replaceNext : s.addNext}
-                  variant="secondary"
-                  onPress={() => setEditing("next")}
-                  disabled={editing !== null}
-                />
-                {data.next ? (
-                  <Button
-                    label={s.removeNext}
-                    variant="ghost"
-                    loading={busy === "remove-next"}
-                    disabled={busy !== null || editing !== null}
-                    onPress={() =>
-                      void (async () => {
-                        if (await confirmDestructive(s.removeNextConfirm, "", s.removeNext)) {
-                          await act("remove-next", () => removeNextPolicy(profileFetch), d.file.removed, s.saveError);
-                        }
-                      })()
-                    }
-                  />
-                ) : null}
-              </>
+              </View>
             )}
           </View>
 
           <View>
-            <SectionBar label={s.history} />
-            <View style={{ paddingVertical: 12 }}>
-              <Text tone="secondary">{data.history.length ? s.historyIntro : s.historyEmpty}</Text>
-            </View>
-            {data.history.map((p) => {
-              const isCurrent = p.id === curId;
-              const expiry = p.noExpiry ? s.noExpiryShort : formatDate(p.expiryDate);
-              const name = providerLabel(p.provider, options);
-              return (
-                <View
-                  key={p.id}
-                  testID={`policy-${p.id}`}
-                  style={{ paddingVertical: 12, gap: 6, borderBottomWidth: hairline, borderBottomColor: colors.rule }}
-                >
-                  <View
-                    accessible
-                    accessibilityLabel={[name, p.policyNumber, expiry, isCurrent ? s.currentBadge : null].filter(Boolean).join(", ")}
-                  >
-                    <View style={{ flexDirection: "row", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      <Text variant="bodyStrong">{name}</Text>
-                      {isCurrent ? (
-                        <Text variant="monoLabel" style={{ borderWidth: hairline, borderColor: colors.text, paddingHorizontal: 6 }}>
-                          {s.currentBadge}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Text tone="secondary">{[p.policyNumber, expiry].filter(Boolean).join(" · ")}</Text>
-                  </View>
-                  {deletable.has(p.id) ? (
-                    <Button
-                      label={s.deleteDuplicate}
-                      variant="ghost"
-                      accessibilityLabel={`${s.deleteDuplicate}: ${name} ${expiry}`}
-                      loading={busy === p.id}
-                      disabled={busy !== null}
-                      onPress={() =>
-                        void (async () => {
-                          if (await confirmDestructive(s.deleteDuplicateConfirm, "", s.deleteDuplicate)) {
-                            await act(p.id, () => deletePolicyRecord(profileFetch, p.id), d.file.removed, s.saveError);
-                          }
-                        })()
+            <Section title={s.history} tight />
+            <Text tone="secondary">{data.history.length ? s.historyIntro : s.historyEmpty}</Text>
+            {data.history.length ? (
+              <Group style={{ marginTop: 12 }}>
+                {data.history.map((p) => {
+                  const isCurrent = p.id === curId;
+                  const expiry = p.noExpiry ? s.noExpiryShort : formatDate(p.expiryDate);
+                  const name = providerLabel(p.provider, options);
+                  return (
+                    <StaticRow
+                      key={p.id}
+                      testID={`policy-${p.id}`}
+                      title={name}
+                      subtitle={[p.policyNumber, expiry].filter(Boolean).join(" · ")}
+                      accessibilityLabel={[name, p.policyNumber, expiry, isCurrent ? s.currentBadge : null].filter(Boolean).join(", ")}
+                      trailing={
+                        isCurrent ? (
+                          // The words are in the row's own label; the chip is the visual of the same fact.
+                          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                            <StatusChip label={s.currentBadge} variant="ink" icon={null} />
+                          </View>
+                        ) : deletable.has(p.id) ? (
+                          <Button
+                            label={s.deleteDuplicate}
+                            variant="text"
+                            accessibilityLabel={`${s.deleteDuplicate}: ${name} ${expiry}`}
+                            loading={busy === p.id}
+                            disabled={busy !== null}
+                            onPress={() =>
+                              void (async () => {
+                                if (await confirmDestructive(s.deleteDuplicateConfirm, "", s.deleteDuplicate)) {
+                                  await act(p.id, () => deletePolicyRecord(profileFetch, p.id), d.file.removed, s.saveError);
+                                }
+                              })()
+                            }
+                          />
+                        ) : null
                       }
-                      style={{ alignSelf: "flex-start" }}
                     />
-                  ) : null}
-                </View>
-              );
-            })}
+                  );
+                })}
+              </Group>
+            ) : null}
           </View>
         </>
       ) : null}

@@ -26,37 +26,48 @@ const s = meStrings.docs.file;
 
 export type DocPhoto = PhotoPart & { cleanup: () => void };
 
-function confirm(): Promise<boolean> {
-  return new Promise((resolve) => {
-    Alert.alert(
-      s.cameraTitle,
-      s.cameraRationale,
-      [
-        { text: s.notNow, style: "cancel", onPress: () => resolve(false) },
-        { text: s.continue, onPress: () => resolve(true) },
-      ],
-      { cancelable: true, onDismiss: () => resolve(false) },
-    );
-  });
-}
+/**
+ * How the screen asks. DocFile passes its own bottom sheet ("Use the
+ * camera?", redesign frame 6.7); without one the system alert is used.
+ */
+export type CapturePrompts = {
+  /** Our plain reason, shown before the phone's own camera prompt. Resolves true to carry on. */
+  explainCamera: () => Promise<boolean>;
+  /** Access is switched off in the phone's Settings: say so and offer Open Settings. */
+  accessOff: (message: string) => void;
+};
 
-function offerSettings(message: string) {
-  Alert.alert(s.cameraTitle, message, [
-    { text: s.notNow, style: "cancel" },
-    { text: s.openSettings, onPress: () => void Linking.openSettings() },
-  ]);
-}
+const alertPrompts: CapturePrompts = {
+  explainCamera: () =>
+    new Promise((resolve) => {
+      Alert.alert(
+        s.cameraTitle,
+        s.cameraRationale,
+        [
+          { text: s.notNow, style: "cancel", onPress: () => resolve(false) },
+          { text: s.continue, onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) },
+      );
+    }),
+  accessOff: (message) => {
+    Alert.alert(s.cameraTitle, message, [
+      { text: s.notNow, style: "cancel" },
+      { text: s.openSettings, onPress: () => void Linking.openSettings() },
+    ]);
+  },
+};
 
-async function ensureCamera(): Promise<boolean> {
+async function ensureCamera(prompts: CapturePrompts): Promise<boolean> {
   let p = await ImagePicker.getCameraPermissionsAsync();
   let step = permissionStep(p);
   if (step === "ask") {
-    if (!(await confirm())) return false;
+    if (!(await prompts.explainCamera())) return false;
     p = await ImagePicker.requestCameraPermissionsAsync();
     step = permissionStep(p);
   }
   if (step === "launch") return true;
-  offerSettings(s.cameraDenied);
+  prompts.accessOff(s.cameraDenied);
   return false;
 }
 
@@ -95,13 +106,13 @@ async function prepare(result: ImagePicker.ImagePickerResult, name: string): Pro
 }
 
 /** Take a photo of the document. null when cancelled or permission refused. */
-export async function takeDocPhoto(name: string): Promise<DocPhoto | null> {
-  if (!(await ensureCamera())) return null;
+export async function takeDocPhoto(name: string, prompts: CapturePrompts = alertPrompts): Promise<DocPhoto | null> {
+  if (!(await ensureCamera(prompts))) return null;
   return prepare(await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 1, exif: false }), name);
 }
 
 /** Choose an existing photo. null when cancelled. */
-export async function chooseDocPhoto(name: string): Promise<DocPhoto | null> {
+export async function chooseDocPhoto(name: string, prompts: CapturePrompts = alertPrompts): Promise<DocPhoto | null> {
   try {
     return await prepare(
       await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsMultipleSelection: false, quality: 1, exif: false }),
@@ -109,7 +120,7 @@ export async function chooseDocPhoto(name: string): Promise<DocPhoto | null> {
     );
   } catch (err) {
     if (err instanceof Error && /permission/i.test(err.message)) {
-      offerSettings(s.libraryDenied);
+      prompts.accessOff(s.libraryDenied);
       return null;
     }
     throw err;
