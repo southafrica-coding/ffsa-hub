@@ -2306,7 +2306,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
                   "justifyContent": "center",
                   "minHeight": 44,
                   "minWidth": 234,
-                  "paddingHorizontal": 12,
+                  "paddingHorizontal": 6,
                   "paddingVertical": 6,
                 }
               }
@@ -2376,7 +2376,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
                   "justifyContent": "center",
                   "minHeight": 44,
                   "minWidth": 234,
-                  "paddingHorizontal": 12,
+                  "paddingHorizontal": 6,
                   "paddingVertical": 6,
                 }
               }
@@ -2446,7 +2446,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
                   "justifyContent": "center",
                   "minHeight": 44,
                   "minWidth": 234,
-                  "paddingHorizontal": 12,
+                  "paddingHorizontal": 6,
                   "paddingVertical": 6,
                 }
               }
@@ -10059,7 +10059,7 @@ exports[`kit gallery (light) renders every component 1`] = `
                   "justifyContent": "center",
                   "minHeight": 44,
                   "minWidth": 234,
-                  "paddingHorizontal": 12,
+                  "paddingHorizontal": 6,
                   "paddingVertical": 6,
                 }
               }
@@ -10129,7 +10129,7 @@ exports[`kit gallery (light) renders every component 1`] = `
                   "justifyContent": "center",
                   "minHeight": 44,
                   "minWidth": 234,
-                  "paddingHorizontal": 12,
+                  "paddingHorizontal": 6,
                   "paddingVertical": 6,
                 }
               }
@@ -10199,7 +10199,7 @@ exports[`kit gallery (light) renders every component 1`] = `
                   "justifyContent": "center",
                   "minHeight": 44,
                   "minWidth": 234,
-                  "paddingHorizontal": 12,
+                  "paddingHorizontal": 6,
                   "paddingVertical": 6,
                 }
               }

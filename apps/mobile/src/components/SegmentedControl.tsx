@@ -53,7 +53,7 @@ function segmentStyle(colors: Colors, on: boolean, pressed: boolean, share: numb
     flexShrink: 0,
     minWidth: share,
     minHeight: touch.floor,
-    paddingHorizontal: 12,
+    paddingHorizontal: 6,
     paddingVertical: 6,
     alignItems: "center",
     justifyContent: "center",
