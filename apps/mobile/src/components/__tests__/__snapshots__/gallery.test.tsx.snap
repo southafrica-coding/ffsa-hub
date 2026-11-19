@@ -26,7 +26,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <View
           style={
             {
-              "alignItems": "center",
+              "alignItems": "flex-start",
               "flexDirection": "row",
               "gap": 8,
             }
@@ -39,6 +39,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
               {
                 "backgroundColor": "#FFB801",
                 "height": 3,
+                "marginTop": 14.5,
                 "width": 14,
               }
             }
@@ -49,11 +50,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
             style={
               {
                 "color": "#C7C3B5",
-                "flexShrink": 1,
+                "flex": 1,
                 "fontFamily": "Roboto_700Bold",
                 "fontSize": 12,
                 "letterSpacing": 0.72,
                 "lineHeight": 16,
+                "minWidth": 0,
                 "textTransform": "uppercase",
               }
             }
@@ -286,7 +288,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <View
           style={
             {
-              "alignItems": "center",
+              "alignItems": "flex-start",
               "flexDirection": "row",
               "gap": 8,
             }
@@ -299,6 +301,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
               {
                 "backgroundColor": "#FFB801",
                 "height": 3,
+                "marginTop": 14.5,
                 "width": 14,
               }
             }
@@ -309,11 +312,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
             style={
               {
                 "color": "#C7C3B5",
-                "flexShrink": 1,
+                "flex": 1,
                 "fontFamily": "Roboto_700Bold",
                 "fontSize": 12,
                 "letterSpacing": 0.72,
                 "lineHeight": 16,
+                "minWidth": 0,
                 "textTransform": "uppercase",
               }
             }
@@ -365,7 +369,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <View
           style={
             {
-              "alignItems": "center",
+              "alignItems": "flex-start",
               "flexDirection": "row",
               "gap": 8,
             }
@@ -378,6 +382,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
               {
                 "backgroundColor": "#FFB801",
                 "height": 3,
+                "marginTop": 14.5,
                 "width": 14,
               }
             }
@@ -388,11 +393,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
             style={
               {
                 "color": "#C7C3B5",
-                "flexShrink": 1,
+                "flex": 1,
                 "fontFamily": "Roboto_700Bold",
                 "fontSize": 12,
                 "letterSpacing": 0.72,
                 "lineHeight": 16,
+                "minWidth": 0,
                 "textTransform": "uppercase",
               }
             }
@@ -434,11 +440,11 @@ exports[`kit gallery (dark) renders every component 1`] = `
     <View
       style={
         {
-          "alignItems": "center",
+          "alignItems": "flex-start",
           "backgroundColor": "#FFB801",
           "borderRadius": 8,
-          "flexDirection": "row",
-          "flexWrap": "wrap",
+          "flexDirection": "column",
+          "flexWrap": "nowrap",
           "gap": 12,
           "paddingLeft": 16,
           "paddingRight": 12,
@@ -452,9 +458,8 @@ exports[`kit gallery (dark) renders every component 1`] = `
         accessible={true}
         style={
           {
-            "flex": 1,
+            "alignSelf": "stretch",
             "gap": 2,
-            "minWidth": 180,
           }
         }
       >
@@ -2222,221 +2227,259 @@ exports[`kit gallery (dark) renders every component 1`] = `
     </View>
     <View
       accessibilityRole="tablist"
+      onLayout={[Function]}
       style={
         {
-          "backgroundColor": "#161614",
-          "borderColor": "#2A2924",
-          "borderRadius": 8,
-          "borderWidth": 1,
-          "flexDirection": "row",
-          "gap": 3,
           "marginHorizontal": 16,
-          "padding": 3,
         }
       }
     >
-      <View
-        accessibilityLabel="Week"
-        accessibilityRole="tab"
-        accessibilityState={
+      <RCTScrollView
+        bounces={false}
+        contentContainerStyle={
           {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": true,
+            "flexGrow": 1,
           }
         }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "alignItems": "center",
-            "backgroundColor": "#2A2924",
-            "borderBottomColor": "#FFB801",
-            "borderBottomWidth": 2,
-            "borderColor": "#2A2924",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flex": 1,
-            "justifyContent": "center",
-            "minHeight": 44,
-            "paddingHorizontal": 6,
-            "paddingVertical": 6,
-          }
-        }
-        testID="segment-week"
+        horizontal={true}
+        showsHorizontalScrollIndicator={false}
       >
-        <Text
-          allowFontScaling={true}
-          style={
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 14,
-              "lineHeight": 20,
-              "textAlign": "center",
+        <View>
+          <View
+            style={
+              {
+                "backgroundColor": "#161614",
+                "borderColor": "#2A2924",
+                "borderRadius": 8,
+                "borderWidth": 1,
+                "flexDirection": "row",
+                "flexGrow": 1,
+                "gap": 3,
+                "padding": 3,
+              }
             }
-          }
-        >
-          Week
-        </Text>
-      </View>
-      <View
-        accessibilityLabel="Practice"
-        accessibilityRole="tab"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": false,
-          }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "alignItems": "center",
-            "backgroundColor": "transparent",
-            "borderBottomColor": "transparent",
-            "borderBottomWidth": 1,
-            "borderColor": "transparent",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flex": 1,
-            "justifyContent": "center",
-            "minHeight": 44,
-            "paddingHorizontal": 6,
-            "paddingVertical": 6,
-          }
-        }
-        testID="segment-practice"
-      >
-        <Text
-          allowFontScaling={true}
-          style={
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_500Medium",
-              "fontSize": 14,
-              "lineHeight": 20,
-              "textAlign": "center",
-            }
-          }
-        >
-          Practice
-        </Text>
-      </View>
-      <View
-        accessibilityLabel="My sets"
-        accessibilityRole="tab"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": false,
-          }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "alignItems": "center",
-            "backgroundColor": "transparent",
-            "borderBottomColor": "transparent",
-            "borderBottomWidth": 1,
-            "borderColor": "transparent",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flex": 1,
-            "justifyContent": "center",
-            "minHeight": 44,
-            "paddingHorizontal": 6,
-            "paddingVertical": 6,
-          }
-        }
-        testID="segment-mine"
-      >
-        <Text
-          allowFontScaling={true}
-          style={
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_500Medium",
-              "fontSize": 14,
-              "lineHeight": 20,
-              "textAlign": "center",
-            }
-          }
-        >
-          My sets
-        </Text>
-      </View>
+          >
+            <View
+              accessibilityLabel="Week"
+              accessibilityRole="tab"
+              accessibilityState={
+                {
+                  "busy": undefined,
+                  "checked": undefined,
+                  "disabled": undefined,
+                  "expanded": undefined,
+                  "selected": true,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onBlur={[Function]}
+              onClick={[Function]}
+              onFocus={[Function]}
+              onLayout={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "alignItems": "center",
+                  "backgroundColor": "#2A2924",
+                  "borderBottomColor": "#FFB801",
+                  "borderBottomWidth": 2,
+                  "borderColor": "#2A2924",
+                  "borderRadius": 6,
+                  "borderWidth": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
+                  "justifyContent": "center",
+                  "minHeight": 44,
+                  "minWidth": 234,
+                  "paddingHorizontal": 12,
+                  "paddingVertical": 6,
+                }
+              }
+              testID="segment-week"
+            >
+              <Text
+                allowFontScaling={true}
+                maxFontSizeMultiplier={2}
+                numberOfLines={1}
+                style={
+                  {
+                    "color": "#F4F2EA",
+                    "fontFamily": "Roboto_700Bold",
+                    "fontSize": 14,
+                    "lineHeight": 20,
+                    "textAlign": "center",
+                  }
+                }
+              >
+                Week
+              </Text>
+            </View>
+            <View
+              accessibilityLabel="Practice"
+              accessibilityRole="tab"
+              accessibilityState={
+                {
+                  "busy": undefined,
+                  "checked": undefined,
+                  "disabled": undefined,
+                  "expanded": undefined,
+                  "selected": false,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onBlur={[Function]}
+              onClick={[Function]}
+              onFocus={[Function]}
+              onLayout={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "alignItems": "center",
+                  "backgroundColor": "transparent",
+                  "borderBottomColor": "transparent",
+                  "borderBottomWidth": 1,
+                  "borderColor": "transparent",
+                  "borderRadius": 6,
+                  "borderWidth": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
+                  "justifyContent": "center",
+                  "minHeight": 44,
+                  "minWidth": 234,
+                  "paddingHorizontal": 12,
+                  "paddingVertical": 6,
+                }
+              }
+              testID="segment-practice"
+            >
+              <Text
+                allowFontScaling={true}
+                maxFontSizeMultiplier={2}
+                numberOfLines={1}
+                style={
+                  {
+                    "color": "#C7C3B5",
+                    "fontFamily": "Roboto_500Medium",
+                    "fontSize": 14,
+                    "lineHeight": 20,
+                    "textAlign": "center",
+                  }
+                }
+              >
+                Practice
+              </Text>
+            </View>
+            <View
+              accessibilityLabel="My sets"
+              accessibilityRole="tab"
+              accessibilityState={
+                {
+                  "busy": undefined,
+                  "checked": undefined,
+                  "disabled": undefined,
+                  "expanded": undefined,
+                  "selected": false,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onBlur={[Function]}
+              onClick={[Function]}
+              onFocus={[Function]}
+              onLayout={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "alignItems": "center",
+                  "backgroundColor": "transparent",
+                  "borderBottomColor": "transparent",
+                  "borderBottomWidth": 1,
+                  "borderColor": "transparent",
+                  "borderRadius": 6,
+                  "borderWidth": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
+                  "justifyContent": "center",
+                  "minHeight": 44,
+                  "minWidth": 234,
+                  "paddingHorizontal": 12,
+                  "paddingVertical": 6,
+                }
+              }
+              testID="segment-mine"
+            >
+              <Text
+                allowFontScaling={true}
+                maxFontSizeMultiplier={2}
+                numberOfLines={1}
+                style={
+                  {
+                    "color": "#C7C3B5",
+                    "fontFamily": "Roboto_500Medium",
+                    "fontSize": 14,
+                    "lineHeight": 20,
+                    "textAlign": "center",
+                  }
+                }
+              >
+                My sets
+              </Text>
+            </View>
+          </View>
+        </View>
+      </RCTScrollView>
     </View>
     <View
       style={
         {
-          "alignItems": "center",
-          "flexDirection": "row",
-          "gap": 12,
+          "alignItems": "flex-start",
+          "columnGap": 12,
+          "flexDirection": "column",
+          "flexWrap": "nowrap",
           "justifyContent": "space-between",
           "minHeight": 44,
           "paddingBottom": 8,
@@ -2451,6 +2494,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
         style={
           {
             "color": "#F4F2EA",
+            "flexGrow": 1,
             "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 15,
@@ -2498,7 +2542,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
             "justifyContent": "center",
             "minHeight": 44,
             "opacity": 1,
-            "paddingLeft": 12,
+            "paddingLeft": 0,
           }
         }
       >
@@ -7449,7 +7493,7 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
               <View
                 style={
                   {
-                    "alignItems": "center",
+                    "alignItems": "flex-start",
                     "flexDirection": "row",
                     "gap": 8,
                   }
@@ -7462,6 +7506,7 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
                     {
                       "backgroundColor": "#FFB801",
                       "height": 3,
+                      "marginTop": 14.5,
                       "width": 14,
                     }
                   }
@@ -7472,11 +7517,12 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
                   style={
                     {
                       "color": "#C7C3B5",
-                      "flexShrink": 1,
+                      "flex": 1,
                       "fontFamily": "Roboto_700Bold",
                       "fontSize": 12,
                       "letterSpacing": 0.72,
                       "lineHeight": 16,
+                      "minWidth": 0,
                       "textTransform": "uppercase",
                     }
                   }
@@ -7733,7 +7779,7 @@ exports[`kit gallery (light) renders every component 1`] = `
         <View
           style={
             {
-              "alignItems": "center",
+              "alignItems": "flex-start",
               "flexDirection": "row",
               "gap": 8,
             }
@@ -7746,6 +7792,7 @@ exports[`kit gallery (light) renders every component 1`] = `
               {
                 "backgroundColor": "#FFB801",
                 "height": 3,
+                "marginTop": 14.5,
                 "width": 14,
               }
             }
@@ -7756,11 +7803,12 @@ exports[`kit gallery (light) renders every component 1`] = `
             style={
               {
                 "color": "#55524A",
-                "flexShrink": 1,
+                "flex": 1,
                 "fontFamily": "Roboto_700Bold",
                 "fontSize": 12,
                 "letterSpacing": 0.72,
                 "lineHeight": 16,
+                "minWidth": 0,
                 "textTransform": "uppercase",
               }
             }
@@ -7993,7 +8041,7 @@ exports[`kit gallery (light) renders every component 1`] = `
         <View
           style={
             {
-              "alignItems": "center",
+              "alignItems": "flex-start",
               "flexDirection": "row",
               "gap": 8,
             }
@@ -8006,6 +8054,7 @@ exports[`kit gallery (light) renders every component 1`] = `
               {
                 "backgroundColor": "#FFB801",
                 "height": 3,
+                "marginTop": 14.5,
                 "width": 14,
               }
             }
@@ -8016,11 +8065,12 @@ exports[`kit gallery (light) renders every component 1`] = `
             style={
               {
                 "color": "#55524A",
-                "flexShrink": 1,
+                "flex": 1,
                 "fontFamily": "Roboto_700Bold",
                 "fontSize": 12,
                 "letterSpacing": 0.72,
                 "lineHeight": 16,
+                "minWidth": 0,
                 "textTransform": "uppercase",
               }
             }
@@ -8072,7 +8122,7 @@ exports[`kit gallery (light) renders every component 1`] = `
         <View
           style={
             {
-              "alignItems": "center",
+              "alignItems": "flex-start",
               "flexDirection": "row",
               "gap": 8,
             }
@@ -8085,6 +8135,7 @@ exports[`kit gallery (light) renders every component 1`] = `
               {
                 "backgroundColor": "#FFB801",
                 "height": 3,
+                "marginTop": 14.5,
                 "width": 14,
               }
             }
@@ -8095,11 +8146,12 @@ exports[`kit gallery (light) renders every component 1`] = `
             style={
               {
                 "color": "#55524A",
-                "flexShrink": 1,
+                "flex": 1,
                 "fontFamily": "Roboto_700Bold",
                 "fontSize": 12,
                 "letterSpacing": 0.72,
                 "lineHeight": 16,
+                "minWidth": 0,
                 "textTransform": "uppercase",
               }
             }
@@ -8141,11 +8193,11 @@ exports[`kit gallery (light) renders every component 1`] = `
     <View
       style={
         {
-          "alignItems": "center",
+          "alignItems": "flex-start",
           "backgroundColor": "#FFB801",
           "borderRadius": 8,
-          "flexDirection": "row",
-          "flexWrap": "wrap",
+          "flexDirection": "column",
+          "flexWrap": "nowrap",
           "gap": 12,
           "paddingLeft": 16,
           "paddingRight": 12,
@@ -8159,9 +8211,8 @@ exports[`kit gallery (light) renders every component 1`] = `
         accessible={true}
         style={
           {
-            "flex": 1,
+            "alignSelf": "stretch",
             "gap": 2,
-            "minWidth": 180,
           }
         }
       >
@@ -9929,221 +9980,259 @@ exports[`kit gallery (light) renders every component 1`] = `
     </View>
     <View
       accessibilityRole="tablist"
+      onLayout={[Function]}
       style={
         {
-          "backgroundColor": "#FBFAF7",
-          "borderColor": "#E7E4D9",
-          "borderRadius": 8,
-          "borderWidth": 1,
-          "flexDirection": "row",
-          "gap": 3,
           "marginHorizontal": 16,
-          "padding": 3,
         }
       }
     >
-      <View
-        accessibilityLabel="Week"
-        accessibilityRole="tab"
-        accessibilityState={
+      <RCTScrollView
+        bounces={false}
+        contentContainerStyle={
           {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": true,
+            "flexGrow": 1,
           }
         }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "alignItems": "center",
-            "backgroundColor": "#FFFFFF",
-            "borderBottomColor": "#FFB801",
-            "borderBottomWidth": 2,
-            "borderColor": "#E7E4D9",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flex": 1,
-            "justifyContent": "center",
-            "minHeight": 44,
-            "paddingHorizontal": 6,
-            "paddingVertical": 6,
-          }
-        }
-        testID="segment-week"
+        horizontal={true}
+        showsHorizontalScrollIndicator={false}
       >
-        <Text
-          allowFontScaling={true}
-          style={
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 14,
-              "lineHeight": 20,
-              "textAlign": "center",
+        <View>
+          <View
+            style={
+              {
+                "backgroundColor": "#FBFAF7",
+                "borderColor": "#E7E4D9",
+                "borderRadius": 8,
+                "borderWidth": 1,
+                "flexDirection": "row",
+                "flexGrow": 1,
+                "gap": 3,
+                "padding": 3,
+              }
             }
-          }
-        >
-          Week
-        </Text>
-      </View>
-      <View
-        accessibilityLabel="Practice"
-        accessibilityRole="tab"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": false,
-          }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "alignItems": "center",
-            "backgroundColor": "transparent",
-            "borderBottomColor": "transparent",
-            "borderBottomWidth": 1,
-            "borderColor": "transparent",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flex": 1,
-            "justifyContent": "center",
-            "minHeight": 44,
-            "paddingHorizontal": 6,
-            "paddingVertical": 6,
-          }
-        }
-        testID="segment-practice"
-      >
-        <Text
-          allowFontScaling={true}
-          style={
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_500Medium",
-              "fontSize": 14,
-              "lineHeight": 20,
-              "textAlign": "center",
-            }
-          }
-        >
-          Practice
-        </Text>
-      </View>
-      <View
-        accessibilityLabel="My sets"
-        accessibilityRole="tab"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": false,
-          }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "alignItems": "center",
-            "backgroundColor": "transparent",
-            "borderBottomColor": "transparent",
-            "borderBottomWidth": 1,
-            "borderColor": "transparent",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flex": 1,
-            "justifyContent": "center",
-            "minHeight": 44,
-            "paddingHorizontal": 6,
-            "paddingVertical": 6,
-          }
-        }
-        testID="segment-mine"
-      >
-        <Text
-          allowFontScaling={true}
-          style={
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_500Medium",
-              "fontSize": 14,
-              "lineHeight": 20,
-              "textAlign": "center",
-            }
-          }
-        >
-          My sets
-        </Text>
-      </View>
+          >
+            <View
+              accessibilityLabel="Week"
+              accessibilityRole="tab"
+              accessibilityState={
+                {
+                  "busy": undefined,
+                  "checked": undefined,
+                  "disabled": undefined,
+                  "expanded": undefined,
+                  "selected": true,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onBlur={[Function]}
+              onClick={[Function]}
+              onFocus={[Function]}
+              onLayout={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "alignItems": "center",
+                  "backgroundColor": "#FFFFFF",
+                  "borderBottomColor": "#FFB801",
+                  "borderBottomWidth": 2,
+                  "borderColor": "#E7E4D9",
+                  "borderRadius": 6,
+                  "borderWidth": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
+                  "justifyContent": "center",
+                  "minHeight": 44,
+                  "minWidth": 234,
+                  "paddingHorizontal": 12,
+                  "paddingVertical": 6,
+                }
+              }
+              testID="segment-week"
+            >
+              <Text
+                allowFontScaling={true}
+                maxFontSizeMultiplier={2}
+                numberOfLines={1}
+                style={
+                  {
+                    "color": "#0A0A0A",
+                    "fontFamily": "Roboto_700Bold",
+                    "fontSize": 14,
+                    "lineHeight": 20,
+                    "textAlign": "center",
+                  }
+                }
+              >
+                Week
+              </Text>
+            </View>
+            <View
+              accessibilityLabel="Practice"
+              accessibilityRole="tab"
+              accessibilityState={
+                {
+                  "busy": undefined,
+                  "checked": undefined,
+                  "disabled": undefined,
+                  "expanded": undefined,
+                  "selected": false,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onBlur={[Function]}
+              onClick={[Function]}
+              onFocus={[Function]}
+              onLayout={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "alignItems": "center",
+                  "backgroundColor": "transparent",
+                  "borderBottomColor": "transparent",
+                  "borderBottomWidth": 1,
+                  "borderColor": "transparent",
+                  "borderRadius": 6,
+                  "borderWidth": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
+                  "justifyContent": "center",
+                  "minHeight": 44,
+                  "minWidth": 234,
+                  "paddingHorizontal": 12,
+                  "paddingVertical": 6,
+                }
+              }
+              testID="segment-practice"
+            >
+              <Text
+                allowFontScaling={true}
+                maxFontSizeMultiplier={2}
+                numberOfLines={1}
+                style={
+                  {
+                    "color": "#55524A",
+                    "fontFamily": "Roboto_500Medium",
+                    "fontSize": 14,
+                    "lineHeight": 20,
+                    "textAlign": "center",
+                  }
+                }
+              >
+                Practice
+              </Text>
+            </View>
+            <View
+              accessibilityLabel="My sets"
+              accessibilityRole="tab"
+              accessibilityState={
+                {
+                  "busy": undefined,
+                  "checked": undefined,
+                  "disabled": undefined,
+                  "expanded": undefined,
+                  "selected": false,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onBlur={[Function]}
+              onClick={[Function]}
+              onFocus={[Function]}
+              onLayout={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "alignItems": "center",
+                  "backgroundColor": "transparent",
+                  "borderBottomColor": "transparent",
+                  "borderBottomWidth": 1,
+                  "borderColor": "transparent",
+                  "borderRadius": 6,
+                  "borderWidth": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
+                  "justifyContent": "center",
+                  "minHeight": 44,
+                  "minWidth": 234,
+                  "paddingHorizontal": 12,
+                  "paddingVertical": 6,
+                }
+              }
+              testID="segment-mine"
+            >
+              <Text
+                allowFontScaling={true}
+                maxFontSizeMultiplier={2}
+                numberOfLines={1}
+                style={
+                  {
+                    "color": "#55524A",
+                    "fontFamily": "Roboto_500Medium",
+                    "fontSize": 14,
+                    "lineHeight": 20,
+                    "textAlign": "center",
+                  }
+                }
+              >
+                My sets
+              </Text>
+            </View>
+          </View>
+        </View>
+      </RCTScrollView>
     </View>
     <View
       style={
         {
-          "alignItems": "center",
-          "flexDirection": "row",
-          "gap": 12,
+          "alignItems": "flex-start",
+          "columnGap": 12,
+          "flexDirection": "column",
+          "flexWrap": "nowrap",
           "justifyContent": "space-between",
           "minHeight": 44,
           "paddingBottom": 8,
@@ -10158,6 +10247,7 @@ exports[`kit gallery (light) renders every component 1`] = `
         style={
           {
             "color": "#0A0A0A",
+            "flexGrow": 1,
             "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 15,
@@ -10205,7 +10295,7 @@ exports[`kit gallery (light) renders every component 1`] = `
             "justifyContent": "center",
             "minHeight": 44,
             "opacity": 1,
-            "paddingLeft": 12,
+            "paddingLeft": 0,
           }
         }
       >
@@ -15156,7 +15246,7 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
               <View
                 style={
                   {
-                    "alignItems": "center",
+                    "alignItems": "flex-start",
                     "flexDirection": "row",
                     "gap": 8,
                   }
@@ -15169,6 +15259,7 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
                     {
                       "backgroundColor": "#FFB801",
                       "height": 3,
+                      "marginTop": 14.5,
                       "width": 14,
                     }
                   }
@@ -15179,11 +15270,12 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
                   style={
                     {
                       "color": "#55524A",
-                      "flexShrink": 1,
+                      "flex": 1,
                       "fontFamily": "Roboto_700Bold",
                       "fontSize": 12,
                       "letterSpacing": 0.72,
                       "lineHeight": 16,
+                      "minWidth": 0,
                       "textTransform": "uppercase",
                     }
                   }

@@ -109,3 +109,33 @@ export function largeTextProblems(root: Node | null | undefined, allowClamp: rea
   if (root) walk(root);
   return out;
 }
+
+/**
+ * Where large text would break a word in half (QA, Nov 2026: "Tod/ay",
+ * "Need/s you", "Leadershi/p"). The test renderer has no layout, so this
+ * reads structure: a row that can't wrap holding a wrapping text beside
+ * another text (one squeezes the other to a sliver), or text given a fixed
+ * width. Run it with useWindowDimensions mocked to a large fontScale, since
+ * the kit stacks side-by-side rows from there. Hidden decoration is skipped.
+ */
+export function wordBreakRisks(root: Node | null | undefined, flatten: (s: unknown) => Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const kids = (n: Node) => n.children.filter((c): c is Node => typeof c !== "string" && !isHidden(c));
+  const texts = (n: Node): Node[] => (n.type === "Text" ? [n] : kids(n).flatMap(texts));
+  const walk = (n: Node) => {
+    const s = flatten(n.props.style);
+    if (n.type === "Text") {
+      if (typeof s.width === "number") out.push(`fixed-width text: ${textOf(n).trim()}`);
+      return;
+    }
+    if (s.flexDirection === "row" && s.flexWrap !== "wrap") {
+      const withText = kids(n).filter((c) => texts(c).length > 0);
+      if (withText.length >= 2 && withText.some((c) => texts(c).some((t) => t.props.numberOfLines === undefined))) {
+        out.push(`side by side: ${withText.map((c) => textOf(c).trim()).join(" | ")}`);
+      }
+    }
+    kids(n).forEach(walk);
+  };
+  if (root && !isHidden(root)) walk(root);
+  return out;
+}

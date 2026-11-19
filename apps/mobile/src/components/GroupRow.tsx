@@ -9,6 +9,7 @@ import { useTheme } from "@/theme/use-theme";
 
 import { LIST_ROW_MIN_HEIGHT } from "./ListGroup";
 import { Text } from "./Text";
+import { useLargeText } from "./useLargeText";
 
 const rowBox: ViewStyle = {
   minHeight: LIST_ROW_MIN_HEIGHT,
@@ -115,6 +116,8 @@ export function InfoRow({
   accessibilityLabel?: string;
   testID?: string;
 }) {
+  // At large text the value goes under the title instead of squeezing it.
+  const stacked = useLargeText();
   return (
     <View accessible accessibilityLabel={accessibilityLabel ?? [title, subtitle, meta].filter(Boolean).join(". ")} testID={testID} style={rowBox}>
       {icon ? <IconTile icon={icon} /> : null}
@@ -125,8 +128,9 @@ export function InfoRow({
             {subtitle}
           </Text>
         ) : null}
+        {meta && stacked ? <Text variant="label">{meta}</Text> : null}
       </View>
-      {meta ? (
+      {meta && !stacked ? (
         <Text variant="label" style={{ flexShrink: 0, maxWidth: "45%", textAlign: "right" }}>
           {meta}
         </Text>

@@ -1,8 +1,9 @@
 import { ChevronLeft } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { View, type ViewStyle } from "react-native";
+import { useWindowDimensions, View, type ViewStyle } from "react-native";
 import { Pressable } from "./Pressable";
 
+import { maxFontScale, textVariants } from "@/theme/styles";
 import { fontFamily, fontSize, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -67,20 +68,32 @@ export function LargeTitle({ eyebrow, title, tick = true, hero = false, subtitle
   );
 }
 
-/** 12pt caps context line; the yellow tick is decoration. */
+const TICK_HEIGHT = 3;
+
+/** Top offset that centres the tick on the eyebrow's FIRST line at this text size. */
+export function eyebrowTickOffset(fontScale: number): number {
+  const scale = Math.min(fontScale, maxFontScale.eyebrow ?? Infinity);
+  return Math.max(0, ((textVariants.eyebrow.lineHeight ?? 16) * scale - TICK_HEIGHT) / 2);
+}
+
+/**
+ * 12pt caps context line; the yellow tick is decoration. A long eyebrow wraps
+ * inside the gutter and the tick stays on its first line.
+ */
 export function Eyebrow({ text, tick = true }: { text: string; tick?: boolean }) {
   const { colors } = useTheme();
+  const { fontScale } = useWindowDimensions();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
       {tick ? (
         <View
           testID="large-title-tick"
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
-          style={{ width: 14, height: 3, backgroundColor: colors.accent }}
+          style={{ width: 14, height: TICK_HEIGHT, marginTop: eyebrowTickOffset(fontScale), backgroundColor: colors.accent }}
         />
       ) : null}
-      <Text variant="eyebrow" style={{ flexShrink: 1 }}>
+      <Text variant="eyebrow" style={{ flex: 1, minWidth: 0 }}>
         {text}
       </Text>
     </View>
