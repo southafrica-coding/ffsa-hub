@@ -580,13 +580,13 @@ the visible text's `accessibilityLiveRegion`, so each platform hears it once.
 ### Me (`app/(app)/me/index.tsx`)
 | Check | Status | Notes |
 |---|---|---|
-| Labels, roles, state | Pass | Rows via shell `ListRow` (button / link with "Opens in browser"); disabled deletion row reports disabled; sign-out has a hint ("this phone only"). |
-| Headers | Pass | Masthead name; section bars Profile / Settings / About. |
+| Labels, roles, state | Pass | Rows via the kit `ListRow` in inset groups (button / link with "Opens in browser"); sign-out has a hint ("this phone only") and the same words visibly under the button (hidden from screen readers so they aren't read twice). |
+| Headers | Pass | `LargeTitle` name (the one caps moment); section headers Profile / Documents / Settings / About. |
 | Touch targets | Pass | Rows 56dp, button 48dp. |
 | Dynamic Type (2.0) | Pass | No fixed heights. |
 | Contrast | Pass | Tokens. |
 | Status not colour alone | Pass | — |
-| Reading order | Fixed | Email and Roles now read as one "Email: …" / "Roles: …" element instead of label then value separately. |
+| Reading order | Fixed | Email and Roles now read as one "Email: …" / "Roles: …" element instead of label then value separately (roles are word-only quiet chips; the group reads them as one list). |
 | Focus | Pass | Native stack handles focus on push/back. |
 | Announcements / live regions | Fixed | Load error is a danger `Banner` with Try again: kit fix keeps its alert role and speaks it on iOS. |
 | Reduce motion | n/a | — |
@@ -597,7 +597,7 @@ the visible text's `accessibilityLiveRegion`, so each platform hears it once.
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Pass | Three labelled fields; phone hint is the field hint; Save reports busy. |
-| Headers | Pass | Native header title "Edit profile". |
+| Headers | Pass | The screen's name in the 44pt bar is the header; back button reads "Back to Me" (`MePage`). |
 | Touch targets | Pass | 48dp. |
 | Dynamic Type (2.0) | Pass | — |
 | Contrast | Pass | Placeholder colour fixed in tokens (light `textQuiet`). |
@@ -612,28 +612,28 @@ the visible text's `accessibilityLiveRegion`, so each platform hears it once.
 ### Notification settings (`app/(app)/me/notifications.tsx`)
 | Check | Status | Notes |
 |---|---|---|
-| Labels, roles, state | Pass | Each `Switch`: role switch, label = group name, hint = description, `checked` + `busy`. |
-| Headers | Pass | Native header; empty / no-access titles are headers. |
+| Labels, roles, state | Pass | Each kit `Toggle`: role switch, label = group name, hint = description, `checked` + `busy` (`SwitchRow`). |
+| Headers | Pass | "Notifications" in the bar; Push notifications / What to notify me about / Slack messages section headers; empty / no-access titles are headers. |
 | Touch targets | Pass | Row 64dp; native switch. |
 | Dynamic Type (2.0) | Pass | Row has `minHeight` only. |
 | Contrast | Pass | Light outline/track (`ruleStrong`) now 3.55:1. Switch colour lines belong to the follow-ups slice. |
 | Status not colour alone | Pass | "On" / "Off" in words beside each switch. |
-| Reading order | Pass | The row text is also readable on its own (a little repetition with the switch; acceptable). |
+| Reading order | Pass | The row text is hidden from screen readers: the switch says the name, the description (hint) and the state once. |
 | Focus | Pass | — |
 | Announcements / live regions | Fixed | A failed save (switch flips back) is a danger `Banner`, which now speaks on iOS (kit). |
 | Reduce motion | n/a | — |
 | Images | n/a | — |
-| Decorative icons | Pass | Empty-state icon hidden (kit `StateMessage`). |
+| Decorative icons | Pass | Empty-state icon hidden (kit `EmptyState`). |
 
 ### Appearance (`app/(app)/me/appearance.tsx`, `src/features/appearance/AppearanceScreen.tsx`)
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Fixed | Radio group + radios with `checked`. The hint was "Double tap to use this look" / "Selected" (repeats what the platform says, and hid each option's description); it is now the description. |
-| Headers | Pass | Native header "Appearance". |
+| Headers | Pass | "Appearance" in the bar is the header (`MePage`). |
 | Touch targets | Pass | Rows 56dp. |
 | Dynamic Type (2.0) | Pass | — |
 | Contrast | Pass | Unchecked radio ring now 3.55:1 in light (token fix). |
-| Status not colour alone | Pass | Square mark + "Selected" word + radio state. |
+| Status not colour alone | Pass | Filled ring vs thin ring (a shape, ink in light / yellow in dark) + the radio's checked state. |
 | Reading order | Pass | — |
 | Focus | Pass | — |
 | Announcements / live regions | Fixed | Save failure is a danger `Banner`, which now speaks on iOS (kit). |
