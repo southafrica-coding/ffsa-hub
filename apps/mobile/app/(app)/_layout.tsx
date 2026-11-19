@@ -42,12 +42,17 @@ export default function AppLayout() {
           <Tabs.Screen name="prayer" options={{ title: "Prayer" }} />
           <Tabs.Screen name="tickets" options={{ title: "Tickets" }} />
           <Tabs.Screen name="me" options={{ title: "Me" }} />
-          <Tabs.Screen name="bookings" options={{ href: null }} />
-          <Tabs.Screen name="schools" options={{ href: null }} />
-          <Tabs.Screen name="history" options={{ href: null }} />
-          <Tabs.Screen name="okrs" options={{ href: null }} />
-          <Tabs.Screen name="ministries" options={{ href: null }} />
-          <Tabs.Screen name="staff-decisions" options={{ href: null }} />
+          {/* Hidden routes (HOME_ROUTES in shell/tabs.ts): no button because
+              TabBar draws only TABS. Never `href: null` here: SDK 58's tabs
+              turn that into `hidden`, and a focused hidden tab is replaced by
+              the first tab, so links, notification taps and router.push to
+              these screens all landed on Home (QA, Nov 2026). */}
+          <Tabs.Screen name="bookings" />
+          <Tabs.Screen name="schools" />
+          <Tabs.Screen name="history" />
+          <Tabs.Screen name="okrs" />
+          <Tabs.Screen name="ministries" />
+          <Tabs.Screen name="staff-decisions" />
         </Tabs>
       </LockGate>
       </OutboxProvider>

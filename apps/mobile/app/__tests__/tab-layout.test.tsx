@@ -1,9 +1,11 @@
-import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
-import { Stack } from "expo-router";
+import { act, fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
+import { Stack, type Href } from "expo-router";
 import { Text } from "react-native";
 
 import type { Outbox } from "@/features/finance/outbox/runner";
 import { useOutbox } from "@/features/finance/outbox/provider";
+import { targetForNotification } from "@/features/push/logic";
+import { HOME_ROUTES } from "@/features/shell/tabs";
 import { apiFetch } from "@/lib/api-client";
 
 import { expenseItem } from "../../src/features/finance/__fixtures__/fixtures";
@@ -142,5 +144,62 @@ describe("app-wide receipt outbox", () => {
     mockOutbox = makeOutbox([expenseItem({ status: "failed", lastError: "no" })]).outbox;
     await renderRouter({ ...landedTree, "(app)/tickets/index": OutboxProbe }, { initialUrl: "/tickets" });
     expect(await screen.findByText("Outbox: 1")).toBeTruthy();
+  });
+});
+
+// The hidden routes (no tab of their own; Home stays marked). Deep links,
+// notification taps and router.push all have to land on the screen: SDK 58's
+// tabs replace a focused `href: null` route with the first tab, which sent
+// every one of these to Home (QA visual pass, Nov 2026).
+const HiddenLayout = () => <Stack screenOptions={{ headerShown: false }} />;
+const hiddenTree: Record<string, unknown> = { ...withPrayer };
+for (const segment of HOME_ROUTES) {
+  hiddenTree[`(app)/${segment}/_layout`] = HiddenLayout;
+  hiddenTree[`(app)/${segment}/index`] = () => <Text>{`Screen ${segment}`}</Text>;
+}
+hiddenTree["(app)/bookings/approvals"] = () => <Text>Screen approvals</Text>;
+hiddenTree["(app)/schools/[id]"] = () => <Text>Screen school</Text>;
+
+const hiddenUrls: [string, string][] = [
+  ...HOME_ROUTES.map((s): [string, string] => [`/${s}`, `Screen ${s}`]),
+  ["/bookings/approvals", "Screen approvals"],
+  ["/schools/abc", "Screen school"],
+];
+
+describe("hidden routes (Bookings, Schools, History, OKRs, Ministries, Staff decisions)", () => {
+  const homeSelected = () =>
+    expect(screen.getByRole("tab", { name: "Home" }).props.accessibilityState).toMatchObject({ selected: true });
+
+  it.each(hiddenUrls)("a deep link to %s opens that screen, Home marked", async (url, text) => {
+    await renderRouter(hiddenTree as Parameters<typeof renderRouter>[0], { initialUrl: url });
+    expect(await screen.findByText(text)).toBeTruthy();
+    expect(screen).toHavePathname(url);
+    homeSelected();
+  });
+
+  it.each(hiddenUrls)("router.push(%s) from Home opens that screen", async (url, text) => {
+    await renderRouter(hiddenTree as Parameters<typeof renderRouter>[0], { initialUrl: "/" });
+    const { router } = jest.requireActual<typeof import("expo-router")>("expo-router");
+    await act(() => router.push(url as Href));
+    expect(await screen.findByText(text)).toBeTruthy();
+    expect(screen).toHavePathname(url);
+    homeSelected();
+  });
+
+  it.each([
+    ["/bookings/requests", "Screen approvals"],
+    ["/my-history", "Screen history"],
+    ["/my-schools/abc", "Screen school"],
+    ["/okrs", "Screen okrs"],
+    ["/ministry", "Screen ministries"],
+    ["/staff-decisions", "Screen staff-decisions"],
+  ])("a notification tap for %s (router.navigate, as PushProvider does) opens the screen", async (href, text) => {
+    await renderRouter(hiddenTree as Parameters<typeof renderRouter>[0], { initialUrl: "/finance" });
+    const target = targetForNotification({ href });
+    expect(target.kind).toBe("app");
+    const { router } = jest.requireActual<typeof import("expo-router")>("expo-router");
+    await act(() => router.navigate((target as { path: string }).path as Href));
+    expect(await screen.findByText(text)).toBeTruthy();
+    homeSelected();
   });
 });
