@@ -1,24 +1,27 @@
 import { useRouter } from "expo-router";
+import { ScanLine, Ticket as TicketIcon } from "lucide-react-native";
 import { useState, type ReactNode } from "react";
 import { View } from "react-native";
 
-import { Banner, Button, Masthead } from "@/components";
-import { useMe } from "@/features/shell";
+import { Banner, Button, EmptyState, ListGroup, ListRow, NeedsYouBand, SkeletonList } from "@/components";
+import { openWebPage, useMe } from "@/features/shell";
+import { useTheme } from "@/theme/use-theme";
 
 import type { MyRegistration, MyTicket } from "../api";
-import { SectionBar, SavedCue } from "../components/SectionBar";
-import { EmptyState, ErrorState, SkeletonRows } from "../components/StateViews";
+import { CountedSectionHeader, SavedCue } from "../components/ListHeader";
 import { RegistrationRow, TicketRow } from "../components/TicketRow";
 import { TicketsScreen } from "../components/TicketsScreen";
 import { formatStamp, splitByWhen } from "../dates";
 import { useMyTickets, useOnline } from "../hooks";
 import { canRunCheckIn } from "../permissions";
 import { strings } from "../strings";
+import { GET_TICKETS_WEB_PATH } from "../web";
 
 type Item = { kind: "ticket"; ticket: MyTicket; event: MyTicket["event"] } | { kind: "registration"; registration: MyRegistration; event: MyRegistration["event"] };
 
 export function MyTicketsScreen({ now = () => new Date() }: { now?: () => Date }) {
   const router = useRouter();
+  const { colors } = useTheme();
   const me = useMe();
   const online = useOnline();
   const t = useMyTickets();
@@ -31,11 +34,28 @@ export function MyTicketsScreen({ now = () => new Date() }: { now?: () => Date }
       <RegistrationRow key={`r-${item.registration.id}`} registration={item.registration} />
     );
 
+  // Buying stays on the website: one row that says so.
+  const getTickets = (
+    <ListGroup inset={false} testID="get-tickets">
+      <ListRow
+        icon={TicketIcon}
+        title={strings.myTickets.getTickets}
+        subtitle={strings.myTickets.getTicketsBody}
+        trailing="web"
+        onPress={() => void openWebPage(GET_TICKETS_WEB_PATH, colors)}
+      />
+    </ListGroup>
+  );
+
   let body: ReactNode = null;
   if (t.status === "loading") {
-    body = <SkeletonRows label={strings.myTickets.loading} />;
+    body = <SkeletonList inset={false} label={strings.myTickets.loading} />;
   } else if (t.status === "error") {
-    body = <ErrorState title={strings.myTickets.errorTitle} message={t.message} onRetry={() => void t.refresh()} />;
+    body = (
+      <Banner tone="error" title={strings.myTickets.errorTitle} testID="error-state" actionLabel={strings.myTickets.retry} onAction={() => void t.refresh()}>
+        {t.message}
+      </Banner>
+    );
   } else {
     const items: Item[] = [
       ...t.data.tickets.map((ticket) => ({ kind: "ticket" as const, ticket, event: ticket.event })),
@@ -54,57 +74,66 @@ export function MyTicketsScreen({ now = () => new Date() }: { now?: () => Date }
     body = (
       <>
         {showStale ? (
-          <Banner tone="info" title={strings.common.offline} testID="stale-banner">
+          <Banner tone="offline" title={strings.common.offline} testID="stale-banner">
             {online ? strings.myTickets.refreshFailedShowingSaved(when) : strings.myTickets.offlineShowingSaved(when)}
           </Banner>
         ) : null}
         {needsWaiver.length > 0 ? (
-          <Banner tone="needsYou" title={strings.myTickets.needsYou} testID="needs-you">
-            {`${needsWaiver.map((i) => i.ticket.event.title).join(", ")}: ${strings.ticket.waiverMissing}`}
-          </Banner>
+          <NeedsYouBand
+            eyebrow={strings.myTickets.needsYou}
+            text={`${needsWaiver.map((i) => i.ticket.event.title).join(", ")}: ${strings.ticket.waiverMissing}`}
+            testID="needs-you"
+          />
         ) : null}
         {items.length === 0 ? (
-          <EmptyState title={strings.myTickets.emptyTitle} body={strings.myTickets.emptyBody} />
+          <EmptyState icon={TicketIcon} title={strings.myTickets.emptyTitle} body={strings.myTickets.emptyBody} testID="empty-state" />
         ) : (
           <>
             {t.data.tickets.length > 0 ? <SavedCue text={strings.myTickets.savedOnPhone} hint={strings.myTickets.savedOnPhoneHint} /> : null}
             {upcoming.length > 0 ? (
               <View>
-                <SectionBar title={strings.myTickets.upcoming} meta={String(upcoming.length)} />
-                {upcoming.map(renderItem)}
+                <CountedSectionHeader title={strings.myTickets.upcoming} count={upcoming.length} />
+                <ListGroup inset={false}>{upcoming.map(renderItem)}</ListGroup>
               </View>
             ) : null}
             {past.length > 0 ? (
-              <View style={{ gap: 8 }}>
+              <View>
                 <Button
                   label={showPast ? strings.myTickets.hidePast : strings.myTickets.showPast(past.length)}
-                  variant="ghost"
+                  variant="text"
+                  size="small"
                   accessibilityState={{ expanded: showPast }}
                   onPress={() => setShowPast((s) => !s)}
                   style={{ alignSelf: "flex-start" }}
                 />
                 {showPast ? (
                   <View testID="past-list">
-                    <SectionBar title={strings.myTickets.past} meta={String(past.length)} />
-                    {past.map(renderItem)}
+                    <CountedSectionHeader title={strings.myTickets.past} count={past.length} />
+                    <ListGroup inset={false}>{past.map(renderItem)}</ListGroup>
                   </View>
                 ) : null}
               </View>
             ) : null}
           </>
         )}
+        {getTickets}
       </>
     );
   }
 
   return (
-    <TicketsScreen edges={["top", "bottom"]} onRefresh={() => void t.refresh()} refreshing={t.refreshing}>
-      <Masthead context={strings.myTickets.context} title={strings.myTickets.title} />
+    <TicketsScreen
+      eyebrow={strings.myTickets.context}
+      title={strings.myTickets.title}
+      onRefresh={() => void t.refresh()}
+      refreshing={t.refreshing}
+    >
       {me.status === "ready" && canRunCheckIn(me.me) ? (
         <Button
           label={strings.myTickets.runCheckIn}
           accessibilityHint={strings.myTickets.runCheckInHint}
           variant="secondary"
+          icon={<ScanLine size={20} color={colors.text} />}
           onPress={() => router.push("/tickets/check-in")}
         />
       ) : null}

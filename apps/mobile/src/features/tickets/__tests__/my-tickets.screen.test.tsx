@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import * as WebBrowser from "expo-web-browser";
 
 import { MeProvider } from "@/features/shell";
 import { ApiError } from "@/lib/api";
@@ -14,6 +15,7 @@ let mockNet = { isConnected: true, isInternetReachable: true };
 
 jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock("expo-network", () => ({ useNetworkState: () => mockNet }));
+jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({ type: "dismiss" })) }));
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
 jest.mock("@/lib/supabase", () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: { user: { id: "u1" } } } }) } },
@@ -78,10 +80,56 @@ describe("My tickets", () => {
     expect(screen.queryByText("Saved on this phone")).toBeNull();
   });
 
-  it("empty: explains where tickets come from", async () => {
+  it("empty: explains where tickets come from, and still offers Get tickets", async () => {
     api({ tickets: () => makeTickets({ tickets: [], registrations: [] }) });
     await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     expect(await screen.findByText("No tickets yet")).toBeTruthy();
+    expect(screen.getByText("When you book or register for an event, your ticket shows up here.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Get tickets. Opens in browser" })).toBeTruthy();
+    expect(screen.queryByText("Saved on this phone")).toBeNull();
+  });
+
+  it("Get tickets: one row that opens the website in the in-app browser, and says so", async () => {
+    api({});
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
+    await screen.findByText("Send Night");
+    const row = screen.getByRole("link", { name: "Get tickets. Opens in browser" });
+    expect(row.props.accessibilityHint).toBe("Browse events on the website");
+    expect(screen.getByText("Opens in browser")).toBeTruthy();
+    await fireEvent.press(row);
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://hub.example.test/my-events", expect.anything());
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("Get tickets waits for the list: not shown while loading or on a failed first load", async () => {
+    api({ tickets: () => new Promise(() => undefined) });
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
+    expect(screen.queryByText("Get tickets")).toBeNull();
+  });
+
+  it.each([
+    ["valid", "Ready to scan"],
+    ["checked_in", "Checked in"],
+    ["void", "Cancelled"],
+  ])("ticket status %s reads '%s' in words", async (status, word) => {
+    const base = makeTickets().tickets[0];
+    api({ tickets: () => makeTickets({ tickets: [{ ...base, status, checkedInAt: status === "checked_in" ? "2026-11-03T07:00:00.000Z" : null }] }) });
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
+    expect(await screen.findByRole("button", { name: new RegExp(`^Send Night\\..*${word}$`) })).toBeTruthy();
+    expect(screen.getByText(word)).toBeTruthy();
+  });
+
+  it.each([
+    ["confirmed", "Confirmed"],
+    ["pending", "Pending"],
+    ["waitlisted", "Waitlisted"],
+    ["cancelled", "Cancelled"],
+  ])("registration status %s reads '%s', and the row doesn't open", async (status, word) => {
+    api({ tickets: () => makeTickets({ tickets: [], registrations: [{ id: "r1", status, event: ticketEvent("e5", "Prayer Day", "2026-11-25") }] }) });
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
+    expect(await screen.findByText(word)).toBeTruthy();
+    expect(screen.getByLabelText(new RegExp(`^Prayer Day\\..*Registered · no ticket needed\\. ${word}$`))).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Prayer Day/ })).toBeNull();
   });
 
   it("error: specific message and a working retry", async () => {
@@ -109,7 +157,22 @@ describe("My tickets", () => {
     });
     await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     expect(await screen.findByText("Send Night")).toBeTruthy();
-    expect(await screen.findByTestId("stale-banner")).toHaveTextContent(/You're offline\. Showing the tickets saved on this phone/);
+    expect(await screen.findByTestId("stale-banner")).toHaveTextContent(/No connection.*You're offline\. Showing the tickets saved on this phone/);
+    // Calm, not an alert: the saved tickets still work.
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText("Saved on this phone")).toBeTruthy();
+  });
+
+  it("online but the refresh failed: says it couldn't refresh and shows the saved copy", async () => {
+    await AsyncStorage.setItem(ticketCacheKey("u1"), JSON.stringify({ savedAt: "2026-11-02T10:00:00.000Z", data: makeTickets() }));
+    api({
+      tickets: () => {
+        throw new ApiError("http", "Something went wrong on the server (500). Try again.", 500);
+      },
+    });
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
+    expect(await screen.findByTestId("stale-banner")).toHaveTextContent(/Couldn't refresh\. Showing the tickets saved on this phone/);
+    expect(screen.getByText("Send Night")).toBeTruthy();
   });
 
   it("needs-you band only from real data (an unsigned waiver), and only once", async () => {
@@ -127,6 +190,7 @@ describe("My tickets", () => {
     await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     await screen.findAllByText("Youth Camp");
     expect(screen.getAllByTestId("needs-you")).toHaveLength(1);
+    expect(screen.getByRole("summary", { name: "Needs you. Youth Camp, Youth Camp: Not signed yet. Contact the event team before you arrive." })).toBeTruthy();
 
     api({});
     await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });

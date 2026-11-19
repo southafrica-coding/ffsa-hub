@@ -38,6 +38,25 @@ jest.mock("@/auth/session-provider", () => {
       ),
   };
 });
+// expo-router's test helper swaps Reanimated for the library's own mock, which
+// doesn't load under this SDK (it falls back to an empty object). The door
+// now draws the kit's collapsing header, so hand it a stand-in like the one
+// in jest.setup.ts.
+jest.mock("react-native-reanimated/mock", () => {
+  const RN = jest.requireActual("react-native");
+  const Animated = { View: RN.View, Text: RN.Text, ScrollView: RN.ScrollView };
+  return {
+    __esModule: true,
+    default: Animated,
+    ...Animated,
+    Extrapolation: { CLAMP: "clamp" },
+    interpolate: () => 0,
+    useSharedValue: <T,>(v: T) => ({ value: v }),
+    useAnimatedStyle: (fn: () => unknown) => fn(),
+    useAnimatedScrollHandler: () => () => {},
+    useReducedMotion: () => false,
+  };
+});
 jest.mock("expo-font", () => ({ useFonts: () => [true, null] }));
 jest.mock("@/lib/supabase", () => ({
   supabase: { auth: { signInWithPassword: jest.fn(), signOut: jest.fn(), getSession: async () => ({ data: { session: null } }) } },

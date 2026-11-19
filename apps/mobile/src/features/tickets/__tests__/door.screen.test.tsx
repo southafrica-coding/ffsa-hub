@@ -72,11 +72,35 @@ describe("Door", () => {
     expect(screen.getByText("Send Night")).toBeTruthy();
   });
 
+  it("page: its own header with a way back, the tally, then scan, code and name", async () => {
+    const onBack = jest.fn();
+    await render(<DoorScreen eventId="e1" eventTitle="Send Night" door={makeDoor()} back={{ label: "Check-in", onPress: onBack }} />);
+    expect(screen.getByRole("header", { name: "Door" })).toBeTruthy();
+    expect(await screen.findByText("of 40 expected")).toBeTruthy();
+    expect(screen.getByText("12")).toBeTruthy();
+    expect(screen.getByPlaceholderText("e.g. AbCdEfGhIjK")).toBeTruthy();
+    expect(screen.getByText("Type at least two letters")).toBeTruthy();
+    // Nothing queued, nothing wrong: no banners.
+    for (const id of ["offline-banner", "queue-banner", "rejected-banner", "failed-banner", "verdict"]) {
+      expect(screen.queryByTestId(id)).toBeNull();
+    }
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Check-in" }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("tally unavailable: a dash and plain words, not a wrong number", async () => {
+    const door = makeDoor({ stats: jest.fn(async () => Promise.reject(new ApiError("http", "Server error", 500))) });
+    await render(<DoorScreen eventId="e1" door={door} />);
+    expect(await screen.findByText("Count unavailable")).toBeTruthy();
+    expect(screen.getByText("–")).toBeTruthy();
+  });
+
   it("checked in: big confirmation, haptic, Undo reverses it", async () => {
     const door = makeDoor();
     await render(<DoorScreen eventId="e1" door={door} />);
     await typeCode("AbCdEfGhIjK");
     expect(await screen.findByTestId("verdict-title")).toHaveTextContent("Checked in");
+    expect(screen.getByTestId("verdict-icon-check", { includeHiddenElements: true })).toBeTruthy();
     expect(screen.getByText("Sample Person 922 · General")).toBeTruthy();
     expect(door.checkIn).toHaveBeenCalledWith("AbCdEfGhIjK");
     expect(Haptics.notificationAsync).toHaveBeenCalledWith("success");
@@ -144,6 +168,12 @@ describe("Door", () => {
 
     await typeCode("AbCdEfGhIjK");
     expect(await screen.findByTestId("verdict-title")).toHaveTextContent("Saved, not yet confirmed");
+    expect(screen.getByTestId("verdict-icon-clock", { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByTestId("verdict").props.style).toMatchObject({ borderStyle: "dashed" });
+    // Said by the tally (it can't update) and by the offline banner.
+    expect(screen.getAllByText("No connection")).toHaveLength(2);
+    // Offline there is nothing to send to yet.
+    expect(screen.queryByRole("button", { name: "Send now" })).toBeNull();
     // Only the tally's label says "Checked in"; no verdict claims it.
     expect(screen.getAllByText("Checked in")).toHaveLength(1);
     expect(screen.getByTestId("queue-banner")).toHaveTextContent(/1 scan not yet confirmed/);
@@ -229,6 +259,17 @@ describe("Door", () => {
     await fireEvent.press(await screen.findByRole("button", { name: "Check in Sample Person 922" }, { timeout: 2000 }));
     expect(door.checkIn).toHaveBeenCalledWith("GuestCode9");
     expect(screen.getByLabelText(/^Sample Person 923\. General\. In at \d\d:\d\d$/)).toBeTruthy();
+    // The count is on the page too (hidden from screen readers: it was announced).
+    expect(screen.getByText("2 guests found", { includeHiddenElements: true })).toBeTruthy();
+    // Undo isn't offered from the name list itself, only on the result card.
+    expect(screen.queryByRole("button", { name: "Check in Sample Person 923" })).toBeNull();
+  });
+
+  it("name search offline: says it needs a connection, and the field is off", async () => {
+    mockNet = { isConnected: false, isInternetReachable: false };
+    await render(<DoorScreen eventId="e1" door={makeDoor()} />);
+    expect(screen.getByText("Name search needs a connection. Scanning still works offline.")).toBeTruthy();
+    expect(screen.getByLabelText("Guest name").props.editable).toBe(false);
   });
 
   it("name search: empty result", async () => {
@@ -249,11 +290,17 @@ describe("Door", () => {
       await render(<DoorScreen eventId="e1" door={door} />);
       await fireEvent.press(screen.getByRole("button", { name: "Scan tickets" }));
       expect(screen.getByTestId("camera")).toBeTruthy();
+      // Full screen: only Close and the torch over the camera, no page behind it.
+      expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual(["Close scanner", "Turn torch on"]);
+      expect(screen.queryByRole("header", { name: "Door" })).toBeNull();
+      expect(screen.getByText("Point the camera at the ticket's QR code")).toBeTruthy();
+      expect(screen.getByTestId("scanner-reticle", { includeHiddenElements: true })).toBeTruthy();
 
       await act(async () => {
         mockCamera.props!.onBarcodeScanned!({ data: "AbCdEfGhIjK", type: "qr" });
       });
       expect(await screen.findByTestId("verdict-title")).toHaveTextContent("Checked in");
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
       // Paused while the result is up.
       expect(mockCamera.props!.onBarcodeScanned).toBeUndefined();
 
@@ -277,7 +324,10 @@ describe("Door", () => {
       mockPermission = { granted: false, canAskAgain: true };
       await render(<DoorScreen eventId="e1" door={makeDoor()} />);
       await fireEvent.press(screen.getByRole("button", { name: "Scan tickets" }));
-      expect(screen.getByText("Use the camera to scan tickets")).toBeTruthy();
+      expect(screen.getByRole("header", { name: "Use the camera to scan tickets" })).toBeTruthy();
+      expect(screen.getByText(/only while this screen is open.*Nothing is recorded/)).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Type a code" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Close scanner" })).toBeTruthy();
       await fireEvent.press(screen.getByRole("button", { name: "Allow camera" }));
       expect(mockRequestPermission).toHaveBeenCalled();
     });

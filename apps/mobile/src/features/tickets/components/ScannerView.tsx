@@ -1,14 +1,15 @@
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
-import { Flashlight, FlashlightOff, X } from "lucide-react-native";
+import { Camera, Flashlight, FlashlightOff, X } from "lucide-react-native";
 import { useState, type ReactNode } from "react";
 import { Linking, Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Button, Text } from "@/components";
-import { palette, touch } from "@/theme/tokens";
+import { hairline, palette, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { strings } from "../strings";
+import { Heading } from "./ListHeader";
 
 type Props = {
   /** Raw QR contents. Debouncing happens in the door controller. */
@@ -30,13 +31,12 @@ function IconButton({ label, onPress, children }: { label: string; onPress: () =
       onPress={onPress}
       hitSlop={8}
       style={({ pressed }) => ({
-        width: touch.minTarget + 8,
-        height: touch.minTarget + 8,
+        width: touch.minTarget,
+        height: touch.minTarget,
         alignItems: "center",
         justifyContent: "center",
+        borderRadius: radius.control,
         backgroundColor: pressed ? palette.textSecondary : palette.ink,
-        borderWidth: 2,
-        borderColor: palette.white,
       })}
     >
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -51,8 +51,9 @@ function IconButton({ label, onPress, children }: { label: string; onPress: () =
  * first, and if it has been refused offers Settings plus the ways to check
  * someone in without a camera. QR codes only.
  *
- * The camera chrome is ink/white regardless of theme: it sits over a live
- * picture, so it needs the strongest contrast available.
+ * Over the camera there is only Close, the torch, the yellow corner
+ * brackets and the result. That chrome is ink/white regardless of theme: it
+ * sits over a live picture, so it needs the strongest contrast available.
  */
 export function ScannerView({ onScanned, paused, onClose, onTypeCode, overlay }: Props) {
   const { colors } = useTheme();
@@ -80,8 +81,24 @@ export function ScannerView({ onScanned, paused, onClose, onTypeCode, overlay }:
     const denied = !permission.canAskAgain;
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} testID={denied ? "camera-denied" : "camera-rationale"}>
-        <View style={{ flex: 1, padding: 20, gap: 16, justifyContent: "center" }}>
-          <Text variant="title">{denied ? strings.camera.deniedTitle : strings.camera.rationaleTitle}</Text>
+        <View style={{ paddingVertical: space.xl, paddingHorizontal: space.gutter, gap: space.md }}>
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: radius.card,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.surface,
+              borderWidth: hairline,
+              borderColor: colors.rule,
+            }}
+          >
+            <Camera size={24} color={colors.text} />
+          </View>
+          <Heading>{denied ? strings.camera.deniedTitle : strings.camera.rationaleTitle}</Heading>
           <Text tone="secondary">{denied ? strings.camera.deniedBody : strings.camera.rationaleBody}</Text>
           {denied ? (
             <Button label={strings.camera.openSettings} onPress={() => void Linking.openSettings()} />
@@ -89,7 +106,7 @@ export function ScannerView({ onScanned, paused, onClose, onTypeCode, overlay }:
             <Button label={strings.camera.allow} onPress={() => void requestPermission()} />
           )}
           <Button label={strings.checkIn.typeCode} variant="secondary" onPress={onTypeCode} />
-          <Button label={strings.camera.close} variant="ghost" onPress={onClose} />
+          <Button label={strings.camera.close} variant="text" onPress={onClose} />
         </View>
       </SafeAreaView>
     );
@@ -110,29 +127,50 @@ export function ScannerView({ onScanned, paused, onClose, onTypeCode, overlay }:
         accessibilityIgnoresInvertColors
       />
       <SafeAreaView style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="box-none">
-        <View style={{ flexDirection: "row", justifyContent: "space-between", padding: 16 }} pointerEvents="box-none">
+        <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: space.sm, paddingTop: space.sm }} pointerEvents="box-none">
           <IconButton label={strings.camera.close} onPress={onClose}>
-            <X size={28} color={palette.white} strokeWidth={3} />
+            <X size={28} color={palette.white} />
           </IconButton>
           <IconButton label={torch ? strings.camera.torchOff : strings.camera.torchOn} onPress={() => setTorch((t) => !t)}>
-            {torch ? <FlashlightOff size={26} color={palette.white} /> : <Flashlight size={26} color={palette.white} />}
+            {torch ? <FlashlightOff size={24} color={palette.white} /> : <Flashlight size={24} color={palette.white} />}
           </IconButton>
         </View>
-        <View style={{ flex: 1 }} pointerEvents="none" />
-        <View style={{ padding: 16, gap: 12 }} pointerEvents="box-none">
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }} pointerEvents="none">
+          <Reticle />
+        </View>
+        <View style={{ padding: space.lg, gap: space.md }} pointerEvents="box-none">
           {overlay ?? (
             <View
               accessibilityLiveRegion={mountError ? "assertive" : "none"}
               accessibilityRole={mountError ? "alert" : undefined}
-              style={{ backgroundColor: palette.ink, padding: 14, borderWidth: 2, borderColor: palette.white }}
+              style={{ backgroundColor: palette.ink, padding: 14, borderWidth: 2, borderColor: palette.white, borderRadius: radius.card }}
             >
-              <Text tone="onInverse" style={{ color: palette.white }}>
-                {mountError ? strings.camera.mountError : strings.camera.aim}
-              </Text>
+              <Text style={{ color: palette.white }}>{mountError ? strings.camera.mountError : strings.camera.aim}</Text>
             </View>
           )}
         </View>
       </SafeAreaView>
+    </View>
+  );
+}
+
+const CORNER = 44;
+const STROKE = 4;
+
+/** Four yellow corner brackets: where to hold the QR. Decoration only. */
+function Reticle() {
+  const corner = { position: "absolute" as const, width: CORNER, height: CORNER, borderColor: palette.yellow };
+  return (
+    <View
+      testID="scanner-reticle"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{ width: "62%", maxWidth: 260, aspectRatio: 1 }}
+    >
+      <View style={{ ...corner, top: 0, left: 0, borderTopWidth: STROKE, borderLeftWidth: STROKE, borderTopLeftRadius: radius.card }} />
+      <View style={{ ...corner, top: 0, right: 0, borderTopWidth: STROKE, borderRightWidth: STROKE, borderTopRightRadius: radius.card }} />
+      <View style={{ ...corner, bottom: 0, left: 0, borderBottomWidth: STROKE, borderLeftWidth: STROKE, borderBottomLeftRadius: radius.card }} />
+      <View style={{ ...corner, bottom: 0, right: 0, borderBottomWidth: STROKE, borderRightWidth: STROKE, borderBottomRightRadius: radius.card }} />
     </View>
   );
 }

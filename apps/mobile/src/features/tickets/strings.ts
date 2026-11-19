@@ -25,6 +25,8 @@ export const strings = {
     runCheckIn: "Run door check-in",
     runCheckInHint: "Scan tickets at an event you're running",
     openTicketHint: "Opens the ticket with its QR code",
+    getTickets: "Get tickets",
+    getTicketsBody: "Browse events on the website",
   },
   status: {
     valid: "Ready to scan",
@@ -42,7 +44,6 @@ export const strings = {
     notFoundBody: "This ticket isn't on this phone any more. Go back to My tickets and pull down to refresh.",
     qrLabel: (code: string) => `Ticket QR code. Code ${code.split("").join(" ")}`,
     showAtDoor: "Show this at the door",
-    codeLabel: "Code",
     brightnessNote: "Screen brightness is turned up while this is open.",
     voidNote: "This ticket was cancelled or refunded, so it won't scan. Contact the event team if that's a mistake.",
     checkedInAt: (time: string) => `Checked in at ${time}`,
@@ -78,6 +79,7 @@ export const strings = {
     typeCode: "Type a code",
     codeField: "Ticket code",
     codeFieldHint: "The letters and numbers under the QR code",
+    codePlaceholder: "e.g. AbCdEfGhIjK",
     checkInCode: "Check in",
     search: "Find by name",
     searchField: "Guest name",
@@ -134,7 +136,7 @@ export const strings = {
     offline: "No connection",
     sessionEnded: "Your session has ended. Please sign in again.",
   },
-  // Screen-reader-only words (labels, hints, announcements).
+  // Screen-reader words (labels, hints, announcements). The guest count is also shown under the results.
   a11y: {
     scannerStarting: "Starting the camera",
     camera: "Camera viewfinder. Point it at the ticket's QR code.",

@@ -107,6 +107,7 @@ describe("My tickets", () => {
     expect(row.props.accessibilityHint).toBe("Opens the ticket with its QR code");
     expect(screen.getByRole("header", { name: "Coming up, 1" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Run door check-in" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Get tickets. Opens in browser" })).toBeTruthy();
     const past = screen.getByRole("button", { name: "Show past events (1)" });
     expect(past.props.accessibilityState).toMatchObject({ expanded: false });
     await fireEvent.press(past);
@@ -229,6 +230,8 @@ describe("Scanner", () => {
 
   it("camera is labelled; close and torch are 48dp+ named buttons with hidden icons", async () => {
     await render(<ScannerView {...props} />);
+    // The corner brackets are decoration: nothing for a screen reader to land on.
+    expect(screen.queryByTestId("scanner-reticle")).toBeNull();
     expect(screen.getByRole("image", { name: /Camera viewfinder/ })).toBeTruthy();
     for (const name of ["Close scanner", "Turn torch on"]) {
       const btn = screen.getByRole("button", { name });

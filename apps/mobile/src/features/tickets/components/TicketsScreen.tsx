@@ -1,46 +1,44 @@
 import type { ReactNode } from "react";
-import { RefreshControl, ScrollView, View, type ViewStyle } from "react-native";
-import { SafeAreaView, type Edge } from "react-native-safe-area-context";
+import { KeyboardAvoidingView, Platform, RefreshControl } from "react-native";
 
+import { LargeTitleScrollView, type LargeTitleProps } from "@/components";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-type Props = {
+type Props = LargeTitleProps & {
   children: ReactNode;
   /** Pull-to-refresh. Omit for screens with nothing to refresh. */
   onRefresh?: () => void;
   refreshing?: boolean;
-  scroll?: boolean;
-  edges?: Edge[];
-  contentStyle?: ViewStyle;
+  /** Pad the home indicator: screens with no tab bar under them (ticket QR, the doors). */
+  bottomInset?: boolean;
+  /** Lift the content above the keyboard (the door's code and name fields). */
+  keyboard?: boolean;
 };
 
 /**
- * The kit's <Screen> plus pull-to-refresh, which the shared Screen doesn't
- * offer yet (kept local so this slice doesn't edit the shared kit; worth
- * folding into Screen later). Same padding, background and safe areas.
+ * Every Tickets page: the kit's collapsing LargeTitle header plus
+ * pull-to-refresh (which the kit's scroll view takes as a prop).
  */
-export function TicketsScreen({ children, onRefresh, refreshing = false, scroll = true, edges = ["bottom"], contentStyle }: Props) {
+export function TicketsScreen({ children, onRefresh, refreshing = false, bottomInset = false, keyboard = false, ...header }: Props) {
   const { colors } = useTheme();
-  const padding: ViewStyle = { paddingHorizontal: 20, paddingVertical: 16, gap: 16 };
+  const page = (
+    <LargeTitleScrollView
+      {...header}
+      gap={space.md}
+      edges={bottomInset ? ["top", "bottom"] : ["top"]}
+      refreshControl={
+        onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} /> : undefined
+      }
+    >
+      {children}
+    </LargeTitleScrollView>
+  );
+  if (!keyboard) return page;
   return (
-    <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: colors.bg }}>
-      {scroll ? (
-        <ScrollView
-          contentContainerStyle={[padding, { flexGrow: 1 }, contentStyle]}
-          keyboardShouldPersistTaps="handled"
-          contentInsetAdjustmentBehavior="automatic"
-          refreshControl={
-            onRefresh ? (
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />
-            ) : undefined
-          }
-        >
-          {children}
-        </ScrollView>
-      ) : (
-        <View style={[padding, { flex: 1 }, contentStyle]}>{children}</View>
-      )}
-    </SafeAreaView>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      {page}
+    </KeyboardAvoidingView>
   );
 }
