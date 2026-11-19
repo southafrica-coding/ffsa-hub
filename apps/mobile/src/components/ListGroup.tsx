@@ -1,6 +1,7 @@
 import { ArrowUpRight, ChevronRight, type LucideIcon } from "lucide-react-native";
 import { Children, Fragment, isValidElement, type ReactNode } from "react";
-import { Pressable, View, type ViewStyle } from "react-native";
+import { View, type ViewStyle } from "react-native";
+import { Pressable } from "./Pressable";
 
 import { hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";

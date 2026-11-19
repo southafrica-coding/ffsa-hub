@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
-import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View, type ViewStyle } from "react-native";
+import { RefreshControl, ScrollView, View, type ViewStyle } from "react-native";
+import { KeyboardAvoidingView } from "./KeyboardAvoidingView";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
 import { refreshControlColors } from "@/theme/styles";
@@ -77,7 +78,7 @@ export function PushedPage({ back, title, children, refreshing, onRefresh, tabBa
           importantForAccessibility="no-hide-descendants"
           style={{ height: hairline, backgroundColor: scrolled ? colors.rule : "transparent" }}
         />
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }}>
           <ScrollView
             ref={scrollRef as never}
             keyboardShouldPersistTaps="handled"

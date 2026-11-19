@@ -1,6 +1,7 @@
 import { ArrowUpRight } from "lucide-react-native";
 import { useEffect, useRef, useState, type ComponentRef } from "react";
-import { Image, Linking, Pressable, View, type TextInput } from "react-native";
+import { Image, Linking, View, type TextInput } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import {
   cooldownMessage,

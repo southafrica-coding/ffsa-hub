@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { ActivityIndicator, Pressable, Text as RNText, View, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
+import { ActivityIndicator, Text as RNText, View, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
+import { Pressable } from "./Pressable";
 
 import { useReduceMotion } from "@/lib/a11y";
 import { buttonStyle, type ButtonSize, type ButtonVariant } from "@/theme/styles";

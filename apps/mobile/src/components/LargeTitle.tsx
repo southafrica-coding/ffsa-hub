@@ -1,6 +1,7 @@
 import { ChevronLeft } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { Pressable, View, type ViewStyle } from "react-native";
+import { View, type ViewStyle } from "react-native";
+import { Pressable } from "./Pressable";
 
 import { fontFamily, fontSize, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -117,6 +118,7 @@ export function BackButton({ label, onPress }: BackAction) {
         minHeight: touch.floor,
         minWidth: touch.floor,
         paddingRight: 8,
+        flexShrink: 1,
         flexDirection: "row",
         alignItems: "center",
         opacity: pressed ? 0.6 : 1,
@@ -125,7 +127,7 @@ export function BackButton({ label, onPress }: BackAction) {
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <ChevronLeft size={26} color={colors.text} />
       </View>
-      <Text style={{ fontSize: fontSize.sheetTitle, fontFamily: fontFamily.body }} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+      <Text style={{ flexShrink: 1, fontSize: fontSize.sheetTitle, fontFamily: fontFamily.body }} numberOfLines={1} maxFontSizeMultiplier={1.4}>
         {label}
       </Text>
     </Pressable>

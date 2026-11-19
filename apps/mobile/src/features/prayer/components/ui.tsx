@@ -3,7 +3,8 @@
 // result of the last action.
 
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Banner, Button, Text } from "@/components";
 import { useAnnounceOnIOS } from "@/lib/a11y";

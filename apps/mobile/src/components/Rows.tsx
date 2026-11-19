@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "./Pressable";
 
 import type { TextTone } from "@/theme/styles";
 import { space } from "@/theme/tokens";

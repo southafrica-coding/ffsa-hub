@@ -6,7 +6,8 @@
 
 import { Plus, Search, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Banner, Bleed, Button, ChoiceChips, ListGroup, ListRow, Sheet, Text, TextField, Toggle } from "@/components";
 import { openWebPage } from "@/features/shell";

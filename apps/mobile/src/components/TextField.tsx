@@ -1,6 +1,7 @@
 import { CircleAlert, Eye, EyeOff } from "lucide-react-native";
 import { forwardRef, useState, type ComponentRef } from "react";
-import { Pressable, TextInput, View, type TextInputProps } from "react-native";
+import { TextInput, View, type TextInputProps } from "react-native";
+import { Pressable } from "./Pressable";
 
 import { fontFamily, fontSize, hairline, radius, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";

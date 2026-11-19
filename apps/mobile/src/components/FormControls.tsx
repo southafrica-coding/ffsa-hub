@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp, CircleAlert } from "lucide-react-native";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "./Pressable";
 
 import { fontFamily, fontSize, hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";

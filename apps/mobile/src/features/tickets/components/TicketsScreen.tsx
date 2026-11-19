@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { KeyboardAvoidingView, Platform, RefreshControl } from "react-native";
+import { RefreshControl } from "react-native";
 
-import { LargeTitleScrollView, type LargeTitleProps } from "@/components";
+import { LargeTitleScrollView, type LargeTitleProps, KeyboardAvoidingView } from "@/components";
 import { refreshControlColors } from "@/theme/styles";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -37,7 +37,7 @@ export function TicketsScreen({ children, onRefresh, refreshing = false, bottomI
   );
   if (!keyboard) return page;
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }}>
       {page}
     </KeyboardAvoidingView>
   );

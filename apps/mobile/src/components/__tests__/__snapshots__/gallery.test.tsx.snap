@@ -47,19 +47,15 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#C7C3B5",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 12,
-                  "letterSpacing": 0.72,
-                  "lineHeight": 16,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#C7C3B5",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 12,
+                "letterSpacing": 0.72,
+                "lineHeight": 16,
+                "textTransform": "uppercase",
+              }
             }
           >
             Eyebrow
@@ -80,19 +76,15 @@ exports[`kit gallery (dark) renders every component 1`] = `
             allowFontScaling={true}
             maxFontSizeMultiplier={1.4}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_900Black",
-                  "fontSize": 28,
-                  "letterSpacing": -0.28,
-                  "lineHeight": 34,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_900Black",
+                "fontSize": 28,
+                "letterSpacing": -0.28,
+                "lineHeight": 34,
+                "textTransform": "uppercase",
+              }
             }
           >
             Large title
@@ -101,17 +93,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#C7C3B5",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 16,
-                "lineHeight": 24,
-              },
-              {
-                "marginTop": 2,
-              },
-            ]
+            {
+              "color": "#C7C3B5",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 16,
+              "lineHeight": 24,
+              "marginTop": 2,
+            }
           }
         >
           One line of body text under the title.
@@ -167,6 +155,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
             {
               "alignItems": "center",
               "flexDirection": "row",
+              "flexShrink": 1,
               "minHeight": 44,
               "minWidth": 44,
               "opacity": 1,
@@ -263,18 +252,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
             maxFontSizeMultiplier={1.4}
             numberOfLines={1}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 17,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 17,
+                "lineHeight": 24,
+              }
             }
           >
             Home
@@ -323,19 +307,15 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#C7C3B5",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 12,
-                  "letterSpacing": 0.72,
-                  "lineHeight": 16,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#C7C3B5",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 12,
+                "letterSpacing": 0.72,
+                "lineHeight": 16,
+                "textTransform": "uppercase",
+              }
             }
           >
             Spaces and vehicles
@@ -356,19 +336,15 @@ exports[`kit gallery (dark) renders every component 1`] = `
             allowFontScaling={true}
             maxFontSizeMultiplier={1.4}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_900Black",
-                  "fontSize": 28,
-                  "letterSpacing": -0.28,
-                  "lineHeight": 34,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_900Black",
+                "fontSize": 28,
+                "letterSpacing": -0.28,
+                "lineHeight": 34,
+                "textTransform": "uppercase",
+              }
             }
           >
             Bookings
@@ -410,19 +386,15 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#C7C3B5",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 12,
-                  "letterSpacing": 0.72,
-                  "lineHeight": 16,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#C7C3B5",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 12,
+                "letterSpacing": 0.72,
+                "lineHeight": 16,
+                "textTransform": "uppercase",
+              }
             }
           >
             FFSA Hub
@@ -443,19 +415,15 @@ exports[`kit gallery (dark) renders every component 1`] = `
             allowFontScaling={true}
             maxFontSizeMultiplier={1.3}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_900Black",
-                  "fontSize": 34,
-                  "letterSpacing": -0.34,
-                  "lineHeight": 36,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_900Black",
+                "fontSize": 34,
+                "letterSpacing": -0.34,
+                "lineHeight": 36,
+                "textTransform": "uppercase",
+              }
             }
           >
             Sign in
@@ -493,17 +461,14 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_700Bold",
-                "fontSize": 12,
-                "letterSpacing": 0.72,
-                "lineHeight": 16,
-                "textTransform": "uppercase",
-              },
-              undefined,
-            ]
+            {
+              "color": "#0A0A0A",
+              "fontFamily": "Roboto_700Bold",
+              "fontSize": 12,
+              "letterSpacing": 0.72,
+              "lineHeight": 16,
+              "textTransform": "uppercase",
+            }
           }
         >
           Needs you · 3
@@ -511,15 +476,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 16,
-                "lineHeight": 24,
-              },
-              undefined,
-            ]
+            {
+              "color": "#0A0A0A",
+              "fontFamily": "Roboto_600SemiBold",
+              "fontSize": 16,
+              "lineHeight": 24,
+            }
           }
         >
           Booking request: Seminar room
@@ -573,18 +535,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 15,
-                "lineHeight": 22,
-              },
-              {
-                "color": "#FFFFFF",
-                "fontFamily": "Roboto_700Bold",
-              },
-            ]
+            {
+              "color": "#FFFFFF",
+              "fontFamily": "Roboto_700Bold",
+              "fontSize": 15,
+              "lineHeight": 22,
+            }
           }
         >
           Open
@@ -625,40 +581,32 @@ exports[`kit gallery (dark) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#FFB801",
-            "borderColor": "transparent",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#FFB801",
+          "borderColor": "transparent",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#0A0A0A",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Primary
@@ -698,40 +646,32 @@ exports[`kit gallery (dark) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#161614",
-            "borderColor": "#6B675D",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#161614",
+          "borderColor": "#6B675D",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#F4F2EA",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Secondary
@@ -771,41 +711,33 @@ exports[`kit gallery (dark) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "transparent",
-            "borderColor": "transparent",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 44,
-            "minWidth": 48,
-            "paddingHorizontal": 8,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "transparent",
+          "borderColor": "transparent",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 44,
+          "minWidth": 48,
+          "paddingHorizontal": 8,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 15,
-              "lineHeight": 22,
-              "textAlign": "center",
-              "textDecorationLine": "underline",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#F4F2EA",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 15,
+            "lineHeight": 22,
+            "textAlign": "center",
+            "textDecorationLine": "underline",
+          }
         }
       >
         Text button
@@ -845,40 +777,32 @@ exports[`kit gallery (dark) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "transparent",
-            "borderColor": "#EB7070",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "transparent",
+          "borderColor": "#EB7070",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#EB7070",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#EB7070",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Destructive
@@ -918,41 +842,33 @@ exports[`kit gallery (dark) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#EB7070",
-            "borderColor": "#EB7070",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "opacity": 1,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#EB7070",
+          "borderColor": "#EB7070",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "opacity": 1,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#0A0A0A",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Delete account
@@ -992,40 +908,32 @@ exports[`kit gallery (dark) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#FFB801",
-            "borderColor": "transparent",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 44,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#FFB801",
+          "borderColor": "transparent",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 44,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 15,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#0A0A0A",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 15,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Small
@@ -1065,40 +973,32 @@ exports[`kit gallery (dark) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#161614",
-            "borderColor": "#2A2924",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#161614",
+          "borderColor": "#2A2924",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#C7C3B5",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Disabled
@@ -1138,23 +1038,19 @@ exports[`kit gallery (dark) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#161614",
-            "borderColor": "#2A2924",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#161614",
+          "borderColor": "#2A2924",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <View
@@ -1168,18 +1064,14 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#C7C3B5",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Saving
@@ -1292,20 +1184,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#8BC777",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#8BC777",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Paid
@@ -1462,20 +1346,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#D9A520",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#D9A520",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Due soon
@@ -1610,20 +1486,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#EB7070",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#EB7070",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Cancelled
@@ -1762,20 +1630,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#0A0A0A",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         You
@@ -2043,20 +1903,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#F4F2EA",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Needs a lead
@@ -2215,20 +2067,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#C7C3B5",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Staff
@@ -2365,20 +2209,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#C7C3B5",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         In progress
@@ -2452,21 +2288,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 16,
-                "lineHeight": 24,
-              },
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_700Bold",
-                "fontSize": 14,
-                "lineHeight": 20,
-                "textAlign": "center",
-              },
-            ]
+            {
+              "color": "#F4F2EA",
+              "fontFamily": "Roboto_700Bold",
+              "fontSize": 14,
+              "lineHeight": 20,
+              "textAlign": "center",
+            }
           }
         >
           Week
@@ -2525,21 +2353,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 16,
-                "lineHeight": 24,
-              },
-              {
-                "color": "#C7C3B5",
-                "fontFamily": "Roboto_500Medium",
-                "fontSize": 14,
-                "lineHeight": 20,
-                "textAlign": "center",
-              },
-            ]
+            {
+              "color": "#C7C3B5",
+              "fontFamily": "Roboto_500Medium",
+              "fontSize": 14,
+              "lineHeight": 20,
+              "textAlign": "center",
+            }
           }
         >
           Practice
@@ -2598,21 +2418,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 16,
-                "lineHeight": 24,
-              },
-              {
-                "color": "#C7C3B5",
-                "fontFamily": "Roboto_500Medium",
-                "fontSize": 14,
-                "lineHeight": 20,
-                "textAlign": "center",
-              },
-            ]
+            {
+              "color": "#C7C3B5",
+              "fontFamily": "Roboto_500Medium",
+              "fontSize": 14,
+              "lineHeight": 20,
+              "textAlign": "center",
+            }
           }
         >
           My sets
@@ -2637,17 +2449,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
         accessibilityRole="header"
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 15,
-              "lineHeight": 22,
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#F4F2EA",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 15,
+            "lineHeight": 22,
+          }
         }
       >
         Needs you
@@ -2697,17 +2505,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 15,
-                "lineHeight": 22,
-              },
-              {
-                "textDecorationLine": "underline",
-              },
-            ]
+            {
+              "color": "#F4F2EA",
+              "fontFamily": "Roboto_600SemiBold",
+              "fontSize": 15,
+              "lineHeight": 22,
+              "textDecorationLine": "underline",
+            }
           }
         >
           Mark all read
@@ -2716,17 +2520,14 @@ exports[`kit gallery (dark) renders every component 1`] = `
     </View>
     <View
       style={
-        [
-          {
-            "backgroundColor": "#161614",
-            "borderColor": "#2A2924",
-            "borderRadius": 8,
-            "borderWidth": 1,
-            "marginHorizontal": 16,
-            "overflow": "hidden",
-          },
-          undefined,
-        ]
+        {
+          "backgroundColor": "#161614",
+          "borderColor": "#2A2924",
+          "borderRadius": 8,
+          "borderWidth": 1,
+          "marginHorizontal": 16,
+          "overflow": "hidden",
+        }
       }
     >
       <View
@@ -2905,17 +2706,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#F4F2EA",
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             List row
@@ -2923,15 +2719,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#C7C3B5",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 13,
-                  "lineHeight": 18,
-                },
-                undefined,
-              ]
+              {
+                "color": "#C7C3B5",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 13,
+                "lineHeight": 18,
+              }
             }
           >
             Caption under the title
@@ -3112,17 +2905,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#F4F2EA",
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             Unread row
@@ -3130,15 +2918,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#C7C3B5",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 13,
-                  "lineHeight": 18,
-                },
-                undefined,
-              ]
+              {
+                "color": "#C7C3B5",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 13,
+                "lineHeight": 18,
+              }
             }
           >
             Dot + bold title
@@ -3302,17 +3087,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#F4F2EA",
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             Read row
@@ -3320,15 +3100,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#C7C3B5",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 13,
-                  "lineHeight": 18,
-                },
-                undefined,
-              ]
+              {
+                "color": "#C7C3B5",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 13,
+                "lineHeight": 18,
+              }
             }
           >
             Regular weight
@@ -3491,17 +3268,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#F4F2EA",
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             Money cell
@@ -3509,15 +3281,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#C7C3B5",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 13,
-                  "lineHeight": 18,
-                },
-                undefined,
-              ]
+              {
+                "color": "#C7C3B5",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 13,
+                "lineHeight": 18,
+              }
             }
           >
             Tabular figures
@@ -3537,22 +3306,15 @@ exports[`kit gallery (dark) renders every component 1`] = `
             accessibilityLabel="12450 rand"
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                [
-                  {
-                    "fontVariant": [
-                      "tabular-nums",
-                    ],
-                  },
-                  undefined,
+              {
+                "color": "#F4F2EA",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "fontVariant": [
+                  "tabular-nums",
                 ],
-              ]
+                "lineHeight": 24,
+              }
             }
           >
             R 12 450
@@ -3626,17 +3388,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#F4F2EA",
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             Opens in the website
@@ -3766,19 +3523,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#C7C3B5",
-                      "fontFamily": "Roboto_400Regular",
-                      "fontSize": 13,
-                      "lineHeight": 18,
-                    },
-                    {
-                      "fontFamily": "Roboto_500Medium",
-                      "fontSize": 12,
-                      "lineHeight": 16,
-                    },
-                  ]
+                  {
+                    "color": "#C7C3B5",
+                    "fontFamily": "Roboto_500Medium",
+                    "fontSize": 12,
+                    "lineHeight": 16,
+                  }
                 }
               >
                 Opens in browser
@@ -3965,17 +3715,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#C7C3B5",
-                },
-              ]
+              {
+                "color": "#C7C3B5",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             Saved offline
@@ -3983,15 +3728,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#C7C3B5",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 13,
-                  "lineHeight": 18,
-                },
-                undefined,
-              ]
+              {
+                "color": "#C7C3B5",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 13,
+                "lineHeight": 18,
+              }
             }
           >
             Saved on this phone, not yet sent
@@ -4101,15 +3843,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         importantForAccessibility="no"
         nativeID="Field-label"
         style={
-          [
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#C7C3B5",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         Field
@@ -4174,15 +3913,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         importantForAccessibility="no"
         nativeID="Field — error-label"
         style={
-          [
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#C7C3B5",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         Field — error
@@ -4389,18 +4125,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
           accessibilityRole="alert"
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#EB7070",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              {
-                "flex": 1,
-                "fontFamily": "Roboto_500Medium",
-              },
-            ]
+            {
+              "color": "#EB7070",
+              "flex": 1,
+              "fontFamily": "Roboto_500Medium",
+              "fontSize": 13,
+              "lineHeight": 18,
+            }
           }
         >
           Plain-English reason.
@@ -4420,15 +4151,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         importantForAccessibility="no"
         nativeID="Field — hint-label"
         style={
-          [
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#C7C3B5",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         Field — hint
@@ -4484,15 +4212,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#C7C3B5",
+            "fontFamily": "Roboto_400Regular",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         We never share it.
@@ -4511,15 +4236,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         importantForAccessibility="no"
         nativeID="Password-label"
         style={
-          [
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#C7C3B5",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         Password
@@ -4736,15 +4458,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         importantForAccessibility="no"
         nativeID="Read only-label"
         style={
-          [
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#C7C3B5",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         Read only
@@ -4960,15 +4679,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              undefined,
-            ]
+            {
+              "color": "#F4F2EA",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+            }
           }
         >
           Offline. Showing what was saved at 08:42.
@@ -5148,15 +4864,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              undefined,
-            ]
+            {
+              "color": "#F4F2EA",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+            }
           }
         >
           Couldn't refresh.
@@ -5208,17 +4921,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#C7C3B5",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              {
-                "textDecorationLine": "underline",
-              },
-            ]
+            {
+              "color": "#C7C3B5",
+              "fontFamily": "Roboto_600SemiBold",
+              "fontSize": 13,
+              "lineHeight": 18,
+              "textDecorationLine": "underline",
+            }
           }
         >
           Try again
@@ -5370,15 +5079,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              undefined,
-            ]
+            {
+              "color": "#F4F2EA",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+            }
           }
         >
           Saved on this phone, not yet sent
@@ -5552,15 +5258,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 15,
-                "lineHeight": 22,
-              },
-              undefined,
-            ]
+            {
+              "color": "#F4F2EA",
+              "fontFamily": "Roboto_600SemiBold",
+              "fontSize": 15,
+              "lineHeight": 22,
+            }
           }
         >
           Heads up
@@ -5568,15 +5271,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              undefined,
-            ]
+            {
+              "color": "#F4F2EA",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+            }
           }
         >
           Bookings open on Sunday.
@@ -5771,17 +5471,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#C7C3B5",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              {
-                "textAlign": "center",
-              },
-            ]
+            {
+              "color": "#C7C3B5",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+              "textAlign": "center",
+            }
           }
         >
           No photo yet
@@ -5830,43 +5526,34 @@ exports[`kit gallery (dark) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#161614",
-                "borderColor": "#6B675D",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#161614",
+              "borderColor": "#6B675D",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Take a photo
@@ -5906,43 +5593,34 @@ exports[`kit gallery (dark) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#161614",
-                "borderColor": "#6B675D",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#161614",
+              "borderColor": "#6B675D",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Choose a photo
@@ -6085,17 +5763,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#C7C3B5",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              {
-                "textAlign": "center",
-              },
-            ]
+            {
+              "color": "#C7C3B5",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+              "textAlign": "center",
+            }
           }
         >
           Photo on file
@@ -6144,43 +5818,34 @@ exports[`kit gallery (dark) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#161614",
-                "borderColor": "#6B675D",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#161614",
+              "borderColor": "#6B675D",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             View
@@ -6220,43 +5885,34 @@ exports[`kit gallery (dark) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#161614",
-                "borderColor": "#6B675D",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#161614",
+              "borderColor": "#6B675D",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Take a photo
@@ -6296,43 +5952,34 @@ exports[`kit gallery (dark) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#161614",
-                "borderColor": "#6B675D",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#161614",
+              "borderColor": "#6B675D",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Choose a photo
@@ -6372,43 +6019,34 @@ exports[`kit gallery (dark) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "transparent",
-                "borderColor": "#EB7070",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "transparent",
+              "borderColor": "#EB7070",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#EB7070",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#EB7070",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Remove
@@ -6555,17 +6193,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
         accessibilityRole="header"
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "textAlign": "center",
-            },
-          ]
+          {
+            "color": "#F4F2EA",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 16,
+            "lineHeight": 24,
+            "textAlign": "center",
+          }
         }
       >
         You're all caught up
@@ -6589,17 +6223,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
         accessibilityRole="header"
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#F4F2EA",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "textAlign": "center",
-            },
-          ]
+          {
+            "color": "#F4F2EA",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 16,
+            "lineHeight": 24,
+            "textAlign": "center",
+          }
         }
       >
         Couldn't load your bookings.
@@ -6607,17 +6237,13 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            {
-              "textAlign": "center",
-            },
-          ]
+          {
+            "color": "#C7C3B5",
+            "fontFamily": "Roboto_400Regular",
+            "fontSize": 13,
+            "lineHeight": 18,
+            "textAlign": "center",
+          }
         }
       >
         Check your signal, then try again.
@@ -6663,40 +6289,32 @@ exports[`kit gallery (dark) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#161614",
-                "borderColor": "#6B675D",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              undefined,
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#161614",
+              "borderColor": "#6B675D",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Try again
@@ -6829,25 +6447,15 @@ exports[`kit gallery (dark) renders every component 1`] = `
       allowFontScaling={true}
       maxFontSizeMultiplier={1.6}
       style={
-        [
-          {
-            "color": "#F4F2EA",
-            "fontFamily": "Roboto_500Medium",
-            "fontSize": 24,
-            "fontVariant": [
-              "tabular-nums",
-            ],
-            "lineHeight": 32,
-          },
-          [
-            {
-              "fontVariant": [
-                "tabular-nums",
-              ],
-            },
-            undefined,
+        {
+          "color": "#F4F2EA",
+          "fontFamily": "Roboto_500Medium",
+          "fontSize": 24,
+          "fontVariant": [
+            "tabular-nums",
           ],
-        ]
+          "lineHeight": 32,
+        }
       }
     >
       R 3 240.00
@@ -6970,19 +6578,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#C7C3B5",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            {
-              "fontFamily": "Roboto_500Medium",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#C7C3B5",
+            "fontFamily": "Roboto_500Medium",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Opens in browser
@@ -7015,17 +6616,14 @@ exports[`kit gallery (dark) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#C7C3B5",
-            "fontFamily": "Roboto_700Bold",
-            "fontSize": 12,
-            "letterSpacing": 0.72,
-            "lineHeight": 16,
-            "textTransform": "uppercase",
-          },
-          undefined,
-        ]
+        {
+          "color": "#C7C3B5",
+          "fontFamily": "Roboto_700Bold",
+          "fontSize": 12,
+          "letterSpacing": 0.72,
+          "lineHeight": 16,
+          "textTransform": "uppercase",
+        }
       }
     >
       eyebrow
@@ -7033,15 +6631,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#C7C3B5",
-            "fontFamily": "Roboto_600SemiBold",
-            "fontSize": 13,
-            "lineHeight": 18,
-          },
-          undefined,
-        ]
+        {
+          "color": "#C7C3B5",
+          "fontFamily": "Roboto_600SemiBold",
+          "fontSize": 13,
+          "lineHeight": 18,
+        }
       }
     >
       label
@@ -7050,17 +6645,14 @@ exports[`kit gallery (dark) renders every component 1`] = `
       allowFontScaling={true}
       maxFontSizeMultiplier={2}
       style={
-        [
-          {
-            "color": "#F4F2EA",
-            "fontFamily": "RobotoMono_700Bold",
-            "fontSize": 11,
-            "letterSpacing": 1.54,
-            "lineHeight": 16,
-            "textTransform": "uppercase",
-          },
-          undefined,
-        ]
+        {
+          "color": "#F4F2EA",
+          "fontFamily": "RobotoMono_700Bold",
+          "fontSize": 11,
+          "letterSpacing": 1.54,
+          "lineHeight": 16,
+          "textTransform": "uppercase",
+        }
       }
     >
       monoLabel
@@ -7068,15 +6660,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#F4F2EA",
-            "fontFamily": "Roboto_400Regular",
-            "fontSize": 13,
-            "lineHeight": 18,
-          },
-          undefined,
-        ]
+        {
+          "color": "#F4F2EA",
+          "fontFamily": "Roboto_400Regular",
+          "fontSize": 13,
+          "lineHeight": 18,
+        }
       }
     >
       caption
@@ -7084,15 +6673,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#F4F2EA",
-            "fontFamily": "Roboto_400Regular",
-            "fontSize": 16,
-            "lineHeight": 24,
-          },
-          undefined,
-        ]
+        {
+          "color": "#F4F2EA",
+          "fontFamily": "Roboto_400Regular",
+          "fontSize": 16,
+          "lineHeight": 24,
+        }
       }
     >
       body
@@ -7100,15 +6686,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#F4F2EA",
-            "fontFamily": "Roboto_600SemiBold",
-            "fontSize": 15,
-            "lineHeight": 22,
-          },
-          undefined,
-        ]
+        {
+          "color": "#F4F2EA",
+          "fontFamily": "Roboto_600SemiBold",
+          "fontSize": 15,
+          "lineHeight": 22,
+        }
       }
     >
       sectionTitle
@@ -7116,15 +6699,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#F4F2EA",
-            "fontFamily": "Roboto_600SemiBold",
-            "fontSize": 16,
-            "lineHeight": 24,
-          },
-          undefined,
-        ]
+        {
+          "color": "#F4F2EA",
+          "fontFamily": "Roboto_600SemiBold",
+          "fontSize": 16,
+          "lineHeight": 24,
+        }
       }
     >
       rowTitle
@@ -7134,17 +6714,14 @@ exports[`kit gallery (dark) renders every component 1`] = `
       allowFontScaling={true}
       maxFontSizeMultiplier={1.4}
       style={
-        [
-          {
-            "color": "#F4F2EA",
-            "fontFamily": "Roboto_900Black",
-            "fontSize": 28,
-            "letterSpacing": -0.28,
-            "lineHeight": 34,
-            "textTransform": "uppercase",
-          },
-          undefined,
-        ]
+        {
+          "color": "#F4F2EA",
+          "fontFamily": "Roboto_900Black",
+          "fontSize": 28,
+          "letterSpacing": -0.28,
+          "lineHeight": 34,
+          "textTransform": "uppercase",
+        }
       }
     >
       pageTitle
@@ -7154,17 +6731,14 @@ exports[`kit gallery (dark) renders every component 1`] = `
       allowFontScaling={true}
       maxFontSizeMultiplier={1.3}
       style={
-        [
-          {
-            "color": "#F4F2EA",
-            "fontFamily": "Roboto_900Black",
-            "fontSize": 34,
-            "letterSpacing": -0.34,
-            "lineHeight": 36,
-            "textTransform": "uppercase",
-          },
-          undefined,
-        ]
+        {
+          "color": "#F4F2EA",
+          "fontFamily": "Roboto_900Black",
+          "fontSize": 34,
+          "letterSpacing": -0.34,
+          "lineHeight": 36,
+          "textTransform": "uppercase",
+        }
       }
     >
       hero
@@ -7173,18 +6747,15 @@ exports[`kit gallery (dark) renders every component 1`] = `
       allowFontScaling={true}
       maxFontSizeMultiplier={1.6}
       style={
-        [
-          {
-            "color": "#F4F2EA",
-            "fontFamily": "Roboto_500Medium",
-            "fontSize": 24,
-            "fontVariant": [
-              "tabular-nums",
-            ],
-            "lineHeight": 32,
-          },
-          undefined,
-        ]
+        {
+          "color": "#F4F2EA",
+          "fontFamily": "Roboto_500Medium",
+          "fontSize": 24,
+          "fontVariant": [
+            "tabular-nums",
+          ],
+          "lineHeight": 32,
+        }
       }
     >
       kpi
@@ -7192,15 +6763,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#C7C3B5",
-            "fontFamily": "RobotoCondensed_400Regular",
-            "fontSize": 14,
-            "lineHeight": 20,
-          },
-          undefined,
-        ]
+        {
+          "color": "#C7C3B5",
+          "fontFamily": "RobotoCondensed_400Regular",
+          "fontSize": 14,
+          "lineHeight": 20,
+        }
       }
     >
       note
@@ -7215,15 +6783,11 @@ exports[`kit gallery (dark) renders every component 1`] = `
       <View
         onLayout={[Function]}
         style={
-          [
-            {
-              "flex": 1,
-              "justifyContent": "flex-end",
-            },
-            {
-              "paddingBottom": 0,
-            },
-          ]
+          {
+            "flex": 1,
+            "justifyContent": "flex-end",
+            "paddingBottom": 0,
+          }
         }
       >
         <View
@@ -7325,19 +6889,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
                 accessibilityRole="header"
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#F4F2EA",
-                      "fontFamily": "Roboto_400Regular",
-                      "fontSize": 16,
-                      "lineHeight": 24,
-                    },
-                    {
-                      "fontFamily": "Roboto_600SemiBold",
-                      "fontSize": 17,
-                      "lineHeight": 24,
-                    },
-                  ]
+                  {
+                    "color": "#F4F2EA",
+                    "fontFamily": "Roboto_600SemiBold",
+                    "fontSize": 17,
+                    "lineHeight": 24,
+                  }
                 }
               >
                 Sheet title
@@ -7345,15 +6902,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#C7C3B5",
-                      "fontFamily": "Roboto_400Regular",
-                      "fontSize": 13,
-                      "lineHeight": 18,
-                    },
-                    undefined,
-                  ]
+                  {
+                    "color": "#C7C3B5",
+                    "fontFamily": "Roboto_400Regular",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                  }
                 }
               >
                 One line
@@ -7526,15 +7080,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#F4F2EA",
-                      "fontFamily": "Roboto_400Regular",
-                      "fontSize": 16,
-                      "lineHeight": 24,
-                    },
-                    undefined,
-                  ]
+                  {
+                    "color": "#F4F2EA",
+                    "fontFamily": "Roboto_400Regular",
+                    "fontSize": 16,
+                    "lineHeight": 24,
+                  }
                 }
               >
                 Sheet body
@@ -7586,40 +7137,32 @@ exports[`kit gallery (dark) renders every component 1`] = `
               onResponderTerminationRequest={[Function]}
               onStartShouldSetResponder={[Function]}
               style={
-                [
-                  {
-                    "alignItems": "center",
-                    "backgroundColor": "#FFB801",
-                    "borderColor": "transparent",
-                    "borderRadius": 6,
-                    "borderWidth": 1,
-                    "flexDirection": "row",
-                    "gap": 8,
-                    "justifyContent": "center",
-                    "minHeight": 50,
-                    "minWidth": 48,
-                    "paddingHorizontal": 16,
-                  },
-                  null,
-                  undefined,
-                ]
+                {
+                  "alignItems": "center",
+                  "backgroundColor": "#FFB801",
+                  "borderColor": "transparent",
+                  "borderRadius": 6,
+                  "borderWidth": 1,
+                  "flexDirection": "row",
+                  "gap": 8,
+                  "justifyContent": "center",
+                  "minHeight": 50,
+                  "minWidth": 48,
+                  "paddingHorizontal": 16,
+                }
               }
             >
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#0A0A0A",
-                      "fontFamily": "Roboto_700Bold",
-                      "fontSize": 16,
-                      "lineHeight": 22,
-                      "textAlign": "center",
-                    },
-                    {
-                      "flexShrink": 1,
-                    },
-                  ]
+                  {
+                    "color": "#0A0A0A",
+                    "flexShrink": 1,
+                    "fontFamily": "Roboto_700Bold",
+                    "fontSize": 16,
+                    "lineHeight": 22,
+                    "textAlign": "center",
+                  }
                 }
               >
                 Save
@@ -7717,6 +7260,7 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
             {
               "alignItems": "center",
               "flexDirection": "row",
+              "flexShrink": 1,
               "minHeight": 44,
               "minWidth": 44,
               "opacity": 1,
@@ -7813,18 +7357,13 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
             maxFontSizeMultiplier={1.4}
             numberOfLines={1}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 17,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 17,
+                "lineHeight": 24,
+              }
             }
           >
             Home
@@ -7847,16 +7386,12 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
             maxFontSizeMultiplier={1.3}
             numberOfLines={1}
             style={
-              [
-                {
-                  "color": "#F4F2EA",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                },
-                {
-                  "opacity": 0,
-                },
-              ]
+              {
+                "color": "#F4F2EA",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "opacity": 0,
+              }
             }
           >
             My tickets
@@ -7876,29 +7411,22 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
         accessibilityElementsHidden={true}
         importantForAccessibility="no-hide-descendants"
         style={
-          [
-            {
-              "backgroundColor": "#2A2924",
-              "height": 1,
-              "marginHorizontal": -20,
-            },
-            {
-              "opacity": 0,
-            },
-          ]
+          {
+            "backgroundColor": "#2A2924",
+            "height": 1,
+            "marginHorizontal": -20,
+            "opacity": 0,
+          }
         }
       />
     </View>
     <RCTScrollView
       contentContainerStyle={
-        [
-          {
-            "gap": 16,
-            "paddingBottom": 24,
-            "paddingHorizontal": 20,
-          },
-          undefined,
-        ]
+        {
+          "gap": 16,
+          "paddingBottom": 24,
+          "paddingHorizontal": 20,
+        }
       }
       keyboardShouldPersistTaps="handled"
       onScroll={[Function]}
@@ -7942,19 +7470,15 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
                 <Text
                   allowFontScaling={true}
                   style={
-                    [
-                      {
-                        "color": "#C7C3B5",
-                        "fontFamily": "Roboto_700Bold",
-                        "fontSize": 12,
-                        "letterSpacing": 0.72,
-                        "lineHeight": 16,
-                        "textTransform": "uppercase",
-                      },
-                      {
-                        "flexShrink": 1,
-                      },
-                    ]
+                    {
+                      "color": "#C7C3B5",
+                      "flexShrink": 1,
+                      "fontFamily": "Roboto_700Bold",
+                      "fontSize": 12,
+                      "letterSpacing": 0.72,
+                      "lineHeight": 16,
+                      "textTransform": "uppercase",
+                    }
                   }
                 >
                   Tickets
@@ -7975,19 +7499,15 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
                   allowFontScaling={true}
                   maxFontSizeMultiplier={1.4}
                   style={
-                    [
-                      {
-                        "color": "#F4F2EA",
-                        "fontFamily": "Roboto_900Black",
-                        "fontSize": 28,
-                        "letterSpacing": -0.28,
-                        "lineHeight": 34,
-                        "textTransform": "uppercase",
-                      },
-                      {
-                        "flexShrink": 1,
-                      },
-                    ]
+                    {
+                      "color": "#F4F2EA",
+                      "flexShrink": 1,
+                      "fontFamily": "Roboto_900Black",
+                      "fontSize": 28,
+                      "letterSpacing": -0.28,
+                      "lineHeight": 34,
+                      "textTransform": "uppercase",
+                    }
                   }
                 >
                   My tickets
@@ -7998,17 +7518,14 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
         </View>
         <View
           style={
-            [
-              {
-                "backgroundColor": "#161614",
-                "borderColor": "#2A2924",
-                "borderRadius": 8,
-                "borderWidth": 1,
-                "marginHorizontal": 16,
-                "overflow": "hidden",
-              },
-              undefined,
-            ]
+            {
+              "backgroundColor": "#161614",
+              "borderColor": "#2A2924",
+              "borderRadius": 8,
+              "borderWidth": 1,
+              "marginHorizontal": 16,
+              "overflow": "hidden",
+            }
           }
         >
           <View
@@ -8069,17 +7586,12 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#F4F2EA",
-                      "fontFamily": "Roboto_600SemiBold",
-                      "fontSize": 16,
-                      "lineHeight": 24,
-                    },
-                    {
-                      "color": "#F4F2EA",
-                    },
-                  ]
+                  {
+                    "color": "#F4F2EA",
+                    "fontFamily": "Roboto_600SemiBold",
+                    "fontSize": 16,
+                    "lineHeight": 24,
+                  }
                 }
               >
                 Send Night
@@ -8087,15 +7599,12 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#C7C3B5",
-                      "fontFamily": "Roboto_400Regular",
-                      "fontSize": 13,
-                      "lineHeight": 18,
-                    },
-                    undefined,
-                  ]
+                  {
+                    "color": "#C7C3B5",
+                    "fontFamily": "Roboto_400Regular",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                  }
                 }
               >
                 Sat 12 Dec · 18:30
@@ -8245,19 +7754,15 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#55524A",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 12,
-                  "letterSpacing": 0.72,
-                  "lineHeight": 16,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#55524A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 12,
+                "letterSpacing": 0.72,
+                "lineHeight": 16,
+                "textTransform": "uppercase",
+              }
             }
           >
             Eyebrow
@@ -8278,19 +7783,15 @@ exports[`kit gallery (light) renders every component 1`] = `
             allowFontScaling={true}
             maxFontSizeMultiplier={1.4}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_900Black",
-                  "fontSize": 28,
-                  "letterSpacing": -0.28,
-                  "lineHeight": 34,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_900Black",
+                "fontSize": 28,
+                "letterSpacing": -0.28,
+                "lineHeight": 34,
+                "textTransform": "uppercase",
+              }
             }
           >
             Large title
@@ -8299,17 +7800,13 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#55524A",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 16,
-                "lineHeight": 24,
-              },
-              {
-                "marginTop": 2,
-              },
-            ]
+            {
+              "color": "#55524A",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 16,
+              "lineHeight": 24,
+              "marginTop": 2,
+            }
           }
         >
           One line of body text under the title.
@@ -8365,6 +7862,7 @@ exports[`kit gallery (light) renders every component 1`] = `
             {
               "alignItems": "center",
               "flexDirection": "row",
+              "flexShrink": 1,
               "minHeight": 44,
               "minWidth": 44,
               "opacity": 1,
@@ -8461,18 +7959,13 @@ exports[`kit gallery (light) renders every component 1`] = `
             maxFontSizeMultiplier={1.4}
             numberOfLines={1}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 17,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 17,
+                "lineHeight": 24,
+              }
             }
           >
             Home
@@ -8521,19 +8014,15 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#55524A",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 12,
-                  "letterSpacing": 0.72,
-                  "lineHeight": 16,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#55524A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 12,
+                "letterSpacing": 0.72,
+                "lineHeight": 16,
+                "textTransform": "uppercase",
+              }
             }
           >
             Spaces and vehicles
@@ -8554,19 +8043,15 @@ exports[`kit gallery (light) renders every component 1`] = `
             allowFontScaling={true}
             maxFontSizeMultiplier={1.4}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_900Black",
-                  "fontSize": 28,
-                  "letterSpacing": -0.28,
-                  "lineHeight": 34,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_900Black",
+                "fontSize": 28,
+                "letterSpacing": -0.28,
+                "lineHeight": 34,
+                "textTransform": "uppercase",
+              }
             }
           >
             Bookings
@@ -8608,19 +8093,15 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#55524A",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 12,
-                  "letterSpacing": 0.72,
-                  "lineHeight": 16,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#55524A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 12,
+                "letterSpacing": 0.72,
+                "lineHeight": 16,
+                "textTransform": "uppercase",
+              }
             }
           >
             FFSA Hub
@@ -8641,19 +8122,15 @@ exports[`kit gallery (light) renders every component 1`] = `
             allowFontScaling={true}
             maxFontSizeMultiplier={1.3}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_900Black",
-                  "fontSize": 34,
-                  "letterSpacing": -0.34,
-                  "lineHeight": 36,
-                  "textTransform": "uppercase",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_900Black",
+                "fontSize": 34,
+                "letterSpacing": -0.34,
+                "lineHeight": 36,
+                "textTransform": "uppercase",
+              }
             }
           >
             Sign in
@@ -8691,17 +8168,14 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_700Bold",
-                "fontSize": 12,
-                "letterSpacing": 0.72,
-                "lineHeight": 16,
-                "textTransform": "uppercase",
-              },
-              undefined,
-            ]
+            {
+              "color": "#0A0A0A",
+              "fontFamily": "Roboto_700Bold",
+              "fontSize": 12,
+              "letterSpacing": 0.72,
+              "lineHeight": 16,
+              "textTransform": "uppercase",
+            }
           }
         >
           Needs you · 3
@@ -8709,15 +8183,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 16,
-                "lineHeight": 24,
-              },
-              undefined,
-            ]
+            {
+              "color": "#0A0A0A",
+              "fontFamily": "Roboto_600SemiBold",
+              "fontSize": 16,
+              "lineHeight": 24,
+            }
           }
         >
           Booking request: Seminar room
@@ -8771,18 +8242,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 15,
-                "lineHeight": 22,
-              },
-              {
-                "color": "#FFFFFF",
-                "fontFamily": "Roboto_700Bold",
-              },
-            ]
+            {
+              "color": "#FFFFFF",
+              "fontFamily": "Roboto_700Bold",
+              "fontSize": 15,
+              "lineHeight": 22,
+            }
           }
         >
           Open
@@ -8823,40 +8288,32 @@ exports[`kit gallery (light) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#0A0A0A",
-            "borderColor": "transparent",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#0A0A0A",
+          "borderColor": "transparent",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#FFFFFF",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#FFFFFF",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Primary
@@ -8896,40 +8353,32 @@ exports[`kit gallery (light) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#FFFFFF",
-            "borderColor": "#8E8A7C",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#FFFFFF",
+          "borderColor": "#8E8A7C",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#0A0A0A",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Secondary
@@ -8969,41 +8418,33 @@ exports[`kit gallery (light) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "transparent",
-            "borderColor": "transparent",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 44,
-            "minWidth": 48,
-            "paddingHorizontal": 8,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "transparent",
+          "borderColor": "transparent",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 44,
+          "minWidth": 48,
+          "paddingHorizontal": 8,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 15,
-              "lineHeight": 22,
-              "textAlign": "center",
-              "textDecorationLine": "underline",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#0A0A0A",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 15,
+            "lineHeight": 22,
+            "textAlign": "center",
+            "textDecorationLine": "underline",
+          }
         }
       >
         Text button
@@ -9043,40 +8484,32 @@ exports[`kit gallery (light) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "transparent",
-            "borderColor": "#D92D20",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "transparent",
+          "borderColor": "#D92D20",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#D92D20",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#D92D20",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Destructive
@@ -9116,41 +8549,33 @@ exports[`kit gallery (light) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#D92D20",
-            "borderColor": "#D92D20",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "opacity": 1,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#D92D20",
+          "borderColor": "#D92D20",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "opacity": 1,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#FFFFFF",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#FFFFFF",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Delete account
@@ -9190,40 +8615,32 @@ exports[`kit gallery (light) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#0A0A0A",
-            "borderColor": "transparent",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 44,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#0A0A0A",
+          "borderColor": "transparent",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 44,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#FFFFFF",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 15,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#FFFFFF",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 15,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Small
@@ -9263,40 +8680,32 @@ exports[`kit gallery (light) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#FBFAF7",
-            "borderColor": "#E7E4D9",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#FBFAF7",
+          "borderColor": "#E7E4D9",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#6B675D",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#6B675D",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Disabled
@@ -9336,23 +8745,19 @@ exports[`kit gallery (light) renders every component 1`] = `
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
       style={
-        [
-          {
-            "alignItems": "center",
-            "backgroundColor": "#FBFAF7",
-            "borderColor": "#E7E4D9",
-            "borderRadius": 6,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 8,
-            "justifyContent": "center",
-            "minHeight": 50,
-            "minWidth": 48,
-            "paddingHorizontal": 16,
-          },
-          null,
-          undefined,
-        ]
+        {
+          "alignItems": "center",
+          "backgroundColor": "#FBFAF7",
+          "borderColor": "#E7E4D9",
+          "borderRadius": 6,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 8,
+          "justifyContent": "center",
+          "minHeight": 50,
+          "minWidth": 48,
+          "paddingHorizontal": 16,
+        }
       }
     >
       <View
@@ -9366,18 +8771,14 @@ exports[`kit gallery (light) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#6B675D",
-              "fontFamily": "Roboto_700Bold",
-              "fontSize": 16,
-              "lineHeight": 22,
-              "textAlign": "center",
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#6B675D",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_700Bold",
+            "fontSize": 16,
+            "lineHeight": 22,
+            "textAlign": "center",
+          }
         }
       >
         Saving
@@ -9490,20 +8891,12 @@ exports[`kit gallery (light) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#3E7F2B",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#3E7F2B",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Paid
@@ -9660,20 +9053,12 @@ exports[`kit gallery (light) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#8A6400",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#8A6400",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Due soon
@@ -9808,20 +9193,12 @@ exports[`kit gallery (light) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#D92D20",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#D92D20",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Cancelled
@@ -9960,20 +9337,12 @@ exports[`kit gallery (light) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#FFFFFF",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#FFFFFF",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         You
@@ -10241,20 +9610,12 @@ exports[`kit gallery (light) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#0A0A0A",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Needs a lead
@@ -10413,20 +9774,12 @@ exports[`kit gallery (light) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#55524A",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Staff
@@ -10563,20 +9916,12 @@ exports[`kit gallery (light) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#55524A",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         In progress
@@ -10650,21 +9995,13 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 16,
-                "lineHeight": 24,
-              },
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_700Bold",
-                "fontSize": 14,
-                "lineHeight": 20,
-                "textAlign": "center",
-              },
-            ]
+            {
+              "color": "#0A0A0A",
+              "fontFamily": "Roboto_700Bold",
+              "fontSize": 14,
+              "lineHeight": 20,
+              "textAlign": "center",
+            }
           }
         >
           Week
@@ -10723,21 +10060,13 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 16,
-                "lineHeight": 24,
-              },
-              {
-                "color": "#55524A",
-                "fontFamily": "Roboto_500Medium",
-                "fontSize": 14,
-                "lineHeight": 20,
-                "textAlign": "center",
-              },
-            ]
+            {
+              "color": "#55524A",
+              "fontFamily": "Roboto_500Medium",
+              "fontSize": 14,
+              "lineHeight": 20,
+              "textAlign": "center",
+            }
           }
         >
           Practice
@@ -10796,21 +10125,13 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 16,
-                "lineHeight": 24,
-              },
-              {
-                "color": "#55524A",
-                "fontFamily": "Roboto_500Medium",
-                "fontSize": 14,
-                "lineHeight": 20,
-                "textAlign": "center",
-              },
-            ]
+            {
+              "color": "#55524A",
+              "fontFamily": "Roboto_500Medium",
+              "fontSize": 14,
+              "lineHeight": 20,
+              "textAlign": "center",
+            }
           }
         >
           My sets
@@ -10835,17 +10156,13 @@ exports[`kit gallery (light) renders every component 1`] = `
         accessibilityRole="header"
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 15,
-              "lineHeight": 22,
-            },
-            {
-              "flexShrink": 1,
-            },
-          ]
+          {
+            "color": "#0A0A0A",
+            "flexShrink": 1,
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 15,
+            "lineHeight": 22,
+          }
         }
       >
         Needs you
@@ -10895,17 +10212,13 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 15,
-                "lineHeight": 22,
-              },
-              {
-                "textDecorationLine": "underline",
-              },
-            ]
+            {
+              "color": "#0A0A0A",
+              "fontFamily": "Roboto_600SemiBold",
+              "fontSize": 15,
+              "lineHeight": 22,
+              "textDecorationLine": "underline",
+            }
           }
         >
           Mark all read
@@ -10914,17 +10227,14 @@ exports[`kit gallery (light) renders every component 1`] = `
     </View>
     <View
       style={
-        [
-          {
-            "backgroundColor": "#FFFFFF",
-            "borderColor": "#E7E4D9",
-            "borderRadius": 8,
-            "borderWidth": 1,
-            "marginHorizontal": 16,
-            "overflow": "hidden",
-          },
-          undefined,
-        ]
+        {
+          "backgroundColor": "#FFFFFF",
+          "borderColor": "#E7E4D9",
+          "borderRadius": 8,
+          "borderWidth": 1,
+          "marginHorizontal": 16,
+          "overflow": "hidden",
+        }
       }
     >
       <View
@@ -11103,17 +10413,12 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#0A0A0A",
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             List row
@@ -11121,15 +10426,12 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#55524A",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 13,
-                  "lineHeight": 18,
-                },
-                undefined,
-              ]
+              {
+                "color": "#55524A",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 13,
+                "lineHeight": 18,
+              }
             }
           >
             Caption under the title
@@ -11310,17 +10612,12 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#0A0A0A",
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             Unread row
@@ -11328,15 +10625,12 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#55524A",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 13,
-                  "lineHeight": 18,
-                },
-                undefined,
-              ]
+              {
+                "color": "#55524A",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 13,
+                "lineHeight": 18,
+              }
             }
           >
             Dot + bold title
@@ -11500,17 +10794,12 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#0A0A0A",
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             Read row
@@ -11518,15 +10807,12 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#55524A",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 13,
-                  "lineHeight": 18,
-                },
-                undefined,
-              ]
+              {
+                "color": "#55524A",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 13,
+                "lineHeight": 18,
+              }
             }
           >
             Regular weight
@@ -11689,17 +10975,12 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#0A0A0A",
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             Money cell
@@ -11707,15 +10988,12 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#55524A",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 13,
-                  "lineHeight": 18,
-                },
-                undefined,
-              ]
+              {
+                "color": "#55524A",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 13,
+                "lineHeight": 18,
+              }
             }
           >
             Tabular figures
@@ -11735,22 +11013,15 @@ exports[`kit gallery (light) renders every component 1`] = `
             accessibilityLabel="12450 rand"
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                [
-                  {
-                    "fontVariant": [
-                      "tabular-nums",
-                    ],
-                  },
-                  undefined,
+              {
+                "color": "#0A0A0A",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "fontVariant": [
+                  "tabular-nums",
                 ],
-              ]
+                "lineHeight": 24,
+              }
             }
           >
             R 12 450
@@ -11824,17 +11095,12 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#0A0A0A",
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             Opens in the website
@@ -11964,19 +11230,12 @@ exports[`kit gallery (light) renders every component 1`] = `
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#55524A",
-                      "fontFamily": "Roboto_400Regular",
-                      "fontSize": 13,
-                      "lineHeight": 18,
-                    },
-                    {
-                      "fontFamily": "Roboto_500Medium",
-                      "fontSize": 12,
-                      "lineHeight": 16,
-                    },
-                  ]
+                  {
+                    "color": "#55524A",
+                    "fontFamily": "Roboto_500Medium",
+                    "fontSize": 12,
+                    "lineHeight": 16,
+                  }
                 }
               >
                 Opens in browser
@@ -12163,17 +11422,12 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "color": "#6B675D",
-                },
-              ]
+              {
+                "color": "#6B675D",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "lineHeight": 24,
+              }
             }
           >
             Saved offline
@@ -12181,15 +11435,12 @@ exports[`kit gallery (light) renders every component 1`] = `
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#55524A",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 13,
-                  "lineHeight": 18,
-                },
-                undefined,
-              ]
+              {
+                "color": "#55524A",
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 13,
+                "lineHeight": 18,
+              }
             }
           >
             Saved on this phone, not yet sent
@@ -12299,15 +11550,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         importantForAccessibility="no"
         nativeID="Field-label"
         style={
-          [
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#55524A",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         Field
@@ -12372,15 +11620,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         importantForAccessibility="no"
         nativeID="Field — error-label"
         style={
-          [
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#55524A",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         Field — error
@@ -12587,18 +11832,13 @@ exports[`kit gallery (light) renders every component 1`] = `
           accessibilityRole="alert"
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#D92D20",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              {
-                "flex": 1,
-                "fontFamily": "Roboto_500Medium",
-              },
-            ]
+            {
+              "color": "#D92D20",
+              "flex": 1,
+              "fontFamily": "Roboto_500Medium",
+              "fontSize": 13,
+              "lineHeight": 18,
+            }
           }
         >
           Plain-English reason.
@@ -12618,15 +11858,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         importantForAccessibility="no"
         nativeID="Field — hint-label"
         style={
-          [
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#55524A",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         Field — hint
@@ -12682,15 +11919,12 @@ exports[`kit gallery (light) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#55524A",
+            "fontFamily": "Roboto_400Regular",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         We never share it.
@@ -12709,15 +11943,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         importantForAccessibility="no"
         nativeID="Password-label"
         style={
-          [
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#55524A",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         Password
@@ -12934,15 +12165,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         importantForAccessibility="no"
         nativeID="Read only-label"
         style={
-          [
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            undefined,
-          ]
+          {
+            "color": "#55524A",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 13,
+            "lineHeight": 18,
+          }
         }
       >
         Read only
@@ -13158,15 +12386,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              undefined,
-            ]
+            {
+              "color": "#0A0A0A",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+            }
           }
         >
           Offline. Showing what was saved at 08:42.
@@ -13346,15 +12571,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              undefined,
-            ]
+            {
+              "color": "#0A0A0A",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+            }
           }
         >
           Couldn't refresh.
@@ -13406,17 +12628,13 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#55524A",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              {
-                "textDecorationLine": "underline",
-              },
-            ]
+            {
+              "color": "#55524A",
+              "fontFamily": "Roboto_600SemiBold",
+              "fontSize": 13,
+              "lineHeight": 18,
+              "textDecorationLine": "underline",
+            }
           }
         >
           Try again
@@ -13568,15 +12786,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              undefined,
-            ]
+            {
+              "color": "#0A0A0A",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+            }
           }
         >
           Saved on this phone, not yet sent
@@ -13750,15 +12965,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 15,
-                "lineHeight": 22,
-              },
-              undefined,
-            ]
+            {
+              "color": "#0A0A0A",
+              "fontFamily": "Roboto_600SemiBold",
+              "fontSize": 15,
+              "lineHeight": 22,
+            }
           }
         >
           Heads up
@@ -13766,15 +12978,12 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              undefined,
-            ]
+            {
+              "color": "#0A0A0A",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+            }
           }
         >
           Bookings open on Sunday.
@@ -13969,17 +13178,13 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#55524A",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              {
-                "textAlign": "center",
-              },
-            ]
+            {
+              "color": "#55524A",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+              "textAlign": "center",
+            }
           }
         >
           No photo yet
@@ -14028,43 +13233,34 @@ exports[`kit gallery (light) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#FFFFFF",
-                "borderColor": "#8E8A7C",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#FFFFFF",
+              "borderColor": "#8E8A7C",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Take a photo
@@ -14104,43 +13300,34 @@ exports[`kit gallery (light) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#FFFFFF",
-                "borderColor": "#8E8A7C",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#FFFFFF",
+              "borderColor": "#8E8A7C",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Choose a photo
@@ -14283,17 +13470,13 @@ exports[`kit gallery (light) renders every component 1`] = `
         <Text
           allowFontScaling={true}
           style={
-            [
-              {
-                "color": "#55524A",
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 13,
-                "lineHeight": 18,
-              },
-              {
-                "textAlign": "center",
-              },
-            ]
+            {
+              "color": "#55524A",
+              "fontFamily": "Roboto_400Regular",
+              "fontSize": 13,
+              "lineHeight": 18,
+              "textAlign": "center",
+            }
           }
         >
           Photo on file
@@ -14342,43 +13525,34 @@ exports[`kit gallery (light) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#FFFFFF",
-                "borderColor": "#8E8A7C",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#FFFFFF",
+              "borderColor": "#8E8A7C",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             View
@@ -14418,43 +13592,34 @@ exports[`kit gallery (light) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#FFFFFF",
-                "borderColor": "#8E8A7C",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#FFFFFF",
+              "borderColor": "#8E8A7C",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Take a photo
@@ -14494,43 +13659,34 @@ exports[`kit gallery (light) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#FFFFFF",
-                "borderColor": "#8E8A7C",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#FFFFFF",
+              "borderColor": "#8E8A7C",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Choose a photo
@@ -14570,43 +13726,34 @@ exports[`kit gallery (light) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "transparent",
-                "borderColor": "#D92D20",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              {
-                "flexBasis": "40%",
-                "flexGrow": 1,
-              },
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "transparent",
+              "borderColor": "#D92D20",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexBasis": "40%",
+              "flexDirection": "row",
+              "flexGrow": 1,
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#D92D20",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#D92D20",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Remove
@@ -14753,17 +13900,13 @@ exports[`kit gallery (light) renders every component 1`] = `
         accessibilityRole="header"
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "textAlign": "center",
-            },
-          ]
+          {
+            "color": "#0A0A0A",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 16,
+            "lineHeight": 24,
+            "textAlign": "center",
+          }
         }
       >
         You're all caught up
@@ -14787,17 +13930,13 @@ exports[`kit gallery (light) renders every component 1`] = `
         accessibilityRole="header"
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#0A0A0A",
-              "fontFamily": "Roboto_600SemiBold",
-              "fontSize": 16,
-              "lineHeight": 24,
-            },
-            {
-              "textAlign": "center",
-            },
-          ]
+          {
+            "color": "#0A0A0A",
+            "fontFamily": "Roboto_600SemiBold",
+            "fontSize": 16,
+            "lineHeight": 24,
+            "textAlign": "center",
+          }
         }
       >
         Couldn't load your bookings.
@@ -14805,17 +13944,13 @@ exports[`kit gallery (light) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            {
-              "textAlign": "center",
-            },
-          ]
+          {
+            "color": "#55524A",
+            "fontFamily": "Roboto_400Regular",
+            "fontSize": 13,
+            "lineHeight": 18,
+            "textAlign": "center",
+          }
         }
       >
         Check your signal, then try again.
@@ -14861,40 +13996,32 @@ exports[`kit gallery (light) renders every component 1`] = `
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
           style={
-            [
-              {
-                "alignItems": "center",
-                "backgroundColor": "#FFFFFF",
-                "borderColor": "#8E8A7C",
-                "borderRadius": 6,
-                "borderWidth": 1,
-                "flexDirection": "row",
-                "gap": 8,
-                "justifyContent": "center",
-                "minHeight": 44,
-                "minWidth": 48,
-                "paddingHorizontal": 16,
-              },
-              null,
-              undefined,
-            ]
+            {
+              "alignItems": "center",
+              "backgroundColor": "#FFFFFF",
+              "borderColor": "#8E8A7C",
+              "borderRadius": 6,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "gap": 8,
+              "justifyContent": "center",
+              "minHeight": 44,
+              "minWidth": 48,
+              "paddingHorizontal": 16,
+            }
           }
         >
           <Text
             allowFontScaling={true}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_700Bold",
-                  "fontSize": 15,
-                  "lineHeight": 22,
-                  "textAlign": "center",
-                },
-                {
-                  "flexShrink": 1,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_700Bold",
+                "fontSize": 15,
+                "lineHeight": 22,
+                "textAlign": "center",
+              }
             }
           >
             Try again
@@ -15027,25 +14154,15 @@ exports[`kit gallery (light) renders every component 1`] = `
       allowFontScaling={true}
       maxFontSizeMultiplier={1.6}
       style={
-        [
-          {
-            "color": "#0A0A0A",
-            "fontFamily": "Roboto_500Medium",
-            "fontSize": 24,
-            "fontVariant": [
-              "tabular-nums",
-            ],
-            "lineHeight": 32,
-          },
-          [
-            {
-              "fontVariant": [
-                "tabular-nums",
-              ],
-            },
-            undefined,
+        {
+          "color": "#0A0A0A",
+          "fontFamily": "Roboto_500Medium",
+          "fontSize": 24,
+          "fontVariant": [
+            "tabular-nums",
           ],
-        ]
+          "lineHeight": 32,
+        }
       }
     >
       R 3 240.00
@@ -15168,19 +14285,12 @@ exports[`kit gallery (light) renders every component 1`] = `
       <Text
         allowFontScaling={true}
         style={
-          [
-            {
-              "color": "#55524A",
-              "fontFamily": "Roboto_400Regular",
-              "fontSize": 13,
-              "lineHeight": 18,
-            },
-            {
-              "fontFamily": "Roboto_500Medium",
-              "fontSize": 12,
-              "lineHeight": 16,
-            },
-          ]
+          {
+            "color": "#55524A",
+            "fontFamily": "Roboto_500Medium",
+            "fontSize": 12,
+            "lineHeight": 16,
+          }
         }
       >
         Opens in browser
@@ -15213,17 +14323,14 @@ exports[`kit gallery (light) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#55524A",
-            "fontFamily": "Roboto_700Bold",
-            "fontSize": 12,
-            "letterSpacing": 0.72,
-            "lineHeight": 16,
-            "textTransform": "uppercase",
-          },
-          undefined,
-        ]
+        {
+          "color": "#55524A",
+          "fontFamily": "Roboto_700Bold",
+          "fontSize": 12,
+          "letterSpacing": 0.72,
+          "lineHeight": 16,
+          "textTransform": "uppercase",
+        }
       }
     >
       eyebrow
@@ -15231,15 +14338,12 @@ exports[`kit gallery (light) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#55524A",
-            "fontFamily": "Roboto_600SemiBold",
-            "fontSize": 13,
-            "lineHeight": 18,
-          },
-          undefined,
-        ]
+        {
+          "color": "#55524A",
+          "fontFamily": "Roboto_600SemiBold",
+          "fontSize": 13,
+          "lineHeight": 18,
+        }
       }
     >
       label
@@ -15248,17 +14352,14 @@ exports[`kit gallery (light) renders every component 1`] = `
       allowFontScaling={true}
       maxFontSizeMultiplier={2}
       style={
-        [
-          {
-            "color": "#0A0A0A",
-            "fontFamily": "RobotoMono_700Bold",
-            "fontSize": 11,
-            "letterSpacing": 1.54,
-            "lineHeight": 16,
-            "textTransform": "uppercase",
-          },
-          undefined,
-        ]
+        {
+          "color": "#0A0A0A",
+          "fontFamily": "RobotoMono_700Bold",
+          "fontSize": 11,
+          "letterSpacing": 1.54,
+          "lineHeight": 16,
+          "textTransform": "uppercase",
+        }
       }
     >
       monoLabel
@@ -15266,15 +14367,12 @@ exports[`kit gallery (light) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#0A0A0A",
-            "fontFamily": "Roboto_400Regular",
-            "fontSize": 13,
-            "lineHeight": 18,
-          },
-          undefined,
-        ]
+        {
+          "color": "#0A0A0A",
+          "fontFamily": "Roboto_400Regular",
+          "fontSize": 13,
+          "lineHeight": 18,
+        }
       }
     >
       caption
@@ -15282,15 +14380,12 @@ exports[`kit gallery (light) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#0A0A0A",
-            "fontFamily": "Roboto_400Regular",
-            "fontSize": 16,
-            "lineHeight": 24,
-          },
-          undefined,
-        ]
+        {
+          "color": "#0A0A0A",
+          "fontFamily": "Roboto_400Regular",
+          "fontSize": 16,
+          "lineHeight": 24,
+        }
       }
     >
       body
@@ -15298,15 +14393,12 @@ exports[`kit gallery (light) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#0A0A0A",
-            "fontFamily": "Roboto_600SemiBold",
-            "fontSize": 15,
-            "lineHeight": 22,
-          },
-          undefined,
-        ]
+        {
+          "color": "#0A0A0A",
+          "fontFamily": "Roboto_600SemiBold",
+          "fontSize": 15,
+          "lineHeight": 22,
+        }
       }
     >
       sectionTitle
@@ -15314,15 +14406,12 @@ exports[`kit gallery (light) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#0A0A0A",
-            "fontFamily": "Roboto_600SemiBold",
-            "fontSize": 16,
-            "lineHeight": 24,
-          },
-          undefined,
-        ]
+        {
+          "color": "#0A0A0A",
+          "fontFamily": "Roboto_600SemiBold",
+          "fontSize": 16,
+          "lineHeight": 24,
+        }
       }
     >
       rowTitle
@@ -15332,17 +14421,14 @@ exports[`kit gallery (light) renders every component 1`] = `
       allowFontScaling={true}
       maxFontSizeMultiplier={1.4}
       style={
-        [
-          {
-            "color": "#0A0A0A",
-            "fontFamily": "Roboto_900Black",
-            "fontSize": 28,
-            "letterSpacing": -0.28,
-            "lineHeight": 34,
-            "textTransform": "uppercase",
-          },
-          undefined,
-        ]
+        {
+          "color": "#0A0A0A",
+          "fontFamily": "Roboto_900Black",
+          "fontSize": 28,
+          "letterSpacing": -0.28,
+          "lineHeight": 34,
+          "textTransform": "uppercase",
+        }
       }
     >
       pageTitle
@@ -15352,17 +14438,14 @@ exports[`kit gallery (light) renders every component 1`] = `
       allowFontScaling={true}
       maxFontSizeMultiplier={1.3}
       style={
-        [
-          {
-            "color": "#0A0A0A",
-            "fontFamily": "Roboto_900Black",
-            "fontSize": 34,
-            "letterSpacing": -0.34,
-            "lineHeight": 36,
-            "textTransform": "uppercase",
-          },
-          undefined,
-        ]
+        {
+          "color": "#0A0A0A",
+          "fontFamily": "Roboto_900Black",
+          "fontSize": 34,
+          "letterSpacing": -0.34,
+          "lineHeight": 36,
+          "textTransform": "uppercase",
+        }
       }
     >
       hero
@@ -15371,18 +14454,15 @@ exports[`kit gallery (light) renders every component 1`] = `
       allowFontScaling={true}
       maxFontSizeMultiplier={1.6}
       style={
-        [
-          {
-            "color": "#0A0A0A",
-            "fontFamily": "Roboto_500Medium",
-            "fontSize": 24,
-            "fontVariant": [
-              "tabular-nums",
-            ],
-            "lineHeight": 32,
-          },
-          undefined,
-        ]
+        {
+          "color": "#0A0A0A",
+          "fontFamily": "Roboto_500Medium",
+          "fontSize": 24,
+          "fontVariant": [
+            "tabular-nums",
+          ],
+          "lineHeight": 32,
+        }
       }
     >
       kpi
@@ -15390,15 +14470,12 @@ exports[`kit gallery (light) renders every component 1`] = `
     <Text
       allowFontScaling={true}
       style={
-        [
-          {
-            "color": "#55524A",
-            "fontFamily": "RobotoCondensed_400Regular",
-            "fontSize": 14,
-            "lineHeight": 20,
-          },
-          undefined,
-        ]
+        {
+          "color": "#55524A",
+          "fontFamily": "RobotoCondensed_400Regular",
+          "fontSize": 14,
+          "lineHeight": 20,
+        }
       }
     >
       note
@@ -15413,15 +14490,11 @@ exports[`kit gallery (light) renders every component 1`] = `
       <View
         onLayout={[Function]}
         style={
-          [
-            {
-              "flex": 1,
-              "justifyContent": "flex-end",
-            },
-            {
-              "paddingBottom": 0,
-            },
-          ]
+          {
+            "flex": 1,
+            "justifyContent": "flex-end",
+            "paddingBottom": 0,
+          }
         }
       >
         <View
@@ -15523,19 +14596,12 @@ exports[`kit gallery (light) renders every component 1`] = `
                 accessibilityRole="header"
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#0A0A0A",
-                      "fontFamily": "Roboto_400Regular",
-                      "fontSize": 16,
-                      "lineHeight": 24,
-                    },
-                    {
-                      "fontFamily": "Roboto_600SemiBold",
-                      "fontSize": 17,
-                      "lineHeight": 24,
-                    },
-                  ]
+                  {
+                    "color": "#0A0A0A",
+                    "fontFamily": "Roboto_600SemiBold",
+                    "fontSize": 17,
+                    "lineHeight": 24,
+                  }
                 }
               >
                 Sheet title
@@ -15543,15 +14609,12 @@ exports[`kit gallery (light) renders every component 1`] = `
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#55524A",
-                      "fontFamily": "Roboto_400Regular",
-                      "fontSize": 13,
-                      "lineHeight": 18,
-                    },
-                    undefined,
-                  ]
+                  {
+                    "color": "#55524A",
+                    "fontFamily": "Roboto_400Regular",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                  }
                 }
               >
                 One line
@@ -15724,15 +14787,12 @@ exports[`kit gallery (light) renders every component 1`] = `
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#0A0A0A",
-                      "fontFamily": "Roboto_400Regular",
-                      "fontSize": 16,
-                      "lineHeight": 24,
-                    },
-                    undefined,
-                  ]
+                  {
+                    "color": "#0A0A0A",
+                    "fontFamily": "Roboto_400Regular",
+                    "fontSize": 16,
+                    "lineHeight": 24,
+                  }
                 }
               >
                 Sheet body
@@ -15784,40 +14844,32 @@ exports[`kit gallery (light) renders every component 1`] = `
               onResponderTerminationRequest={[Function]}
               onStartShouldSetResponder={[Function]}
               style={
-                [
-                  {
-                    "alignItems": "center",
-                    "backgroundColor": "#0A0A0A",
-                    "borderColor": "transparent",
-                    "borderRadius": 6,
-                    "borderWidth": 1,
-                    "flexDirection": "row",
-                    "gap": 8,
-                    "justifyContent": "center",
-                    "minHeight": 50,
-                    "minWidth": 48,
-                    "paddingHorizontal": 16,
-                  },
-                  null,
-                  undefined,
-                ]
+                {
+                  "alignItems": "center",
+                  "backgroundColor": "#0A0A0A",
+                  "borderColor": "transparent",
+                  "borderRadius": 6,
+                  "borderWidth": 1,
+                  "flexDirection": "row",
+                  "gap": 8,
+                  "justifyContent": "center",
+                  "minHeight": 50,
+                  "minWidth": 48,
+                  "paddingHorizontal": 16,
+                }
               }
             >
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#FFFFFF",
-                      "fontFamily": "Roboto_700Bold",
-                      "fontSize": 16,
-                      "lineHeight": 22,
-                      "textAlign": "center",
-                    },
-                    {
-                      "flexShrink": 1,
-                    },
-                  ]
+                  {
+                    "color": "#FFFFFF",
+                    "flexShrink": 1,
+                    "fontFamily": "Roboto_700Bold",
+                    "fontSize": 16,
+                    "lineHeight": 22,
+                    "textAlign": "center",
+                  }
                 }
               >
                 Save
@@ -15915,6 +14967,7 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
             {
               "alignItems": "center",
               "flexDirection": "row",
+              "flexShrink": 1,
               "minHeight": 44,
               "minWidth": 44,
               "opacity": 1,
@@ -16011,18 +15064,13 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
             maxFontSizeMultiplier={1.4}
             numberOfLines={1}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 16,
-                  "lineHeight": 24,
-                },
-                {
-                  "fontFamily": "Roboto_400Regular",
-                  "fontSize": 17,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "flexShrink": 1,
+                "fontFamily": "Roboto_400Regular",
+                "fontSize": 17,
+                "lineHeight": 24,
+              }
             }
           >
             Home
@@ -16045,16 +15093,12 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
             maxFontSizeMultiplier={1.3}
             numberOfLines={1}
             style={
-              [
-                {
-                  "color": "#0A0A0A",
-                  "fontFamily": "Roboto_600SemiBold",
-                  "fontSize": 16,
-                },
-                {
-                  "opacity": 0,
-                },
-              ]
+              {
+                "color": "#0A0A0A",
+                "fontFamily": "Roboto_600SemiBold",
+                "fontSize": 16,
+                "opacity": 0,
+              }
             }
           >
             My tickets
@@ -16074,29 +15118,22 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
         accessibilityElementsHidden={true}
         importantForAccessibility="no-hide-descendants"
         style={
-          [
-            {
-              "backgroundColor": "#E7E4D9",
-              "height": 1,
-              "marginHorizontal": -20,
-            },
-            {
-              "opacity": 0,
-            },
-          ]
+          {
+            "backgroundColor": "#E7E4D9",
+            "height": 1,
+            "marginHorizontal": -20,
+            "opacity": 0,
+          }
         }
       />
     </View>
     <RCTScrollView
       contentContainerStyle={
-        [
-          {
-            "gap": 16,
-            "paddingBottom": 24,
-            "paddingHorizontal": 20,
-          },
-          undefined,
-        ]
+        {
+          "gap": 16,
+          "paddingBottom": 24,
+          "paddingHorizontal": 20,
+        }
       }
       keyboardShouldPersistTaps="handled"
       onScroll={[Function]}
@@ -16140,19 +15177,15 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
                 <Text
                   allowFontScaling={true}
                   style={
-                    [
-                      {
-                        "color": "#55524A",
-                        "fontFamily": "Roboto_700Bold",
-                        "fontSize": 12,
-                        "letterSpacing": 0.72,
-                        "lineHeight": 16,
-                        "textTransform": "uppercase",
-                      },
-                      {
-                        "flexShrink": 1,
-                      },
-                    ]
+                    {
+                      "color": "#55524A",
+                      "flexShrink": 1,
+                      "fontFamily": "Roboto_700Bold",
+                      "fontSize": 12,
+                      "letterSpacing": 0.72,
+                      "lineHeight": 16,
+                      "textTransform": "uppercase",
+                    }
                   }
                 >
                   Tickets
@@ -16173,19 +15206,15 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
                   allowFontScaling={true}
                   maxFontSizeMultiplier={1.4}
                   style={
-                    [
-                      {
-                        "color": "#0A0A0A",
-                        "fontFamily": "Roboto_900Black",
-                        "fontSize": 28,
-                        "letterSpacing": -0.28,
-                        "lineHeight": 34,
-                        "textTransform": "uppercase",
-                      },
-                      {
-                        "flexShrink": 1,
-                      },
-                    ]
+                    {
+                      "color": "#0A0A0A",
+                      "flexShrink": 1,
+                      "fontFamily": "Roboto_900Black",
+                      "fontSize": 28,
+                      "letterSpacing": -0.28,
+                      "lineHeight": 34,
+                      "textTransform": "uppercase",
+                    }
                   }
                 >
                   My tickets
@@ -16196,17 +15225,14 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
         </View>
         <View
           style={
-            [
-              {
-                "backgroundColor": "#FFFFFF",
-                "borderColor": "#E7E4D9",
-                "borderRadius": 8,
-                "borderWidth": 1,
-                "marginHorizontal": 16,
-                "overflow": "hidden",
-              },
-              undefined,
-            ]
+            {
+              "backgroundColor": "#FFFFFF",
+              "borderColor": "#E7E4D9",
+              "borderRadius": 8,
+              "borderWidth": 1,
+              "marginHorizontal": 16,
+              "overflow": "hidden",
+            }
           }
         >
           <View
@@ -16267,17 +15293,12 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#0A0A0A",
-                      "fontFamily": "Roboto_600SemiBold",
-                      "fontSize": 16,
-                      "lineHeight": 24,
-                    },
-                    {
-                      "color": "#0A0A0A",
-                    },
-                  ]
+                  {
+                    "color": "#0A0A0A",
+                    "fontFamily": "Roboto_600SemiBold",
+                    "fontSize": 16,
+                    "lineHeight": 24,
+                  }
                 }
               >
                 Send Night
@@ -16285,15 +15306,12 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
               <Text
                 allowFontScaling={true}
                 style={
-                  [
-                    {
-                      "color": "#55524A",
-                      "fontFamily": "Roboto_400Regular",
-                      "fontSize": 13,
-                      "lineHeight": 18,
-                    },
-                    undefined,
-                  ]
+                  {
+                    "color": "#55524A",
+                    "fontFamily": "Roboto_400Regular",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                  }
                 }
               >
                 Sat 12 Dec · 18:30

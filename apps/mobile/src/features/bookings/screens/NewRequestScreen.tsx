@@ -2,11 +2,11 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Building2, Car, Music } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useSession } from "@/auth/session-provider";
-import { Bleed, Button, EmptyState, LargeTitle, ListGroup, ListRow, LoadFailed, SkeletonList, Text } from "@/components";
+import { Bleed, Button, EmptyState, LargeTitle, ListGroup, ListRow, LoadFailed, SkeletonList, Text, KeyboardAvoidingView } from "@/components";
 import { openWebPage, useMe } from "@/features/shell";
 import { announce } from "@/lib/a11y";
 import { hairline, space, touch } from "@/theme/tokens";
@@ -76,7 +76,7 @@ function FormPage({ onCancel, progress: bars, footer, step, children }: { onCanc
   }, [step]);
   return (
     <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: colors.bg }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }}>
         <View style={{ paddingHorizontal: space.gutter }}>
           <View style={{ minHeight: touch.floor, flexDirection: "row", alignItems: "center", marginHorizontal: -space.sm }}>
             <Button label={strings.common.cancel} variant="ghost" onPress={onCancel} testID="cancel-request" />
@@ -114,6 +114,22 @@ export default function NewRequestScreen() {
     space: { ...EMPTY_SPACE, requesterName: fullName },
     vehicle: { ...EMPTY_VEHICLE, requesterName: fullName, requesterEmail: me.me?.user.email ?? "" },
   }));
+  // Opened before the account had loaded (a cold start): fill the blanks once it
+  // arrives, never overwriting what the person has typed.
+  const email = me.me?.user.email ?? "";
+  const [seeded, setSeeded] = useState({ fullName, email });
+  if (seeded.fullName !== fullName || seeded.email !== email) {
+    setSeeded({ fullName, email });
+    setFlow((f) => ({
+      ...f,
+      space: f.space.requesterName ? f.space : { ...f.space, requesterName: fullName },
+      vehicle: {
+        ...f.vehicle,
+        requesterName: f.vehicle.requesterName || fullName,
+        requesterEmail: f.vehicle.requesterEmail || email,
+      },
+    }));
+  }
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [blocked, setBlocked] = useState<{ message: string; conflicts: Conflict[] } | null>(null);

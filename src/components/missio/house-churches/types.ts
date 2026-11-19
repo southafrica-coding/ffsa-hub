@@ -154,3 +154,30 @@ export type HouseErrorCode =
   | "ended_at_in_future"
   | "rate_limited"
   | "server_error";
+
+export type FeedbackMood = "hard" | "okay" | "good" | "great";
+
+export interface FeedbackEntry {
+  meetingDate: string;
+  attendance: number;
+  mood: FeedbackMood;
+  newNames: string[];
+  prayer: string | null;
+  notes: string | null;
+  submittedAt: string;
+}
+
+export interface FeedbackHouse {
+  houseId: string;
+  number: number;
+  name: string | null;
+  meetingDay: string | null;
+  coaches: string[];
+  /** Newest first. A missed week has no entry. */
+  entries: FeedbackEntry[];
+}
+
+export interface FeedbackHistoryResponse {
+  houses: FeedbackHouse[];
+  since: string;
+}

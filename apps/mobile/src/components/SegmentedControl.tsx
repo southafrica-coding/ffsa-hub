@@ -1,4 +1,5 @@
-import { Pressable, View, type ViewStyle } from "react-native";
+import { View, type ViewStyle } from "react-native";
+import { Pressable } from "./Pressable";
 
 import { fontFamily, hairline, radius, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";

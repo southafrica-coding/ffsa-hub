@@ -1,6 +1,7 @@
 import { ChevronRight, Lock } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Banner, Button, EmptyState, FadeIn, SectionHeader, SkeletonList, StatusChip, Text } from "@/components";
 import { fontFamily, hairline, radius, space, touch } from "@/theme/tokens";

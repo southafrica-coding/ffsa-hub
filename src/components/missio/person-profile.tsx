@@ -37,12 +37,12 @@ export function journeyDate(value: string): string {
   return date ? dayFormat.format(date) : "";
 }
 
-function since(value: string): string {
+export function since(value: string): string {
   const date = asDate(value);
   return date ? monthFormat.format(date) : "";
 }
 
-function initials(name: string): string {
+export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const letters = parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : (parts[0] ?? "?").slice(0, 2);
   return letters.toUpperCase();
@@ -83,12 +83,12 @@ export function journeyCopy(event: JourneyEvent): { title: string; detail: strin
   }
 }
 
-type AccessClient = {
+export type AccessClient = {
   get: (id: string) => Promise<HubAccess>;
   set: (id: string, role: "coach" | "house_church_leader", on: boolean) => Promise<HubAccess>;
 };
 
-const defaultAccess: AccessClient = {
+export const defaultAccess: AccessClient = {
   get: (id) => fetchHubAccess(id),
   set: (id, role, on) => saveHubRole(id, role, on),
 };
@@ -263,7 +263,7 @@ function HouseRow({ house }: { house: ProfileHouse }) {
   );
 }
 
-function ContactActions({ phone, email }: { phone: string | null; email: string | null }) {
+export function ContactActions({ phone, email }: { phone: string | null; email: string | null }) {
   const call = telHref(phone);
   const chat = whatsAppHref(phone);
   if (!call && !chat && !email) return null;
@@ -294,7 +294,7 @@ const ROLE_ROWS: ReadonlyArray<{ role: "coach" | "house_church_leader"; label: s
 ];
 
 /** Board M10c: a pastor gives someone with a Hub login a Missio role. */
-function HubAccessCard({ personId, name, client }: { personId: string; name: string; client: AccessClient }) {
+export function HubAccessCard({ personId, name, client }: { personId: string; name: string; client: AccessClient }) {
   const [access, setAccess] = useState<HubAccess | null>(null);
   const [failed, setFailed] = useState(false);
   const [pending, setPending] = useState(false);

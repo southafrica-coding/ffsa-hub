@@ -1,4 +1,5 @@
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "./Pressable";
 
 import { needsYouBandStyle } from "@/theme/styles";
 import { fontFamily, fontSize, palette, radius, touch } from "@/theme/tokens";

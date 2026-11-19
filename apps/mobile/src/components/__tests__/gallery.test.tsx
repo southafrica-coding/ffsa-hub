@@ -1,6 +1,7 @@
 import { render } from "@testing-library/react-native";
 import { Clock, Wallet } from "lucide-react-native";
-import { View } from "react-native";
+import type { ReactElement } from "react";
+import { StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -125,9 +126,52 @@ function Gallery() {
   );
 }
 
+// NativeWind's interop (registered for every test in jest.setup.ts, as on a
+// device) rebuilds each View/Text/Pressable `style`. These collect every host
+// element's flattened style, so a test can render once without the interop
+// and once with it and require the same result.
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- the interop's internal registry has no typed export
+const { interopComponents } = require("react-native-css-interop/dist/runtime/api") as { interopComponents: Map<unknown, unknown> };
+
+type Node = { type: string; props: Record<string, unknown>; children: (Node | string)[] | null };
+
+function hostStyles(tree: Node | Node[] | null): { type: string; testID?: unknown; style: unknown }[] {
+  const out: { type: string; testID?: unknown; style: unknown }[] = [];
+  const walk = (n: Node | string) => {
+    if (typeof n === "string") return;
+    out.push({ type: n.type, testID: n.props.testID, style: StyleSheet.flatten(n.props.style as never) ?? {} });
+    n.children?.forEach(walk);
+  };
+  (Array.isArray(tree) ? tree : tree ? [tree] : []).forEach(walk);
+  return out;
+}
+
+async function renderWithoutInterop(ui: ReactElement) {
+  const saved = new Map(interopComponents);
+  interopComponents.clear();
+  try {
+    const r = await render(ui);
+    return hostStyles(r.toJSON() as never);
+  } finally {
+    saved.forEach((v, k) => interopComponents.set(k, v));
+  }
+}
+
 describe.each(["light", "dark"] as const)("kit gallery (%s)", (scheme) => {
   beforeEach(() => {
     mockScheme = scheme;
+  });
+
+  it("looks the same through NativeWind's interop (what the phone runs) as without it", async () => {
+    const ui = (
+      <SafeAreaProvider initialMetrics={metrics}>
+        <Gallery />
+      </SafeAreaProvider>
+    );
+    const plain = await renderWithoutInterop(ui);
+    const onDevice = hostStyles((await render(ui)).toJSON() as never);
+    expect(interopComponents.size).toBeGreaterThan(0);
+    expect(onDevice).toEqual(plain);
   });
 
   it("renders every component", async () => {

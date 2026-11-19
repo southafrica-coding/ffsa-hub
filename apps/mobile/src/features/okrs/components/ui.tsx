@@ -6,7 +6,8 @@
 
 import { ChevronDown, ChevronRight, Clock, TriangleAlert, type LucideIcon } from "lucide-react-native";
 import { Children, useState, type ReactNode } from "react";
-import { Pressable, View, useWindowDimensions } from "react-native";
+import { View, useWindowDimensions } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Freshness as KitFreshness, ListGroup, RadioRow, Sheet, StatusChip, Text, type FreshnessState, type StatusChipProps } from "@/components";
 import { hairline, radius, space, touch } from "@/theme/tokens";

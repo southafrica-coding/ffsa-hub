@@ -1,4 +1,5 @@
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Text, selectionHaptic } from "@/components";
 import { fontFamily, hairline, radius, space } from "@/theme/tokens";
