@@ -1,19 +1,33 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { FileText, ImageOff } from "lucide-react-native";
+import { Clock, FileText, ImageOff, Plus } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { FlatList, RefreshControl, View } from "react-native";
+import { RefreshControl, View } from "react-native";
 
-import { Banner, Button, Masthead, Screen, Text } from "@/components";
+import {
+  Banner,
+  Button,
+  LargeTitleScrollView,
+  ListGroup,
+  ListRow,
+  MoneyText,
+  NeedsYouBand,
+  SkeletonList,
+  StatusChip,
+  Text,
+  type BackAction,
+} from "@/components";
 import { useSession } from "@/auth/session-provider";
 import { announce } from "@/lib/a11y";
 import { supabase } from "@/lib/supabase";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { userMessage } from "../api";
 import { formatSavedAt } from "../cache";
 import { OutboxList } from "../components/OutboxList";
-import { BudgetBar, Chips, ErrorState, Row, SectionBar, Skeleton, StaleNote, Tag } from "../components/ui";
+import { ChoiceChips } from "../components/form-parts";
+import { Bleed, BudgetBar, GroupRow, InfoRow, LoadError, PushedPage, SectionTitle, StaleNote, StatusLine } from "../components/parts";
 import { loadTeam, receiptCount, type ReadClient, type TeamData, type TeamMemberView, type TeamMoneyView } from "../data";
 import { takeFlash, type Flash } from "../flash";
 import { budgetFigures, budgetLines, formatMoney, moneyLabel, sumBy } from "../money";
@@ -27,8 +41,10 @@ import { dateRange } from "./HomeScreen";
 
 const db = supabase as unknown as ReadClient;
 const ALL = "__all__";
+const WHOLE = { cents: false };
 
 export default function TeamScreen({ teamId }: { teamId: string }) {
+  const router = useRouter();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const load = useCallback(() => loadTeam(db, teamId), [teamId]);
@@ -38,6 +54,7 @@ export default function TeamScreen({ teamId }: { teamId: string }) {
     load,
     errorMessage: userMessage,
   });
+  const back: BackAction = { label: strings.home.title, onPress: () => router.back() };
 
   const [flash, setFlash] = useState<Flash | null>(null);
   // Coming back from the expense form: show what happened, and reload.
@@ -54,16 +71,20 @@ export default function TeamScreen({ teamId }: { teamId: string }) {
 
   if (state.status === "loading") {
     return (
-      <Screen edges={["bottom"]}>
-        <Skeleton label={strings.team.loading} rows={6} />
-      </Screen>
+      <PushedPage back={back}>
+        <Bleed>
+          <SkeletonList label={strings.team.loading} count={6} inset={false} />
+        </Bleed>
+      </PushedPage>
     );
   }
   if (state.status === "error") {
     return (
-      <Screen edges={["bottom"]}>
-        <ErrorState title={strings.team.errorTitle} message={state.message} onRetry={retry} />
-      </Screen>
+      <PushedPage back={back}>
+        <Bleed>
+          <LoadError title={strings.team.errorTitle} message={state.message} onRetry={retry} />
+        </Bleed>
+      </PushedPage>
     );
   }
 
@@ -74,22 +95,25 @@ export default function TeamScreen({ teamId }: { teamId: string }) {
 
   if (state.data.kind === "none") {
     return (
-      <Screen edges={["bottom"]}>
-        {stale}
-        <Banner tone="danger" title={strings.team.errorTitle}>
-          {strings.team.notFound}
-        </Banner>
-      </Screen>
+      <PushedPage back={back}>
+        <Bleed style={{ gap: space.md }}>
+          {stale}
+          <Banner tone="error" title={strings.team.errorTitle}>
+            {strings.team.notFound}
+          </Banner>
+        </Bleed>
+      </PushedPage>
     );
   }
   if (state.data.kind === "member") {
-    return <MemberView view={state.data} stale={stale} refreshing={refreshing} onRefresh={refresh} />;
+    return <MemberView view={state.data} back={back} stale={stale} refreshing={refreshing} onRefresh={refresh} />;
   }
   return (
     <MoneyView
       view={state.data}
       teamId={teamId}
       userId={userId}
+      back={back}
       stale={stale}
       flash={flash}
       refreshing={refreshing}
@@ -104,6 +128,7 @@ function MoneyView({
   view,
   teamId,
   userId,
+  back,
   stale,
   flash,
   refreshing,
@@ -112,6 +137,7 @@ function MoneyView({
   view: TeamMoneyView;
   teamId: string;
   userId: string | null;
+  back: BackAction;
   stale: React.ReactNode;
   flash: Flash | null;
   refreshing: boolean;
@@ -131,113 +157,130 @@ function MoneyView({
   const categoryName = useMemo(() => new Map(view.categories.map((c) => [c.id, c.name])), [view.categories]);
   const context = [view.team.location ?? strings.home.locationTbc, view.team.country].filter(Boolean).join(" · ");
 
-  const header = (
-    <View style={{ gap: 16, paddingBottom: 8 }}>
-      <Masthead context={context} title={view.team.team_name} />
-      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-        <Tag>{strings.status[view.team.status] ?? view.team.status}</Tag>
-        {!view.canEdit ? <Tag>{strings.team.viewOnly}</Tag> : null}
-        <Text variant="monoLabel" tone="secondary">
-          {dateRange(view.team.start_date, view.team.end_date)}
-        </Text>
+  return (
+    <LargeTitleScrollView
+      back={back}
+      eyebrow={context}
+      title={view.team.team_name}
+      gap={0}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, flexWrap: "wrap", marginTop: -space.sm }}>
+        <StatusChip label={strings.status[view.team.status] ?? view.team.status} variant="quiet" icon={null} />
+        {!view.canEdit ? <StatusChip label={strings.team.viewOnly} variant="quiet" icon={null} /> : null}
+        <Text variant="label">{dateRange(view.team.start_date, view.team.end_date)}</Text>
       </View>
 
-      {!online ? <Banner tone="info">{strings.outbox.offline}</Banner> : null}
-      {stale}
-      {flash ? <Banner tone={flash.tone}>{flash.message}</Banner> : null}
+      <Bleed style={{ gap: space.md, marginTop: space.md }}>
+        {!online ? <Banner tone="offline">{strings.outbox.offline}</Banner> : null}
+        {stale}
+        {/* "Saved on this phone, not yet sent" is the queued note; anything else is the saved confirmation. */}
+        {flash ? <Banner tone={flash.tone === "info" ? "queued" : flash.tone}>{flash.message}</Banner> : null}
 
-      {/* The one yellow band: expenses the books can't close without. */}
-      {view.canEdit && missing > 0 ? (
-        <Banner tone="needsYou" title={strings.team.needsYouTitle} testID="needs-you">
-          {strings.team.missingReceipts(missing)}
-        </Banner>
-      ) : null}
+        {/* The one yellow band: expenses the books can't close without. */}
+        {view.canEdit && missing > 0 ? (
+          <NeedsYouBand eyebrow={strings.team.needsYouTitle} text={strings.team.missingReceipts(missing)} testID="needs-you" />
+        ) : null}
+      </Bleed>
 
       {/* One big number: what's left. */}
       <View
         accessible
         accessibilityLabel={
           total.over
-            ? strings.a11y.overNow(moneyLabel(-total.remaining, "ZAR", { cents: false }))
-            : `${strings.team.remaining}: ${moneyLabel(total.remaining, "ZAR", { cents: false })}`
+            ? strings.a11y.overNow(moneyLabel(-total.remaining, "ZAR", WHOLE))
+            : `${strings.team.remaining}: ${moneyLabel(total.remaining, "ZAR", WHOLE)}`
         }
-        style={{ gap: 4 }}
+        style={{ marginTop: space.lg }}
       >
-        <Text variant="monoLabel" tone="secondary">
-          {total.over ? strings.team.over : `${strings.team.remaining} to spend`}
-        </Text>
-        <Text variant="numeral" tone={total.over ? "danger" : "default"}>
-          {formatMoney(total.remaining, "ZAR", { cents: false })}
-        </Text>
+        <Text variant="label">{total.over ? strings.team.over : strings.team.leftToSpend}</Text>
+        <MoneyText
+          variant="kpi"
+          tone={total.over ? "danger" : "default"}
+          amount={total.over ? -total.remaining : total.remaining}
+          currency="ZAR"
+          options={WHOLE}
+          style={{ marginTop: space.xs }}
+        />
         {view.team.currency !== "ZAR" ? (
-          <Text variant="caption" tone="secondary">{`Figures in rand · the team spends in ${view.team.currency}`}</Text>
+          <Text variant="caption" tone="secondary">
+            {strings.team.teamSpendsIn(view.team.currency)}
+          </Text>
         ) : null}
       </View>
-      <BudgetBar figures={total} currency="ZAR" />
+      <View style={{ marginTop: space.sm }}>
+        <BudgetBar figures={total} currency="ZAR" />
+      </View>
 
       {view.canEdit ? (
         <Button
           label={strings.team.addExpense}
           accessibilityHint={strings.team.addExpenseHint}
+          icon={<Plus size={20} color={colors.onPrimary} />}
+          style={{ marginTop: space.lg }}
           onPress={() => router.push({ pathname: "/finance/[teamId]/new", params: { teamId } })}
         />
       ) : null}
 
-      <OutboxList items={pendingItems} outbox={outbox} />
+      {/* Unsent items sit above the budget lines: they are money not yet in the figures. */}
+      <Bleed style={{ marginTop: space.md }}>
+        <OutboxList items={pendingItems} outbox={outbox} />
+      </Bleed>
 
       {lines.length > 0 ? (
-        <View>
-          <SectionBar title={strings.team.budgetLines} meta={`${lines.length}`} />
-          {lines.map((l) => (
-            <Row key={l.categoryId} accessibilityLabel={`${l.name}. ${strings.team.budget} ${moneyLabel(l.total, "ZAR", { cents: false })}, ${strings.team.spent} ${moneyLabel(l.spent, "ZAR", { cents: false })}, ${strings.team.remaining} ${moneyLabel(l.remaining, "ZAR", { cents: false })}${l.over ? `, ${strings.team.over}` : ""}`}>
-              <Text variant="bodyStrong">{l.name}</Text>
-              <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-                <BudgetBar figures={l} currency="ZAR" compact />
-              </View>
-            </Row>
-          ))}
+        <>
+          <SectionTitle title={strings.team.budgetLines} meta={`${lines.length}`} />
+          <Bleed>
+            <ListGroup inset={false}>
+              {lines.map((l) => (
+                <GroupRow
+                  key={l.categoryId}
+                  accessibilityLabel={`${l.name}. ${strings.team.budget} ${moneyLabel(l.total, "ZAR", WHOLE)}, ${strings.team.spent} ${moneyLabel(l.spent, "ZAR", WHOLE)}, ${strings.team.remaining} ${moneyLabel(l.remaining, "ZAR", WHOLE)}${l.over ? `, ${strings.team.over}` : ""}`}
+                >
+                  <Text variant="rowTitle">{l.name}</Text>
+                  <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+                    <BudgetBar figures={l} currency="ZAR" compact />
+                  </View>
+                </GroupRow>
+              ))}
+            </ListGroup>
+          </Bleed>
+        </>
+      ) : null}
+
+      <SectionTitle title={strings.team.expenses} meta={`${shown.length} · ${formatMoney(sumBy(shown, (e) => e.zar_amount), "ZAR")}`} />
+      {lines.length > 1 ? (
+        <View style={{ paddingBottom: space.md }}>
+          <ChoiceChips
+            label={strings.a11y.expensesFilter}
+            labelPlacement="inline"
+            value={filter}
+            onChange={setFilter}
+            options={[{ value: ALL, label: strings.team.allLines }, ...lines.filter((l) => l.count > 0).map((l) => ({ value: l.categoryId, label: `${l.name} (${l.count})` }))]}
+          />
         </View>
       ) : null}
-
-      <SectionBar
-        title={strings.team.expenses}
-        meta={`${shown.length} · ${formatMoney(sumBy(shown, (e) => e.zar_amount), "ZAR")}`}
-      />
-      {lines.length > 1 ? (
-        <Chips
-          label={strings.a11y.expensesFilter}
-          value={filter}
-          onChange={setFilter}
-          options={[{ value: ALL, label: strings.team.allLines }, ...lines.filter((l) => l.count > 0).map((l) => ({ value: l.categoryId, label: `${l.name} (${l.count})` }))]}
-        />
-      ) : null}
-    </View>
-  );
-
-  return (
-    <Screen scroll={false} edges={["bottom"]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <FlatList
-        data={shown}
-        keyExtractor={(e) => e.id}
-        ListHeaderComponent={header}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />}
-        ListEmptyComponent={
-          <Text tone="secondary" style={{ paddingVertical: 16 }}>
-            {filter === ALL ? strings.team.noExpenses : strings.team.noExpensesInLine}
-          </Text>
-        }
-        renderItem={({ item }) => (
-          <ExpenseRow
-            expense={item}
-            category={categoryName.get(item.category_id) ?? "Other"}
-            receipts={receiptCount(item, view.receiptCounts)}
-            waiting={receiptsFor(items, item.id, userId).length}
-            onPress={() => router.push({ pathname: "/finance/[teamId]/expense/[expenseId]", params: { teamId, expenseId: item.id } })}
-          />
-        )}
-      />
-    </Screen>
+      {shown.length === 0 ? (
+        <Text tone="secondary" style={{ paddingVertical: space.sm }}>
+          {filter === ALL ? strings.team.noExpenses : strings.team.noExpensesInLine}
+        </Text>
+      ) : (
+        <Bleed>
+          <ListGroup inset={false}>
+            {shown.map((item) => (
+              <ExpenseRow
+                key={item.id}
+                expense={item}
+                category={categoryName.get(item.category_id) ?? strings.team.otherLine}
+                receipts={receiptCount(item, view.receiptCounts)}
+                waiting={receiptsFor(items, item.id, userId).length}
+                onPress={() => router.push({ pathname: "/finance/[teamId]/expense/[expenseId]", params: { teamId, expenseId: item.id } })}
+              />
+            ))}
+          </ListGroup>
+        </Bleed>
+      )}
+    </LargeTitleScrollView>
   );
 }
 
@@ -258,10 +301,9 @@ function ExpenseRow({
   waiting: number;
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
   const method = strings.paymentMethods[e.payment_method] ?? e.payment_method;
-  const local =
-    e.local_currency && e.local_currency !== "ZAR" && e.local_amount !== null ? formatMoney(e.local_amount, e.local_currency) : null;
+  const hasLocal = Boolean(e.local_currency) && e.local_currency !== "ZAR" && e.local_amount !== null;
+  const local = hasLocal ? formatMoney(e.local_amount as number, e.local_currency) : null;
   const receiptText = waiting
     ? strings.outbox.pendingReceipts(waiting)
     : receipts
@@ -282,43 +324,37 @@ function ExpenseRow({
     .join(". ");
 
   return (
-    <Row onPress={onPress} accessibilityLabel={label} accessibilityHint="Opens the expense and its receipts" testID={`expense-row-${e.id}`}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text variant="monoLabel" tone="secondary">
-            {e.expense_date}
-          </Text>
-          <Text variant="bodyStrong" numberOfLines={2}>
-            {e.description || e.vendor || category}
-          </Text>
-        </View>
-        <View style={{ alignItems: "flex-end", gap: 2 }}>
-          <Text variant="bodyStrong" style={{ fontVariant: ["tabular-nums"] }}>
-            {formatMoney(e.zar_amount, "ZAR")}
-          </Text>
+    <ListRow
+      title={e.description || e.vendor || category}
+      onPress={onPress}
+      accessibilityLabel={label}
+      accessibilityHint={strings.team.expenseHint}
+      testID={`expense-row-${e.id}`}
+      meta={
+        <>
+          {/* Single amounts keep their cents. */}
+          <MoneyText variant="rowTitle" amount={e.zar_amount} currency="ZAR" />
           {local ? (
-            <Text variant="caption" tone="secondary">
+            <Text variant="caption" tone="secondary" style={{ fontVariant: ["tabular-nums"] }}>
               {local}
             </Text>
           ) : null}
-        </View>
-      </View>
-      <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        </>
+      }
+    >
+      <Text variant="caption" tone="secondary">
+        {e.expense_date}
+      </Text>
+      <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: space.xs }}>
         <Text variant="caption" tone="secondary">{`${category} · ${method}`}</Text>
-        {isEstimate(e) ? <Tag tone="attention">{strings.expense.estimate}</Tag> : null}
-        {e.source === "slack" ? <Tag>Slack</Tag> : null}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          {receipts || waiting ? (
-            <FileText size={16} color={waiting ? colors.attention : colors.positiveText} />
-          ) : (
-            <ImageOff size={16} color={colors.attention} />
-          )}
-          <Text variant="caption" tone={receipts && !waiting ? "positive" : "attention"}>
-            {receiptText}
-          </Text>
-        </View>
+        {isEstimate(e) ? <StatusChip label={strings.expense.estimate} variant="attention" icon={Clock} /> : null}
+        {e.source === "slack" ? <StatusChip label={strings.team.slack} variant="quiet" icon={null} /> : null}
+        {/* Receipt status in words, with an icon: never colour alone. */}
+        <StatusLine icon={waiting ? Clock : receipts ? FileText : ImageOff} tone={receipts && !waiting ? "positive" : "attention"}>
+          {receiptText}
+        </StatusLine>
       </View>
-    </Row>
+    </ListRow>
   );
 }
 
@@ -326,11 +362,13 @@ function ExpenseRow({
 
 function MemberView({
   view,
+  back,
   stale,
   refreshing,
   onRefresh,
 }: {
   view: TeamMemberView;
+  back: BackAction;
   stale: React.ReactNode;
   refreshing: boolean;
   onRefresh: () => void;
@@ -338,39 +376,34 @@ function MemberView({
   const { colors } = useTheme();
   const o = view.overview;
   const role = strings.roles[o.my_role ?? ""] ?? o.my_role ?? "";
+  const facts = [dateRange(o.start_date, o.end_date), strings.team.people(o.roster.length), role ? strings.team.yourRole(role) : null];
   return (
-    <Screen scroll={false} edges={["bottom"]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <FlatList
-        data={o.roster}
-        keyExtractor={(p) => p.id}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />}
-        ListHeaderComponent={
-          <View style={{ gap: 16, paddingBottom: 8 }}>
-            <Masthead context={[o.program_name, o.location ?? strings.home.locationTbc, o.country].filter(Boolean).join(" · ")} title={o.team_name} />
-            {stale}
-            <Text variant="monoLabel" tone="secondary">
-              {`${dateRange(o.start_date, o.end_date)} · ${o.roster.length} ${o.roster.length === 1 ? "person" : "people"}${role ? ` · you're a ${role.toLowerCase()}` : ""}`}
-            </Text>
-            <SectionBar title={strings.team.whoIsGoing} meta={`${o.roster.length}`} />
-          </View>
-        }
-        ListFooterComponent={
-          <Text tone="secondary" style={{ paddingVertical: 16 }}>
-            {strings.team.memberNote}
-          </Text>
-        }
-        renderItem={({ item }) => (
-          <Row accessibilityLabel={`${item.name ?? "Unnamed"}, ${strings.roles[item.role] ?? item.role}`}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-              <Text style={{ flex: 1 }}>{item.name ?? "Unnamed"}</Text>
-              <Text variant="monoLabel" tone="secondary">
-                {strings.roles[item.role] ?? item.role}
-              </Text>
-            </View>
-          </Row>
-        )}
-      />
-    </Screen>
+    <LargeTitleScrollView
+      back={back}
+      eyebrow={[o.program_name, o.location ?? strings.home.locationTbc, o.country].filter(Boolean).join(" · ")}
+      title={o.team_name}
+      gap={0}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />}
+    >
+      <Text variant="label" style={{ marginTop: -space.sm }}>
+        {facts.filter(Boolean).join(" · ")}
+      </Text>
+      {stale ? <Bleed style={{ marginTop: space.md }}>{stale}</Bleed> : null}
+      <SectionTitle title={strings.team.whoIsGoing} meta={`${o.roster.length}`} />
+      {o.roster.length > 0 ? (
+        <Bleed>
+          <ListGroup inset={false}>
+            {o.roster.map((p) => {
+              const name = p.name ?? strings.team.unnamed;
+              const theirRole = strings.roles[p.role] ?? p.role;
+              return <InfoRow key={p.id} title={name} meta={theirRole} accessibilityLabel={`${name}, ${theirRole}`} />;
+            })}
+          </ListGroup>
+        </Bleed>
+      ) : null}
+      <Text tone="secondary" style={{ marginTop: space.lg }}>
+        {strings.team.memberNote}
+      </Text>
+    </LargeTitleScrollView>
   );
 }

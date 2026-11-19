@@ -1,6 +1,6 @@
-// Small building blocks the finance screens share. They live with the
-// feature (not the shared kit) so other slices aren't touched; candidates
-// to move into src/components once a second feature needs them.
+// The pre-redesign building blocks. Finance itself no longer uses them (see
+// parts.tsx and form-parts.tsx); other features still import them until
+// their own redesign slices move to the kit, so they stay as they were.
 
 import { useEffect, useState, type ReactNode } from "react";
 import { Animated, Pressable, View, type ViewStyle } from "react-native";
@@ -10,7 +10,6 @@ import { useReduceMotion } from "@/lib/a11y";
 import { hairline, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-import { barFill, formatMoney, moneyLabel, type BudgetFigures } from "../money";
 import { strings } from "../strings";
 
 // ── Section bar (the web's black bar with a mono caps label) ────────────────
@@ -40,74 +39,6 @@ export function SectionBar({ title, meta }: { title: string; meta?: string }) {
           {meta}
         </Text>
       ) : null}
-    </View>
-  );
-}
-
-// ── Budget bar: numbers always shown, never colour alone ────────────────────
-
-export function BudgetBar({ figures, currency, compact = false }: { figures: BudgetFigures; currency: string; compact?: boolean }) {
-  const { colors } = useTheme();
-  const fill = barFill(figures.ratio);
-  const summary =
-    figures.ratio === null
-      ? strings.team.noBudget
-      : figures.over
-        ? `${strings.team.over} by ${formatMoney(-figures.remaining, currency, { cents: false })}`
-        : `${figures.pctSpent}% spent`;
-  const spokenSummary =
-    figures.ratio === null
-      ? strings.team.noBudget
-      : figures.over
-        ? `${strings.team.over} by ${moneyLabel(-figures.remaining, currency, { cents: false })}`
-        : `${figures.pctSpent} percent spent`;
-  const label = `${strings.team.budget} ${moneyLabel(figures.total, currency, { cents: false })}, ${strings.team.spent} ${moneyLabel(figures.spent, currency, { cents: false })}, ${strings.team.remaining} ${moneyLabel(figures.remaining, currency, { cents: false })}. ${spokenSummary}.`;
-
-  return (
-    <View
-      accessible
-      accessibilityRole="progressbar"
-      accessibilityLabel={label}
-      accessibilityValue={figures.pctSpent === null ? undefined : { min: 0, max: 100, now: Math.min(100, Math.floor(figures.pctSpent)) }}
-      style={{ gap: 6 }}
-    >
-      {!compact ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 16, rowGap: 4 }}>
-          <Figure label={strings.team.budget} value={formatMoney(figures.total, currency, { cents: false })} />
-          <Figure label={strings.team.spent} value={formatMoney(figures.spent, currency, { cents: false })} />
-          <Figure
-            label={strings.team.remaining}
-            value={formatMoney(figures.remaining, currency, { cents: false })}
-            tone={figures.over ? "danger" : "default"}
-          />
-        </View>
-      ) : null}
-      {figures.ratio !== null ? (
-        <View style={{ height: 6, backgroundColor: colors.surfaceStrong }}>
-          <View
-            testID="budget-bar-fill"
-            style={{ height: 6, width: `${fill * 100}%`, backgroundColor: figures.over ? colors.danger : colors.text }}
-          />
-        </View>
-      ) : null}
-      <Text variant="caption" tone={figures.over ? "danger" : "secondary"}>
-        {compact
-          ? `${formatMoney(figures.spent, currency, { cents: false })} of ${formatMoney(figures.total, currency, { cents: false })} · ${summary}`
-          : summary}
-      </Text>
-    </View>
-  );
-}
-
-function Figure({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "danger" }) {
-  return (
-    <View style={{ gap: 2 }}>
-      <Text variant="monoLabel" tone="secondary">
-        {label}
-      </Text>
-      <Text variant="bodyStrong" tone={tone} style={{ fontVariant: ["tabular-nums"] }}>
-        {value}
-      </Text>
     </View>
   );
 }
