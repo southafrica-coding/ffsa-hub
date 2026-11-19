@@ -30,7 +30,7 @@ export function EmptyState({ title, body, icon: Icon, actionLabel, onAction, car
         gap: 6,
         paddingVertical: space.xxl,
         paddingHorizontal: space.xxl,
-        ...(card ? { borderWidth: hairline, borderColor: colors.rule, borderRadius: radius.card, backgroundColor: colors.surface } : null),
+        ...(card ? { borderWidth: hairline, borderColor: colors.rule, borderRadius: radius.card, backgroundColor: colors.raised } : null),
       }}
     >
       {Icon ? (

@@ -35,7 +35,8 @@ export function ListGroup({
           borderWidth: hairline,
           borderColor: colors.rule,
           borderRadius: radius.card,
-          backgroundColor: colors.surface,
+          // Rows are white in light (raised), as the mockups draw them; surface (#FBFAF7) is for banners, tiles and tracks.
+          backgroundColor: colors.raised,
           overflow: "hidden",
         },
         style,

@@ -162,7 +162,7 @@ describe("ListGroup + ListRow", () => {
       borderRadius: 8,
       borderWidth: 1,
       borderColor: colors.light.rule,
-      backgroundColor: colors.light.surface,
+      backgroundColor: colors.light.raised,
     });
   });
 
@@ -229,6 +229,13 @@ describe("StatusChip", () => {
     // Icon present (hidden from screen readers; the word carries the meaning).
     expect(chip.props.children.filter(Boolean)).toHaveLength(2);
     expect(flat(chip.props.style)).toMatchObject({ minHeight: 24, borderRadius: 6 });
+  });
+
+  it("can be word-only when the word is the whole meaning (You, Staff)", async () => {
+    await render(<StatusChip variant="ink" label="You" icon={null} testID="chip" />);
+    const chip = screen.getByTestId("chip");
+    expect(screen.getByText("You")).toBeTruthy();
+    expect(chip.props.children.filter(Boolean)).toHaveLength(1);
   });
 
   it("uses the dark status colours in dark", async () => {

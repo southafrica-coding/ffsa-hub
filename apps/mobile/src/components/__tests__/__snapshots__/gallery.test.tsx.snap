@@ -10909,7 +10909,7 @@ exports[`kit gallery (light) renders every component 1`] = `
       style={
         [
           {
-            "backgroundColor": "#FBFAF7",
+            "backgroundColor": "#FFFFFF",
             "borderColor": "#E7E4D9",
             "borderRadius": 8,
             "borderWidth": 1,
@@ -14611,7 +14611,7 @@ exports[`kit gallery (light) renders every component 1`] = `
       style={
         {
           "alignItems": "center",
-          "backgroundColor": "#FBFAF7",
+          "backgroundColor": "#FFFFFF",
           "borderColor": "#E7E4D9",
           "borderRadius": 8,
           "borderWidth": 1,
@@ -14766,7 +14766,7 @@ exports[`kit gallery (light) renders every component 1`] = `
       style={
         {
           "alignItems": "center",
-          "backgroundColor": "#FBFAF7",
+          "backgroundColor": "#FFFFFF",
           "borderColor": "#E7E4D9",
           "borderRadius": 8,
           "borderWidth": 1,
@@ -16184,7 +16184,7 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
           style={
             [
               {
-                "backgroundColor": "#FBFAF7",
+                "backgroundColor": "#FFFFFF",
                 "borderColor": "#E7E4D9",
                 "borderRadius": 8,
                 "borderWidth": 1,

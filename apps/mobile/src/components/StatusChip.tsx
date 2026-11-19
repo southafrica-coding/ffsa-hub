@@ -22,8 +22,8 @@ export type StatusChipProps = {
   /** The word. Status is never colour alone. */
   label: string;
   variant?: ChipVariant;
-  /** Replace the variant's icon. */
-  icon?: LucideIcon;
+  /** Replace the variant's icon, or pass null for a word-only chip (e.g. "You", "Staff"). */
+  icon?: LucideIcon | null;
   /** Spoken instead of the word, if it needs more context ("Status: paid"). */
   accessibilityLabel?: string;
   testID?: string;
@@ -37,7 +37,7 @@ export type StatusChipProps = {
 export function StatusChip({ label, variant = "neutral", icon, accessibilityLabel, testID }: StatusChipProps) {
   const { colors } = useTheme();
   const s = chipStyle(variant, colors);
-  const Icon = icon ?? DEFAULT_ICON[variant];
+  const Icon = icon === null ? null : (icon ?? DEFAULT_ICON[variant]);
   return (
     <View testID={testID} accessible accessibilityRole="text" accessibilityLabel={accessibilityLabel ?? label} style={s.container}>
       {Icon ? (
