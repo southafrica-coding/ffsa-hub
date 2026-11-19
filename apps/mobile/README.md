@@ -47,7 +47,7 @@ Only the shell edits `app/(app)/_layout.tsx` (the tab bar). The bar matches a ro
 
 These gates are **for the interface only**. Hiding a button protects nothing: the API and Supabase RLS decide, and the app must handle a `403` gracefully (show a "not available on your account" state).
 
-Also exported for any slice: `SectionBar` (black section header), `BarAction`, `ListRow` (56dp row, push / opens-in-browser variants), `StateMessage` (empty / no-access), `SkeletonRows` (static loading placeholder, no motion).
+Screens are built from the component kit in `src/components` (rows, section titles, bands, sheets, load states, form controls): see `docs/redesign.md` for the kit and how to build a screen in the redesign style.
 
 **Strings** live in one file per feature (`src/features/<feature>/strings.ts`) so translation can come later.
 

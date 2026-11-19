@@ -4,7 +4,7 @@ import { useCallback, useMemo, type ReactNode } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { type BackAction, Bleed, Button, EmptyState, LargeTitleScrollView, ListGroup, ListRow, LoadFailed, NeedsYouBand, SectionTitle, SkeletonList, StaleNote } from "@/components";
+import { type BackAction, Bleed, Button, EmptyState, FadeIn, LargeTitleScrollView, ListGroup, ListRow, LoadFailed, NeedsYouBand, SectionTitle, SkeletonList, StaleNote } from "@/components";
 import { formatSavedAt } from "@/features/finance/cache";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { useMe } from "@/features/shell";
@@ -156,11 +156,11 @@ export default function BookingsHomeScreen() {
       </Bleed>
 
       {groups ? (
-        <>
+        <FadeIn>
           <Group title={s.sections.waiting} items={groups.waiting} onOpen={openItem} />
           <Group title={s.sections.upcoming} items={groups.upcoming} onOpen={openItem} />
           <Group title={s.sections.past} items={groups.past.slice(0, PAST_LIMIT)} onOpen={openItem} />
-        </>
+        </FadeIn>
       ) : null}
     </>,
     true,

@@ -5,7 +5,7 @@ import { useCallback, useState } from "react";
 import { Alert, RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Bleed, Button, EmptyState, Freshness, LargeTitleScrollView, ListGroup, ListRow, LoadError, NeedsYouBand, SectionTitle, SkeletonList, StatusChip, Text } from "@/components";
+import { Banner, Bleed, Button, EmptyState, FadeIn, Freshness, LargeTitleScrollView, ListGroup, ListRow, LoadError, NeedsYouBand, SectionTitle, SkeletonList, StatusChip, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage } from "@/features/shell";
 import { announce } from "@/lib/a11y";
@@ -114,7 +114,7 @@ export default function MinistryDetailScreen({ id }: { id: string }) {
       </Bleed>
 
       {data ? (
-        <>
+        <FadeIn>
           {data.ministry.description ? (
             <Text tone="secondary" style={{ marginTop: topNotes ? space.lg : 0 }}>
               {data.ministry.description}
@@ -143,7 +143,7 @@ export default function MinistryDetailScreen({ id }: { id: string }) {
               </ListGroup>
             </Bleed>
           ) : null}
-        </>
+        </FadeIn>
       ) : null}
     </LargeTitleScrollView>
   );

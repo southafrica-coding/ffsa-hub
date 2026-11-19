@@ -2,7 +2,7 @@ import { Lock } from "lucide-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
-import { Button, EmptyState, ListGroup, ListRow, NeedsYouBand, SectionHeader, SkeletonList, Text } from "@/components";
+import { Button, EmptyState, FadeIn, ListGroup, ListRow, NeedsYouBand, SectionHeader, SkeletonList, Text } from "@/components";
 import { openWebPage } from "@/features/shell";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -140,97 +140,99 @@ export function MySetsView({
       ) : null}
       <ActionNotice result={result} />
 
-      <View>
-        <SectionHeader title={strings.mine.invitations} inset={false} tight />
-        {invites.length === 0 ? (
-          <Quiet>{strings.mine.noInvitations}</Quiet>
-        ) : (
-          <ListGroup inset={false}>
-            {invites.map((inv) => {
-              const label = seatLabel(inv, seatTypes);
-              const s = inv.set;
-              return (
-                <View key={inv.id} testID={`invite-${inv.id}`} style={{ paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.sm }}>
-                  <View
-                    accessible
-                    accessibilityLabel={
-                      s
-                        ? `${label} on ${setTitle(s)}, ${spokenDate(s.set_date)}, ${spokenTimeRange(s.start_time, s.end_time)}${s.owner ? `, from ${fullName(s.owner)}` : ""}`
-                        : label
-                    }
-                  >
-                    <Text variant="rowTitle">{s ? strings.mine.roleOn(label, setTitle(s)) : label}</Text>
-                    {s ? (
-                      <Text variant="caption" tone="secondary">
-                        {dayLabel(s.set_date)} · {timeRange(s.start_time, s.end_time)}
-                        {s.owner ? ` · ${fullName(s.owner)}` : ""}
-                      </Text>
-                    ) : null}
+      <FadeIn style={{ gap: space.md }}>
+        <View>
+          <SectionHeader title={strings.mine.invitations} inset={false} tight />
+          {invites.length === 0 ? (
+            <Quiet>{strings.mine.noInvitations}</Quiet>
+          ) : (
+            <ListGroup inset={false}>
+              {invites.map((inv) => {
+                const label = seatLabel(inv, seatTypes);
+                const s = inv.set;
+                return (
+                  <View key={inv.id} testID={`invite-${inv.id}`} style={{ paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.sm }}>
+                    <View
+                      accessible
+                      accessibilityLabel={
+                        s
+                          ? `${label} on ${setTitle(s)}, ${spokenDate(s.set_date)}, ${spokenTimeRange(s.start_time, s.end_time)}${s.owner ? `, from ${fullName(s.owner)}` : ""}`
+                          : label
+                      }
+                    >
+                      <Text variant="rowTitle">{s ? strings.mine.roleOn(label, setTitle(s)) : label}</Text>
+                      {s ? (
+                        <Text variant="caption" tone="secondary">
+                          {dayLabel(s.set_date)} · {timeRange(s.start_time, s.end_time)}
+                          {s.owner ? ` · ${fullName(s.owner)}` : ""}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
+                      <Button
+                        label={strings.set.accept}
+                        size="small"
+                        onPress={() => respond(inv, "accept")}
+                        loading={busy === inv.id}
+                        disabled={!!busy}
+                        accessibilityLabel={`${strings.set.accept} ${label}`}
+                      />
+                      <Button
+                        label={strings.set.decline}
+                        variant="secondary"
+                        size="small"
+                        onPress={() => respond(inv, "decline")}
+                        disabled={!!busy}
+                        accessibilityLabel={`${strings.set.decline} ${label}`}
+                      />
+                    </View>
                   </View>
-                  <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
-                    <Button
-                      label={strings.set.accept}
-                      size="small"
-                      onPress={() => respond(inv, "accept")}
-                      loading={busy === inv.id}
-                      disabled={!!busy}
-                      accessibilityLabel={`${strings.set.accept} ${label}`}
-                    />
-                    <Button
-                      label={strings.set.decline}
-                      variant="secondary"
-                      size="small"
-                      onPress={() => respond(inv, "decline")}
-                      disabled={!!busy}
-                      accessibilityLabel={`${strings.set.decline} ${label}`}
-                    />
-                  </View>
-                </View>
-              );
-            })}
-          </ListGroup>
-        )}
-      </View>
+                );
+              })}
+            </ListGroup>
+          )}
+        </View>
 
-      <View>
-        <SectionHeader title={strings.mine.serving} inset={false} tight />
-        {serving.length === 0 ? (
-          <Quiet>{strings.mine.noServing}</Quiet>
-        ) : (
-          <ListGroup inset={false}>
-            {serving.map((r) => (
-              <ListRow
-                key={r.id}
-                testID={`serving-${r.id}`}
-                title={strings.mine.roleOn(seatLabel(r, seatTypes), setTitle(r.set!))}
-                subtitle={`${dayLabel(r.set!.set_date)} · ${timeRange(r.set!.start_time, r.set!.end_time)}`}
-                accessibilityHint={strings.set.openHint}
-                onPress={() => setOpenId(r.set!.id)}
-              />
-            ))}
-          </ListGroup>
-        )}
-      </View>
+        <View>
+          <SectionHeader title={strings.mine.serving} inset={false} tight />
+          {serving.length === 0 ? (
+            <Quiet>{strings.mine.noServing}</Quiet>
+          ) : (
+            <ListGroup inset={false}>
+              {serving.map((r) => (
+                <ListRow
+                  key={r.id}
+                  testID={`serving-${r.id}`}
+                  title={strings.mine.roleOn(seatLabel(r, seatTypes), setTitle(r.set!))}
+                  subtitle={`${dayLabel(r.set!.set_date)} · ${timeRange(r.set!.start_time, r.set!.end_time)}`}
+                  accessibilityHint={strings.set.openHint}
+                  onPress={() => setOpenId(r.set!.id)}
+                />
+              ))}
+            </ListGroup>
+          )}
+        </View>
 
-      <View>
-        <SectionHeader title={strings.mine.leading} inset={false} tight />
-        {leading.length === 0 ? (
-          <Quiet>{strings.mine.noLeading}</Quiet>
-        ) : (
-          <ListGroup inset={false}>
-            {leading.map((s) => (
-              <ListRow
-                key={s.id}
-                testID={`leading-${s.id}`}
-                title={setTitle(s)}
-                subtitle={`${dayLabel(s.set_date)} · ${timeRange(s.start_time, s.end_time)}${s.series_id ? ` · ${strings.set.repeats}` : ""}`}
-                accessibilityHint={strings.set.openHint}
-                onPress={() => setOpenId(s.id)}
-              />
-            ))}
-          </ListGroup>
-        )}
-      </View>
+        <View>
+          <SectionHeader title={strings.mine.leading} inset={false} tight />
+          {leading.length === 0 ? (
+            <Quiet>{strings.mine.noLeading}</Quiet>
+          ) : (
+            <ListGroup inset={false}>
+              {leading.map((s) => (
+                <ListRow
+                  key={s.id}
+                  testID={`leading-${s.id}`}
+                  title={setTitle(s)}
+                  subtitle={`${dayLabel(s.set_date)} · ${timeRange(s.start_time, s.end_time)}${s.series_id ? ` · ${strings.set.repeats}` : ""}`}
+                  accessibilityHint={strings.set.openHint}
+                  onPress={() => setOpenId(s.id)}
+                />
+              ))}
+            </ListGroup>
+          )}
+        </View>
+      </FadeIn>
 
       {more}
 

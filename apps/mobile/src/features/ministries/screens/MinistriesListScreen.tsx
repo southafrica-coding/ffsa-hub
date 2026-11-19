@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Bleed, EmptyState, Freshness, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, SectionTitle, SkeletonList, StatusChip, Text } from "@/components";
+import { Bleed, EmptyState, FadeIn, Freshness, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, SectionTitle, SkeletonList, StatusChip, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage } from "@/features/shell";
 import { apiFetch } from "@/lib/api-client";
@@ -65,8 +65,9 @@ export default function MinistriesListScreen() {
         {data && data.ministries.length === 0 ? <EmptyState testID="empty" icon={UsersRound} title={s.emptyTitle} body={s.emptyBody} /> : null}
       </Bleed>
 
-      {data
-        ? sections.map((section, i) => (
+      {data && sections.length > 0 ? (
+        <FadeIn>
+          {sections.map((section, i) => (
             <View key={section.type}>
               {showHeadings ? <SectionTitle title={section.label} meta={section.items.length} tight={i === 0} /> : null}
               <Bleed>
@@ -77,8 +78,9 @@ export default function MinistriesListScreen() {
                 </ListGroup>
               </Bleed>
             </View>
-          ))
-        : null}
+          ))}
+        </FadeIn>
+      ) : null}
 
       {data?.canCreate ? (
         <Bleed style={{ marginTop: space.lg }}>

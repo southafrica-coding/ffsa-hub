@@ -2,7 +2,7 @@ import { CalendarDays, Lock } from "lucide-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
-import { Banner, EmptyState, NeedsYouBand, SkeletonList, Text } from "@/components";
+import { Banner, EmptyState, FadeIn, NeedsYouBand, SkeletonList, Text } from "@/components";
 import { space } from "@/theme/tokens";
 
 import { dayMarker, stripDays, stripSummary, stripWeek, type DayMarker } from "../day-strip";
@@ -126,31 +126,33 @@ export function WeekView({
       {emptyWeek && shown.blockouts.length === 0 ? (
         <EmptyState icon={CalendarDays} title={strings.week.emptyTitle} body={strings.week.emptyBody} testID="week-empty" />
       ) : (
-        <View testID={`day-${shown.date}`}>
-          <DayHeader date={shown.date} />
-          <View style={{ gap: space.sm }}>
-            {shown.blockouts.map((b) => (
-              <Banner key={b.id} tone="info" icon={Lock} testID={`blockout-${b.id}`}>
-                {strings.week.blocked(blockoutWhen(b), b.reason, b.relocation_note)}
-              </Banner>
-            ))}
-            {shown.sets.length === 0 ? (
-              <Text variant="caption" tone="secondary">
-                {strings.week.nothingThisDay}
-              </Text>
-            ) : null}
-            {shown.sets.map((s) => (
-              <SetRow
-                key={s.id}
-                set={s}
-                seatTypes={meta.seatTypes}
-                bands={meta.bands}
-                userId={userId}
-                onPress={() => setOpenId(s.id)}
-              />
-            ))}
+        <FadeIn>
+          <View testID={`day-${shown.date}`}>
+            <DayHeader date={shown.date} />
+            <View style={{ gap: space.sm }}>
+              {shown.blockouts.map((b) => (
+                <Banner key={b.id} tone="info" icon={Lock} testID={`blockout-${b.id}`}>
+                  {strings.week.blocked(blockoutWhen(b), b.reason, b.relocation_note)}
+                </Banner>
+              ))}
+              {shown.sets.length === 0 ? (
+                <Text variant="caption" tone="secondary">
+                  {strings.week.nothingThisDay}
+                </Text>
+              ) : null}
+              {shown.sets.map((s) => (
+                <SetRow
+                  key={s.id}
+                  set={s}
+                  seatTypes={meta.seatTypes}
+                  bands={meta.bands}
+                  userId={userId}
+                  onPress={() => setOpenId(s.id)}
+                />
+              ))}
+            </View>
           </View>
-        </View>
+        </FadeIn>
       )}
 
       <SetSheet

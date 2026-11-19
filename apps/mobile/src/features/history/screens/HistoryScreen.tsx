@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Bleed, EmptyState, Freshness, GroupRow, LargeTitleScrollView, ListGroup, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
+import { Bleed, EmptyState, FadeIn, Freshness, GroupRow, LargeTitleScrollView, ListGroup, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 // The pieces My Schools and My History share until the kit has them.
 import { openWebPage } from "@/features/shell";
@@ -75,7 +75,7 @@ export default function HistoryScreen() {
         ) : null}
 
         {sections.length > 0 ? (
-          <View>
+          <FadeIn>
             {sections.map((section, i) => (
               <View key={section.kind} testID={`section-${section.kind}`}>
                 <SectionTitle title={section.title} meta={String(section.records.length)} tight={i === 0} />
@@ -88,7 +88,7 @@ export default function HistoryScreen() {
                 </Bleed>
               </View>
             ))}
-          </View>
+          </FadeIn>
         ) : null}
       </LargeTitleScrollView>
 

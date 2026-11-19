@@ -3,7 +3,7 @@ import { Clock, ShieldCheck, Wallet } from "lucide-react-native";
 import { useCallback } from "react";
 import { RefreshControl, View } from "react-native";
 
-import { Banner, Bleed, EmptyState, GroupRow, InfoRow, LargeTitleScrollView, ListGroup, LoadError, NeedsYouBand, SectionTitle, SkeletonList, StaleNote, StatusChip, StatusLine, Text } from "@/components";
+import { Banner, Bleed, EmptyState, FadeIn, GroupRow, InfoRow, LargeTitleScrollView, ListGroup, LoadError, NeedsYouBand, SectionTitle, SkeletonList, StaleNote, StatusChip, StatusLine, Text } from "@/components";
 import { useSession } from "@/auth/session-provider";
 import { useMe } from "@/features/shell";
 import { supabase } from "@/lib/supabase";
@@ -81,7 +81,7 @@ export default function FinanceHomeScreen() {
       ) : null}
 
       {teams && teams.length > 0 ? (
-        <>
+        <FadeIn>
           <SectionTitle title={s.teamsSection} meta={s.teamCount(teams.length)} tight />
           <Bleed>
             <ListGroup inset={false}>
@@ -95,7 +95,7 @@ export default function FinanceHomeScreen() {
               ))}
             </ListGroup>
           </Bleed>
-        </>
+        </FadeIn>
       ) : null}
 
       {/* Jack's decision (spec §1): a labelled placeholder. No link, no inbox.

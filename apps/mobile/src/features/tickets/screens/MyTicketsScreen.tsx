@@ -3,8 +3,9 @@ import { ScanLine, Ticket as TicketIcon } from "lucide-react-native";
 import { useState, type ReactNode } from "react";
 import { View } from "react-native";
 
-import { Banner, Button, EmptyState, ListGroup, ListRow, NeedsYouBand, SectionTitle, SkeletonList } from "@/components";
+import { Banner, Button, EmptyState, FadeIn, ListGroup, ListRow, NeedsYouBand, SectionTitle, SkeletonList } from "@/components";
 import { openWebPage, useMe } from "@/features/shell";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import type { MyRegistration, MyTicket } from "../api";
@@ -90,7 +91,7 @@ export function MyTicketsScreen({ now = () => new Date() }: { now?: () => Date }
         {items.length === 0 ? (
           <EmptyState icon={TicketIcon} title={strings.myTickets.emptyTitle} body={strings.myTickets.emptyBody} testID="empty-state" />
         ) : (
-          <>
+          <FadeIn style={{ gap: space.md }}>
             {t.data.tickets.length > 0 ? <SavedCue text={strings.myTickets.savedOnPhone} hint={strings.myTickets.savedOnPhoneHint} /> : null}
             {upcoming.length > 0 ? (
               <View>
@@ -116,7 +117,7 @@ export function MyTicketsScreen({ now = () => new Date() }: { now?: () => Date }
                 ) : null}
               </View>
             ) : null}
-          </>
+          </FadeIn>
         )}
         {getTickets}
       </>

@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { type BackAction, Bleed, EmptyState, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
+import { type BackAction, Bleed, EmptyState, FadeIn, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
@@ -76,7 +76,7 @@ export default function WallScreen({ cycle }: { cycle: string | null }) {
       ) : null}
 
       {data && active ? (
-        <>
+        <FadeIn>
           <Bleed>
             <CycleSwitcher cycles={data.cycles} active={active} onChange={(slug) => router.setParams({ cycle: slug })} />
           </Bleed>
@@ -162,7 +162,7 @@ export default function WallScreen({ cycle }: { cycle: string | null }) {
               <ListRow title={s.openWeb} trailing="web" onPress={() => void openWebPage(webPath(null, active.slug), colors)} testID="open-web" />
             </ListGroup>
           </Bleed>
-        </>
+        </FadeIn>
       ) : null}
     </LargeTitleScrollView>
   );

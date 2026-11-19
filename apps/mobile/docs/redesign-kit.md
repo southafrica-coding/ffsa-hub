@@ -1,5 +1,13 @@
 # Redesign kit: tokens, type and components (R1 foundation)
 
+> **R4 (polish and QA, 19 Nov 2026):** every "Not migrated" row below is now
+> migrated, the legacy names (`Masthead`, `Text` `display`/`title`/`numeral`/
+> `bodyStrong`, `Banner tone="needsYou"`, `Button variant="destructive"`, shell
+> `SectionBar`/`StateMessage`/`SkeletonRows`/old `ListRow`) are deleted, and
+> the pieces features had built for themselves are in the kit. The current
+> kit and how to build a screen with it: **`docs/redesign.md`**. This page is
+> kept as the R1 record.
+
 The iPhone redesign's foundation (branch `feat/mobile-r-foundation`, 18 Nov 2026). Source of truth
 for the look: `~/CODING/mobile-prompts/redesign/design-spec.md` and the mockups. This page is the
 map for the slices that re-lay-out screens (R2/R3): what exists, and what replaces what.

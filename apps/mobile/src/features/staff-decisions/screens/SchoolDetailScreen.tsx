@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Bleed, Button, EmptyState, Freshness, LargeTitleScrollView, ListGroup, ListRow, LoadError, NeedsYouBand, SectionHeader, SkeletonList, StatusChip, Text } from "@/components";
+import { Bleed, Button, EmptyState, FadeIn, Freshness, LargeTitleScrollView, ListGroup, ListRow, LoadError, NeedsYouBand, SectionHeader, SkeletonList, StatusChip, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { openWebPage } from "@/features/shell";
 import { apiFetch } from "@/lib/api-client";
@@ -90,7 +90,7 @@ export default function SchoolDetailScreen({ programId }: { programId: string })
         </Bleed>
 
         {data ? (
-          <>
+          <FadeIn>
             <SectionHeader title={s.studentsCount(data.rows.length)} inset={false} />
             <Bleed>
               {data.rows.length === 0 ? (
@@ -122,7 +122,7 @@ export default function SchoolDetailScreen({ programId }: { programId: string })
                 />
               </ListGroup>
             </Bleed>
-          </>
+          </FadeIn>
         ) : null}
       </LargeTitleScrollView>
 

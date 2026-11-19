@@ -62,10 +62,9 @@ Status: **fixed** (in this branch) · **ok** (already honours the theme, checked
 | Android navigation bar | Edge-to-edge (SDK 58): the bar is transparent over our bg; button colour comes from the DayNight theme, which the Appearance override switches. | None in code. Needs a device check; if the buttons are wrong, add `expo-navigation-bar` and set its style from the scheme. | follow-up (device) |
 | Sign-in | Wordmark already swaps black/white PNGs by scheme; tick uses accent. | — | ok |
 | Kit: `TextField` | Outline (`ruleStrong`) 1.98:1 in dark; placeholder 4.49:1. | Dark token values above. | fixed |
-| Kit: `Button`, `Banner`, `LargeTitle`/`Masthead`, `Text`, `Divider`, `Screen` and the redesign kit | All colours from tokens; the yellow band is yellow with ink text in both schemes (no border since the redesign); primary buttons are yellow/black in dark; every kit component is snapshotted in light and dark (`src/components/__tests__/gallery.test.tsx`). | — | ok |
+| Kit: `Button`, `Banner`, `LargeTitle`, `Text`, `Divider`, `Screen` and the redesign kit | All colours from tokens; the yellow band is yellow with ink text in both schemes (no border since the redesign); primary buttons are yellow/black in dark; every kit component is snapshotted in light and dark (`src/components/__tests__/gallery.test.tsx`). | — | ok |
 | Kit: `Button` loading spinner | `ActivityIndicator` uses the button's text colour. | — | ok |
 | Shell: `TabBar` | Tint, pressed fill, yellow active tick and badge (inverse) all from tokens; tick is decoration, the selected state is also in the role/label. | — | ok |
-| Shell: `SectionBar`, `ListRow`, `StateMessage`, `SkeletonRows` | Tokens. In dark the black section bar inverts to bone with ink text (13:1+), so it still reads as a bar on a black page. | — | ok |
 | Shell: in-app browser (`openWebPage`) | Toolbar/controls colours come from the `colors` the caller passes. Bookings passed none, so the browser opened light in dark mode. | Bookings' six calls now pass `colors`. | fixed |
 | Home: feed, `NotificationRow` | Tokens. | — | ok |
 | Home: pull-to-refresh (`app/(app)/index.tsx`) | Android spinner disc defaults to white; with a light arrow in dark it is low contrast. | Batch 3 follow-ups: spreads `refreshControlColors(colors)` onto its `RefreshControl` (My Schools list, enrolment and attendance too). | fixed |

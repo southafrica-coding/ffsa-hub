@@ -34,11 +34,12 @@ Phase 1, slice 2. Mirrors the website's `/my-finance` and outreach team pages.
 - Every screen draws its own header: `LargeTitleScrollView` (My finance, team,
   expense) or Cancel + title in the bar (Add expense). The stack has no native
   header.
-- Screens are built from the kit (`@/components`). What the kit doesn't have
-  yet lives in `components/parts.tsx` (section title with a count, free-form
-  and static list rows, budget bar, status line) and `components/form-parts.tsx`
-  (choice chips, select field, disclosure, form bar). `components/ui.tsx` is
-  the older set: finance no longer uses it, other features still do.
+- Screens are built from the kit (`@/components`): section titles, group and
+  info rows, status lines, choice chips, select field, disclosure and the
+  load states were first built here and promoted to the kit in R4. Only the
+  budget bar stays in `components/parts.tsx`. The Add expense bar is the
+  kit `NavBar` with Cancel in its leading slot; Cancel with anything filled
+  in asks "Discard this expense?" first.
 - Budget summaries are whole rands; single amounts keep their cents
   (`money.ts`, unchanged).
 - At most one yellow band per screen: unsent items that failed (My finance),

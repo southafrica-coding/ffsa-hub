@@ -15,7 +15,7 @@ import {
 import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, EmptyState, LargeTitleScrollView, ListGroup, ListRow, NeedsYouBand, SectionHeader } from "@/components";
+import { Banner, Button, EmptyState, FadeIn, LargeTitleScrollView, ListGroup, ListRow, NeedsYouBand, SectionHeader } from "@/components";
 import { strings as historyStrings } from "@/features/history/strings";
 import type { FeedItem } from "@/features/home/api";
 import { groupFeed, resolveTarget, timeAgo } from "@/features/home/feed-logic";
@@ -142,25 +142,29 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
-      {needsYou.length > 0 ? (
-        <View>
-          <SectionHeader
-            inset={false}
-            title={s.sections.needsYou(needsYou.length)}
-            actionLabel={s.markAllRead}
-            actionAccessibilityLabel={s.markAllReadA11y(needsYou.length)}
-            actionTestID="mark-all-read"
-            onAction={() => feed.markRead(needsYou.map((i) => i.key))}
-          />
-          {rows(needsYou)}
-        </View>
-      ) : null}
+      {needsYou.length > 0 || earlier.length > 0 ? (
+        <FadeIn>
+          {needsYou.length > 0 ? (
+            <View>
+              <SectionHeader
+                inset={false}
+                title={s.sections.needsYou(needsYou.length)}
+                actionLabel={s.markAllRead}
+                actionAccessibilityLabel={s.markAllReadA11y(needsYou.length)}
+                actionTestID="mark-all-read"
+                onAction={() => feed.markRead(needsYou.map((i) => i.key))}
+              />
+              {rows(needsYou)}
+            </View>
+          ) : null}
 
-      {earlier.length > 0 ? (
-        <View>
-          <SectionHeader inset={false} title={s.sections.earlier} />
-          {rows(earlier)}
-        </View>
+          {earlier.length > 0 ? (
+            <View>
+              <SectionHeader inset={false} title={s.sections.earlier} />
+              {rows(earlier)}
+            </View>
+          ) : null}
+        </FadeIn>
       ) : null}
 
       {/* Fixed order; rows the person can't open simply drop out. */}

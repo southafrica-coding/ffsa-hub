@@ -2,7 +2,7 @@ import { ChevronRight, Lock } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 
-import { Banner, Button, EmptyState, SectionHeader, SkeletonList, StatusChip, Text } from "@/components";
+import { Banner, Button, EmptyState, FadeIn, SectionHeader, SkeletonList, StatusChip, Text } from "@/components";
 import { fontFamily, hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -106,68 +106,70 @@ export function PracticeView({ anchor, nav, userId }: { anchor: string; nav: Pra
       ) : null}
       <ActionNotice result={result} />
 
-      <View>
-        <SectionHeader title={strings.practice.yours} inset={false} tight />
-        {mine.length === 0 ? (
-          <Text variant="caption" tone="secondary">
-            {strings.practice.noneYours}
-          </Text>
-        ) : null}
-        <View style={{ gap: space.sm }}>
-          {mine.map((b) => (
-            <View
-              key={b.id}
-              testID={`my-practice-${b.id}`}
-              style={{ padding: space.md, gap: space.sm, borderWidth: 2, borderColor: colors.text, borderRadius: radius.card }}
-            >
-              <View accessible accessibilityLabel={`${stationName(week, b)}, ${spokenDate(b.practice_date)}, ${spokenTimeRange(b.start_time, b.end_time)}`}>
-                <Text variant="sectionTitle">{stationName(week, b)}</Text>
-                <Text variant="caption" tone="secondary">
-                  {dayLabel(b.practice_date)} · {timeRange(b.start_time, b.end_time)}
-                </Text>
-              </View>
-              {canCancel(b, userId, week) && !isPast(week, b.practice_date, toMin(b.end_time)) ? (
-                <View style={{ flexDirection: "row" }}>
-                  <Button
-                    label={strings.practice.cancelBooking}
-                    variant="danger"
-                    size="small"
-                    onPress={() => cancel(b)}
-                    loading={busy === b.id}
-                    disabled={!!busy}
-                    accessibilityLabel={`${strings.practice.cancelBooking}: ${stationName(week, b)}, ${dayLabel(b.practice_date)} ${timeRange(b.start_time, b.end_time)}`}
-                  />
-                </View>
-              ) : null}
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {week.days.map((date) => (
-        <View key={date} testID={`practice-day-${date}`}>
-          <DayHeader date={date} />
-          {isClosedDay(settings, date) ? (
+      <FadeIn style={{ gap: space.md }}>
+        <View>
+          <SectionHeader title={strings.practice.yours} inset={false} tight />
+          {mine.length === 0 ? (
             <Text variant="caption" tone="secondary">
-              {strings.practice.closedDay(settings.closed_label)}
+              {strings.practice.noneYours}
             </Text>
-          ) : (
-            <View style={{ gap: 6 }}>
-              {practiceRows(settings).map((r) => (
-                <PracticeRow
-                  key={r.start}
-                  week={week}
-                  date={date}
-                  start={r.start}
-                  end={r.end}
-                  userId={userId}
-                  onPress={() => setTarget({ date, start: r.start })}
-                />
-              ))}
-            </View>
-          )}
+          ) : null}
+          <View style={{ gap: space.sm }}>
+            {mine.map((b) => (
+              <View
+                key={b.id}
+                testID={`my-practice-${b.id}`}
+                style={{ padding: space.md, gap: space.sm, borderWidth: 2, borderColor: colors.text, borderRadius: radius.card }}
+              >
+                <View accessible accessibilityLabel={`${stationName(week, b)}, ${spokenDate(b.practice_date)}, ${spokenTimeRange(b.start_time, b.end_time)}`}>
+                  <Text variant="sectionTitle">{stationName(week, b)}</Text>
+                  <Text variant="caption" tone="secondary">
+                    {dayLabel(b.practice_date)} · {timeRange(b.start_time, b.end_time)}
+                  </Text>
+                </View>
+                {canCancel(b, userId, week) && !isPast(week, b.practice_date, toMin(b.end_time)) ? (
+                  <View style={{ flexDirection: "row" }}>
+                    <Button
+                      label={strings.practice.cancelBooking}
+                      variant="danger"
+                      size="small"
+                      onPress={() => cancel(b)}
+                      loading={busy === b.id}
+                      disabled={!!busy}
+                      accessibilityLabel={`${strings.practice.cancelBooking}: ${stationName(week, b)}, ${dayLabel(b.practice_date)} ${timeRange(b.start_time, b.end_time)}`}
+                    />
+                  </View>
+                ) : null}
+              </View>
+            ))}
+          </View>
         </View>
-      ))}
+
+        {week.days.map((date) => (
+          <View key={date} testID={`practice-day-${date}`}>
+            <DayHeader date={date} />
+            {isClosedDay(settings, date) ? (
+              <Text variant="caption" tone="secondary">
+                {strings.practice.closedDay(settings.closed_label)}
+              </Text>
+            ) : (
+              <View style={{ gap: 6 }}>
+                {practiceRows(settings).map((r) => (
+                  <PracticeRow
+                    key={r.start}
+                    week={week}
+                    date={date}
+                    start={r.start}
+                    end={r.end}
+                    userId={userId}
+                    onPress={() => setTarget({ date, start: r.start })}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        ))}
+      </FadeIn>
 
       {stations.length > 0 ? (
         <PracticeSheet

@@ -16,7 +16,7 @@ import {
 import { useState } from "react";
 import { View } from "react-native";
 
-import { Banner, Button, LargeTitleScrollView, ListRow, StaticRow, StatusChip, Text } from "@/components";
+import { Banner, Button, FadeIn, LargeTitleScrollView, ListRow, StaticRow, StatusChip, Text } from "@/components";
 import { AppearanceIcon, appearanceStrings, useAppearance } from "@/features/appearance";
 import { clearFeedCaches } from "@/features/home/feed-cache";
 import { Group, GroupSkeleton, Section } from "@/features/me/components/me-kit";
@@ -68,24 +68,26 @@ export default function MeScreen() {
       ) : null}
 
       {me ? (
-        <View style={{ gap: 12 }} testID="profile-card">
-          <View accessible accessibilityLabel={s.a11y.field(s.email, me.user.email ?? "—")} style={{ gap: 2 }}>
-            <Text variant="label">{s.email}</Text>
-            <Text selectable>{me.user.email ?? "—"}</Text>
+        <FadeIn>
+          <View style={{ gap: 12 }} testID="profile-card">
+            <View accessible accessibilityLabel={s.a11y.field(s.email, me.user.email ?? "—")} style={{ gap: 2 }}>
+              <Text variant="label">{s.email}</Text>
+              <Text selectable>{me.user.email ?? "—"}</Text>
+            </View>
+            <View accessible accessibilityLabel={s.a11y.field(s.roles, roles.length ? roles.join(", ") : s.noRoles)} style={{ gap: 4 }}>
+              <Text variant="label">{s.roles}</Text>
+              {roles.length ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                  {roles.map((role) => (
+                    <StatusChip key={role} label={role} variant="quiet" icon={null} />
+                  ))}
+                </View>
+              ) : (
+                <Text>{s.noRoles}</Text>
+              )}
+            </View>
           </View>
-          <View accessible accessibilityLabel={s.a11y.field(s.roles, roles.length ? roles.join(", ") : s.noRoles)} style={{ gap: 4 }}>
-            <Text variant="label">{s.roles}</Text>
-            {roles.length ? (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {roles.map((role) => (
-                  <StatusChip key={role} label={role} variant="quiet" icon={null} />
-                ))}
-              </View>
-            ) : (
-              <Text>{s.noRoles}</Text>
-            )}
-          </View>
-        </View>
+        </FadeIn>
       ) : null}
 
       <Section title={s.sections.profile} />

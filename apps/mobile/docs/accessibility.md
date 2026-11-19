@@ -747,3 +747,31 @@ the kit too.
 7. Switch Control / Voice Control (or Android Switch Access): every control reachable, receipt
    zoom buttons work.
 8. Smart Invert (iOS): ticket QR and receipt photos are not inverted.
+
+## R4 polish and QA (19 Nov 2026)
+
+The table rows above that name `Masthead`, shell `SectionBar` / `StateMessage` /
+`SkeletonRows` are history: those pieces are deleted. Their replacements are
+the kit's `LargeTitle` / `LargeTitleScrollView` (title is the header),
+`SectionTitle` / `SectionHeader` (header, read with its count), `EmptyState`
+(title is a header, icon hidden) and `SkeletonList` (one labelled progressbar,
+static under Reduce Motion).
+
+- **Dynamic Type:** `largeTextProblems()` (`src/lib/a11y/testing.ts`) checks a
+  rendered screen for text that ignores the OS size, is capped below 1.2×, or
+  is clamped to a number of lines. Key screens render at the largest
+  accessibility size (fontScale 3.1, 360pt wide) in their a11y tests. The
+  deliberate clamps (History rows, the Ministries caption, a Staff decisions
+  note, the receipt viewer title) are named in those tests; the full text is
+  one tap away and VoiceOver reads it whole.
+- **Contrast:** `tokens.test.ts` adds the kit's fill/label pairs (positive,
+  danger, primary, inverse, accent), text on raised rows and sheets, the
+  selected segment, the focus ring and outlines (3:1), and bone on ink.
+- **Reduce Motion:** header collapse (nav title appears without fading),
+  skeletons (static), button press (no scale), content fade (skipped via
+  Reanimated's `ReduceMotion.System`), re-tap scroll to top (no animation),
+  zoomable receipt (no easing).
+- **New spoken labels:** set sheet subtitle ("Wednesday 18 November, 8 to
+  9:30 am"), the Home band's "Open: {title}", "Mark all N as read", Send now's
+  busy state, the schools band's "Apply on the website" hint.
+
