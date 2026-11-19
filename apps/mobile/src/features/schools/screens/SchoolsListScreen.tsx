@@ -52,7 +52,7 @@ export default function SchoolsListScreen() {
 
   return (
     <LargeTitleScrollView
-      eyebrow={data ? `${s.context} · ${data.enrolments.length}` : s.context}
+      eyebrow={data?.enrolments.length ? `${s.context} · ${s.count(data.enrolments.length)}` : s.context}
       title={s.title}
       // My Schools is reached from Home (it isn't a tab), so it goes back to Home.
       back={{ label: strings.common.home, onPress: () => router.navigate("/") }}

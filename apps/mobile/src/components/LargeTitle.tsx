@@ -1,5 +1,5 @@
 import { ChevronLeft } from "lucide-react-native";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useWindowDimensions, View, type ViewStyle } from "react-native";
 import { Pressable } from "./Pressable";
 
@@ -100,18 +100,38 @@ export function Eyebrow({ text, tick = true }: { text: string; tick?: boolean })
   );
 }
 
+// The centred title's inset from each side of the bar.
+const TITLE_INSET = 88;
+// Room kept between the back label and the centred title.
+const TITLE_GAP = 8;
+
 /**
  * The 44pt bar over a pushed screen: back chevron + parent name (or any
  * `left` content, e.g. Cancel or Done), optional centred title and trailing
  * actions.
  */
 export function NavBar({ back, left, title, right }: { back?: BackAction; left?: ReactNode; title?: ReactNode; right?: ReactNode }) {
+  const [barWidth, setBarWidth] = useState(0);
+  const [titleWidth, setTitleWidth] = useState(0);
+  // The back label stops short of the centred title and ends in "…" (QA pass
+  // 2: "Household" ran into "Add child" at large text).
+  const backMax = title && barWidth && titleWidth ? Math.max(touch.floor, (barWidth - titleWidth) / 2 - TITLE_GAP) : undefined;
   return (
-    <View style={{ minHeight: touch.floor, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: -12 }}>
-      {left ?? (back ? <BackButton {...back} /> : <View style={{ width: touch.floor }} />)}
+    <View
+      onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
+      style={{ minHeight: touch.floor, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: -12 }}
+    >
+      {left ??
+        (back ? (
+          <View style={{ flexShrink: 1, maxWidth: backMax }}>
+            <BackButton {...back} />
+          </View>
+        ) : (
+          <View style={{ width: touch.floor }} />
+        ))}
       {title ? (
-        <View pointerEvents="none" style={{ position: "absolute", left: 88, right: 88, alignItems: "center" }}>
-          {title}
+        <View pointerEvents="none" style={{ position: "absolute", left: TITLE_INSET, right: TITLE_INSET, alignItems: "center" }}>
+          <View onLayout={(e) => setTitleWidth(e.nativeEvent.layout.width)}>{title}</View>
         </View>
       ) : null}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>{right}</View>

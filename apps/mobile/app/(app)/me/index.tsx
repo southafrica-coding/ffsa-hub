@@ -21,6 +21,7 @@ import { AppearanceIcon, appearanceStrings, useAppearance } from "@/features/app
 import { LockSettingRow } from "@/features/lock";
 import { Group, GroupSkeleton, Section } from "@/features/me/components/me-kit";
 import { isStaff } from "@/features/me/docs-logic";
+import { emailParts } from "@/features/me/email-parts";
 import { ACCOUNT_DELETION_ROUTE, DOC_ROUTES, FULL_PROFILE_PATH, PRIVACY_POLICY_PATH } from "@/features/me/links";
 import { signOutOfThisPhone } from "@/features/me/sign-out";
 import { meStrings as s } from "@/features/me/strings";
@@ -67,7 +68,15 @@ export default function MeScreen() {
           <View style={{ gap: 12 }} testID="profile-card">
             <View accessible accessibilityLabel={s.a11y.field(s.email, me.user.email ?? "—")} style={{ gap: 2 }}>
               <Text variant="label">{s.email}</Text>
-              <Text selectable>{me.user.email ?? "—"}</Text>
+              {/* Two pieces in a wrapping row, so a long address breaks before
+                  the "@" rather than inside the domain (QA pass 2: "…@g/mail.com"). */}
+              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                {emailParts(me.user.email ?? "—").map((part) => (
+                  <Text key={part} selectable>
+                    {part}
+                  </Text>
+                ))}
+              </View>
             </View>
             <View accessible accessibilityLabel={s.a11y.field(s.roles, roles.length ? roles.join(", ") : s.noRoles)} style={{ gap: 4 }}>
               <Text variant="label">{s.roles}</Text>

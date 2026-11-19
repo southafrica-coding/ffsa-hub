@@ -30,6 +30,8 @@ export const palette = {
   green: "#3E7F2B",
   amber: "#8A6400",
   amberBorder: "#B98600",
+  // Attention text on the dark scheme: amber, well clear of the yellow fill.
+  amberOnDark: "#C08C0C",
   destructive: "#D92D20",
   // Focus ring on paper (rare). Brand blue, otherwise unused in-app.
   blue: "#000DE5",
@@ -153,7 +155,8 @@ export const colors: Record<ColorScheme, SemanticColors> = {
     positive: "#6FB356",
     onPositive: palette.ink,
     positiveText: "#8BC777",
-    attention: "#D9A520",
+    // Amber, not the brand yellow: yellow is a fill only, never text (QA pass 2).
+    attention: palette.amberOnDark,
     attentionBorder: palette.amberBorder,
     danger: "#EB7070",
     onDanger: palette.ink,

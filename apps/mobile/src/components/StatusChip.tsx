@@ -39,13 +39,14 @@ export function StatusChip({ label, variant = "neutral", icon, accessibilityLabe
   const s = chipStyle(variant, colors);
   const Icon = icon === null ? null : (icon ?? DEFAULT_ICON[variant]);
   return (
-    <View testID={testID} accessible accessibilityRole="text" accessibilityLabel={accessibilityLabel ?? label} style={s.container}>
+    <View testID={testID} accessible accessibilityRole="text" accessibilityLabel={accessibilityLabel ?? label} style={[s.container, { maxWidth: "100%" }]}>
       {Icon ? (
         <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <Icon size={14} color={s.color} strokeWidth={2.25} />
         </View>
       ) : null}
-      <Text style={{ fontFamily: fontFamily.bodySemibold, fontSize: fontSize.chip, lineHeight: 16, color: s.color }}>{label}</Text>
+      {/* Never wider than its row: at the largest text the word wraps inside the chip (QA pass 2). */}
+      <Text style={{ fontFamily: fontFamily.bodySemibold, fontSize: fontSize.chip, lineHeight: 16, color: s.color, flexShrink: 1 }}>{label}</Text>
     </View>
   );
 }

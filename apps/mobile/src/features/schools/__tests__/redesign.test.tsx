@@ -68,7 +68,7 @@ describe("My Schools (8.1)", () => {
   it("header: eyebrow with the enrolment count, caps title as the heading, Back goes to Home", async () => {
     schools.mockResolvedValue(full());
     await show(<SchoolsListScreen />);
-    expect(await screen.findByText("Training & education · 2")).toBeTruthy();
+    expect(await screen.findByText("Training & education · 2 schools")).toBeTruthy();
     const title = screen.getByRole("header", { name: strings.list.title });
     expect(flat(title)).toMatchObject({ fontFamily: "Roboto_900Black", textTransform: "uppercase" });
     await fireEvent.press(screen.getByRole("button", { name: "Back to Home" }));
@@ -148,9 +148,10 @@ describe("My Schools (8.1)", () => {
   it("no enrolments (8.4): the empty card sits in the list with My attendance still reachable", async () => {
     schools.mockResolvedValue(schoolsList({ enrolments: [] }));
     await show(<SchoolsListScreen />);
-    expect(await screen.findByText("Training & education · 0")).toBeTruthy();
+    expect(await screen.findByTestId("empty")).toBeTruthy();
+    // No bare "· 0" in the eyebrow (QA pass 2).
+    expect(screen.getByText("Training & education")).toBeTruthy();
     expect(screen.getByRole("header", { name: `${strings.list.enrolments}, 0` })).toBeTruthy();
-    expect(screen.getByTestId("empty")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("attendance-row"));
     expect(mockRouter.push).toHaveBeenCalledWith("/schools/attendance");
   });

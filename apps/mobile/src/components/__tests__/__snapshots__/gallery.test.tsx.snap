@@ -110,6 +110,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
     </View>
     <View>
       <View
+        onLayout={[Function]}
         style={
           {
             "alignItems": "center",
@@ -121,111 +122,97 @@ exports[`kit gallery (dark) renders every component 1`] = `
         }
       >
         <View
-          accessibilityLabel="Back to Home"
-          accessibilityRole="button"
-          accessibilityState={
-            {
-              "busy": undefined,
-              "checked": undefined,
-              "disabled": undefined,
-              "expanded": undefined,
-              "selected": undefined,
-            }
-          }
-          accessibilityValue={
-            {
-              "max": undefined,
-              "min": undefined,
-              "now": undefined,
-              "text": undefined,
-            }
-          }
-          accessible={true}
-          collapsable={false}
-          focusable={true}
-          hitSlop={4}
-          onBlur={[Function]}
-          onClick={[Function]}
-          onFocus={[Function]}
-          onResponderGrant={[Function]}
-          onResponderMove={[Function]}
-          onResponderRelease={[Function]}
-          onResponderTerminate={[Function]}
-          onResponderTerminationRequest={[Function]}
-          onStartShouldSetResponder={[Function]}
           style={
             {
-              "alignItems": "center",
-              "flexDirection": "row",
               "flexShrink": 1,
-              "minHeight": 44,
-              "minWidth": 44,
-              "opacity": 1,
-              "paddingRight": 8,
+              "maxWidth": undefined,
             }
           }
         >
           <View
-            accessibilityElementsHidden={true}
-            importantForAccessibility="no-hide-descendants"
-          >
-            <RNSVGSvgView
-              align="xMidYMid"
-              aria-hidden="true"
-              bbHeight={26}
-              bbWidth={26}
-              className="lucide lucide-chevron-left"
-              fill="none"
-              focusable={false}
-              height={26}
-              meetOrSlice={0}
-              minX={0}
-              minY={0}
-              stroke="#F4F2EA"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              style={
-                [
-                  {
-                    "backgroundColor": "transparent",
-                    "borderWidth": 0,
-                  },
-                  {
-                    "flex": 0,
-                    "height": 26,
-                    "width": 26,
-                  },
-                ]
+            accessibilityLabel="Back to Home"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
               }
-              vbHeight={24}
-              vbWidth={24}
-              width={26}
-              xmlns="http://www.w3.org/2000/svg"
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            hitSlop={4}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "flexShrink": 1,
+                "minHeight": 44,
+                "minWidth": 44,
+                "opacity": 1,
+                "paddingRight": 8,
+              }
+            }
+          >
+            <View
+              accessibilityElementsHidden={true}
+              importantForAccessibility="no-hide-descendants"
             >
-              <RNSVGGroup
-                fill={null}
-                propList={
+              <RNSVGSvgView
+                align="xMidYMid"
+                aria-hidden="true"
+                bbHeight={26}
+                bbWidth={26}
+                className="lucide lucide-chevron-left"
+                fill="none"
+                focusable={false}
+                height={26}
+                meetOrSlice={0}
+                minX={0}
+                minY={0}
+                stroke="#F4F2EA"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                style={
                   [
-                    "fill",
-                    "stroke",
-                    "strokeWidth",
-                    "strokeLinecap",
-                    "strokeLinejoin",
+                    {
+                      "backgroundColor": "transparent",
+                      "borderWidth": 0,
+                    },
+                    {
+                      "flex": 0,
+                      "height": 26,
+                      "width": 26,
+                    },
                   ]
                 }
-                stroke={
-                  {
-                    "payload": 4294243050,
-                    "type": 0,
-                  }
-                }
-                strokeLinecap={1}
-                strokeLinejoin={1}
-                strokeWidth={2}
+                vbHeight={24}
+                vbWidth={24}
+                width={26}
+                xmlns="http://www.w3.org/2000/svg"
               >
-                <RNSVGPath
-                  d="m15 18-6-6 6-6"
+                <RNSVGGroup
                   fill={null}
                   propList={
                     [
@@ -245,26 +232,49 @@ exports[`kit gallery (dark) renders every component 1`] = `
                   strokeLinecap={1}
                   strokeLinejoin={1}
                   strokeWidth={2}
-                />
-              </RNSVGGroup>
-            </RNSVGSvgView>
-          </View>
-          <Text
-            allowFontScaling={true}
-            maxFontSizeMultiplier={1.4}
-            numberOfLines={1}
-            style={
-              {
-                "color": "#F4F2EA",
-                "flexShrink": 1,
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 17,
-                "lineHeight": 24,
+                >
+                  <RNSVGPath
+                    d="m15 18-6-6 6-6"
+                    fill={null}
+                    propList={
+                      [
+                        "fill",
+                        "stroke",
+                        "strokeWidth",
+                        "strokeLinecap",
+                        "strokeLinejoin",
+                      ]
+                    }
+                    stroke={
+                      {
+                        "payload": 4294243050,
+                        "type": 0,
+                      }
+                    }
+                    strokeLinecap={1}
+                    strokeLinejoin={1}
+                    strokeWidth={2}
+                  />
+                </RNSVGGroup>
+              </RNSVGSvgView>
+            </View>
+            <Text
+              allowFontScaling={true}
+              maxFontSizeMultiplier={1.4}
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#F4F2EA",
+                  "flexShrink": 1,
+                  "fontFamily": "Roboto_400Regular",
+                  "fontSize": 17,
+                  "lineHeight": 24,
+                }
               }
-            }
-          >
-            Home
-          </Text>
+            >
+              Home
+            </Text>
+          </View>
         </View>
         <View
           style={
@@ -1096,6 +1106,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -1191,6 +1202,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
         style={
           {
             "color": "#8BC777",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -1209,11 +1221,12 @@ exports[`kit gallery (dark) renders every component 1`] = `
           "alignItems": "center",
           "alignSelf": "flex-start",
           "backgroundColor": "#161614",
-          "borderColor": "#D9A520",
+          "borderColor": "#C08C0C",
           "borderRadius": 6,
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -1236,7 +1249,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
           meetOrSlice={0}
           minX={0}
           minY={0}
-          stroke="#D9A520"
+          stroke="#C08C0C"
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth={2.25}
@@ -1271,7 +1284,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
             }
             stroke={
               {
-                "payload": 4292453664,
+                "payload": 4290808844,
                 "type": 0,
               }
             }
@@ -1293,7 +1306,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
               }
               stroke={
                 {
-                  "payload": 4292453664,
+                  "payload": 4290808844,
                   "type": 0,
                 }
               }
@@ -1315,7 +1328,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
               }
               stroke={
                 {
-                  "payload": 4292453664,
+                  "payload": 4290808844,
                   "type": 0,
                 }
               }
@@ -1337,7 +1350,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
               }
               stroke={
                 {
-                  "payload": 4292453664,
+                  "payload": 4290808844,
                   "type": 0,
                 }
               }
@@ -1352,7 +1365,8 @@ exports[`kit gallery (dark) renders every component 1`] = `
         allowFontScaling={true}
         style={
           {
-            "color": "#D9A520",
+            "color": "#C08C0C",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -1376,6 +1390,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -1493,6 +1508,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
         style={
           {
             "color": "#EB7070",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -1516,6 +1532,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -1637,6 +1654,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
         style={
           {
             "color": "#0A0A0A",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -1661,6 +1679,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -1910,6 +1929,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
         style={
           {
             "color": "#F4F2EA",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -1933,6 +1953,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -2074,6 +2095,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
         style={
           {
             "color": "#C7C3B5",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -2097,6 +2119,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -2216,6 +2239,7 @@ exports[`kit gallery (dark) renders every component 1`] = `
         style={
           {
             "color": "#C7C3B5",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -4942,7 +4966,14 @@ exports[`kit gallery (dark) renders every component 1`] = `
         accessible={true}
         collapsable={false}
         focusable={true}
-        hitSlop={4}
+        hitSlop={
+          {
+            "bottom": 13,
+            "left": 8,
+            "right": 8,
+            "top": 13,
+          }
+        }
         onBlur={[Function]}
         onClick={[Function]}
         onFocus={[Function]}
@@ -4955,8 +4986,6 @@ exports[`kit gallery (dark) renders every component 1`] = `
         style={
           {
             "justifyContent": "center",
-            "marginVertical": -10,
-            "minHeight": 44,
             "opacity": 1,
             "paddingHorizontal": 4,
           }
@@ -7257,6 +7286,7 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
       }
     >
       <View
+        onLayout={[Function]}
         style={
           {
             "alignItems": "center",
@@ -7268,111 +7298,97 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
         }
       >
         <View
-          accessibilityLabel="Back to Home"
-          accessibilityRole="button"
-          accessibilityState={
-            {
-              "busy": undefined,
-              "checked": undefined,
-              "disabled": undefined,
-              "expanded": undefined,
-              "selected": undefined,
-            }
-          }
-          accessibilityValue={
-            {
-              "max": undefined,
-              "min": undefined,
-              "now": undefined,
-              "text": undefined,
-            }
-          }
-          accessible={true}
-          collapsable={false}
-          focusable={true}
-          hitSlop={4}
-          onBlur={[Function]}
-          onClick={[Function]}
-          onFocus={[Function]}
-          onResponderGrant={[Function]}
-          onResponderMove={[Function]}
-          onResponderRelease={[Function]}
-          onResponderTerminate={[Function]}
-          onResponderTerminationRequest={[Function]}
-          onStartShouldSetResponder={[Function]}
           style={
             {
-              "alignItems": "center",
-              "flexDirection": "row",
               "flexShrink": 1,
-              "minHeight": 44,
-              "minWidth": 44,
-              "opacity": 1,
-              "paddingRight": 8,
+              "maxWidth": undefined,
             }
           }
         >
           <View
-            accessibilityElementsHidden={true}
-            importantForAccessibility="no-hide-descendants"
-          >
-            <RNSVGSvgView
-              align="xMidYMid"
-              aria-hidden="true"
-              bbHeight={26}
-              bbWidth={26}
-              className="lucide lucide-chevron-left"
-              fill="none"
-              focusable={false}
-              height={26}
-              meetOrSlice={0}
-              minX={0}
-              minY={0}
-              stroke="#F4F2EA"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              style={
-                [
-                  {
-                    "backgroundColor": "transparent",
-                    "borderWidth": 0,
-                  },
-                  {
-                    "flex": 0,
-                    "height": 26,
-                    "width": 26,
-                  },
-                ]
+            accessibilityLabel="Back to Home"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
               }
-              vbHeight={24}
-              vbWidth={24}
-              width={26}
-              xmlns="http://www.w3.org/2000/svg"
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            hitSlop={4}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "flexShrink": 1,
+                "minHeight": 44,
+                "minWidth": 44,
+                "opacity": 1,
+                "paddingRight": 8,
+              }
+            }
+          >
+            <View
+              accessibilityElementsHidden={true}
+              importantForAccessibility="no-hide-descendants"
             >
-              <RNSVGGroup
-                fill={null}
-                propList={
+              <RNSVGSvgView
+                align="xMidYMid"
+                aria-hidden="true"
+                bbHeight={26}
+                bbWidth={26}
+                className="lucide lucide-chevron-left"
+                fill="none"
+                focusable={false}
+                height={26}
+                meetOrSlice={0}
+                minX={0}
+                minY={0}
+                stroke="#F4F2EA"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                style={
                   [
-                    "fill",
-                    "stroke",
-                    "strokeWidth",
-                    "strokeLinecap",
-                    "strokeLinejoin",
+                    {
+                      "backgroundColor": "transparent",
+                      "borderWidth": 0,
+                    },
+                    {
+                      "flex": 0,
+                      "height": 26,
+                      "width": 26,
+                    },
                   ]
                 }
-                stroke={
-                  {
-                    "payload": 4294243050,
-                    "type": 0,
-                  }
-                }
-                strokeLinecap={1}
-                strokeLinejoin={1}
-                strokeWidth={2}
+                vbHeight={24}
+                vbWidth={24}
+                width={26}
+                xmlns="http://www.w3.org/2000/svg"
               >
-                <RNSVGPath
-                  d="m15 18-6-6 6-6"
+                <RNSVGGroup
                   fill={null}
                   propList={
                     [
@@ -7392,26 +7408,49 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
                   strokeLinecap={1}
                   strokeLinejoin={1}
                   strokeWidth={2}
-                />
-              </RNSVGGroup>
-            </RNSVGSvgView>
-          </View>
-          <Text
-            allowFontScaling={true}
-            maxFontSizeMultiplier={1.4}
-            numberOfLines={1}
-            style={
-              {
-                "color": "#F4F2EA",
-                "flexShrink": 1,
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 17,
-                "lineHeight": 24,
+                >
+                  <RNSVGPath
+                    d="m15 18-6-6 6-6"
+                    fill={null}
+                    propList={
+                      [
+                        "fill",
+                        "stroke",
+                        "strokeWidth",
+                        "strokeLinecap",
+                        "strokeLinejoin",
+                      ]
+                    }
+                    stroke={
+                      {
+                        "payload": 4294243050,
+                        "type": 0,
+                      }
+                    }
+                    strokeLinecap={1}
+                    strokeLinejoin={1}
+                    strokeWidth={2}
+                  />
+                </RNSVGGroup>
+              </RNSVGSvgView>
+            </View>
+            <Text
+              allowFontScaling={true}
+              maxFontSizeMultiplier={1.4}
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#F4F2EA",
+                  "flexShrink": 1,
+                  "fontFamily": "Roboto_400Regular",
+                  "fontSize": 17,
+                  "lineHeight": 24,
+                }
               }
-            }
-          >
-            Home
-          </Text>
+            >
+              Home
+            </Text>
+          </View>
         </View>
         <View
           pointerEvents="none"
@@ -7424,22 +7463,26 @@ exports[`kit gallery (dark) renders the collapsing large-title page 1`] = `
             }
           }
         >
-          <Text
-            accessibilityElementsHidden={true}
-            importantForAccessibility="no-hide-descendants"
-            maxFontSizeMultiplier={1.3}
-            numberOfLines={1}
-            style={
-              {
-                "color": "#F4F2EA",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 16,
-                "opacity": 0,
-              }
-            }
+          <View
+            onLayout={[Function]}
           >
-            My tickets
-          </Text>
+            <Text
+              accessibilityElementsHidden={true}
+              importantForAccessibility="no-hide-descendants"
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#F4F2EA",
+                  "fontFamily": "Roboto_600SemiBold",
+                  "fontSize": 16,
+                  "opacity": 0,
+                }
+              }
+            >
+              My tickets
+            </Text>
+          </View>
         </View>
         <View
           style={
@@ -7863,6 +7906,7 @@ exports[`kit gallery (light) renders every component 1`] = `
     </View>
     <View>
       <View
+        onLayout={[Function]}
         style={
           {
             "alignItems": "center",
@@ -7874,111 +7918,97 @@ exports[`kit gallery (light) renders every component 1`] = `
         }
       >
         <View
-          accessibilityLabel="Back to Home"
-          accessibilityRole="button"
-          accessibilityState={
-            {
-              "busy": undefined,
-              "checked": undefined,
-              "disabled": undefined,
-              "expanded": undefined,
-              "selected": undefined,
-            }
-          }
-          accessibilityValue={
-            {
-              "max": undefined,
-              "min": undefined,
-              "now": undefined,
-              "text": undefined,
-            }
-          }
-          accessible={true}
-          collapsable={false}
-          focusable={true}
-          hitSlop={4}
-          onBlur={[Function]}
-          onClick={[Function]}
-          onFocus={[Function]}
-          onResponderGrant={[Function]}
-          onResponderMove={[Function]}
-          onResponderRelease={[Function]}
-          onResponderTerminate={[Function]}
-          onResponderTerminationRequest={[Function]}
-          onStartShouldSetResponder={[Function]}
           style={
             {
-              "alignItems": "center",
-              "flexDirection": "row",
               "flexShrink": 1,
-              "minHeight": 44,
-              "minWidth": 44,
-              "opacity": 1,
-              "paddingRight": 8,
+              "maxWidth": undefined,
             }
           }
         >
           <View
-            accessibilityElementsHidden={true}
-            importantForAccessibility="no-hide-descendants"
-          >
-            <RNSVGSvgView
-              align="xMidYMid"
-              aria-hidden="true"
-              bbHeight={26}
-              bbWidth={26}
-              className="lucide lucide-chevron-left"
-              fill="none"
-              focusable={false}
-              height={26}
-              meetOrSlice={0}
-              minX={0}
-              minY={0}
-              stroke="#0A0A0A"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              style={
-                [
-                  {
-                    "backgroundColor": "transparent",
-                    "borderWidth": 0,
-                  },
-                  {
-                    "flex": 0,
-                    "height": 26,
-                    "width": 26,
-                  },
-                ]
+            accessibilityLabel="Back to Home"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
               }
-              vbHeight={24}
-              vbWidth={24}
-              width={26}
-              xmlns="http://www.w3.org/2000/svg"
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            hitSlop={4}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "flexShrink": 1,
+                "minHeight": 44,
+                "minWidth": 44,
+                "opacity": 1,
+                "paddingRight": 8,
+              }
+            }
+          >
+            <View
+              accessibilityElementsHidden={true}
+              importantForAccessibility="no-hide-descendants"
             >
-              <RNSVGGroup
-                fill={null}
-                propList={
+              <RNSVGSvgView
+                align="xMidYMid"
+                aria-hidden="true"
+                bbHeight={26}
+                bbWidth={26}
+                className="lucide lucide-chevron-left"
+                fill="none"
+                focusable={false}
+                height={26}
+                meetOrSlice={0}
+                minX={0}
+                minY={0}
+                stroke="#0A0A0A"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                style={
                   [
-                    "fill",
-                    "stroke",
-                    "strokeWidth",
-                    "strokeLinecap",
-                    "strokeLinejoin",
+                    {
+                      "backgroundColor": "transparent",
+                      "borderWidth": 0,
+                    },
+                    {
+                      "flex": 0,
+                      "height": 26,
+                      "width": 26,
+                    },
                   ]
                 }
-                stroke={
-                  {
-                    "payload": 4278848010,
-                    "type": 0,
-                  }
-                }
-                strokeLinecap={1}
-                strokeLinejoin={1}
-                strokeWidth={2}
+                vbHeight={24}
+                vbWidth={24}
+                width={26}
+                xmlns="http://www.w3.org/2000/svg"
               >
-                <RNSVGPath
-                  d="m15 18-6-6 6-6"
+                <RNSVGGroup
                   fill={null}
                   propList={
                     [
@@ -7998,26 +8028,49 @@ exports[`kit gallery (light) renders every component 1`] = `
                   strokeLinecap={1}
                   strokeLinejoin={1}
                   strokeWidth={2}
-                />
-              </RNSVGGroup>
-            </RNSVGSvgView>
-          </View>
-          <Text
-            allowFontScaling={true}
-            maxFontSizeMultiplier={1.4}
-            numberOfLines={1}
-            style={
-              {
-                "color": "#0A0A0A",
-                "flexShrink": 1,
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 17,
-                "lineHeight": 24,
+                >
+                  <RNSVGPath
+                    d="m15 18-6-6 6-6"
+                    fill={null}
+                    propList={
+                      [
+                        "fill",
+                        "stroke",
+                        "strokeWidth",
+                        "strokeLinecap",
+                        "strokeLinejoin",
+                      ]
+                    }
+                    stroke={
+                      {
+                        "payload": 4278848010,
+                        "type": 0,
+                      }
+                    }
+                    strokeLinecap={1}
+                    strokeLinejoin={1}
+                    strokeWidth={2}
+                  />
+                </RNSVGGroup>
+              </RNSVGSvgView>
+            </View>
+            <Text
+              allowFontScaling={true}
+              maxFontSizeMultiplier={1.4}
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#0A0A0A",
+                  "flexShrink": 1,
+                  "fontFamily": "Roboto_400Regular",
+                  "fontSize": 17,
+                  "lineHeight": 24,
+                }
               }
-            }
-          >
-            Home
-          </Text>
+            >
+              Home
+            </Text>
+          </View>
         </View>
         <View
           style={
@@ -8849,6 +8902,7 @@ exports[`kit gallery (light) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -8944,6 +8998,7 @@ exports[`kit gallery (light) renders every component 1`] = `
         style={
           {
             "color": "#3E7F2B",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -8967,6 +9022,7 @@ exports[`kit gallery (light) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -9106,6 +9162,7 @@ exports[`kit gallery (light) renders every component 1`] = `
         style={
           {
             "color": "#8A6400",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -9129,6 +9186,7 @@ exports[`kit gallery (light) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -9246,6 +9304,7 @@ exports[`kit gallery (light) renders every component 1`] = `
         style={
           {
             "color": "#D92D20",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -9269,6 +9328,7 @@ exports[`kit gallery (light) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -9390,6 +9450,7 @@ exports[`kit gallery (light) renders every component 1`] = `
         style={
           {
             "color": "#FFFFFF",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -9414,6 +9475,7 @@ exports[`kit gallery (light) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -9663,6 +9725,7 @@ exports[`kit gallery (light) renders every component 1`] = `
         style={
           {
             "color": "#0A0A0A",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -9686,6 +9749,7 @@ exports[`kit gallery (light) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -9827,6 +9891,7 @@ exports[`kit gallery (light) renders every component 1`] = `
         style={
           {
             "color": "#55524A",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -9850,6 +9915,7 @@ exports[`kit gallery (light) renders every component 1`] = `
           "borderWidth": 1,
           "flexDirection": "row",
           "gap": 4,
+          "maxWidth": "100%",
           "minHeight": 24,
           "paddingHorizontal": 8,
           "paddingVertical": 2,
@@ -9969,6 +10035,7 @@ exports[`kit gallery (light) renders every component 1`] = `
         style={
           {
             "color": "#55524A",
+            "flexShrink": 1,
             "fontFamily": "Roboto_600SemiBold",
             "fontSize": 12,
             "lineHeight": 16,
@@ -12695,7 +12762,14 @@ exports[`kit gallery (light) renders every component 1`] = `
         accessible={true}
         collapsable={false}
         focusable={true}
-        hitSlop={4}
+        hitSlop={
+          {
+            "bottom": 13,
+            "left": 8,
+            "right": 8,
+            "top": 13,
+          }
+        }
         onBlur={[Function]}
         onClick={[Function]}
         onFocus={[Function]}
@@ -12708,8 +12782,6 @@ exports[`kit gallery (light) renders every component 1`] = `
         style={
           {
             "justifyContent": "center",
-            "marginVertical": -10,
-            "minHeight": 44,
             "opacity": 1,
             "paddingHorizontal": 4,
           }
@@ -15010,6 +15082,7 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
       }
     >
       <View
+        onLayout={[Function]}
         style={
           {
             "alignItems": "center",
@@ -15021,111 +15094,97 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
         }
       >
         <View
-          accessibilityLabel="Back to Home"
-          accessibilityRole="button"
-          accessibilityState={
-            {
-              "busy": undefined,
-              "checked": undefined,
-              "disabled": undefined,
-              "expanded": undefined,
-              "selected": undefined,
-            }
-          }
-          accessibilityValue={
-            {
-              "max": undefined,
-              "min": undefined,
-              "now": undefined,
-              "text": undefined,
-            }
-          }
-          accessible={true}
-          collapsable={false}
-          focusable={true}
-          hitSlop={4}
-          onBlur={[Function]}
-          onClick={[Function]}
-          onFocus={[Function]}
-          onResponderGrant={[Function]}
-          onResponderMove={[Function]}
-          onResponderRelease={[Function]}
-          onResponderTerminate={[Function]}
-          onResponderTerminationRequest={[Function]}
-          onStartShouldSetResponder={[Function]}
           style={
             {
-              "alignItems": "center",
-              "flexDirection": "row",
               "flexShrink": 1,
-              "minHeight": 44,
-              "minWidth": 44,
-              "opacity": 1,
-              "paddingRight": 8,
+              "maxWidth": undefined,
             }
           }
         >
           <View
-            accessibilityElementsHidden={true}
-            importantForAccessibility="no-hide-descendants"
-          >
-            <RNSVGSvgView
-              align="xMidYMid"
-              aria-hidden="true"
-              bbHeight={26}
-              bbWidth={26}
-              className="lucide lucide-chevron-left"
-              fill="none"
-              focusable={false}
-              height={26}
-              meetOrSlice={0}
-              minX={0}
-              minY={0}
-              stroke="#0A0A0A"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              style={
-                [
-                  {
-                    "backgroundColor": "transparent",
-                    "borderWidth": 0,
-                  },
-                  {
-                    "flex": 0,
-                    "height": 26,
-                    "width": 26,
-                  },
-                ]
+            accessibilityLabel="Back to Home"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
               }
-              vbHeight={24}
-              vbWidth={24}
-              width={26}
-              xmlns="http://www.w3.org/2000/svg"
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            hitSlop={4}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "flexShrink": 1,
+                "minHeight": 44,
+                "minWidth": 44,
+                "opacity": 1,
+                "paddingRight": 8,
+              }
+            }
+          >
+            <View
+              accessibilityElementsHidden={true}
+              importantForAccessibility="no-hide-descendants"
             >
-              <RNSVGGroup
-                fill={null}
-                propList={
+              <RNSVGSvgView
+                align="xMidYMid"
+                aria-hidden="true"
+                bbHeight={26}
+                bbWidth={26}
+                className="lucide lucide-chevron-left"
+                fill="none"
+                focusable={false}
+                height={26}
+                meetOrSlice={0}
+                minX={0}
+                minY={0}
+                stroke="#0A0A0A"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                style={
                   [
-                    "fill",
-                    "stroke",
-                    "strokeWidth",
-                    "strokeLinecap",
-                    "strokeLinejoin",
+                    {
+                      "backgroundColor": "transparent",
+                      "borderWidth": 0,
+                    },
+                    {
+                      "flex": 0,
+                      "height": 26,
+                      "width": 26,
+                    },
                   ]
                 }
-                stroke={
-                  {
-                    "payload": 4278848010,
-                    "type": 0,
-                  }
-                }
-                strokeLinecap={1}
-                strokeLinejoin={1}
-                strokeWidth={2}
+                vbHeight={24}
+                vbWidth={24}
+                width={26}
+                xmlns="http://www.w3.org/2000/svg"
               >
-                <RNSVGPath
-                  d="m15 18-6-6 6-6"
+                <RNSVGGroup
                   fill={null}
                   propList={
                     [
@@ -15145,26 +15204,49 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
                   strokeLinecap={1}
                   strokeLinejoin={1}
                   strokeWidth={2}
-                />
-              </RNSVGGroup>
-            </RNSVGSvgView>
-          </View>
-          <Text
-            allowFontScaling={true}
-            maxFontSizeMultiplier={1.4}
-            numberOfLines={1}
-            style={
-              {
-                "color": "#0A0A0A",
-                "flexShrink": 1,
-                "fontFamily": "Roboto_400Regular",
-                "fontSize": 17,
-                "lineHeight": 24,
+                >
+                  <RNSVGPath
+                    d="m15 18-6-6 6-6"
+                    fill={null}
+                    propList={
+                      [
+                        "fill",
+                        "stroke",
+                        "strokeWidth",
+                        "strokeLinecap",
+                        "strokeLinejoin",
+                      ]
+                    }
+                    stroke={
+                      {
+                        "payload": 4278848010,
+                        "type": 0,
+                      }
+                    }
+                    strokeLinecap={1}
+                    strokeLinejoin={1}
+                    strokeWidth={2}
+                  />
+                </RNSVGGroup>
+              </RNSVGSvgView>
+            </View>
+            <Text
+              allowFontScaling={true}
+              maxFontSizeMultiplier={1.4}
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#0A0A0A",
+                  "flexShrink": 1,
+                  "fontFamily": "Roboto_400Regular",
+                  "fontSize": 17,
+                  "lineHeight": 24,
+                }
               }
-            }
-          >
-            Home
-          </Text>
+            >
+              Home
+            </Text>
+          </View>
         </View>
         <View
           pointerEvents="none"
@@ -15177,22 +15259,26 @@ exports[`kit gallery (light) renders the collapsing large-title page 1`] = `
             }
           }
         >
-          <Text
-            accessibilityElementsHidden={true}
-            importantForAccessibility="no-hide-descendants"
-            maxFontSizeMultiplier={1.3}
-            numberOfLines={1}
-            style={
-              {
-                "color": "#0A0A0A",
-                "fontFamily": "Roboto_600SemiBold",
-                "fontSize": 16,
-                "opacity": 0,
-              }
-            }
+          <View
+            onLayout={[Function]}
           >
-            My tickets
-          </Text>
+            <Text
+              accessibilityElementsHidden={true}
+              importantForAccessibility="no-hide-descendants"
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#0A0A0A",
+                  "fontFamily": "Roboto_600SemiBold",
+                  "fontSize": 16,
+                  "opacity": 0,
+                }
+              }
+            >
+              My tickets
+            </Text>
+          </View>
         </View>
         <View
           style={

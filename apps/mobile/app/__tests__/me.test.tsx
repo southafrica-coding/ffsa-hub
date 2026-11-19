@@ -62,7 +62,10 @@ describe("Me", () => {
     mockFetch.mockImplementation(apiRoutes({ "/api/me": ME }));
     await render(wrap(<MeScreen />));
     expect(await screen.findByRole("header", { name: "Sample Person" })).toBeTruthy();
-    expect(screen.getByText("sample@example.org")).toBeTruthy();
+    // In two pieces, so a long address wraps before the "@" (QA pass 2); read as one.
+    expect(screen.getByText("sample")).toBeTruthy();
+    expect(screen.getByText("@example.org")).toBeTruthy();
+    expect(screen.getByLabelText(/sample@example\.org/)).toBeTruthy();
     expect(screen.getByText("FFSA Hub · Me")).toBeTruthy();
     // Roles are quiet word-only chips, read together as one line.
     expect(screen.getByLabelText("Roles: Staff, Team leader")).toBeTruthy();

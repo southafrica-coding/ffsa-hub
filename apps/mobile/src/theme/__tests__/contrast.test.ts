@@ -133,7 +133,7 @@ describe("redesign values (design-spec §2)", () => {
       textTertiary: "#C7C3B5",
       textQuiet: "#858175",
       positiveText: "#8BC777",
-      attention: "#D9A520",
+      attention: "#C08C0C",
       danger: "#EB7070",
     });
   });
