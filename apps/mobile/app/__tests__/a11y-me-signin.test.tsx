@@ -145,7 +145,8 @@ describe("Notification settings", () => {
     const sw = await screen.findByRole("switch", { name: "Prayer Room" });
     expect(sw.props.accessibilityHint).toBe("Block-outs and devo set relocations.");
     expect(sw.props.accessibilityState).toMatchObject({ checked: true });
-    expect(screen.getByText("On")).toBeTruthy();
+    // The words sit beside the switch; the switch itself carries the state for screen readers.
+    expect(screen.getByText("On", { includeHiddenElements: true })).toBeTruthy();
     expect(audit()).toEqual([]);
   });
 

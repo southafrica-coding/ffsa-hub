@@ -1,17 +1,30 @@
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
-import { Bell, BriefcaseBusiness, CarFront, HeartPulse, IdCard, Pencil, ShieldCheck, Trash2, UserRound, UsersRound } from "lucide-react-native";
+import {
+  Bell,
+  BriefcaseBusiness,
+  CarFront,
+  HeartPulse,
+  IdCard,
+  LogOut,
+  Pencil,
+  ShieldCheck,
+  Trash2,
+  UserRound,
+  UsersRound,
+} from "lucide-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
-import { Banner, Button, Divider, Masthead, Screen, Text } from "@/components";
+import { Banner, Button, LargeTitleScrollView, ListRow, StatusChip, Text } from "@/components";
 import { AppearanceIcon, appearanceStrings, useAppearance } from "@/features/appearance";
 import { clearFeedCaches } from "@/features/home/feed-cache";
+import { Group, GroupSkeleton, Section, StaticRow } from "@/features/me/components/me-kit";
 import { isStaff } from "@/features/me/docs-logic";
 import { ACCOUNT_DELETION_ROUTE, DOC_ROUTES, FULL_PROFILE_PATH, PRIVACY_POLICY_PATH } from "@/features/me/links";
 import { meStrings as s } from "@/features/me/strings";
 import { unregisterPushOnSignOut } from "@/features/push";
-import { ListRow, SectionBar, SkeletonRows, openWebPage, roleLabels, useMe } from "@/features/shell";
+import { openWebPage, roleLabels, useMe } from "@/features/shell";
 import { displayName } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/theme/use-theme";
@@ -45,17 +58,11 @@ export default function MeScreen() {
   const version = Constants.expoConfig?.version;
 
   return (
-    <Screen edges={["top"]}>
-      <Masthead context={s.context} title={name} />
-
-      {status === "loading" ? <SkeletonRows count={2} label={s.loading} /> : null}
+    <LargeTitleScrollView eyebrow={s.context} title={name} gap={0}>
+      {status === "loading" ? <GroupSkeleton count={2} label={s.loading} /> : null}
 
       {status === "error" ? (
-        <Banner
-          tone="danger"
-          title={s.error.title}
-          action={<Button label={s.error.retry} variant="secondary" onPress={refresh} />}
-        >
+        <Banner tone="error" title={s.error.title} actionLabel={s.error.retry} onAction={refresh}>
           {error ?? ""}
         </Banner>
       ) : null}
@@ -63,22 +70,26 @@ export default function MeScreen() {
       {me ? (
         <View style={{ gap: 12 }} testID="profile-card">
           <View accessible accessibilityLabel={s.a11y.field(s.email, me.user.email ?? "—")} style={{ gap: 2 }}>
-            <Text variant="monoLabel" tone="secondary">
-              {s.email}
-            </Text>
+            <Text variant="label">{s.email}</Text>
             <Text selectable>{me.user.email ?? "—"}</Text>
           </View>
-          <View accessible accessibilityLabel={s.a11y.field(s.roles, roles.length ? roles.join(", ") : s.noRoles)} style={{ gap: 2 }}>
-            <Text variant="monoLabel" tone="secondary">
-              {s.roles}
-            </Text>
-            <Text>{roles.length ? roles.join(" · ") : s.noRoles}</Text>
+          <View accessible accessibilityLabel={s.a11y.field(s.roles, roles.length ? roles.join(", ") : s.noRoles)} style={{ gap: 4 }}>
+            <Text variant="label">{s.roles}</Text>
+            {roles.length ? (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {roles.map((role) => (
+                  <StatusChip key={role} label={role} variant="quiet" icon={null} />
+                ))}
+              </View>
+            ) : (
+              <Text>{s.noRoles}</Text>
+            )}
           </View>
         </View>
       ) : null}
 
-      <View>
-        <SectionBar label={s.sections.profile} />
+      <Section title={s.sections.profile} />
+      <Group>
         <ListRow
           icon={Pencil}
           title={s.rows.edit.title}
@@ -86,10 +97,10 @@ export default function MeScreen() {
           onPress={() => router.push("/me/edit")}
           disabled={!me}
         />
-      </View>
+      </Group>
 
-      <View>
-        <SectionBar label={s.sections.documents} />
+      <Section title={s.sections.documents} />
+      <Group>
         <ListRow icon={UsersRound} title={s.rows.household.title} subtitle={s.rows.household.subtitle} onPress={() => router.push(DOC_ROUTES.household)} />
         <ListRow icon={CarFront} title={s.rows.licence.title} subtitle={s.rows.licence.subtitle} onPress={() => router.push(DOC_ROUTES.licence)} />
         <ListRow icon={IdCard} title={s.rows.passport.title} subtitle={s.rows.passport.subtitle} onPress={() => router.push(DOC_ROUTES.passport)} />
@@ -105,10 +116,10 @@ export default function MeScreen() {
           trailing="web"
           onPress={() => void openWebPage(FULL_PROFILE_PATH, colors)}
         />
-      </View>
+      </Group>
 
-      <View>
-        <SectionBar label={s.sections.settings} />
+      <Section title={s.sections.settings} />
+      <Group>
         <ListRow
           icon={Bell}
           title={s.rows.notifications.title}
@@ -122,10 +133,10 @@ export default function MeScreen() {
           subtitle={appearanceStrings.summary(appearance.preference, scheme)}
           onPress={() => router.push("/me/appearance")}
         />
-      </View>
+      </Group>
 
-      <View>
-        <SectionBar label={s.sections.about} />
+      <Section title={s.sections.about} />
+      <Group>
         <ListRow
           icon={ShieldCheck}
           title={s.rows.privacy.title}
@@ -139,27 +150,34 @@ export default function MeScreen() {
           subtitle={s.rows.deletion.subtitle}
           onPress={() => router.push(ACCOUNT_DELETION_ROUTE)}
         />
-        <View
-          accessible
+        <StaticRow
+          title={s.version.label}
+          subtitle={version ? s.version.value(version) : s.version.unknown}
           accessibilityLabel={`${s.version.label}: ${version ?? s.version.unknown}`}
-          style={{ paddingVertical: 12, paddingHorizontal: 4, gap: 2 }}
-        >
-          <Text variant="monoLabel" tone="secondary">
-            {s.version.label}
-          </Text>
-          <Text>{version ? s.version.value(version) : s.version.unknown}</Text>
-        </View>
-      </View>
+        />
+      </Group>
 
-      <View style={{ flex: 1 }} />
-      <Divider strong />
-      <Button
-        label={s.signOut}
-        variant="secondary"
-        onPress={signOut}
-        loading={signingOut}
-        accessibilityHint={s.signOutHint}
-      />
-    </Screen>
+      {/* One tap, no confirm: it only signs this phone out. */}
+      <View style={{ marginTop: 24, gap: 8 }}>
+        <Button
+          label={s.signOut}
+          variant="secondary"
+          icon={<LogOut size={20} color={colors.text} />}
+          onPress={signOut}
+          loading={signingOut}
+          accessibilityHint={s.signOutHint}
+        />
+        {/* The button's hint says the same to screen readers. */}
+        <Text
+          variant="caption"
+          tone="secondary"
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          style={{ textAlign: "center" }}
+        >
+          {s.signOutHint}
+        </Text>
+      </View>
+    </LargeTitleScrollView>
   );
 }

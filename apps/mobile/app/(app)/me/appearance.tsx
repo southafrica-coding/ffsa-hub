@@ -1,14 +1,4 @@
-import { Stack } from "expo-router";
+import { AppearanceScreen } from "@/features/appearance";
 
-import { AppearanceScreen, appearanceStrings } from "@/features/appearance";
-
-// Me > Appearance (Match phone / Light / Dark). The header comes from the Me
-// stack; only the title is set here so app/(app)/me/_layout.tsx stays as is.
-export default function AppearanceRoute() {
-  return (
-    <>
-      <Stack.Screen options={{ title: appearanceStrings.title }} />
-      <AppearanceScreen />
-    </>
-  );
-}
+// Me > Appearance (Match phone / Light / Dark). The screen draws its own header (see me/_layout.tsx).
+export default AppearanceScreen;
