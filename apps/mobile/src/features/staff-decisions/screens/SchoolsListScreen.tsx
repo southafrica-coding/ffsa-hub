@@ -88,7 +88,8 @@ export default function SchoolsListScreen() {
 function SchoolRow({ school, onPress }: { school: School; onPress: () => void }) {
   return (
     <GroupRow onPress={onPress} accessibilityLabel={schoolA11yLabel(school)} accessibilityHint={s.rowHint} testID={`school-${school.id}`}>
-      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: space.sm, rowGap: space.xs }}>
+      {/* Archived sits at the trailing edge, and drops under a long name rather than squeezing it. */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: space.sm, rowGap: space.xs }}>
         <Text variant="rowTitle" style={{ flexShrink: 1 }}>
           {school.name}
         </Text>
