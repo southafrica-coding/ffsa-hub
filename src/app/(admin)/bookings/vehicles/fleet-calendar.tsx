@@ -1,4 +1,5 @@
-// Fleet calendar — one row per vehicle, one bar per booking, the month left to right.
+// Fleet calendar — one row per vehicle, one bar per booking, the next 30 days left to
+// right (running into the next month on its own).
 // Design: frame 38a in FFSA Hub Redesign.dc.html. Rendered on the team-only
 // booking board (/bookings/vehicles/board) — it names people and plates.
 //
@@ -8,7 +9,7 @@
 //   approved                         → BOOKED (bone)
 //   pending                          → WAITING ON APPROVAL (dashed)
 //   completed, or ended before today → DONE (faded)
-//   vehicle.status = maintenance     → OFF THE ROAD (black, whole month)
+//   vehicle.status = maintenance     → OFF THE ROAD (black, all 30 days)
 // Denied / cancelled are not drawn. Bookings with no vehicle assigned get their own row.
 
 import Link from "next/link";
@@ -38,44 +39,67 @@ const d = (s: string) => new Date(s.slice(0, 10) + "T00:00:00Z");
 const iso = (x: Date) => x.toISOString().slice(0, 10);
 const addDays = (x: Date, n: number) => new Date(x.getTime() + n * 86400000);
 
-export function monthWindow(month?: string) {
-  // The server runs in UTC; "this month" and "today" are South African.
-  const [ty, tm] = todayInSA().split("-").map(Number);
-  const [y, m] = month && /^\d{4}-\d{2}$/.test(month)
-    ? month.split("-").map(Number)
-    : [ty, tm];
-  const first = new Date(Date.UTC(y, m - 1, 1));
-  const last = new Date(Date.UTC(y, m, 0));
-  const key = (yy: number, mm: number) => {
-    const t = new Date(Date.UTC(yy, mm - 1, 1));
-    return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, "0")}`;
+/** Days on the fleet calendar. */
+export const WINDOW_DAYS = 30;
+const fmtShort = (x: Date) => `${x.getUTCDate()} ${MONTHS[x.getUTCMonth()].slice(0, 3)}`;
+
+/**
+ * The 30 days the calendar shows. `from` is a start date (YYYY-MM-DD); an old
+ * month link (YYYY-MM) starts on the 1st of that month, or today if it's this
+ * month; nothing means today. Back and forward move 30 days.
+ */
+export function calendarWindow(from?: string) {
+  // The server runs in UTC; "today" is South African.
+  const todayIso = todayInSA();
+  let start = todayIso;
+  if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) start = from;
+  else if (from && /^\d{4}-\d{2}$/.test(from)) start = from === todayIso.slice(0, 7) ? todayIso : `${from}-01`;
+  const first = d(start);
+  const last = addDays(first, WINDOW_DAYS - 1);
+  const sameYear = first.getUTCFullYear() === last.getUTCFullYear();
+  const label = `${fmtShort(first)}${sameYear ? "" : " " + first.getUTCFullYear()} – ${fmtShort(last)} ${last.getUTCFullYear()}`;
+  return {
+    first,
+    last,
+    from: iso(first),
+    to: iso(last),
+    prev: iso(addDays(first, -WINDOW_DAYS)),
+    next: iso(addDays(first, WINDOW_DAYS)),
+    isToday: start === todayIso,
+    label,
   };
-  return { first, last, from: iso(first), to: iso(last), prev: key(y, m - 1), next: key(y, m + 1), label: `${MONTHS[m - 1]} ${y}` };
 }
 
 export function FleetCalendar({
   vehicles,
   bookings,
-  month,
+  from,
   basePath = "/bookings/vehicles/board",
   status,
 }: {
   vehicles: Vehicle[];
   bookings: VehicleBookingWithRefs[];
-  month?: string;
-  /** Page the month arrows link back to. */
+  /** First day shown (YYYY-MM-DD); today when absent. */
+  from?: string;
+  /** Page the arrows link back to. */
   basePath?: string;
-  /** The page's status filter, kept across month changes. */
+  /** The page's status filter, kept when moving through the dates. */
   status?: string;
 }) {
-  const w = monthWindow(month);
-  const monthHref = (m: string) =>
-    `${basePath}?month=${m}${status && status !== "all" ? `&status=${encodeURIComponent(status)}` : ""}`;
-  const days = w.last.getUTCDate();
+  const w = calendarWindow(from);
+  const windowHref = (f: string | null) => {
+    const q = new URLSearchParams();
+    if (f) q.set("from", f);
+    if (status && status !== "all") q.set("status", status);
+    const qs = q.toString();
+    return `${basePath}${qs ? `?${qs}` : ""}`;
+  };
+  const days = WINDOW_DAYS;
   const todayIso = todayInSA();
   const today = d(todayIso);
+  const dayIndex = (x: Date) => Math.round((x.getTime() - w.first.getTime()) / 86400000) + 1;
   const inMonth = today >= w.first && today <= w.last;
-  const todayN = inMonth ? today.getUTCDate() : -1;
+  const todayN = inMonth ? dayIndex(today) : -1;
 
   const live = bookings.filter((b) => b.status !== "denied" && b.status !== "cancelled");
   const fleet = vehicles.filter((v) => v.status !== "retired");
@@ -94,10 +118,10 @@ export function FleetCalendar({
   const barsFor = (list: VehicleBookingWithRefs[]) =>
     list.map((b) => {
       const s = d(b.checkout_date), e = d(b.return_date);
-      const start = s < w.first ? 1 : s.getUTCDate();
-      const end = e > w.last ? days : e.getUTCDate();
+      const start = s < w.first ? 1 : dayIndex(s);
+      const end = e > w.last ? days : dayIndex(e);
       const span = Math.max(1, end - start + 1);
-      const fmt = (x: Date) => `${x.getUTCDate()} ${MONTHS[x.getUTCMonth()].slice(0, 3).toUpperCase()}`;
+      const fmt = (x: Date) => fmtShort(x).toUpperCase();
       const meta = `${s < w.first ? "← " : ""}${fmt(s)} – ${fmt(e)}${e > w.last ? " →" : ""}`;
       return { b, start, span, meta, kind: kindOf(b) };
     });
@@ -113,9 +137,11 @@ export function FleetCalendar({
   const dayInfo = Array.from({ length: days }, (_, i) => {
     const date = addDays(w.first, i);
     const dow = date.getUTCDay();
-    return { n: i + 1, dow: DOW[dow], weekend: dow === 0 || dow === 6, monday: dow === 1, past: date < today };
+    const dom = date.getUTCDate();
+    return { n: i + 1, dom, mon: i === 0 || dom === 1 ? MONTHS[date.getUTCMonth()].slice(0, 3).toUpperCase() : "", dow: DOW[dow], weekend: dow === 0 || dow === 6, monday: dow === 1, past: date < today };
   });
-  const rule = (x: (typeof dayInfo)[number]) => (x.monday ? "#B4B0A2" : "#EFEDE4");
+  // A new month gets a black rule, a new week a darker one.
+  const rule = (x: (typeof dayInfo)[number]) => (x.dom === 1 && x.n > 1 ? INK : x.monday ? "#B4B0A2" : "#EFEDE4");
   const cellBg = (x: (typeof dayInfo)[number]) => (x.n === todayN ? "#FFFDF6" : x.past ? "#FBFAF6" : x.weekend ? "#FCFBF8" : "#FFFFFF");
 
   const Row = ({ title, sub, warn, list, offRoad }: { title: string; sub: string; warn?: string; list: VehicleBookingWithRefs[]; offRoad?: boolean }) => (
@@ -172,21 +198,29 @@ export function FleetCalendar({
   ];
 
   return (
-    <div style={{ background: "#FFFFFF", border: `1px solid ${INK}`, overflowX: "auto" }}>
-      <div style={{ minWidth: 1080 }}>
-        <div style={{ borderBottom: `1px solid ${INK}`, padding: "20px 26px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-            <Link href={monthHref(w.prev)} style={navBtn} aria-label="Previous month">‹</Link>
-            <div>
+    // Only the day grid scrolls sideways; the header and legend wrap, so on a phone the
+    // dates and the back/forward buttons stay on screen.
+    <div style={{ background: "#FFFFFF", border: `1px solid ${INK}` }}>
+      <div>
+        <div style={{ borderBottom: `1px solid ${INK}`, padding: "16px clamp(14px, 4vw, 26px)", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "16px 24px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            <Link href={windowHref(w.prev)} style={navBtn} aria-label="Previous 30 days">‹</Link>
+            <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 7 }}>
                 <span style={{ width: 16, height: 3, background: "#FFB801" }} />
                 <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: "0.2em", color: "#55524A" }}>
-                  FLEET CALENDAR · {fleet.length} VEHICLES
+                  FLEET CALENDAR · {fleet.length} VEHICLES · {w.isToday ? "NEXT 30 DAYS" : "30 DAYS"}
+                  {!w.isToday && (
+                    <>
+                      {" · "}
+                      <Link href={windowHref(null)} style={{ color: INK, textDecoration: "underline" }}>TODAY</Link>
+                    </>
+                  )}
                 </span>
               </div>
-              <h2 style={{ margin: 0, fontFamily: COND, fontWeight: 900, fontSize: 44, lineHeight: 0.9, textTransform: "uppercase", color: INK }}>{w.label}</h2>
+              <h2 style={{ margin: 0, fontFamily: COND, fontWeight: 900, fontSize: "clamp(26px, 8vw, 44px)", lineHeight: 0.95, textTransform: "uppercase", color: INK }}>{w.label}</h2>
             </div>
-            <Link href={monthHref(w.next)} style={navBtn} aria-label="Next month">›</Link>
+            <Link href={windowHref(w.next)} style={navBtn} aria-label="Next 30 days">›</Link>
           </div>
           {inMonth && (
             <div style={{ display: "flex", gap: 20 }}>
@@ -200,6 +234,8 @@ export function FleetCalendar({
           )}
         </div>
 
+        <div style={{ overflowX: "auto" }}>
+        <div style={{ minWidth: 1080 }}>
         <div style={{ display: "grid", gridTemplateColumns: cols, background: BONE, borderBottom: `2px solid ${INK}` }}>
           <div style={{ padding: "10px 16px", borderRight: `1px solid ${INK}`, display: "flex", alignItems: "flex-end" }}>
             <span style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: "0.16em", color: "#7C786C" }}>VEHICLE</span>
@@ -209,7 +245,8 @@ export function FleetCalendar({
             return (
               <div key={x.n} style={{ padding: "8px 0 7px", textAlign: "center", borderLeft: `1px solid ${rule(x)}`, borderTop: `3px solid ${isToday ? "#FFB801" : "transparent"}`, background: isToday ? INK : x.weekend ? "#EDEAE0" : BONE }}>
                 <div style={{ fontFamily: MONO, fontSize: 7.5, fontWeight: 700, letterSpacing: "0.06em", color: isToday ? "#FFB801" : x.weekend || x.past ? "#9A9689" : "#7C786C" }}>{x.dow}</div>
-                <div style={{ fontFamily: COND, fontWeight: 900, fontSize: 15, lineHeight: 1.15, color: isToday ? "#FFFFFF" : x.past ? "#B4B0A2" : INK, fontVariantNumeric: "tabular-nums" }}>{x.n}</div>
+                <div style={{ fontFamily: COND, fontWeight: 900, fontSize: 15, lineHeight: 1.15, color: isToday ? "#FFFFFF" : x.past ? "#B4B0A2" : INK, fontVariantNumeric: "tabular-nums" }}>{x.dom}</div>
+                <div style={{ fontFamily: MONO, fontSize: 7, fontWeight: 700, letterSpacing: "0.06em", lineHeight: 1.2, minHeight: 8, color: isToday ? "#FFB801" : INK }}>{x.mon}</div>
               </div>
             );
           })}
@@ -243,7 +280,10 @@ export function FleetCalendar({
           </div>
         )}
 
-        <div style={{ padding: "14px 26px", background: BONE, display: "flex", gap: 26, alignItems: "center", flexWrap: "wrap" }}>
+        </div>
+        </div>
+
+        <div style={{ padding: "14px clamp(14px, 4vw, 26px)", background: BONE, display: "flex", gap: "10px 26px", alignItems: "center", flexWrap: "wrap" }}>
           {legend.map(([l, s]) => (
             <span key={l} style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "#45423B" }}>
               <span style={{ width: 20, height: 12, boxSizing: "border-box", ...s }} />{l}

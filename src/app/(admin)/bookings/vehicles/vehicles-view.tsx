@@ -47,16 +47,17 @@ export function VehiclesBoard({
   statusFilter,
   pendingCount,
   calendarBookings,
-  month,
+  from,
 }: {
   bookings: VehicleBookingWithRefs[];
   vehicles: Vehicle[];
   access: VehicleAccess;
   statusFilter: string;
   pendingCount: number;
-  /** Every booking overlapping the calendar's month, whatever the filter. */
+  /** Every booking overlapping the calendar’s 30 days, whatever the filter. */
   calendarBookings: VehicleBookingWithRefs[];
-  month?: string;
+  /** First day the calendar shows (YYYY-MM-DD, or an old YYYY-MM link). */
+  from?: string;
 }) {
 
   return (
@@ -131,10 +132,10 @@ export function VehiclesBoard({
           <Link
             key={f.key}
             href={(() => {
-              // Keep the calendar's month when switching the table filter.
+              // Keep the calendar's dates when switching the table filter.
               const q = new URLSearchParams();
               if (f.key !== "all") q.set("status", f.key);
-              if (month) q.set("month", month);
+              if (from) q.set("from", from);
               const qs = q.toString();
               return `/bookings/vehicles/board${qs ? `?${qs}` : ""}`;
             })()}
@@ -150,11 +151,11 @@ export function VehiclesBoard({
       </div>
 
       <div className="space-y-5 px-5 py-6 md:px-8 md:py-7">
-      {/* Fleet calendar — one row per vehicle, the month left to right. */}
+      {/* Fleet calendar — one row per vehicle, the next 30 days left to right. */}
       <FleetCalendar
         vehicles={vehicles}
         bookings={calendarBookings}
-        month={month}
+        from={from}
         status={statusFilter}
       />
 
