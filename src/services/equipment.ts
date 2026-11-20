@@ -181,7 +181,7 @@ export type EquipmentOrder = {
   approved_at: string | null;
   decline_reason: string | null;
   access_token: string;
-  /** Unpaid orders hold stock only until this time (migration 258). */
+  /** Unpaid orders hold stock only until this time (migration 380). */
   hold_expires_at: string | null;
   customer_id_number: string | null;
   /** What it's for, e.g. "Missio youth night". */
@@ -896,7 +896,7 @@ export async function getEquipmentManagerEmails(admin: Client): Promise<string[]
 }
 
 /**
- * equipment_place_order (migration 258): lock, re-check and insert the whole
+ * equipment_place_order (migration 380): lock, re-check and insert the whole
  * order in one transaction. Service-role client only.
  */
 export async function placeOrder(

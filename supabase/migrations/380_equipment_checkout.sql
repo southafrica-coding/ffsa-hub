@@ -1,5 +1,5 @@
 -- ============================================================
--- FFSA Hub — Migration 258: Equipment checkout
+-- FFSA Hub — Migration 380: Equipment checkout (was 258 in PR 451; renumbered after main moved on)
 -- ============================================================
 -- Stage M of handoff/equipment-hire/PROMPT.md (spec rules 2, 4, 9, 10, 11).
 -- Requires migrations 255 and 257.

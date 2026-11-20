@@ -15,7 +15,6 @@ import { addLine, emptyCart } from "@/lib/equipment/cart";
 import { useCart } from "@/lib/equipment/use-cart";
 
 export function ItemBooking({
-  slug,
   product,
   settings,
   from,
@@ -27,7 +26,6 @@ export function ItemBooking({
   internalRate,
   variant,
 }: {
-  slug: string;
   product: QuoteProduct;
   settings: QuoteSettings;
   from: string;
