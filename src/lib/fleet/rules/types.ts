@@ -89,6 +89,8 @@ export interface Trip {
   to: ISODate;
   label?: string | null;
   source?: string | null;
+  /** Who made the booking (the 07:00 message shows who has an OUT vehicle). Not read by the rules. */
+  who?: string | null;
 }
 
 /** A workshop visit (the app's `records`). */

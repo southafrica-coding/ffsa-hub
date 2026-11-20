@@ -18,7 +18,7 @@ vi.mock("./load", () => ({
   loadFleet: async () => ({ F: data, vehicleRows: [], providers: [], coordinator: coordinators[0] ?? null, coordinators }),
 }));
 
-import { canSendFleetReminder, deliverReminder, fleetDigestPart, reminderDigestParts, reminderSlackText, runFleetReminder, type ReminderDeps } from "./reminder-send";
+import { canSendFleetReminder, deliverReminder, fleetDigestPart, reminderSlackText, runFleetReminder, type ReminderDeps } from "./reminder-send";
 import { buildReminder } from "./rules";
 
 function fakeDeps() {
@@ -150,8 +150,10 @@ describe("fleetDigestPart: one Slack message, not two (Jack, 18 Nov 2026)", () =
     expect(part.outcome).toBe("sent");
     expect(sent.map((s) => s.channel)).toEqual(["email"]);
     expect(part.slackUserIds).toEqual(["U123"]);
-    expect(part.parts[0]).toMatch(/^\*🔧 Inspections – <.+\/bookings\/vehicles\/fleet\|open Fleet>\*$/);
-    expect(part.parts[1]).toBe("*Today*\n• Hyundai H1 #1 (KVS 119 NW) – weekly check\n• Hyundai H1 #2 (JYD 637 NW) – weekly check");
+    expect(part.fleetParts[0]).toMatch(/^\*🔧 FLEET – <.+\/bookings\/vehicles\/fleet\|open Fleet>\*$/);
+    // Every vehicle gets a block (the heading + one per vehicle).
+    expect(part.fleetParts).toHaveLength(1 + data.vehicles.length);
+    expect(part.fleetParts.join("\n")).toContain("🟢 *IN*  *Hyundai H1 #1 (KVS 119 NW)*\n• Weekly check due today");
     expect(part.items).toBeGreaterThanOrEqual(2);
   });
 
@@ -160,7 +162,7 @@ describe("fleetDigestPart: one Slack message, not two (Jack, 18 Nov 2026)", () =
       const admin = fakeAdmin();
       const { sent, deps } = fakeDeps();
       const part = await fleetDigestPart(admin, { date: "2026-11-17", deps, env });
-      expect(part).toMatchObject({ outcome: "preview", parts: [], items: 0, slackUserIds: [] });
+      expect(part).toMatchObject({ outcome: "preview", bookingParts: [], fleetParts: [], items: 0, slackUserIds: [] });
       expect(sent).toHaveLength(0);
     }
   });
@@ -169,10 +171,6 @@ describe("fleetDigestPart: one Slack message, not two (Jack, 18 Nov 2026)", () =
     data = { ...data, notify: { ...(data.notify || {}), slack: false } } as FleetData;
     const { deps } = fakeDeps();
     const part = await fleetDigestPart(fakeAdmin(), { date: "2026-11-17", deps, env: live });
-    expect(part.parts).toEqual([]);
-  });
-
-  it("adds nothing on an empty day", () => {
-    expect(reminderDigestParts({ subject: "", text: "", sections: {} as never, empty: true }, "X")).toEqual([]);
+    expect(part.fleetParts).toEqual([]);
   });
 });

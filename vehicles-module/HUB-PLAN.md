@@ -180,3 +180,12 @@ Still open below: the Ask API key (9).
 #623 is merged; it goes live on the live Hub with `FLEET_MESSAGES_ENABLED` unset and no import (no separate preview project). Jack asked for Move to stop changing a booking's vehicle silently. Gideon's wording: "Please be aware your vehicle has been changed from "[old]" to "[new]"", then the booking details and a link.
 
 Move now sends that through the Hub's own booking notice (`notifyVehicleRequester`, kind "changed": Slack DM and email, logged on the booking page), skips it when you moved your own booking, refreshes a still-open Slack request message, and tells the co-ordinator when the person couldn't be reached. Separate PR off main.
+
+## Gideon, 19 Nov: the 07:00 message in two parts
+
+All of Fleet's Slack goes through the FFSA Hub Activity bot's 07:00 vehicles message, in two parts:
+
+- **BOOKINGS:** everything about bookings (pickups, returns, overdue, unpaid, waiting), plus Fleet's clashes and today's pre- and post-trip checks.
+- **FLEET:** every vehicle, 🟢 IN (not booked, not at the workshop) with what's due on it (inspections, service, bumper-to-bumper, workshop visits, faults or damage, licence disc), or 🔴 OUT (booked or at the workshop) with only who has it (booking and person) or the workshop. ⚪ OFF for For sale / Off the road.
+
+`src/lib/fleet/digest.ts` sorts the tested rules' output by vehicle; the rules are unchanged. Still behind `FLEET_MESSAGES_ENABLED`: while it's unset the bookings digest is exactly as before. The in-car guide line is left out until the Manual tab is in the Hub.

@@ -82,7 +82,7 @@ export async function upsertFleetVehicleDetails(supabase: Client, row: Record<st
 export async function getFleetTrips(supabase: Client, since: string) {
   return supabase
     .from("vehicle_bookings")
-    .select("id, booking_name, purpose, checkout_date, return_date, status, assignments:vehicle_booking_assignments(vehicle_id)")
+    .select("id, booking_name, requester_name, purpose, checkout_date, return_date, status, assignments:vehicle_booking_assignments(vehicle_id)")
     .in("status", ["approved", "completed"])
     .gte("return_date", since)
     .order("checkout_date", { ascending: true });

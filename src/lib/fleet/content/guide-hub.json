@@ -254,7 +254,7 @@
           "h": "Daily reminders"
         },
         {
-          "p": "Switched off for now: Fleet sends no email or Slack messages until an admin turns them on. When it’s on, at 7am the person with the Vehicle Co-ordinator role gets an email listing the checks due today, tomorrow and the day after, overdue checks, booking clashes, vehicles leaving or coming back, postponed checks, workshop visits and services due by km. On Mondays it also lists in-car guides to reprint. On Slack the same list is part of the 7am vehicles message (pickups, returns, overdue and waiting bookings), so it’s one message, not two. Nothing is sent on days with nothing to do."
+          "p": "Switched off for now: Fleet sends no email or Slack messages until an admin turns them on. When it’s on, at 7am the person with the Vehicle Co-ordinator role gets an email listing the checks due today, tomorrow and the day after, overdue checks, booking clashes, vehicles leaving or coming back, postponed checks, workshop visits and services due by km. On Slack it’s part of the 7am vehicles message from the FFSA Hub Activity bot, which has two parts. BOOKINGS: pickups, returns, overdue and waiting bookings, clashes with workshop visits, and the pre- and post-trip checks for vehicles going out or coming back today. FLEET: every vehicle, marked IN (not booked, not at the workshop) or OUT (booked or at the workshop). An IN vehicle lists what’s due on it: inspections, service, bumper-to-bumper inspection, workshop visits, faults or damage reported, and its licence disc. An OUT vehicle only shows who has it, or which workshop it’s at. The vehicles are listed every day. Admins can see the message for any date on the reminder preview page."
         },
         {
           "h": "The checklist"
@@ -333,6 +333,10 @@
     [
       "2026-11-19",
       "Move on the Calendar now tells the person who booked: they get a Slack message and an email saying their vehicle has been changed from the old one to the new one, with their booking details and a link. The booking’s Slack request message shows the new vehicle too."
+    ],
+    [
+      "2026-11-19",
+      "The 7am vehicles message on Slack now has two parts: BOOKINGS (everything about bookings, with clashes and today’s pre- and post-trip checks) and FLEET (every vehicle, IN with what’s due on it, or OUT with only who has it). Still switched off until it’s turned on."
     ]
   ]
 }

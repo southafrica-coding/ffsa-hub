@@ -6,8 +6,9 @@
 //                 place once it's decided (in Slack or the Hub).
 //   • collected / paid / signed / cancelled — FYI.
 //   • returned  — mileage, km driven, wash/fuel, damage, + Mark completed.
-//   • digest    — 07:00 SAST: pickups, returns, overdue, unpaid, waiting, and
-//                 Fleet's inspection checks (one message, not two).
+//   • digest    — 07:00 SAST, in two parts: BOOKINGS (pickups, returns, overdue,
+//                 unpaid, waiting, + Fleet's clashes and trip checks) and FLEET
+//                 (every vehicle IN or OUT, with what's due on it). One message.
 //
 // Everything is best-effort: nothing here may fail the action that triggered
 // it. All reads use the ADMIN client (callers are already authorised).
@@ -50,6 +51,7 @@ const itemLabel = new Map(INVENTORY_ITEMS.map((i) => [i.key, i.label]));
 
 const section = (text: string): Block => ({ type: "section", text: { type: "mrkdwn", text } });
 const context = (text: string): Block => ({ type: "context", elements: [{ type: "mrkdwn", text }] });
+const divider = (): Block => ({ type: "divider" });
 const openButton = (id: string): Block => ({
   type: "button",
   action_id: VH_OPEN,
@@ -501,14 +503,15 @@ const rowLine = (b: Row, tail?: string) => {
   return `• <${bookingUrl(b.id)}|${b.booking_name}>${v ? ` · ${v}` : ""}${b.requester_name ? ` · ${b.requester_name}` : ""}${tail ? ` · ${tail}` : ""}`;
 };
 
-/** The morning summary. Sends nothing on a quiet day. */
 /**
- * The 07:00 digest. `fleet` is Fleet's reminder (lib/fleet/reminder-send fleetDigestPart):
- * its sections go at the end of the same message, and the Vehicle Coordinator(s) get it
- * even when they aren't on the alert list.
+ * The 07:00 digest, in two parts (Gideon, 19 Nov 2026): BOOKINGS, everything about
+ * bookings, and FLEET, every vehicle IN or OUT (lib/fleet/digest). `fleet` is Fleet's
+ * share (lib/fleet/reminder-send fleetDigestPart); the Vehicle Coordinator(s) get the
+ * message even when they aren't on the alert list. Without Fleet's share, a quiet day
+ * sends nothing; with it, the vehicles are listed every day.
  */
 export async function sendVehicleDigest(
-  opts: { fleet?: { parts: string[]; items: number; slackUserIds: string[] } | null } = {}
+  opts: { fleet?: { bookingParts: string[]; fleetParts: string[]; items: number; slackUserIds: string[] } | null } = {}
 ): Promise<{ sent: boolean; items: number }> {
   if (!process.env.SLACK_BOT_TOKEN) return { sent: false, items: 0 };
   const admin = createAdminClient() as Client;
@@ -554,17 +557,26 @@ export async function sendVehicleDigest(
   if (waiting.length) parts.push(`*⏳ Waiting on a decision 2+ days (${waiting.length})*\n${waiting.map((b) => rowLine(b, headline(b))).join("\n")}`);
   if (toComplete.length) parts.push(`*✔️ Signed in, not marked completed (${toComplete.length})*\n${toComplete.map((b) => rowLine(b)).join("\n")}`);
 
-  const fleet = opts.fleet?.parts.length ? opts.fleet : null;
-  if (fleet) parts.push(...fleet.parts);
+  const fleet = opts.fleet && (opts.fleet.fleetParts.length || opts.fleet.bookingParts.length) ? opts.fleet : null;
+  if (fleet) parts.push(...fleet.bookingParts);
 
   const items = overdue.length + pickups.length + returns.length + unpaid.length + waiting.length + toComplete.length + (fleet?.items ?? 0);
-  if (items === 0) return { sent: false, items: 0 };
+  if (items === 0 && !fleet?.fleetParts.length) return { sent: false, items: 0 };
 
+  // Fleet off (FLEET_MESSAGES_ENABLED unset): exactly the bookings digest as before.
+  const body = fleet?.fleetParts.length
+    ? [
+        section(`*📅 BOOKINGS – <${SITE}/bookings/vehicles/board|open the board>*`),
+        ...(parts.length ? parts : ["Nothing on bookings today."]).map(section),
+        divider(),
+        ...fleet.fleetParts.map(section),
+      ]
+    : parts.map(section);
   const message = {
     text: `Vehicles today — ${items} thing${items === 1 ? "" : "s"} to know`,
     blocks: [
       section(`*🚐 Vehicles — ${dateRangeLabel(today, null)}*`),
-      ...parts.map(section),
+      ...body,
       context(`<${SITE}/bookings/vehicles|Open the vehicle board>`),
     ],
   };

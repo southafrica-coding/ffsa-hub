@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Masthead, SectionBar } from "@/components/ffsa";
 import { requireFleet } from "@/lib/fleet/load";
-import { canSendFleetReminder, reminderDigestParts, runFleetReminder } from "@/lib/fleet/reminder-send";
+import { canSendFleetReminder, fleetDigestBlocks, runFleetReminder } from "@/lib/fleet/reminder-send";
 import { REMINDER_SECTIONS, fmtDate, todayInSA } from "@/lib/fleet/rules";
 import { getFleetReminderSends } from "@/services/fleet";
 import { FLEET } from "../_components/ui";
@@ -24,7 +24,8 @@ export default async function ReminderPreview({ searchParams }: { searchParams: 
   const r = run.reminder;
   const live = canSendFleetReminder();
   const { data: sends } = await getFleetReminderSends(supabase);
-  const channels = [run.notify.email && "email", run.notify.slack && "Slack (inside the 07:00 vehicle digest)"].filter(Boolean).join(" and ") || "nothing (both switched off on the Schedule page)";
+  const channels = [run.notify.email && "email", run.notify.slack && "Slack (inside the 07:00 vehicles message)"].filter(Boolean).join(" and ") || "nothing (both switched off on the Schedule page)";
+  const slack = fleetDigestBlocks(run);
 
   return (
     <>
@@ -64,12 +65,19 @@ export default async function ReminderPreview({ searchParams }: { searchParams: 
               </ul>
             </div>
           ))}
-          <details className="border-t border-rule pt-3">
-            <summary className="cursor-pointer font-mono text-[10px] font-bold uppercase tracking-[0.14em]">Its part of the Slack digest</summary>
-            <pre className="mt-2 whitespace-pre-wrap break-words bg-bone p-3 text-[12px]">{reminderDigestParts(r, run.url).join("\n\n")}</pre>
-          </details>
         </div>
       )}
+
+      <SectionBar title="Slack at 07:00" meta="FFSA Hub Activity" />
+      <div className="space-y-3 px-5 py-4 text-[14px] md:px-8">
+        <p className="text-[#55524A]">
+          Fleet’s part of the 07:00 vehicles message. Under BOOKINGS it adds clashes and today’s pre- and post-trip checks; FLEET lists every vehicle, IN with what’s due on it, or OUT with only who has it.
+        </p>
+        <h3 className="font-display text-[16px] font-black uppercase">Bookings</h3>
+        <pre className="whitespace-pre-wrap break-words bg-bone p-3 text-[12px]">{slack.bookingParts.join("\n\n") || "Nothing from Fleet. The bookings lines (pickups, returns, overdue…) are added when it’s sent."}</pre>
+        <h3 className="font-display text-[16px] font-black uppercase">Fleet</h3>
+        <pre className="whitespace-pre-wrap break-words bg-bone p-3 text-[12px]">{slack.fleetParts.slice(1).join("\n\n")}</pre>
+      </div>
 
       <SectionBar title="Goes to" />
       <div className="px-5 py-4 text-[14px] md:px-8">

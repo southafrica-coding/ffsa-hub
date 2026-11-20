@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const digests: unknown[] = [];
-let fleetResult: unknown = { outcome: "sent", parts: ["*🔧 Inspections*", "*Today*\n• H1 – weekly check"], items: 1, slackUserIds: ["U1"] };
+let fleetResult: unknown = { outcome: "sent", bookingParts: [], fleetParts: ["*🔧 FLEET*", "🟢 *IN*  *H1*\n• Weekly check due today"], items: 1, slackUserIds: ["U1"] };
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/fleet/reminder-send", () => ({

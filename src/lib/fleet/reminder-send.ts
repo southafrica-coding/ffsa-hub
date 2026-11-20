@@ -14,7 +14,8 @@ import { sendTransactional } from "@/lib/email/send-transactional";
 import * as slack from "@/lib/slack/client";
 import { isBotConfigured } from "@/lib/slack/bots";
 import { loadFleet, type Coordinator } from "./load";
-import { REMINDER_SECTIONS, buildReminder, todayInSA, type ISODate, type Reminder } from "./rules";
+import { REMINDER_SECTIONS, buildReminder, todayInSA, type FleetData, type ISODate, type Reminder } from "./rules";
+import { buildFleetDigest, fleetBookingParts, fleetDigestCount, fleetVehicleParts } from "./digest";
 
 type Client = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -64,19 +65,6 @@ export function reminderSlackText(r: Reminder, url: string): string {
     .join("\n\n");
   return `*${esc(r.subject)}*\n\n${body}\n\n<${url}|Open Fleet>`;
 }
-
-/** The Fleet part of the vehicle team's Slack digest: a heading, then one block per section. */
-export function reminderDigestParts(r: Reminder, url: string): string[] {
-  if (r.empty) return [];
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return [
-    `*🔧 Inspections – <${url}|open Fleet>*`,
-    ...REMINDER_SECTIONS.filter(([k]) => r.sections[k].length).map(([k, title]) => `*${title}*\n${r.sections[k].map((l) => "• " + esc(l)).join("\n")}`),
-  ];
-}
-
-/** Lines in the Fleet part, counted toward the digest's "N things to know". */
-export const reminderItemCount = (r: Reminder) => REMINDER_SECTIONS.reduce((n, [k]) => n + r.sections[k].length, 0);
 
 // ── Sending ────────────────────────────────────────────────
 
@@ -157,6 +145,8 @@ export async function deliverReminder(
 
 export interface ReminderRun {
   date: ISODate;
+  /** The fleet as the rules saw it (the 07:00 message sorts it by vehicle). */
+  F: FleetData;
   reminder: Reminder;
   url: string;
   coordinators: Coordinator[];
@@ -180,7 +170,7 @@ export async function runFleetReminder(
   const reminder = buildReminder(F, date, { appUrl: url, linkText: "Open Fleet" });
   const n = (F.notify || {}) as { email?: unknown; slack?: unknown };
   const notify = { email: n.email !== false, slack: n.slack !== false };
-  const base = { date, reminder, url, coordinators, notify };
+  const base = { date, F, reminder, url, coordinators, notify };
 
   if (reminder.empty) return { ...base, outcome: "empty" };
   if (!opts.send) return { ...base, outcome: "preview" };
@@ -200,17 +190,30 @@ export async function runFleetReminder(
 
 export interface FleetDigestPart {
   outcome: ReminderRun["outcome"];
-  /** Slack blocks to add to the digest; empty when there's nothing to say or Slack is off. */
-  parts: string[];
+  /** Blocks for the Bookings part: clashes and today's pre- and post-trip checks. */
+  bookingParts: string[];
+  /** Blocks for the Fleet part: every vehicle, IN or OUT. Empty when Fleet's messages are off. */
+  fleetParts: string[];
   items: number;
   /** The coordinators' Slack ids, so they get the digest even if not on its alert list. */
   slackUserIds: string[];
 }
 
+/** Both Fleet parts of the 07:00 message for this run (what the preview page shows too). */
+export function fleetDigestBlocks(run: Pick<ReminderRun, "F" | "date" | "url">) {
+  const d = buildFleetDigest(run.F, run.date);
+  return {
+    bookingParts: fleetBookingParts(d, `${run.url}/calendar`),
+    fleetParts: [`*🔧 FLEET – <${run.url}|open Fleet>*`, ...fleetVehicleParts(d)],
+    items: fleetDigestCount(d),
+  };
+}
+
 /**
  * Run at 07:00 by the vehicle digest cron: emails the reminder (once a day, live site only)
- * and returns the Fleet sections for the digest's single Slack message. Off the live site
- * it returns no parts, so previews and local runs never put Fleet into a Slack message.
+ * and returns Fleet's blocks for the single Slack message from the FFSA Hub Activity bot.
+ * Off (FLEET_MESSAGES_ENABLED unset, or not the live site) it returns no blocks, so
+ * previews and local runs never put Fleet into a Slack message.
  */
 export async function fleetDigestPart(
   admin: Client,
@@ -218,11 +221,11 @@ export async function fleetDigestPart(
 ): Promise<FleetDigestPart> {
   const send = canSendFleetReminder(opts.env);
   const run = await runFleetReminder(admin, { date: opts.date, send, deps: opts.deps });
-  const on = send && run.notify.slack && !run.reminder.empty;
+  const on = send && run.notify.slack && run.F.vehicles.length > 0;
+  const b = on ? fleetDigestBlocks(run) : { bookingParts: [], fleetParts: [], items: 0 };
   return {
     outcome: run.outcome,
-    parts: on ? reminderDigestParts(run.reminder, run.url) : [],
-    items: on ? reminderItemCount(run.reminder) : 0,
+    ...b,
     slackUserIds: on ? run.coordinators.map((c) => c.slackUserId).filter((x): x is string => !!x) : [],
   };
 }
