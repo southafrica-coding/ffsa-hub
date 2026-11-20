@@ -87,7 +87,7 @@ function Figure({ label, value, muted = false }: { label: string; value: number;
   return (
     <div>
       <p className="mono-label">{label}</p>
-      <p className="numeral mt-1 text-[32px] leading-[0.85]" style={muted ? { color: "#9A9689" } : undefined}>
+      <p className="numeral mt-1 text-[32px] leading-[0.85]" style={muted ? { color: "var(--text-quiet)" } : undefined}>
         {value}
       </p>
     </div>

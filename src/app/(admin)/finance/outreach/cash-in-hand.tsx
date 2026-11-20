@@ -55,11 +55,11 @@ export function CashInHand({
         <h3 className="mono-label">Money sent to the team</h3>
         <div className="flex flex-wrap gap-x-5 gap-y-1 font-mono text-[12.5px] tabular-nums">
           <span>
-            <span className="text-[#7C786C]">Sent </span>
+            <span className="text-[color:var(--text-tertiary)]">Sent </span>
             {zar(c.sent)}
           </span>
           <span>
-            <span className="text-[#7C786C]">Spent </span>
+            <span className="text-[color:var(--text-tertiary)]">Spent </span>
             {zar(c.spent)}
           </span>
         </div>
@@ -83,7 +83,7 @@ export function CashInHand({
             <div className="mt-3">
               <Bar pct={c.pctSpent ?? 0} tone={colour} />
             </div>
-            <p className="mt-2 font-mono text-[11px] text-[#55524A]">
+            <p className="mt-2 font-mono text-[11px] text-[color:var(--text-muted)]">
               {[
                 lastSent && `Last sent ${shortDate(lastSent)}`,
                 perDay > 0

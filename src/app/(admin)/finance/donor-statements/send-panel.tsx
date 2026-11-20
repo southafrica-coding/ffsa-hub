@@ -210,7 +210,7 @@ function SendLog({ sends }: { sends: SendRow[] }) {
       </div>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-y border-rule text-left font-mono text-[9px] uppercase tracking-[0.12em] text-[#7C786C]">
+          <tr className="border-y border-rule text-left font-mono text-[9px] uppercase tracking-[0.12em] text-[color:var(--text-tertiary)]">
             <th className="px-5 py-1.5">When</th>
             <th>Donor</th>
             <th>To</th>

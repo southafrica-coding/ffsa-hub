@@ -40,6 +40,8 @@ import { listUserMinistries } from "@/services/staff-cv";
 import { ProfileTabs } from "@/components/profile/profile-tabs";
 import { PROFILE_TABS, type ProfileTab } from "@/components/profile/profile-tab-keys";
 import { canHaveSpouse } from "@/lib/users/marital-status";
+import { AppearanceCard } from "@/components/profile/appearance-card";
+import { isColorScheme } from "@/lib/theme";
 
 export default async function ProfilePage({
   searchParams,
@@ -364,6 +366,14 @@ export default async function ProfilePage({
                   }}
                 />
               </div>
+            </section>
+
+            <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
+              <div>
+                <p className="page-eyebrow">HUB SETTINGS</p>
+                <h2 className="text-xl font-semibold">Appearance</h2>
+              </div>
+              <AppearanceCard saved={isColorScheme(row.color_scheme) ? row.color_scheme : null} />
             </section>
 
             <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">

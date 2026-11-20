@@ -119,14 +119,14 @@ export function OwnerOkrs({
                   <div className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[10px] font-bold uppercase tracking-[0.12em]">
                     <button
                       type="button"
-                      className="text-[#55524A] underline hover:text-ink"
+                      className="text-[color:var(--text-muted)] underline hover:text-ink"
                       onClick={() => setEditingKr({ objectiveId: o.id, kr: null })}
                     >
                       + Key result
                     </button>
                     <button
                       type="button"
-                      className="text-[#55524A] underline hover:text-ink"
+                      className="text-[color:var(--text-muted)] underline hover:text-ink"
                       onClick={() => setEditingObjective(o)}
                     >
                       Edit objective
@@ -225,7 +225,7 @@ function KeyResultRow({ kr, onOpen }: { kr: OkrKeyResult; onOpen: () => void }) 
       <div className="flex w-full flex-wrap items-start justify-between gap-3">
         <span className="min-w-0 flex-1 text-[13.5px] leading-snug text-ink">
           {kr.label && (
-            <span className="mr-2 font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+            <span className="mr-2 font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
               {kr.label}
             </span>
           )}
@@ -237,7 +237,7 @@ function KeyResultRow({ kr, onOpen }: { kr: OkrKeyResult; onOpen: () => void }) 
       {progress && (
         <div className="w-full max-w-sm">
           <Bar pct={progress.pct} tone={progress.tone} />
-          <span className="mt-1 block font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+          <span className="mt-1 block font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
             {caption}
           </span>
         </div>
@@ -246,7 +246,7 @@ function KeyResultRow({ kr, onOpen }: { kr: OkrKeyResult; onOpen: () => void }) 
       {/* Recency is the point of the row: a key result nobody has touched for
           six months should not look like one updated yesterday. Notes are no
           longer crammed in here — they have their own box in the drawer. */}
-      <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+      <span className="font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
         {kr.timeline && <>{kr.timeline} · </>}
         {kr.last_checkin_at ? `updated ${formatRelativeTime(kr.last_checkin_at)}` : "never updated"}
         {kr.notes ? " · has notes" : ""}
@@ -308,7 +308,7 @@ function ObjectiveNotes({
               <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="ml-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#55524A] underline hover:text-ink"
+                className="ml-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-muted)] underline hover:text-ink"
               >
                 Edit
               </button>
@@ -318,7 +318,7 @@ function ObjectiveNotes({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#55524A] underline hover:text-ink"
+            className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-muted)] underline hover:text-ink"
           >
             + Notes
           </button>
@@ -351,7 +351,7 @@ function ObjectiveNotes({
             setNotes(stored ?? "");
             setOpen(false);
           }}
-          className="text-[#55524A] underline hover:text-ink"
+          className="text-[color:var(--text-muted)] underline hover:text-ink"
         >
           Cancel
         </button>

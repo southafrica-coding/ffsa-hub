@@ -272,7 +272,7 @@ export function FeedbackRuntime({
             }
           }}
           disabled={submitting}
-          className="bg-ink px-6 py-3 text-white hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
+          className="bg-ink px-6 py-3 text-white hover:bg-[var(--ink-bg-hover)] disabled:bg-[color:var(--surface-4)]"
         >
           {submitting ? "Sending…" : isLastStep ? "Send feedback" : "Continue"}
         </button>

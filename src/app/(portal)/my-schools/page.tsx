@@ -182,7 +182,7 @@ export default async function MySchoolsPage() {
                   ) : (
                     <Link
                       href={`/my-schools/apply/${program.id}`}
-                      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white"
+                      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[var(--ink-bg-hover)] hover:text-white"
                     >
                       Apply
                     </Link>
@@ -248,7 +248,7 @@ export default async function MySchoolsPage() {
                 <li key={enrollment.id} className="border-b border-rule">
                   <Link
                     href={`/my-schools/${enrollment.id}`}
-                    className="flex min-h-[48px] items-center justify-between gap-4 px-5 py-3.5 hover:bg-[#F7F5EE] md:px-8"
+                    className="flex min-h-[48px] items-center justify-between gap-4 px-5 py-3.5 hover:bg-[var(--surface-hover)] md:px-8"
                   >
                     <div className="min-w-0">
                       <div className="truncate font-display text-[17px] font-black uppercase leading-none text-ink">

@@ -157,7 +157,7 @@ export function ObjectiveDialog({
               <button
                 type="button"
                 onClick={() => setKeyResults((prev) => [...prev, ""])}
-                className="mt-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#55524A] underline hover:text-ink"
+                className="mt-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-muted)] underline hover:text-ink"
               >
                 + Add another
               </button>

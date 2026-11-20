@@ -46,7 +46,7 @@ export default async function PersonDetailPage({
             href={`/print/records-library/persons/${id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white"
+            className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[var(--ink-bg-hover)] hover:text-white"
           >
             Print / PDF
           </a>

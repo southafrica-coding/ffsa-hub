@@ -52,7 +52,7 @@ function saveButton(label: string, saving: boolean, onClick: () => void, disable
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[10px] font-bold tracking-[0.12em] text-white hover:bg-[#262622] disabled:opacity-50"
+      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[10px] font-bold tracking-[0.12em] text-white hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
     >
       {saving ? "SAVING…" : label}
     </button>
@@ -166,7 +166,7 @@ export function ApplicantReview({
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
       {/* ── Pipeline strip. Wraps on a phone so eight stages stay on screen. ── */}
-      <div className="flex shrink-0 items-start gap-2 border-b border-ink bg-[#F7F5EE] px-3 py-3 md:px-6">
+      <div className="flex shrink-0 items-start gap-2 border-b border-ink bg-[var(--surface-hover)] px-3 py-3 md:px-6">
         <div className="flex min-w-0 flex-1 flex-wrap gap-1">
           {stages.map((s) => {
             const hot = s.key === currentStatus;
@@ -439,7 +439,7 @@ export function ApplicantReview({
             type="button"
             disabled={locked}
             onClick={() => onDecision("accepted")}
-            className="bg-ink px-5 py-2.5 font-mono text-[10px] font-bold tracking-[0.14em] text-white hover:bg-[#262622] disabled:opacity-50"
+            className="bg-ink px-5 py-2.5 font-mono text-[10px] font-bold tracking-[0.14em] text-white hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
           >
             {busy ? "SAVING…" : "ACCEPT →"}
           </button>

@@ -99,7 +99,7 @@ export function SchedulingSection({
             fontSize: "9px",
             letterSpacing: "0.25em",
             fontWeight: 700,
-            color: "#0A0A0A",
+            color: "var(--text-primary)",
             textTransform: "uppercase",
           }}
         >
@@ -108,11 +108,11 @@ export function SchedulingSection({
         <div
           className="mt-2 p-4 flex items-center justify-between gap-3"
           style={{
-            background: "#FFFFFF",
+            background: "var(--surface-1)",
             border: "1px solid var(--rule)",
           }}
         >
-          <div style={{ color: "#7C786C", fontSize: "13px" }}>
+          <div style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>
             No availability request yet. Send the recipient a link to pick
             times.
           </div>
@@ -159,7 +159,7 @@ export function SchedulingSection({
           fontSize: "9px",
           letterSpacing: "0.25em",
           fontWeight: 700,
-          color: "#0A0A0A",
+          color: "var(--text-primary)",
           textTransform: "uppercase",
         }}
       >
@@ -169,7 +169,7 @@ export function SchedulingSection({
       <div
         className="mt-2 p-4"
         style={{
-          background: "#FFFFFF",
+          background: "var(--surface-1)",
           border: "1px solid var(--rule)",
         }}
       >
@@ -178,7 +178,7 @@ export function SchedulingSection({
         <div className="mt-3 space-y-2">
           {scheduling.status === "pending" && !expired && (
             <>
-              <p style={{ color: "#9A9689", fontSize: "13px" }}>
+              <p style={{ color: "var(--text-quiet)", fontSize: "13px" }}>
                 Recipient hasn&rsquo;t picked times yet. Link expires{" "}
                 {formatSlot(scheduling.expires_at)}.
               </p>
@@ -194,7 +194,7 @@ export function SchedulingSection({
 
           {scheduling.status === "awaiting_selection" && (
             <>
-              <p style={{ color: "#9A9689", fontSize: "13px" }}>
+              <p style={{ color: "var(--text-quiet)", fontSize: "13px" }}>
                 {recipientSlots.length} time
                 {recipientSlots.length === 1 ? "" : "s"} submitted. Pick one to
                 confirm:
@@ -213,7 +213,7 @@ export function SchedulingSection({
                       border: "1px solid var(--rule-strong)",
                       color: "var(--text-primary)",
                       fontSize: "13px",
-                      background: "#F4F2EA",
+                      background: "var(--surface-2)",
                     }}
                   >
                     <span>{formatSlot(slot.starts_at)}</span>
@@ -223,7 +223,7 @@ export function SchedulingSection({
                         letterSpacing: "0.1em",
                         fontWeight: 700,
                         textTransform: "uppercase",
-                        color: "#0A0A0A",
+                        color: "var(--text-primary)",
                       }}
                     >
                       Pick this
@@ -247,7 +247,7 @@ export function SchedulingSection({
           )}
 
           {scheduling.status === "cancelled" && (
-            <p style={{ color: "#55524A", fontSize: "13px" }}>
+            <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>
               Cancelled
               {scheduling.cancelled_at
                 ? ` on ${formatSlot(scheduling.cancelled_at)}`
@@ -268,7 +268,7 @@ export function SchedulingSection({
                 fontWeight: 600,
                 letterSpacing: "0.05em",
                 textTransform: "uppercase",
-                color: "#55524A",
+                color: "var(--text-muted)",
                 background: "transparent",
                 border: "none",
                 cursor: "pointer",
@@ -287,7 +287,7 @@ export function SchedulingSection({
               onClick={() => setRequestOpen(true)}
               style={{
                 borderColor: "var(--rule-strong)",
-                color: "#9A9689",
+                color: "var(--text-quiet)",
               }}
             >
               Request again
@@ -312,7 +312,7 @@ export function SchedulingSection({
       >
         <DialogContent
           style={{
-            background: "#0A0A0A",
+            background: "var(--ink-bg)",
             borderColor: "var(--rule)",
             color: "var(--text-primary)",
           }}
@@ -327,7 +327,7 @@ export function SchedulingSection({
               <p
                 style={{
                   fontSize: "14px",
-                  color: "#0A0A0A",
+                  color: "var(--text-primary)",
                   fontWeight: 700,
                 }}
               >
@@ -342,7 +342,7 @@ export function SchedulingSection({
                   fontSize: "11px",
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
-                  color: "#55524A",
+                  color: "var(--text-muted)",
                 }}
               >
                 Personal message (optional)
@@ -358,7 +358,7 @@ export function SchedulingSection({
               <p
                 style={{
                   fontSize: "11px",
-                  color: "#45423B",
+                  color: "var(--text-secondary)",
                   marginTop: "6px",
                 }}
               >
@@ -372,7 +372,7 @@ export function SchedulingSection({
               variant="outline"
               onClick={() => setConfirmTarget(null)}
               disabled={busy}
-              style={{ borderColor: "var(--rule-strong)", color: "#9A9689" }}
+              style={{ borderColor: "var(--rule-strong)", color: "var(--text-quiet)" }}
             >
               Cancel
             </Button>
@@ -404,8 +404,8 @@ function StatusPill({
   expired: boolean;
 }) {
   let label = status.replace("_", " ");
-  let bg = "#F1EFE7";
-  let fg = "#7C786C";
+  let bg = "var(--surface-3)";
+  let fg = "var(--text-tertiary)";
 
   if (expired) {
     label = "expired";
@@ -413,11 +413,11 @@ function StatusPill({
     fg = "hsl(var(--destructive))";
   } else if (status === "pending") {
     bg = "var(--yellow-dim)";
-    fg = "#0A0A0A";
+    fg = "var(--text-primary)";
   } else if (status === "awaiting_selection") {
     label = "needs your pick";
     bg = "var(--yellow-dim)";
-    fg = "#0A0A0A";
+    fg = "var(--text-primary)";
   } else if (status === "scheduled") {
     bg = "transparent";
     fg = "var(--green-text)";
@@ -458,7 +458,7 @@ function MagicLinkRow({ url }: { url: string }) {
     <div
       className="flex items-center gap-2 p-2"
       style={{
-        background: "#F4F2EA",
+        background: "var(--surface-2)",
         border: "1px solid var(--rule)",
       }}
     >
@@ -466,7 +466,7 @@ function MagicLinkRow({ url }: { url: string }) {
         style={{
           flex: 1,
           fontSize: "11px",
-          color: "#9A9689",
+          color: "var(--text-quiet)",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -481,7 +481,7 @@ function MagicLinkRow({ url }: { url: string }) {
           background: "transparent",
           border: "1px solid var(--rule-strong)",
           padding: "4px 8px",
-          color: copied ? "var(--green-text)" : "#7C786C",
+          color: copied ? "var(--green-text)" : "var(--text-tertiary)",
           fontSize: "11px",
           cursor: "pointer",
           display: "inline-flex",
@@ -557,7 +557,7 @@ function RequestDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         style={{
-          background: "#0A0A0A",
+          background: "var(--ink-bg)",
           borderColor: "var(--rule)",
           color: "var(--text-primary)",
         }}
@@ -570,7 +570,7 @@ function RequestDialog({
 
         <div className="space-y-4 mt-2">
           <div>
-            <Label htmlFor="duration" style={{ fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#55524A" }}>
+            <Label htmlFor="duration" style={{ fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)" }}>
               Call duration (minutes)
             </Label>
             <Input
@@ -585,7 +585,7 @@ function RequestDialog({
           </div>
 
           <div>
-            <Label htmlFor="expiry" style={{ fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#55524A" }}>
+            <Label htmlFor="expiry" style={{ fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)" }}>
               Link expires in (days)
             </Label>
             <Input
@@ -600,7 +600,7 @@ function RequestDialog({
           </div>
 
           <div>
-            <Label htmlFor="message" style={{ fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#55524A" }}>
+            <Label htmlFor="message" style={{ fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)" }}>
               Personal message (optional)
             </Label>
             <Textarea
@@ -619,7 +619,7 @@ function RequestDialog({
             variant="outline"
             onClick={onClose}
             disabled={busy}
-            style={{ borderColor: "var(--rule-strong)", color: "#9A9689" }}
+            style={{ borderColor: "var(--rule-strong)", color: "var(--text-quiet)" }}
           >
             Cancel
           </Button>

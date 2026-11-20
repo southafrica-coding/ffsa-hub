@@ -597,7 +597,7 @@ function DonorRow({
             <span className="text-[color:var(--text-tertiary)]">—</span>
           )}
           {d.emailSource && d.emailSource !== "source" && (
-            <span className="ml-1.5 font-mono text-[9px] uppercase tracking-[0.1em] text-[#7C786C]">
+            <span className="ml-1.5 font-mono text-[9px] uppercase tracking-[0.1em] text-[color:var(--text-tertiary)]">
               {d.emailSource === "edit" ? "edited" : d.emailSource}
             </span>
           )}
@@ -647,7 +647,7 @@ function DonorRow({
             )}
             <table className="w-full max-w-3xl text-sm">
               <thead>
-                <tr className="text-left font-mono text-[9px] uppercase tracking-[0.12em] text-[#7C786C]">
+                <tr className="text-left font-mono text-[9px] uppercase tracking-[0.12em] text-[color:var(--text-tertiary)]">
                   <th className="py-1">Date</th>
                   <th>Invoice</th>
                   <th>Ministry</th>

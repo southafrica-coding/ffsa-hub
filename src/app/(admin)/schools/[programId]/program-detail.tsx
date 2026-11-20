@@ -352,7 +352,7 @@ function StorageImage({
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-[#262622]"
+          className="inline-flex items-center gap-1.5 bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-[var(--ink-bg-hover)]"
         >
           <Download className="h-3.5 w-3.5" /> Download Photo
         </a>
@@ -1520,7 +1520,7 @@ function ArrivalTab({
                             <button
                               type="button"
                               onClick={() => removeFromArrival(enrollment)}
-                              className="block w-full px-3 py-2 !font-sans text-left text-[13px] !font-semibold normal-case tracking-normal text-ink hover:bg-[#F7F5EE]"
+                              className="block w-full px-3 py-2 !font-sans text-left text-[13px] !font-semibold normal-case tracking-normal text-ink hover:bg-[var(--surface-hover)]"
                             >
                               Remove from school
                             </button>

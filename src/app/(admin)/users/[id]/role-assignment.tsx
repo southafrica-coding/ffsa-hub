@@ -145,7 +145,7 @@ export function RoleAssignment({
   return (
     <div
       style={{
-        background: "#FFFFFF",
+        background: "var(--surface-1)",
         border: "1px solid var(--rule)",
         padding: "20px",
       }}
@@ -161,13 +161,13 @@ export function RoleAssignment({
       >
         Job titles
       </p>
-      <p style={{ fontSize: "13px", color: "#55524A", marginBottom: "14px" }}>
+      <p style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "14px" }}>
         Stack as many as fit the person — access is the combined total of every title.
       </p>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
         {assigned.length === 0 && (
-          <span style={{ fontSize: "13px", color: "#45423B" }}>No titles yet.</span>
+          <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>No titles yet.</span>
         )}
 
         {assigned.map((a) => (
@@ -177,7 +177,7 @@ export function RoleAssignment({
               display: "inline-flex",
               alignItems: "center",
               gap: "6px",
-              background: "#FFF4D9",
+              background: "var(--yellow-dim)",
               color: "var(--ink)",
               border: "1px solid #FFF4D9",
               padding: "5px 10px",
@@ -215,7 +215,7 @@ export function RoleAssignment({
                 gap: "4px",
                 border: "1px dashed var(--rule-strong)",
                 background: "transparent",
-                color: "#7C786C",
+                color: "var(--text-tertiary)",
                 padding: "5px 10px",
                 fontSize: "13px",
                 cursor: options.length === 0 ? "not-allowed" : "pointer",
@@ -250,7 +250,7 @@ export function RoleAssignment({
                         textAlign: "left",
                         padding: "7px 10px",
                         fontSize: "12px",
-                        color: "#7C786C",
+                        color: "var(--text-tertiary)",
                         background: "transparent",
                         cursor: "pointer",
                       }}
@@ -263,7 +263,7 @@ export function RoleAssignment({
                           display: "block",
                           padding: "7px 10px",
                           fontSize: "12px",
-                          color: "#45423B",
+                          color: "var(--text-secondary)",
                         }}
                       >
                         No programs available.
@@ -306,7 +306,7 @@ export function RoleAssignment({
                     >
                       {r.display_name}
                       {r.scope_type === "program" && (
-                        <span style={{ color: "#45423B", fontSize: "11px" }}> · by program</span>
+                        <span style={{ color: "var(--text-secondary)", fontSize: "11px" }}> · by program</span>
                       )}
                     </button>
                   ))
@@ -340,7 +340,7 @@ export function RoleAssignment({
       )}
 
       {lockedNote && (
-        <p style={{ fontSize: "12px", color: "#55524A", marginTop: "14px" }}>
+        <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "14px" }}>
           {lockedNote}
         </p>
       )}
@@ -370,7 +370,7 @@ export function RoleAssignment({
           >
             <UserMinus className="h-3.5 w-3.5" /> Convert to community member
           </button>
-          <p style={{ fontSize: "12px", color: "#55524A", marginTop: "8px" }}>
+          <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "8px" }}>
             They&rsquo;ve left staff. Clears their titles, permissions and ministry
             memberships in one go — pick anything they should keep (community
             members do serve in ministries). Their login, profile and history stay.

@@ -298,7 +298,7 @@ export function SharePanel({
               type="button"
               onClick={send}
               disabled={busy || status !== "open"}
-              className="px-4 py-1.5 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
+              className="px-4 py-1.5 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:bg-[color:var(--surface-4)]"
               title={status !== "open" ? "Open the form before sending" : undefined}
             >
               {busy ? "Sending…" : kind === "reminder" ? "Send reminder" : "Send the link"}

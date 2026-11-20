@@ -381,7 +381,7 @@ export function RosterTab({
             <div
               key={r.enrollmentId}
               className={cn(
-                "block gap-4 border-b border-rule px-5 py-3.5 hover:bg-[#F7F5EE] md:grid md:items-center md:px-8",
+                "block gap-4 border-b border-rule px-5 py-3.5 hover:bg-[var(--surface-hover)] md:grid md:items-center md:px-8",
                 r.removed && "opacity-60"
               )}
               style={{ gridTemplateColumns: cols }}
@@ -429,14 +429,14 @@ export function RosterTab({
                         <button
                           type="button"
                           onClick={() => mutateRow(r, "restore")}
-                          className="block w-full border-b border-rule px-3 py-2 !font-sans text-left text-[13px] !font-semibold normal-case tracking-normal text-ink hover:bg-[#F7F5EE]"
+                          className="block w-full border-b border-rule px-3 py-2 !font-sans text-left text-[13px] !font-semibold normal-case tracking-normal text-ink hover:bg-[var(--surface-hover)]"
                         >
                           Restore to school
                         </button>
                         <button
                           type="button"
                           onClick={() => mutateRow(r, "delete")}
-                          className="block w-full px-3 py-2 !font-sans text-left text-[13px] !font-semibold normal-case tracking-normal text-destructive hover:bg-[#F7F5EE]"
+                          className="block w-full px-3 py-2 !font-sans text-left text-[13px] !font-semibold normal-case tracking-normal text-destructive hover:bg-[var(--surface-hover)]"
                         >
                           Delete permanently
                         </button>
@@ -445,7 +445,7 @@ export function RosterTab({
                       <button
                         type="button"
                         onClick={() => mutateRow(r, "remove")}
-                        className="block w-full px-3 py-2 !font-sans text-left text-[13px] !font-semibold normal-case tracking-normal text-ink hover:bg-[#F7F5EE]"
+                        className="block w-full px-3 py-2 !font-sans text-left text-[13px] !font-semibold normal-case tracking-normal text-ink hover:bg-[var(--surface-hover)]"
                       >
                         Remove from school
                       </button>
@@ -592,7 +592,7 @@ export function AddStudentButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622]"
+        className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[var(--ink-bg-hover)]"
       >
         + Add student
       </button>
@@ -645,7 +645,7 @@ export function AddStudentButton({
                 <button
                   type="submit"
                   disabled={busy || !userId}
-                  className="bg-ink px-3.5 py-2 font-mono text-[9.5px] font-bold tracking-[0.12em] text-white hover:bg-[#262622] disabled:opacity-50"
+                  className="bg-ink px-3.5 py-2 font-mono text-[9.5px] font-bold tracking-[0.12em] text-white hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
                 >
                   {busy ? "ADDING…" : "ADD TO SCHOOL"}
                 </button>

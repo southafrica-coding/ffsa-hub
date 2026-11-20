@@ -176,3 +176,12 @@ export async function getPendingApprovalCount(supabase: Client) {
     .eq("status", "pending_approval");
   return count ?? 0;
 }
+
+/**
+ * Save the caller's own Light / Dark setting (users.color_scheme, migration
+ * 344). Goes through the set_my_color_scheme RPC, which only ever writes the
+ * caller's row; null goes back to following the device.
+ */
+export async function setMyColorScheme(supabase: Client, scheme: "light" | "dark" | null) {
+  return supabase.rpc("set_my_color_scheme", { p_scheme: scheme });
+}

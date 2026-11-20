@@ -454,7 +454,7 @@ export function RolesManager({
           <button
             type="button"
             onClick={openNew}
-            className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622]"
+            className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[var(--ink-bg-hover)]"
           >
             + New role
           </button>

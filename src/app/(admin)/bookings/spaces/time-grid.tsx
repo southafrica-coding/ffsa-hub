@@ -67,7 +67,7 @@ export function TimeGrid({
                     // No yellow here — the screen's one yellow band is the
                     // pending-requests strip. Today reads white, the rest grey.
                     "font-display text-[17px] font-black tabular-nums leading-none",
-                    col.isToday ? "text-white" : "text-[#8C8A80]"
+                    col.isToday ? "text-white" : "text-[color:var(--text-quiet)]"
                   )}
                 >
                   {col.sublabel}

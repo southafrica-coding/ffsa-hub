@@ -5,7 +5,8 @@ import { ProfileCompletionGate } from "@/components/profile-completion-gate";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { BackButton } from "@/components/back-button";
 import { getSidebarAccess } from "@/lib/sidebar-access";
-import { getUserInitials } from "@/lib/user-initials";
+import { getShellProfile } from "@/lib/user-initials";
+import { ThemeSync } from "@/lib/theme/theme-sync";
 import { AssistantMount } from "@/components/assistant/assistant-mount";
 
 export default async function AdminLayout({
@@ -14,11 +15,12 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
-  const [{ userRoles, permittedModules, menuLoadFailed }, initials] =
-    await Promise.all([getSidebarAccess(supabase), getUserInitials(supabase)]);
+  const [{ userRoles, permittedModules, menuLoadFailed }, { initials, colorScheme }] =
+    await Promise.all([getSidebarAccess(supabase), getShellProfile(supabase)]);
 
   return (
     <div className="flex h-screen overflow-hidden">
+      <ThemeSync scheme={colorScheme} />
       <AdminSidebar
         userRoles={userRoles}
         permittedModules={permittedModules}

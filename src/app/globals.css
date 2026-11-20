@@ -50,27 +50,33 @@
     /* NO ROUNDED CORNERS ANYWHERE */
     --radius: 0px;
 
-    /* Brand */
-    --ink:            #0A0A0A;
-    --yellow:         #FFB801;
-    --yellow-dim:     #FFF4D9;
-    --yellow-border:  #0A0A0A;
-    --green:          #3E7F2B;
-    --green-text:     #2F6620;
-    --amber:          #8A6400;
-    --amber-border:   #B98600;
-    --blue:           #000DE5;
-
-    /* Surfaces — same names, light values */
-    --surface-1:      #FFFFFF;
-    --surface-2:      #F4F2EA;
-    --surface-3:      #F1EFE7;
-    --surface-4:      #E7E4D9;
-    --rule:           #DEDACE;
-    --rule-strong:    #C7C3B5;
+    /* Brand + surfaces as "R G B" channels. Tailwind's brand colours
+       (bg-ink, text-ink, bg-white, bg-bone, border-rule …) read these, and
+       html.dark swaps them — see THEMES below. */
+    --c-ink:          10 10 10;      /* strongest text + borders   #0A0A0A */
+    --c-ink-bg:       10 10 10;      /* black bars (bg-ink)        #0A0A0A */
+    --c-ink-bg-hover: 38 38 34;      /* hover on a black bar       #262622 */
+    --c-paper:        255 255 255;   /* page + cards (bg-white)    #FFFFFF */
+    --c-bone:         244 242 234;   /* #F4F2EA */
+    --c-bone-2:       241 239 231;   /* #F1EFE7 */
+    --c-bone-3:       231 228 217;   /* #E7E4D9 */
+    --c-rule:         222 218 206;   /* #DEDACE */
+    --c-rule-strong:  199 195 181;   /* #C7C3B5 */
+    --c-yellow-dim:   255 244 217;   /* #FFF4D9 */
+    --c-grass:        62 127 43;     /* #3E7F2B */
+    --c-grass-text:   47 102 32;     /* #2F6620 */
+    --c-amber:        138 100 0;     /* #8A6400 */
+    --c-amber-border: 185 134 0;     /* #B98600 */
+    --c-surface-1:    255 255 255;
+    --c-surface-2:    244 242 234;
+    --c-surface-3:    241 239 231;
+    --c-surface-4:    231 228 217;
+    --c-hover:        247 245 238;   /* row hover / zebra          #F7F5EE */
 
     --text-primary:   #0A0A0A;
+    --text-strong:    #2A2822;
     --text-secondary: #45423B;
+    --text-muted:     #55524A;
     --text-tertiary:  #7C786C;
     --text-quiet:     #9A9689;
 
@@ -78,6 +84,180 @@
     --font-mono-brand: var(--font-roboto-mono, 'Roboto Mono', monospace);
   }
 }
+
+
+
+/* Derived tokens. Declared on every element that redefines the channels
+   above (html, .theme-light, yellow surfaces), because a custom property
+   built from var() is resolved where it is declared, not where it is used. */
+@layer base {
+  :root,
+  .theme-light,
+  .bg-yellow,
+  .needs-you {
+    /* Brand */
+    --ink:            rgb(var(--c-ink));
+    --ink-bg:         rgb(var(--c-ink-bg));
+    --ink-bg-hover:   rgb(var(--c-ink-bg-hover));
+    --on-ink:         #FFFFFF;
+    --yellow:         #FFB801;
+    --yellow-dim:     rgb(var(--c-yellow-dim));
+    --yellow-border:  #0A0A0A;
+    --green:          rgb(var(--c-grass));
+    --green-text:     rgb(var(--c-grass-text));
+    --amber:          rgb(var(--c-amber));
+    --amber-border:   rgb(var(--c-amber-border));
+    --blue:           #000DE5;
+
+    /* Surfaces — same names; values follow the theme */
+    --surface-1:      rgb(var(--c-surface-1));
+    --surface-2:      rgb(var(--c-surface-2));
+    --surface-3:      rgb(var(--c-surface-3));
+    --surface-4:      rgb(var(--c-surface-4));
+    --surface-hover:  rgb(var(--c-hover));
+    --rule:           rgb(var(--c-rule));
+    --rule-strong:    rgb(var(--c-rule-strong));
+
+  }
+}
+
+/* ─────────────────────────────────────────────────────
+   THEMES
+   Light is :root above. Dark is html.dark, set before first paint by
+   the script in src/lib/theme/no-flash-script.ts from the person's
+   profile (users.color_scheme), or the device setting until they pick.
+   Only token VALUES change here; components keep using the same names.
+
+   .theme-light pins a block to the light values in both modes: the
+   black rail and phone top bar, event storefronts and email previews
+   (event brand kits keep their own look).
+
+   Yellow surfaces always carry black text, so they pin the foreground
+   tokens to their light values too.
+   ───────────────────────────────────────────────────── */
+@layer base {
+  html.dark {
+    color-scheme: dark;
+
+    --background:    40 10% 4%;
+    --foreground:    48 30% 94%;
+    --card:          40 10% 4%;
+    --card-foreground: 48 30% 94%;
+    --popover:       45 9% 8%;
+    --popover-foreground: 48 30% 94%;
+    --primary:       48 30% 94%;
+    --primary-foreground: 0 0% 4%;
+    --secondary:     45 10% 11%;
+    --secondary-foreground: 45 10% 80%;
+    --muted:         45 10% 11%;
+    --muted-foreground: 45 7% 63%;
+    --accent:        45 10% 14%;
+    --accent-foreground: 48 30% 94%;
+    --destructive:   2 72% 62%;
+    --destructive-foreground: 0 0% 100%;
+    --border:        45 9% 17%;
+    --input:         45 8% 26%;
+    --ring:          48 30% 94%;
+
+    --c-ink:          244 242 234;   /* text + borders turn bone-white */
+    --c-ink-bg:       38 37 32;      /* black bars turn charcoal #262520 */
+    --c-ink-bg-hover: 52 51 45;      /* #34332D */
+    --c-paper:        10 10 10;      /* page #0A0A0A */
+    --c-bone:         23 22 18;      /* #171612 */
+    --c-bone-2:       28 27 22;      /* #1C1B16 */
+    --c-bone-3:       40 38 32;      /* #282620 */
+    --c-rule:         48 46 39;      /* #302E27 */
+    --c-rule-strong:  74 71 61;      /* #4A473D */
+    --c-yellow-dim:   46 36 8;       /* #2E2408 */
+    --c-grass:        102 178 76;    /* #66B24C */
+    --c-grass-text:   139 208 111;   /* #8BD06F */
+    --c-amber:        230 177 64;    /* #E6B140 */
+    --c-amber-border: 185 134 0;
+    --c-surface-1:    10 10 10;
+    --c-surface-2:    23 22 18;
+    --c-surface-3:    28 27 22;
+    --c-surface-4:    40 38 32;
+    --c-hover:        22 21 17;      /* #161511 */
+
+    --on-ink:         #FFFFFF;
+    --yellow-border:  #0A0A0A;
+    --blue:           #8C93FF;
+
+    --text-primary:   #F4F2EA;
+    --text-strong:    #E6E3D8;
+    --text-secondary: #C9C5B8;
+    --text-muted:     #B5B1A4;
+    --text-tertiary:  #9A9689;
+    --text-quiet:     #8A8679;
+  }
+
+  /* Pinned light: the same values as :root. */
+  html.dark .theme-light,
+  html.dark .bg-yellow,
+  html.dark .needs-you {
+    --c-ink:          10 10 10;
+    --c-ink-bg:       10 10 10;
+    --c-ink-bg-hover: 38 38 34;
+    --text-primary:   #0A0A0A;
+    --text-strong:    #2A2822;
+    --text-secondary: #45423B;
+    --text-muted:     #55524A;
+    --text-tertiary:  #7C786C;
+    --text-quiet:     #9A9689;
+    --foreground:     0 0% 4%;
+  }
+  html.dark .theme-light {
+    color-scheme: light;
+    color: var(--text-primary);
+    --background:    0 0% 100%;
+    --card:          0 0% 100%;
+    --card-foreground: 0 0% 4%;
+    --popover:       0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+    --primary:       0 0% 4%;
+    --primary-foreground: 0 0% 100%;
+    --secondary:     48 20% 95%;
+    --secondary-foreground: 40 8% 26%;
+    --muted:         48 20% 95%;
+    --muted-foreground: 40 7% 46%;
+    --accent:        48 20% 92%;
+    --accent-foreground: 0 0% 4%;
+    --destructive:   0 62% 42%;
+    --border:        45 18% 88%;
+    --input:         42 12% 78%;
+    --ring:          0 0% 4%;
+    --c-paper:        255 255 255;
+    --c-bone:         244 242 234;
+    --c-bone-2:       241 239 231;
+    --c-bone-3:       231 228 217;
+    --c-rule:         222 218 206;
+    --c-rule-strong:  199 195 181;
+    --c-yellow-dim:   255 244 217;
+    --c-grass:        62 127 43;
+    --c-grass-text:   47 102 32;
+    --c-amber:        138 100 0;
+    --c-surface-1:    255 255 255;
+    --c-surface-2:    244 242 234;
+    --c-surface-3:    241 239 231;
+    --c-surface-4:    231 228 217;
+    --c-hover:        247 245 238;
+    --blue:           #000DE5;
+  }
+}
+
+/* Dark-mode safety net for the warm greys that some screens still write as
+   literal hex classes (text-[#55524A] and friends) instead of tokens: mostly
+   Fleet, whose files are left alone here so open Fleet PRs don't conflict.
+   Each maps to the token it stands for. Prefer the token in new code:
+   text-[color:var(--text-muted)] etc. Delete a line once nothing uses it. */
+html.dark :is(.text-\[\#2A2822\], .text-\[\#2B2A26\]):not(.theme-light *) { color: var(--text-strong); }
+html.dark .text-\[\#45423B\]:not(.theme-light *) { color: var(--text-secondary); }
+html.dark :is(.text-\[\#55524A\], .text-\[\#6B675C\]):not(.theme-light *) { color: var(--text-muted); }
+html.dark .text-\[\#7C786C\]:not(.theme-light *) { color: var(--text-tertiary); }
+html.dark .text-\[\#9A9689\]:not(.theme-light *) { color: var(--text-quiet); }
+html.dark .border-\[\#55524A\]:not(.theme-light *) { border-color: var(--rule-strong); }
+html.dark :is(.bg-\[\#262622\], .hover\:bg-\[\#262622\]:hover):not(.theme-light *) { background-color: var(--ink-bg-hover); }
+html.dark :is(.bg-\[\#F7F5EE\], .hover\:bg-\[\#F7F5EE\]:hover):not(.theme-light *) { background-color: var(--surface-hover); }
 
 /* ─────────────────────────────────────────────────────
    BASE
@@ -89,6 +269,7 @@
   }
 
   html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
 
   body {
     background-color: var(--surface-1);
@@ -98,6 +279,13 @@
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* The black FF wordmark and mark sit on white in light mode; in dark mode
+     flip them to white rather than shipping a second <Image> per call site. */
+  html.dark img[src*="ff-wordmark-black"]:not(.theme-light img),
+  html.dark img[src*="ff-mark-black"]:not(.theme-light img) {
+    filter: invert(1);
   }
 
   /* The dark theme's paper-grain body::before overlay is REMOVED.
@@ -177,13 +365,13 @@
   }
   [data-slot="button"][data-variant="default"],
   button.bg-primary {
-    background: var(--ink) !important;
-    color: #FFFFFF !important;
+    background: var(--ink-bg) !important;
+    color: var(--on-ink) !important;
     border: 1px solid var(--ink) !important;
     box-shadow: none !important;
   }
   [data-slot="button"][data-variant="default"]:hover {
-    background: #262622 !important;
+    background: var(--ink-bg-hover) !important;
     transform: none !important;
   }
   [data-slot="button"][data-variant="outline"] {
@@ -391,15 +579,15 @@
     height: auto !important;
   }
   [data-slot="tabs-trigger"][data-state="active"] {
-    background: var(--ink) !important;
-    color: #FFFFFF !important;
+    background: var(--ink-bg) !important;
+    color: var(--on-ink) !important;
     border-color: var(--ink) !important;
     box-shadow: none !important;
   }
 
   /* ── Table — hairline rules, black head ── */
   [data-slot="table"] { border-collapse: separate !important; border-spacing: 0 !important; width: 100% !important; }
-  [data-slot="table-header"] tr { background: var(--ink) !important; }
+  [data-slot="table-header"] tr { background: var(--ink-bg) !important; }
   [data-slot="table-head"] {
     font-family: var(--font-mono-brand) !important;
     font-size: 9px !important;
@@ -411,7 +599,7 @@
     white-space: nowrap !important;
   }
   [data-slot="table-row"] { border-bottom: 1px solid var(--surface-4) !important; }
-  [data-slot="table-row"]:hover { background: #F7F5EE !important; }
+  [data-slot="table-row"]:hover { background: var(--surface-hover) !important; }
   [data-slot="table-cell"] {
     padding: 13px 16px !important;
     font-size: 14px !important;
@@ -421,6 +609,7 @@
 
   /* ── Dialog / Sheet / Popover / Tooltip — square, bordered, flat ── */
   [data-slot="dialog-overlay"] { background: rgba(10,10,10,0.22) !important; backdrop-filter: none !important; }
+  html.dark [data-slot="dialog-overlay"], html.dark [data-slot="sheet-overlay"] { background: rgba(0,0,0,0.6) !important; }
   [data-slot="dialog-content"] {
     background: var(--surface-1) !important;
     border: 1px solid var(--ink) !important;
@@ -440,7 +629,7 @@
     border-radius: 0 !important;
   }
   [data-slot="tooltip-content"] {
-    background: var(--ink) !important; border: none !important; color: #FFFFFF !important;
+    background: var(--ink-bg) !important; border: none !important; color: var(--on-ink) !important;
     font-family: var(--font-mono-brand) !important; font-size: 10px !important;
     letter-spacing: 0.1em !important; border-radius: 0 !important; box-shadow: none !important;
   }
@@ -501,7 +690,7 @@
   .section-bar {
     display: flex; align-items: center; justify-content: space-between;
     flex-wrap: wrap; gap: 4px 12px;
-    background: var(--ink); color: #FFFFFF; padding: 11px 20px;
+    background: var(--ink-bg); color: var(--on-ink); padding: 11px 20px;
   }
   @media (min-width: 768px) { .section-bar { padding: 11px 22px; } }
   .section-bar-title {
@@ -539,7 +728,7 @@
     text-transform: uppercase; border: 1px solid var(--rule-strong); color: var(--text-secondary);
     padding: 5px 9px; display: inline-flex; align-items: center; gap: 6px;
   }
-  .chip[data-active="true"] { background: var(--ink); color: #FFFFFF; border-color: var(--ink); }
+  .chip[data-active="true"] { background: var(--ink-bg); color: var(--on-ink); border-color: var(--ink); }
 
   /* Big condensed numeral */
   .numeral {

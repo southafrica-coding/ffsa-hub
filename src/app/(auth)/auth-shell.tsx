@@ -23,7 +23,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
         />
 
         <div>
-          <div className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-[#9A9689]">
+          <div className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-[color:var(--text-quiet)]">
             South Africa · Hub
           </div>
           <p className="mt-5 font-display text-[clamp(2.75rem,4.2vw,4.25rem)] font-black uppercase leading-[0.9] tracking-[-0.01em] text-white">

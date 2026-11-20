@@ -132,14 +132,14 @@ export function CheckinPanel({
         <p className="text-[14px] leading-snug text-ink">{kr.description}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <StatusPill tone={statusTone(kr.current_status)}>{statusLabel(kr.current_status)}</StatusPill>
-          <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+          <span className="font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
             {kr.last_checkin_at ? formatRelativeTime(kr.last_checkin_at) : "never updated"}
           </span>
           {canEdit && onEditKeyResult && (
             <button
               type="button"
               onClick={onEditKeyResult}
-              className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#55524A] underline hover:text-ink"
+              className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-muted)] underline hover:text-ink"
             >
               Edit
             </button>
@@ -148,7 +148,7 @@ export function CheckinPanel({
         {progress && (
           <div className="mt-3">
             <Bar pct={progress.pct} tone={progress.tone} />
-            <span className="mt-1 block font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+            <span className="mt-1 block font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
               {metricCaption(kr)}
             </span>
           </div>
@@ -201,7 +201,7 @@ export function CheckinPanel({
             <button
               type="submit"
               disabled={saving}
-              className="border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] disabled:opacity-50"
+              className="border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save check-in"}
             </button>
@@ -229,7 +229,7 @@ export function CheckinPanel({
                 {savingNotes ? "Saving…" : "Save notes"}
               </button>
               {notesEdit && (
-                <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+                <span className="font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
                   edited {formatRelativeTime(notesEdit.at)}
                   {notesEdit.actor ? ` · ${notesEdit.actor}` : ""}
                 </span>
@@ -240,7 +240,7 @@ export function CheckinPanel({
           <>
             <p className="whitespace-pre-wrap text-[12.5px] leading-snug text-ink">{kr.notes}</p>
             {notesEdit && (
-              <span className="mt-2 block font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+              <span className="mt-2 block font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
                 edited {formatRelativeTime(notesEdit.at)}
                 {notesEdit.actor ? ` · ${notesEdit.actor}` : ""}
               </span>
@@ -269,7 +269,7 @@ export function CheckinPanel({
                       <StatusPill tone={statusTone(entry.checkin.status)}>
                         {statusLabel(entry.checkin.status)}
                       </StatusPill>
-                      <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+                      <span className="font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
                         {/* checkin_on, not `at` — the date the author meant, not the row's. */}
                         {entry.checkin.checkin_on}
                         {entry.author ? ` · ${entry.author}` : ""}
@@ -289,7 +289,7 @@ export function CheckinPanel({
                      progress update is a statement and an edit is a footnote. */
                   <li key={`e-${entry.event.id}`} className="border-l-2 border-rule pl-3">
                     <p className="text-[12.5px] leading-snug text-ink">{summarise(entry.event)}</p>
-                    <span className="mt-0.5 block font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+                    <span className="mt-0.5 block font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
                       {formatRelativeTime(entry.at)}
                       {entry.author ? ` · ${entry.author}` : ""}
                     </span>
@@ -303,7 +303,7 @@ export function CheckinPanel({
               )}
             </ol>
             {truncated && (
-              <p className="mt-3 font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+              <p className="mt-3 font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
                 Showing the most recent 100 entries.
               </p>
             )}

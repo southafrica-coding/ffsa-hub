@@ -498,7 +498,7 @@ export function ExpenseImport({
                   reports 0 created and every row skipped, which is the
                   whole point — silence used to read as success. */}
               {result && (
-                <div className="border border-ink bg-[#F7F5EE] px-4 py-3 text-[13px]">
+                <div className="border border-ink bg-[var(--surface-hover)] px-4 py-3 text-[13px]">
                   <p className="font-semibold">
                     {result.created} imported
                     {result.skipped > 0 && `, ${result.skipped} already there`}

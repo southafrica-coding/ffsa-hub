@@ -89,7 +89,7 @@ function ScopeSection({
       {/* Scope header row */}
       <div
         className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none"
-        style={{ background: "#FFFFFF" }}
+        style={{ background: "var(--surface-1)" }}
         onClick={() => setOpen((o) => !o)}
       >
         {/* Select-all checkbox */}
@@ -114,7 +114,7 @@ function ScopeSection({
           {allChecked ? (
             <Check className="h-3 w-3 text-black" />
           ) : someChecked ? (
-            <Minus className="h-3 w-3" style={{ color: "#0A0A0A" }} />
+            <Minus className="h-3 w-3" style={{ color: "var(--text-primary)" }} />
           ) : null}
         </button>
 
@@ -124,7 +124,7 @@ function ScopeSection({
             style={{
               fontSize: "9px",
               letterSpacing: "0.15em",
-              color: "#45423B",
+              color: "var(--text-secondary)",
               marginLeft: "8px",
               textTransform: "uppercase",
             }}
@@ -156,7 +156,7 @@ function ScopeSection({
               <label
                 key={p.id}
                 className="flex items-center gap-2 cursor-pointer"
-                style={{ fontSize: "13px", color: "#9A9689" }}
+                style={{ fontSize: "13px", color: "var(--text-quiet)" }}
               >
                 <button
                   onClick={() => onToggle(p.id, scope.scope_type, scope.id, !checked)}
@@ -240,7 +240,7 @@ function ModuleSection({
   return (
     <div
       style={{
-        background: "#FFFFFF",
+        background: "var(--surface-1)",
         border: "1px solid var(--rule)",
         overflow: "hidden",
       }}
@@ -266,7 +266,7 @@ function ModuleSection({
           <button
             onClick={toggleGlobalAll}
             className="flex items-center gap-1.5 text-xs"
-            style={{ color: "#45423B", cursor: "pointer" }}
+            style={{ color: "var(--text-secondary)", cursor: "pointer" }}
           >
             <div
               style={{
@@ -286,7 +286,7 @@ function ModuleSection({
               {globalAllChecked ? (
                 <Check className="h-2.5 w-2.5 text-black" />
               ) : globalSomeChecked ? (
-                <Minus className="h-2.5 w-2.5" style={{ color: "#0A0A0A" }} />
+                <Minus className="h-2.5 w-2.5" style={{ color: "var(--text-primary)" }} />
               ) : null}
             </div>
             Select all
@@ -323,7 +323,7 @@ function ModuleSection({
                 <label
                   key={p.id}
                   className="flex items-center gap-2 cursor-pointer"
-                  style={{ fontSize: "13px", color: "#9A9689" }}
+                  style={{ fontSize: "13px", color: "var(--text-quiet)" }}
                 >
                   <button
                     onClick={() => onToggle(p.id, null, null, !checked)}
@@ -356,7 +356,7 @@ function ModuleSection({
                 fontSize: "9px",
                 letterSpacing: "0.2em",
                 fontWeight: 600,
-                color: "#2A2822",
+                color: "var(--text-strong)",
                 textTransform: "uppercase",
               }}
             >
@@ -408,7 +408,7 @@ function TierPanel({
   return (
     <div
       style={{
-        background: active ? "var(--yellow-dim)" : "#FFFFFF",
+        background: active ? "var(--yellow-dim)" : "var(--surface-1)",
         border: active ? "1px solid #FFF4D9" : "1px solid var(--rule)",
         padding: "1.25rem 1.5rem",
       }}
@@ -419,7 +419,7 @@ function TierPanel({
             style={{
               fontSize: "9px",
               letterSpacing: "0.2em",
-              color: active ? "#0A0A0A" : "#45423B",
+              color: active ? "var(--text-primary)" : "var(--text-secondary)",
               textTransform: "uppercase",
               fontWeight: 700,
               marginBottom: "6px",
@@ -429,12 +429,12 @@ function TierPanel({
           </div>
           <p className="text-sm text-muted-foreground">{description}</p>
           {isSelf && (
-            <p className="text-xs mt-2" style={{ color: "#7C786C" }}>
+            <p className="text-xs mt-2" style={{ color: "var(--text-tertiary)" }}>
               You cannot change your own admin status.
             </p>
           )}
           {!isSelf && lockedNote && (
-            <p className="text-xs mt-2" style={{ color: "#7C786C" }}>
+            <p className="text-xs mt-2" style={{ color: "var(--text-tertiary)" }}>
               {lockedNote}
             </p>
           )}
@@ -864,7 +864,7 @@ export function PermissionManager({
       {isSuperAdmin && (
         <div
           style={{
-            background: "#FFFFFF",
+            background: "var(--surface-1)",
             border: "1px solid var(--rule)",
             padding: "1.25rem 1.5rem",
           }}
@@ -873,7 +873,7 @@ export function PermissionManager({
             <div className="flex-1">
               <Label
                 htmlFor="job-title"
-                style={{ fontSize: "9px", letterSpacing: "0.2em", color: "#45423B", textTransform: "uppercase" }}
+                style={{ fontSize: "9px", letterSpacing: "0.2em", color: "var(--text-secondary)", textTransform: "uppercase" }}
               >
                 Job Title
               </Label>
@@ -886,7 +886,7 @@ export function PermissionManager({
                 className="mt-1"
               />
               {targetLocked && (
-                <p className="text-xs mt-2" style={{ color: "#7C786C" }}>
+                <p className="text-xs mt-2" style={{ color: "var(--text-tertiary)" }}>
                   {SUPER_ADMIN_LOCKED_NOTE}
                 </p>
               )}
@@ -902,7 +902,7 @@ export function PermissionManager({
                     textTransform: "uppercase",
                     padding: "3px 8px",
                     background: "var(--yellow-dim)",
-                    color: "#0A0A0A",
+                    color: "var(--text-primary)",
                   }}
                 >
                   Pending Approval
@@ -948,7 +948,7 @@ export function PermissionManager({
         <div
           className="flex items-start justify-between gap-4"
           style={{
-            background: "#FFFFFF",
+            background: "var(--surface-1)",
             border: "1px solid var(--rule)",
             padding: "1.25rem 1.5rem",
           }}
@@ -959,7 +959,7 @@ export function PermissionManager({
                 fontSize: "9px",
                 letterSpacing: "0.2em",
                 fontWeight: 700,
-                color: "#0A0A0A",
+                color: "var(--text-primary)",
                 textTransform: "uppercase",
               }}
             >
@@ -987,7 +987,7 @@ export function PermissionManager({
             fontSize: "9px",
             letterSpacing: "0.3em",
             fontWeight: 700,
-            color: "#0A0A0A",
+            color: "var(--text-primary)",
             textTransform: "uppercase",
           }}
         >

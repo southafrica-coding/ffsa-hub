@@ -168,7 +168,7 @@ export function ExportPanel({
               <button type="button" onClick={() => setAll(true)} style={linkBtn}>
                 All
               </button>
-              <span style={{ color: "#2A2822" }}> · </span>
+              <span style={{ color: "var(--text-strong)" }}> · </span>
               <button type="button" onClick={() => setAll(false)} style={linkBtn}>
                 None
               </button>
@@ -205,7 +205,7 @@ export function ExportPanel({
               marginTop: "10px",
               background:
                 selected.size === 0 ? "#F4F2EA" : "#0A0A0A",
-              color: selected.size === 0 ? "#45423B" : "#0A0A0A",
+              color: selected.size === 0 ? "var(--text-secondary)" : "var(--text-primary)",
               border:
                 "1px solid " +
                 (selected.size === 0 ? "var(--rule-strong)" : "#0A0A0A"),
@@ -269,7 +269,7 @@ const perOutcomeLabel: CSSProperties = {
   letterSpacing: "0.12em",
   textTransform: "uppercase",
   fontWeight: 700,
-  color: "#45423B",
+  color: "var(--text-secondary)",
   marginRight: "2px",
 };
 const outcomeChip: CSSProperties = {
@@ -280,7 +280,7 @@ const outcomeChip: CSSProperties = {
   fontWeight: 600,
   padding: "4px 9px",
   border: "1px solid var(--rule-strong)",
-  background: "#F4F2EA",
+  background: "var(--surface-2)",
   color: "#C7C3B5",
   cursor: "pointer",
 };
@@ -293,8 +293,8 @@ const pill: CSSProperties = {
   fontWeight: 600,
   padding: "6px 12px",
   border: "1px solid var(--rule-strong)",
-  background: "#F4F2EA",
-  color: "#9A9689",
+  background: "var(--surface-2)",
+  color: "var(--text-quiet)",
   cursor: "pointer",
 };
 const panel: CSSProperties = {
@@ -303,7 +303,7 @@ const panel: CSSProperties = {
   top: "calc(100% + 6px)",
   zIndex: 50,
   width: "280px",
-  background: "#FFFFFF",
+  background: "var(--surface-1)",
   border: "1px solid var(--rule)",
   boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
   padding: "14px",
@@ -313,7 +313,7 @@ const labelStyle: CSSProperties = {
   letterSpacing: "0.12em",
   textTransform: "uppercase",
   fontWeight: 700,
-  color: "#7C786C",
+  color: "var(--text-tertiary)",
 };
 const selectStyle: CSSProperties = {
   width: "100%",
@@ -321,7 +321,7 @@ const selectStyle: CSSProperties = {
   fontSize: "12px",
   padding: "7px 9px",
   border: "1px solid var(--rule-strong)",
-  background: "#F4F2EA",
+  background: "var(--surface-2)",
   color: "var(--text-primary)",
 };
 const groupStyle: CSSProperties = {
@@ -329,7 +329,7 @@ const groupStyle: CSSProperties = {
   letterSpacing: "0.1em",
   textTransform: "uppercase",
   fontWeight: 700,
-  color: "#45423B",
+  color: "var(--text-secondary)",
   margin: "0 0 3px",
 };
 const checkRow: CSSProperties = {
@@ -343,7 +343,7 @@ const checkRow: CSSProperties = {
 };
 const linkBtn: CSSProperties = {
   fontSize: "11px",
-  color: "#0A0A0A",
+  color: "var(--text-primary)",
   background: "none",
   border: "none",
   cursor: "pointer",

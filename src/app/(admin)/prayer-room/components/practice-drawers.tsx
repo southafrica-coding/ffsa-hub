@@ -103,7 +103,7 @@ function Head({ time, sub }: { time: string; sub?: string }) {
 function Label({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
   return (
     <div className="mb-2 flex items-baseline justify-between">
-      <span className="font-mono text-[9px] font-bold tracking-[0.16em] text-[#7C786C]">{children}</span>
+      <span className="font-mono text-[9px] font-bold tracking-[0.16em] text-[color:var(--text-tertiary)]">{children}</span>
       {right && <span className="font-mono text-[9px] font-bold tracking-[0.1em] text-ink">{right}</span>}
     </div>
   );
@@ -129,7 +129,7 @@ function Toggle<T extends string | number>({
           className={cn(
             "min-h-[44px] flex-1 border border-ink p-3 text-center font-mono text-[10px] font-bold tracking-[0.1em]",
             i > 0 && "border-l-0",
-            value === o.value ? "bg-ink text-white" : "text-[#45423B]",
+            value === o.value ? "bg-ink text-white" : "text-[color:var(--text-secondary)]",
             o.disabled && "cursor-not-allowed text-[#B4B0A2]"
           )}
         >
@@ -169,7 +169,7 @@ function Cta({
 
 function Foot({ children }: { children: React.ReactNode }) {
   return (
-    <span className="block text-center font-mono text-[8.5px] tracking-[0.08em] text-[#7C786C]">{children}</span>
+    <span className="block text-center font-mono text-[8.5px] tracking-[0.08em] text-[color:var(--text-tertiary)]">{children}</span>
   );
 }
 
@@ -302,7 +302,7 @@ function StationDrawer({
     return (
       <>
         <Head time={range(toMin(b.start_time), toMin(b.end_time))} sub="FULL BAND · THE WHOLE ROOM" />
-        <div className="border-b border-[#E7E4D9] px-[22px] py-4">
+        <div className="border-b border-bone-3 px-[22px] py-4">
           <Label>WHAT EVERYONE SEES ON THE WALL</Label>
           <div className="border-2 border-ink px-3.5 py-3 font-display text-[22px] font-black uppercase leading-none text-ink">
             {b.band_name}
@@ -314,11 +314,11 @@ function StationDrawer({
         {stations.map((s) => {
           const on = b.people.filter((p) => p.station_id === s.id);
           return (
-            <div key={s.id} className="flex items-center gap-3.5 border-b border-[#E7E4D9] px-[22px] py-2.5">
-              <span className="w-[84px] shrink-0 font-mono text-[9.5px] font-bold tracking-[0.12em] text-[#55524A]">
+            <div key={s.id} className="flex items-center gap-3.5 border-b border-bone-3 px-[22px] py-2.5">
+              <span className="w-[84px] shrink-0 font-mono text-[9.5px] font-bold tracking-[0.12em] text-[color:var(--text-muted)]">
                 {s.label.toUpperCase()}
               </span>
-              <span className={cn("text-[13.5px]", on.length ? "font-bold text-ink" : "text-[#9A9689]")}>
+              <span className={cn("text-[13.5px]", on.length ? "font-bold text-ink" : "text-[color:var(--text-quiet)]")}>
                 {on.length ? on.map((p) => p.full_name).join(", ") : "Nobody"}
               </span>
             </div>
@@ -339,7 +339,7 @@ function StationDrawer({
     <>
       <Head time={range(start, start + slot)} sub={`${taken} OF ${stations.length} STATIONS TAKEN`} />
 
-      <div className="px-[22px] pb-1.5 pt-4 font-mono text-[9px] font-bold tracking-[0.16em] text-[#7C786C]">
+      <div className="px-[22px] pb-1.5 pt-4 font-mono text-[9px] font-bold tracking-[0.16em] text-[color:var(--text-tertiary)]">
         PICK A STATION
       </div>
       <div className="grid grid-cols-2 gap-1.5 px-[22px] pb-4">
@@ -353,17 +353,17 @@ function StationDrawer({
                 key={s.id}
                 className={cn(
                   "flex min-h-[50px] flex-col justify-center gap-0.5 bg-bone px-3 py-2",
-                  mine ? "border-[1.5px] border-ink" : "border border-[#E7E4D9]"
+                  mine ? "border-[1.5px] border-ink" : "border border-bone-3"
                 )}
               >
-                <span className="font-mono text-[9.5px] font-bold tracking-[0.12em] text-[#9A9689]">
+                <span className="font-mono text-[9.5px] font-bold tracking-[0.12em] text-[color:var(--text-quiet)]">
                   {s.label.toUpperCase()}
                 </span>
-                <span className={cn("truncate text-[12.5px] text-[#55524A]", mine && "font-bold text-ink")}>
+                <span className={cn("truncate text-[12.5px] text-[color:var(--text-muted)]", mine && "font-bold text-ink")}>
                   {mine ? "You" : namesOf(b)}
                   {/* Times are per booking, not per row, so a 60 says so. */}
                   {toMin(b.end_time) - toMin(b.start_time) > slot && (
-                    <span className="font-normal text-[#9A9689]"> · until {b.end_time}</span>
+                    <span className="font-normal text-[color:var(--text-quiet)]"> · until {b.end_time}</span>
                   )}
                 </span>
                 {(b.booked_by === userId || week.me.isStaff) && (
@@ -400,7 +400,7 @@ function StationDrawer({
               >
                 {s.label.toUpperCase()}
               </span>
-              <span className={cn("text-[12.5px]", on ? "font-bold text-white" : "text-[#3E7F2B]")}>
+              <span className={cn("text-[12.5px]", on ? "font-bold text-white" : "text-grass")}>
                 {on
                   ? group
                     ? `GROUP OF ${people}`
@@ -415,7 +415,7 @@ function StationDrawer({
       </div>
 
       {station && isGroupable && (
-        <div className="border-t border-[#E7E4D9] px-[22px] py-3.5">
+        <div className="border-t border-bone-3 px-[22px] py-3.5">
           <Toggle
             value={mode}
             onChange={setMode}
@@ -427,17 +427,17 @@ function StationDrawer({
           {group && (
             <div className="mt-3.5">
               <Label right={`${people} OF ${station.max_people} MICS`}>WHO&apos;S SINGING</Label>
-              <div className="flex justify-between border-b border-[#E7E4D9] py-[11px] text-[13.5px] text-ink">
+              <div className="flex justify-between border-b border-bone-3 py-[11px] text-[13.5px] text-ink">
                 <strong>You</strong>
-                <span className="font-mono text-[9px] font-bold text-[#7C786C]">YOU · BOOKING</span>
+                <span className="font-mono text-[9px] font-bold text-[color:var(--text-tertiary)]">YOU · BOOKING</span>
               </div>
               {singers.map((p) => (
-                <div key={p.id} className="flex justify-between border-b border-[#E7E4D9] py-[11px] text-[13.5px] text-ink">
+                <div key={p.id} className="flex justify-between border-b border-bone-3 py-[11px] text-[13.5px] text-ink">
                   {p.name}
                   <button
                     type="button"
                     onClick={() => setSingers((xs) => xs.filter((x) => x.id !== p.id))}
-                    className="font-mono text-[9px] font-bold text-[#7C786C]"
+                    className="font-mono text-[9px] font-bold text-[color:var(--text-tertiary)]"
                   >
                     REMOVE
                   </button>
@@ -458,7 +458,7 @@ function StationDrawer({
       )}
 
       {station && (
-        <div className="border-t border-[#E7E4D9] px-[22px] py-3.5">
+        <div className="border-t border-bone-3 px-[22px] py-3.5">
           <Label>HOW LONG</Label>
           <Toggle
             value={minutes}
@@ -469,7 +469,7 @@ function StationDrawer({
             ]}
           />
           {longer.note && (
-            <div className={cn("mt-2 text-[12.5px]", longer.ok ? "text-[#3E7F2B]" : "text-[#7C786C]")}>
+            <div className={cn("mt-2 text-[12.5px]", longer.ok ? "text-grass" : "text-[color:var(--text-tertiary)]")}>
               {longer.note}
             </div>
           )}
@@ -478,12 +478,12 @@ function StationDrawer({
 
       {/* The full-band option sits under the stations, greyed with the reason
           when anyone is already in the row (rule 8). */}
-      <div className="flex items-center justify-between gap-3 border-t border-[#E7E4D9] bg-[#FBFAF6] px-[22px] py-[13px]">
+      <div className="flex items-center justify-between gap-3 border-t border-bone-3 bg-[var(--surface-hover)] px-[22px] py-[13px]">
         <div>
-          <div className={cn("text-[13px] font-bold", row.people ? "text-[#9A9689]" : "text-ink")}>
+          <div className={cn("text-[13px] font-bold", row.people ? "text-[color:var(--text-quiet)]" : "text-ink")}>
             Book the whole room
           </div>
-          <div className="mt-0.5 font-mono text-[8.5px] font-bold tracking-[0.1em] text-[#9A9689]">
+          <div className="mt-0.5 font-mono text-[8.5px] font-bold tracking-[0.1em] text-[color:var(--text-quiet)]">
             {row.people ? practisingPhrase(row.people).toUpperCase() : "EVERY STATION · UP TO 60 MIN"}
           </div>
         </div>
@@ -656,7 +656,7 @@ function BandDrawer({
         <div className="font-display text-[32px] font-black uppercase leading-none text-white">Book the whole room</div>
       </div>
 
-      <div className="border-b border-[#E7E4D9] px-[22px] py-4">
+      <div className="border-b border-bone-3 px-[22px] py-4">
         <Label>WHAT EVERYONE SEES ON THE WALL</Label>
         <input
           value={name}
@@ -667,7 +667,7 @@ function BandDrawer({
         />
       </div>
 
-      <div className="border-b border-[#E7E4D9] px-[22px] py-4">
+      <div className="border-b border-bone-3 px-[22px] py-4">
         <Label>WHEN · UP TO {settings.max_minutes} MIN</Label>
         <div className="flex flex-col gap-[5px]">
           {rows.map((r) => {
@@ -676,11 +676,11 @@ function BandDrawer({
             const shut = closureCovering(week.closures, date, r.start, r.end);
             if (r.band) {
               return (
-                <div key={r.start} className="flex items-center gap-3 border border-[#E7E4D9] bg-[#FBFAF6] px-3.5 py-3">
-                  <span className="h-[15px] w-[15px] shrink-0 bg-[#C7C3B5]" />
-                  <span className="font-mono text-[11px] font-bold text-[#9A9689]">{range(r.start, r.end)}</span>
+                <div key={r.start} className="flex items-center gap-3 border border-bone-3 bg-[var(--surface-hover)] px-3.5 py-3">
+                  <span className="h-[15px] w-[15px] shrink-0 bg-rule-strong" />
+                  <span className="font-mono text-[11px] font-bold text-[color:var(--text-quiet)]">{range(r.start, r.end)}</span>
                   <span className="flex-1" />
-                  <span className="truncate font-mono text-[9px] font-bold tracking-[0.1em] text-[#9A9689]">
+                  <span className="truncate font-mono text-[9px] font-bold tracking-[0.1em] text-[color:var(--text-quiet)]">
                     {r.band.band_name?.toUpperCase()}
                   </span>
                 </div>
@@ -698,8 +698,8 @@ function BandDrawer({
                 className={cn(
                   PLAIN_BUTTON,
                   "flex items-start gap-3 px-3.5 py-3 text-left",
-                  on ? "border-2 border-ink" : "border border-[#E7E4D9]",
-                  (shut || r.people > 0 || gone) && !on && "bg-[#E7E4D9]"
+                  on ? "border-2 border-ink" : "border border-bone-3",
+                  (shut || r.people > 0 || gone) && !on && "bg-bone-3"
                 )}
               >
                 <span
@@ -713,7 +713,7 @@ function BandDrawer({
                     <span
                       className={cn(
                         "font-mono text-[11px] font-bold",
-                        shut || r.people > 0 || gone ? "text-[#9A9689]" : "text-ink"
+                        shut || r.people > 0 || gone ? "text-[color:var(--text-quiet)]" : "text-ink"
                       )}
                     >
                       {range(r.start, r.end)}
@@ -722,14 +722,14 @@ function BandDrawer({
                     <span
                       className={cn(
                         "font-mono text-[9px] font-bold tracking-[0.1em]",
-                        shut || gone ? "text-[#9A9689]" : r.people ? "text-[#8A6400]" : "text-[#3E7F2B]"
+                        shut || gone ? "text-[color:var(--text-quiet)]" : r.people ? "text-amber" : "text-grass"
                       )}
                     >
                       {shut ? shut.label.toUpperCase() : gone ? "GONE" : r.people ? `${r.people} PRACTISING` : "EMPTY"}
                     </span>
                   </div>
                   {r.people > 0 && !gone && (
-                    <div className="mt-[5px] text-[12px] leading-normal text-[#55524A]">
+                    <div className="mt-[5px] text-[12px] leading-normal text-[color:var(--text-muted)]">
                       {whoIsOn(r, stations)}{" "}
                       {week.me.isStaff
                         ? "You're an admin, so you can move them to make room."
@@ -744,7 +744,7 @@ function BandDrawer({
       </div>
 
       <div className="flex justify-between px-[22px] pb-1.5 pt-3.5">
-        <span className="font-mono text-[9px] font-bold tracking-[0.16em] text-[#7C786C]">WHO&apos;S ON WHAT</span>
+        <span className="font-mono text-[9px] font-bold tracking-[0.16em] text-[color:var(--text-tertiary)]">WHO&apos;S ON WHAT</span>
         <span className="font-mono text-[9px] font-bold tracking-[0.1em] text-ink">
           {everyone.length} {everyone.length === 1 ? "PERSON" : "PEOPLE"} · EACH GETS TOLD
         </span>
@@ -753,12 +753,12 @@ function BandDrawer({
         const on = lineup[s.id] ?? [];
         const full = on.length >= s.max_people;
         return (
-          <div key={s.id} className="flex min-h-[46px] items-center gap-3.5 border-b border-[#E7E4D9] px-[22px] py-2.5">
-            <span className="w-[84px] shrink-0 font-mono text-[9.5px] font-bold tracking-[0.12em] text-[#55524A]">
+          <div key={s.id} className="flex min-h-[46px] items-center gap-3.5 border-b border-bone-3 px-[22px] py-2.5">
+            <span className="w-[84px] shrink-0 font-mono text-[9.5px] font-bold tracking-[0.12em] text-[color:var(--text-muted)]">
               {s.label.toUpperCase()}
             </span>
             <span className="flex min-w-0 flex-1 flex-wrap gap-x-2 text-[13.5px]">
-              {on.length === 0 && <span className="text-[#9A9689]">Nobody — leave it empty</span>}
+              {on.length === 0 && <span className="text-[color:var(--text-quiet)]">Nobody — leave it empty</span>}
               {on.map((p) => (
                 <button
                   key={p.id}
@@ -775,7 +775,7 @@ function BandDrawer({
               <button
                 type="button"
                 onClick={() => setPickFor(s)}
-                className="font-mono text-[9px] font-bold tracking-[0.1em] text-[#7C786C]"
+                className="font-mono text-[9px] font-bold tracking-[0.1em] text-[color:var(--text-tertiary)]"
               >
                 {on.length && s.max_people <= 1 ? "CHANGE" : "+ ADD"}
               </button>
@@ -906,34 +906,34 @@ function MoveDrawer({
         </div>
       </div>
 
-      <div className="px-[22px] pb-1.5 pt-3.5 font-mono text-[9px] font-bold tracking-[0.16em] text-[#7C786C]">
+      <div className="px-[22px] pb-1.5 pt-3.5 font-mono text-[9px] font-bold tracking-[0.16em] text-[color:var(--text-tertiary)]">
         WHO LOSES WHAT
       </div>
       {plan === null && <p className="mono-label px-[22px] py-3">Working it out…</p>}
       {rows.map((r) => {
         const partial = r.kept !== null;
         return (
-          <div key={`${r.booking_id}:${r.user_id}`} className="flex justify-between gap-3.5 border-b border-[#E7E4D9] px-[22px] py-3">
+          <div key={`${r.booking_id}:${r.user_id}`} className="flex justify-between gap-3.5 border-b border-bone-3 px-[22px] py-3">
             <div>
               <div className="text-[14px] font-bold text-ink">{r.person_name}</div>
-              <div className="mt-[3px] font-mono text-[9px] tracking-[0.08em] text-[#7C786C]">
+              <div className="mt-[3px] font-mono text-[9px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
                 {r.station.toUpperCase()} · BOOKED {r.booked_start.slice(0, 5)} – {r.booked_end.slice(0, 5)}
               </div>
             </div>
-            <div className="text-right text-[12.5px] leading-normal text-[#45423B]">
+            <div className="text-right text-[12.5px] leading-normal text-[color:var(--text-secondary)]">
               Loses {partial ? r.lost_start.slice(0, 5) : "all of it"}
               <br />
               {partial ? (
-                <span className="text-[#3E7F2B]">Keeps {r.kept!.slice(0, 5)}</span>
+                <span className="text-grass">Keeps {r.kept!.slice(0, 5)}</span>
               ) : (
-                <span className="text-[#9A9689]">Keeps nothing that day</span>
+                <span className="text-[color:var(--text-quiet)]">Keeps nothing that day</span>
               )}
             </div>
           </div>
         );
       })}
 
-      <div className="border-b border-[#E7E4D9] px-[22px] py-4">
+      <div className="border-b border-bone-3 px-[22px] py-4">
         <Label>WHY · REQUIRED</Label>
         <input
           value={reason}
@@ -945,7 +945,7 @@ function MoveDrawer({
       </div>
 
       {preview && (
-        <div className="border-b border-[#E7E4D9] px-[22px] py-4">
+        <div className="border-b border-bone-3 px-[22px] py-4">
           <Label
             right={
               rows.length > 1 ? (
@@ -955,7 +955,7 @@ function MoveDrawer({
                       key={r.user_id}
                       type="button"
                       onClick={() => setPreviewFor(r.user_id)}
-                      className={cn(r.user_id === preview.user_id ? "text-ink underline" : "text-[#9A9689]")}
+                      className={cn(r.user_id === preview.user_id ? "text-ink underline" : "text-[color:var(--text-quiet)]")}
                     >
                       {firstName(r.person_name).toUpperCase()}
                     </button>
@@ -966,7 +966,7 @@ function MoveDrawer({
           >
             WHAT {firstName(preview.person_name).toUpperCase()} GETS
           </Label>
-          <div className="border-l-[3px] border-yellow py-0.5 pl-3.5 text-[13.5px] leading-relaxed text-[#2A2822]">
+          <div className="border-l-[3px] border-yellow py-0.5 pl-3.5 text-[13.5px] leading-relaxed text-[color:var(--text-strong)]">
             {preview.message}
           </div>
         </div>

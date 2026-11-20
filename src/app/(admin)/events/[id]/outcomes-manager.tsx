@@ -229,7 +229,7 @@ export function OutcomesManager({
                       type="button"
                       onClick={() => saveEdit(o.id)}
                       disabled={busy}
-                      className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
+                      className="px-3 py-1 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:bg-[color:var(--surface-4)]"
                     >
                       Save
                     </button>
@@ -363,7 +363,7 @@ export function OutcomesManager({
                 type="button"
                 onClick={addOutcome}
                 disabled={busy}
-                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:bg-[color:var(--surface-4)]"
               >
                 Save outcome
               </button>

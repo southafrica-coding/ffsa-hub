@@ -175,7 +175,7 @@ export default function ApplyForm({ isMember = false }: { isMember?: boolean }) 
                   type="checkbox"
                   checked={on}
                   onChange={(e) => setPicked((p) => ({ ...p, [s.id]: e.target.checked }))}
-                  className="h-4 w-4 shrink-0 accent-[#0A0A0A]"
+                  className="h-4 w-4 shrink-0 accent-ink"
                 />
                 <span className="min-w-0 font-display text-[20px] font-black uppercase leading-[1.1] text-ink">
                   {s.label}
@@ -190,7 +190,7 @@ export default function ApplyForm({ isMember = false }: { isMember?: boolean }) 
                     type="checkbox"
                     checked={!!before[s.id]}
                     onChange={(e) => setBefore((b) => ({ ...b, [s.id]: e.target.checked }))}
-                    className="h-3.5 w-3.5 shrink-0 accent-[#0A0A0A]"
+                    className="h-3.5 w-3.5 shrink-0 accent-ink"
                   />
                   <span className="font-mono text-[9px] font-bold uppercase tracking-[0.1em] text-[color:var(--text-secondary)]">
                     I have been evaluated for this before

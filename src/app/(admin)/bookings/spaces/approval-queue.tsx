@@ -89,7 +89,7 @@ export function ApprovalQueue({ initial }: { initial: ApprovalRow[] }) {
               type="button"
               onClick={() => approve(row)}
               disabled={busy === row.id}
-              className="shrink-0 border border-ink bg-ink px-2.5 py-1.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.12em] text-white hover:bg-[#262622] disabled:opacity-50"
+              className="shrink-0 border border-ink bg-ink px-2.5 py-1.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.12em] text-white hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
             >
               {busy === row.id ? "…" : "Approve"}
             </button>

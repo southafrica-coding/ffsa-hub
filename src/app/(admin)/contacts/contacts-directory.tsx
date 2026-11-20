@@ -93,7 +93,7 @@ function heardLabel(iso: string | null | undefined): { text: string; stale: bool
 const CONSENT: Record<string, { text: string; cls: string }> = {
   subscribed: { text: "YES", cls: "border-grass text-grass-text" },
   pending: { text: "NOT YET", cls: "border-amber-border text-amber" },
-  unsubscribed_all: { text: "NO", cls: "border-rule-strong text-[#7C786C]" },
+  unsubscribed_all: { text: "NO", cls: "border-rule-strong text-[color:var(--text-tertiary)]" },
   bounced: { text: "BOUNCING", cls: "border-destructive text-destructive" },
 };
 
@@ -216,7 +216,7 @@ export function ContactsDirectory({
             <span className="numeral text-[26px] leading-none">
               {(activeLabel ? activeLabel.count : activeCount).toLocaleString("en-ZA").replace(/,/g, " ")}
             </span>
-            <span className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-[#7C786C]">
+            <span className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-tertiary)]">
               Contacts
             </span>
           </div>
@@ -226,17 +226,17 @@ export function ContactsDirectory({
             (handoff/13 delta 1, session G). Until then there is one label group,
             not two, and saying so beats inventing a split the data can't back. */}
         <div className="px-[18px] pb-2.5 pt-3.5">
-          <div className="font-mono text-[8.5px] font-bold uppercase tracking-[0.18em] text-[#7C786C]">
+          <div className="font-mono text-[8.5px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-tertiary)]">
             What they are to us
           </div>
-          <div className="mt-[3px] font-mono text-[8px] uppercase tracking-[0.06em] text-[#9A9689]">
+          <div className="mt-[3px] font-mono text-[8px] uppercase tracking-[0.06em] text-[color:var(--text-quiet)]">
             Put on by hand
           </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {labels.length === 0 && (
-            <div className="px-[18px] py-2 text-[12.5px] text-[#7C786C]">No labels yet</div>
+            <div className="px-[18px] py-2 text-[12.5px] text-[color:var(--text-tertiary)]">No labels yet</div>
           )}
           {labels.map((l) => {
             const active = l.id === labelFilter;
@@ -255,9 +255,9 @@ export function ContactsDirectory({
                     style={{ background: colors.bg }}
                     aria-hidden
                   />
-                  <span className="truncate text-[12.5px] text-[#2A2822]">{l.name}</span>
+                  <span className="truncate text-[12.5px] text-[color:var(--text-strong)]">{l.name}</span>
                 </span>
-                <span className="numeral shrink-0 font-mono text-[9.5px] font-bold text-[#45423B]">
+                <span className="numeral shrink-0 font-mono text-[9.5px] font-bold text-[color:var(--text-secondary)]">
                   {l.count}
                 </span>
               </button>
@@ -274,7 +274,7 @@ export function ContactsDirectory({
           </Link>
           <Link
             href="/contacts/labels"
-            className="px-1 py-1 text-center font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-[#7C786C] hover:text-ink"
+            className="px-1 py-1 text-center font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-tertiary)] hover:text-ink"
           >
             Manage labels
           </Link>
@@ -295,7 +295,7 @@ export function ContactsDirectory({
               aria-label="Search contacts by name, any email, or any phone"
               className="min-w-0 flex-1 border-0 bg-transparent p-0 font-display text-[20px] font-black leading-none text-ink outline-none placeholder:text-[#C7C3B5] md:text-[24px]"
             />
-            <span className="hidden shrink-0 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-[#7C786C] lg:inline">
+            <span className="hidden shrink-0 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-tertiary)] lg:inline">
               Name · Any email · Any phone
             </span>
           </div>
@@ -306,7 +306,7 @@ export function ContactsDirectory({
                 {totalCount === 1 ? "1 person" : `${totalCount.toLocaleString("en-ZA")} people`}
               </span>
               {matchNote && (
-                <span className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-[#7C786C]">
+                <span className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-[color:var(--text-tertiary)]">
                   {matchNote.isPrimary
                     ? `Matched on her ${matchNote.kind}`
                     : `Matched on ${matchNote.kind === "phone" ? "an old phone" : "an old address"} she no longer uses`}
@@ -331,7 +331,7 @@ export function ContactsDirectory({
                   Matched · {matchNote.kind} {matchNote.position}
                 </span>
               </div>
-              <div className="mt-[3px] font-mono text-[9.5px] tracking-[0.06em] text-[#55524A]">
+              <div className="mt-[3px] font-mono text-[9.5px] tracking-[0.06em] text-[color:var(--text-muted)]">
                 {matchNote.reach}
               </div>
             </div>
@@ -351,7 +351,7 @@ export function ContactsDirectory({
             <span className="font-mono text-[9.5px] font-bold uppercase tracking-[0.14em] text-ink">
               {activeLabel ? activeLabel.name : "Everyone"}, {SORT_LABELS[sort].toLowerCase()} first
             </span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-[#7C786C]">
+            <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-[color:var(--text-tertiary)]">
               {totalCount.toLocaleString("en-ZA").replace(/,/g, " ")} people
             </span>
             {STATUSES.map((s) => (
@@ -360,7 +360,7 @@ export function ContactsDirectory({
                 type="button"
                 onClick={() => setParam("status", s)}
                 data-active={statusFilter === s ? "true" : undefined}
-                className="font-mono text-[9px] font-bold uppercase tracking-[0.1em] text-[#9A9689] data-[active=true]:text-ink data-[active=true]:underline data-[active=true]:underline-offset-4"
+                className="font-mono text-[9px] font-bold uppercase tracking-[0.1em] text-[color:var(--text-quiet)] data-[active=true]:text-ink data-[active=true]:underline data-[active=true]:underline-offset-4"
               >
                 {s}
               </button>
@@ -371,7 +371,7 @@ export function ContactsDirectory({
               value={sort}
               onChange={(e) => setParam("sort", e.target.value === "newest" ? null : e.target.value)}
               aria-label="Sort contacts"
-              className="h-[31px] border border-rule-strong bg-transparent px-3 font-mono text-[9px] font-bold uppercase tracking-[0.1em] text-[#45423B]"
+              className="h-[31px] border border-rule-strong bg-transparent px-3 font-mono text-[9px] font-bold uppercase tracking-[0.1em] text-[color:var(--text-secondary)]"
             >
               {(Object.keys(SORT_LABELS) as ContactSort[]).map((k) => (
                 <option key={k} value={k}>
@@ -428,7 +428,7 @@ export function ContactsDirectory({
             </div>
 
             {contacts.length === 0 && (
-              <div className="border-b border-rule px-5 py-10 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-[#7C786C] md:px-7">
+              <div className="border-b border-rule px-5 py-10 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-tertiary)] md:px-7">
                 {searchQuery ? "Nobody matches that" : "No contacts yet"}
               </div>
             )}
@@ -455,7 +455,7 @@ export function ContactsDirectory({
                 <div
                   key={c.id}
                   data-selected={selected.has(c.id) ? "true" : undefined}
-                  className="grid grid-cols-[34px_1fr_210px_168px_128px_108px] items-center border-b border-rule px-5 py-[11px] hover:bg-[#FBFAF6] data-[selected=true]:bg-bone md:px-7"
+                  className="grid grid-cols-[34px_1fr_210px_168px_128px_108px] items-center border-b border-rule px-5 py-[11px] hover:bg-[var(--surface-hover)] data-[selected=true]:bg-bone md:px-7"
                 >
                   <span>
                     <input
@@ -478,16 +478,16 @@ export function ContactsDirectory({
                     >
                       {name}
                     </button>
-                    <div className="mt-[2px] truncate font-mono text-[9px] tracking-[0.04em] text-[#7C786C]">
+                    <div className="mt-[2px] truncate font-mono text-[9px] tracking-[0.04em] text-[color:var(--text-tertiary)]">
                       {reach}
                     </div>
                   </div>
 
                   <div className="min-w-0 pr-3">
-                    <div className="truncate text-[12px] text-[#45423B]">
+                    <div className="truncate text-[12px] text-[color:var(--text-secondary)]">
                       {c.source ?? "—"}
                     </div>
-                    <div className="mt-[2px] font-mono text-[8.5px] uppercase tracking-[0.06em] text-[#9A9689]">
+                    <div className="mt-[2px] font-mono text-[8.5px] uppercase tracking-[0.06em] text-[color:var(--text-quiet)]">
                       {c.created_at
                         ? new Date(c.created_at).toLocaleDateString("en-ZA", {
                             day: "numeric",
@@ -504,7 +504,7 @@ export function ContactsDirectory({
                       return (
                         <span
                           key={l.id}
-                          className="flex items-center gap-[5px] whitespace-nowrap border border-rule px-1.5 py-[3px] text-[10.5px] text-[#45423B]"
+                          className="flex items-center gap-[5px] whitespace-nowrap border border-rule px-1.5 py-[3px] text-[10.5px] text-[color:var(--text-secondary)]"
                         >
                           <span
                             className="h-[7px] w-[7px] shrink-0"
@@ -516,7 +516,7 @@ export function ContactsDirectory({
                       );
                     })}
                     {rowLabels.length > 2 && (
-                      <span className="font-mono text-[9px] text-[#9A9689]">
+                      <span className="font-mono text-[9px] text-[color:var(--text-quiet)]">
                         +{rowLabels.length - 2}
                       </span>
                     )}
@@ -533,7 +533,7 @@ export function ContactsDirectory({
                   <div className="text-right">
                     <span
                       className={`numeral font-mono text-[9.5px] font-bold tracking-[0.04em] ${
-                        heard.stale ? "text-[#9A9689]" : "text-[#45423B]"
+                        heard.stale ? "text-[color:var(--text-quiet)]" : "text-[color:var(--text-secondary)]"
                       }`}
                     >
                       {heard.text}
@@ -547,8 +547,8 @@ export function ContactsDirectory({
 
         {/* ── footer ── */}
         {totalCount > 0 && (
-          <div className="flex items-center justify-between gap-4 border-t border-rule bg-[#FBFAF6] px-5 py-4 md:px-7">
-            <span className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-[#7C786C]">
+          <div className="flex items-center justify-between gap-4 border-t border-rule bg-[var(--surface-hover)] px-5 py-4 md:px-7">
+            <span className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-tertiary)]">
               Showing {shown.toLocaleString("en-ZA").replace(/,/g, " ")} of{" "}
               {totalCount.toLocaleString("en-ZA").replace(/,/g, " ")}
             </span>

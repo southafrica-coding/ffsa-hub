@@ -66,7 +66,8 @@ function Rail({
   initials: string;
 }) {
   return (
-    <div className="hidden md:flex w-[74px] shrink-0 flex-col items-center bg-ink py-[18px] gap-1.5">
+    // theme-light: the rail is black in both modes.
+    <div className="theme-light hidden md:flex w-[74px] shrink-0 flex-col items-center bg-ink py-[18px] gap-1.5">
       <OrgSwitcherMount compact />
       <Link href="/dashboard" className="mb-3.5 block">
         <Image src="/brand/ff-mark-white.png" alt="Fire & Fragrance" width={34} height={34}
@@ -141,7 +142,7 @@ function ModulePanel({
 
       {menuLoadFailed && onRefresh && (
         <div className="mx-2.5 mt-2.5 border border-amber-border bg-yellow-dim px-3 py-2.5">
-          <p className="text-xs leading-snug text-[#45423B]">
+          <p className="text-xs leading-snug text-[color:var(--text-secondary)]">
             We couldn&apos;t load your menu just now — usually a momentary hiccup, not a change to your access.
           </p>
           <button onClick={onRefresh} className="mono-label mt-2 inline-flex items-center gap-1.5 !text-ink">
@@ -166,7 +167,7 @@ function ModulePanel({
               data-active={active ? "" : undefined}
               className={cn(
                 "flex items-center gap-2.5 px-2.5 py-2 text-[13px] font-semibold transition-colors",
-                active ? "bg-ink text-white" : "text-[#2A2822] hover:bg-bone-3"
+                active ? "bg-ink text-white" : "text-[color:var(--text-strong)] hover:bg-bone-3"
               )}
             >
               <mod.icon className="h-[15px] w-[15px] shrink-0" />
@@ -178,7 +179,7 @@ function ModulePanel({
 
       {area === "personal" && (
         <Link href="/account/security" onClick={onNavClick}
-              className="flex items-center gap-2.5 border-t border-ink px-[18px] py-3 text-[13px] font-semibold text-[#2A2822] hover:bg-bone-3">
+              className="flex items-center gap-2.5 border-t border-ink px-[18px] py-3 text-[13px] font-semibold text-[color:var(--text-strong)] hover:bg-bone-3">
           <KeyRound className="h-[15px] w-[15px]" /> Change password
         </Link>
       )}
@@ -188,14 +189,14 @@ function ModulePanel({
           <Link
             href="/profile"
             onClick={onNavClick}
-            className="flex items-center gap-2.5 px-[18px] py-3 text-[13px] font-semibold text-[#2A2822] hover:bg-bone-3"
+            className="flex items-center gap-2.5 px-[18px] py-3 text-[13px] font-semibold text-[color:var(--text-strong)] hover:bg-bone-3"
           >
             <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center bg-ink font-display text-[11px] font-black text-white">
               {initials || "\u00B7"}
             </span>
             My profile
           </Link>
-          <SignOutForm className="flex w-full items-center gap-2.5 border-t border-rule px-[18px] py-3.5 text-[13px] font-semibold text-[#2A2822] hover:bg-bone-3">
+          <SignOutForm className="flex w-full items-center gap-2.5 border-t border-rule px-[18px] py-3.5 text-[13px] font-semibold text-[color:var(--text-strong)] hover:bg-bone-3">
             <LogOut className="h-[15px] w-[15px]" /> Sign out
           </SignOutForm>
         </div>
@@ -252,7 +253,7 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
       </div>
 
       {/* ── Mobile: black top bar + drawer ── */}
-      <div className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between bg-ink px-4 md:hidden">
+      <div className="theme-light fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between bg-ink px-4 md:hidden">
         <span className="flex min-w-0 items-center gap-2">
           <OrgSwitcherMount compact />
           <Image src="/brand/ff-wordmark-white.png" alt="Fire & Fragrance" width={120} height={14}

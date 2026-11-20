@@ -164,7 +164,7 @@ export function CanvasBlock({
         </span>
         {actions}
       </div>
-      <div className="ff-email-content" dangerouslySetInnerHTML={{ __html: html }} />
+      <div className="ff-email-content theme-light" dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );
 }

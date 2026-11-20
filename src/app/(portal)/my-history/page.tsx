@@ -150,7 +150,7 @@ function RecordRow({
   return (
     <li className="border-b border-rule">
       <details className="group">
-        <summary className="flex min-h-[48px] cursor-pointer items-center justify-between gap-4 px-5 py-3.5 hover:bg-[#F7F5EE] md:px-8">
+        <summary className="flex min-h-[48px] cursor-pointer items-center justify-between gap-4 px-5 py-3.5 hover:bg-[var(--surface-hover)] md:px-8">
           <div className="min-w-0 flex-1">
             <div className="truncate text-[15px] font-bold text-ink">{title}</div>
             {subtitle && <div className="mono-label mt-1 truncate">{subtitle}</div>}

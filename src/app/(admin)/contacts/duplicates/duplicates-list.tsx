@@ -180,7 +180,7 @@ function ClusterCard({
                     }}
                   >
                     {selected && (
-                      <Check className="h-3 w-3" style={{ color: "#0A0A0A" }} />
+                      <Check className="h-3 w-3" style={{ color: "var(--text-primary)" }} />
                     )}
                   </span>
                   <span className="text-sm font-medium truncate">
@@ -190,7 +190,7 @@ function ClusterCard({
                 {selected ? (
                   <span
                     className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 "
-                    style={{ background: GOLD, color: "#0A0A0A" }}
+                    style={{ background: GOLD, color: "var(--text-primary)" }}
                   >
                     Keep
                   </span>
