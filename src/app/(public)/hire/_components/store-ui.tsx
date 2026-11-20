@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils/cn";
 import { dayLabel } from "@/lib/equipment/dates";
 import { randsShort } from "@/lib/equipment/money";
 import { itemTitle, withDates, type StoreItem } from "@/lib/equipment/storefront";
+import { Photo } from "./photo";
+
+export { Photo };
 
 type Range = { from: string; to: string };
 
@@ -117,21 +120,6 @@ const toneClass = {
   some: "text-[color:var(--hire-accent)]",
   none: "text-[color:var(--hire-ink)]",
 };
-
-export function Photo({ src, alt, className }: { src: string | null; alt: string; className?: string }) {
-  return (
-    <div className={cn("relative overflow-hidden bg-[color:var(--hire-surface2)]", className)}>
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={alt} className="h-full w-full object-cover" loading="lazy" />
-      ) : (
-        <span className="absolute inset-0 flex items-center justify-center text-[11px] uppercase tracking-[0.14em] text-[color:var(--hire-dim)]">
-          No photo yet
-        </span>
-      )}
-    </div>
-  );
-}
 
 /**
  * One product: a card in a grid on desktop (46a), a two-column row on a

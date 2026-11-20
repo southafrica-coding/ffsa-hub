@@ -55,7 +55,7 @@ export default async function ListingEditorPage({ params }: { params: Promise<{ 
       <header className="border-b border-[color:var(--hire-line)] px-[18px] pb-3 pt-3 md:px-9 md:pb-5 md:pt-6">
         <Link
           href={`/bookings/equipment/gear?open=${product.id}`}
-          className="mb-2 inline-flex min-h-[44px] items-center gap-1.5 text-[13px] text-[color:var(--hire-muted)] hover:text-[color:var(--hire-ink)] md:min-h-0"
+          className="mb-2 inline-flex min-h-[44px] items-center gap-1.5 text-[13px] !text-[color:var(--hire-muted)] hover:!text-[color:var(--hire-ink)] md:min-h-0"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Register
         </Link>

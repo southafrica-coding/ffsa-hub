@@ -318,7 +318,7 @@ export function ListingEditor({
               {product.is_listed ? (
                 <>
                   On the store.{" "}
-                  <Link href={`/hire/p/${product.slug}`} className="text-[color:var(--hire-accent)] underline underline-offset-4">
+                  <Link href={`/hire/p/${product.slug}`} className="!text-[color:var(--hire-accent)] underline underline-offset-4">
                     See it
                   </Link>
                 </>

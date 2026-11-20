@@ -22,6 +22,7 @@ export type EquipmentLiveStatus = EquipmentUnitStatus | "reserved" | "out";
 
 export type EquipmentOrderStatus =
   | "quote"
+  | "awaiting_payment"
   | "requested"
   | "confirmed"
   | "prepping"
@@ -180,6 +181,11 @@ export type EquipmentOrder = {
   approved_at: string | null;
   decline_reason: string | null;
   access_token: string;
+  /** Unpaid orders hold stock only until this time (migration 380). */
+  hold_expires_at: string | null;
+  customer_id_number: string | null;
+  /** What it's for, e.g. "Missio youth night". */
+  purpose: string | null;
   notes: string | null;
   created_by: string | null;
   created_at: string;
@@ -751,4 +757,175 @@ export async function getTagProduct(
     .maybeSingle();
   const p = Array.isArray(data?.product) ? data.product[0] : data?.product;
   return p ?? null;
+}
+
+// ── Orders (stage M) ───────────────────────────────────────
+
+export type EquipmentOrderFull = EquipmentOrder & {
+  lines: (EquipmentOrderLine & {
+    product: Pick<EquipmentProduct, "id" | "name" | "brand" | "model" | "slug" | "price_day_cents"> | null;
+  })[];
+  payments: EquipmentPayment[];
+  units: (EquipmentOrderUnit & { unit: Pick<EquipmentUnit, "id" | "tag" | "product_id"> | null })[];
+  ministry: { id: string; name: string } | null;
+};
+
+const ORDER_EMBED =
+  "*,lines:equipment_order_lines(*,product:equipment_products(id,name,brand,model,slug,price_day_cents))," +
+  "payments:equipment_payments(*),units:equipment_order_units(*,unit:equipment_units(id,tag,product_id))," +
+  "ministry:ministries(id,name)";
+
+export async function getOrderById(supabase: Client, id: string) {
+  return supabase.from("equipment_orders").select(ORDER_EMBED).eq("id", id).maybeSingle();
+}
+
+/** For /hire/o/[token] — call with the service-role client; the token is the key. */
+export async function getOrderByToken(admin: Client, token: string) {
+  return admin.from("equipment_orders").select(ORDER_EMBED).eq("access_token", token).maybeSingle();
+}
+
+export async function listOrders(supabase: Client, opts?: { statuses?: string[]; limit?: number }) {
+  let query = supabase
+    .from("equipment_orders")
+    .select(
+      "id,number,kind,status,customer_name,customer_org,starts_on,ends_on,total_cents,deposit_cents,purpose,created_at,hold_expires_at,ministry:ministries(id,name),lines:equipment_order_lines(quantity)"
+    )
+    .order("starts_on", { ascending: true })
+    .limit(opts?.limit ?? 200);
+  if (opts?.statuses?.length) query = query.in("status", opts.statuses);
+  return query;
+}
+
+export async function updateOrder(supabase: Client, id: string, data: Partial<EquipmentOrder>) {
+  return supabase
+    .from("equipment_orders")
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+}
+
+/** Move an order on only if it's still in the status we expect (replays are no-ops). */
+export async function moveOrderIfStatus(
+  supabase: Client,
+  id: string,
+  from: EquipmentOrderStatus[],
+  data: Partial<EquipmentOrder>
+) {
+  return supabase
+    .from("equipment_orders")
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .in("status", from)
+    .select()
+    .maybeSingle();
+}
+
+/** pending → paid for every pending payment on an order; returns the rows it flipped. */
+export async function markOrderPaymentsPaid(admin: Client, orderId: string, providerPaymentId: string | null) {
+  const now = new Date().toISOString();
+  return admin
+    .from("equipment_payments")
+    .update({ status: "paid", paid_at: now, provider_payment_id: providerPaymentId, updated_at: now })
+    .eq("order_id", orderId)
+    .eq("status", "pending")
+    .in("kind", ["hire", "deposit"])
+    .select();
+}
+
+export async function markOrderPaymentsStatus(admin: Client, orderId: string, status: "cancelled" | "failed") {
+  return admin
+    .from("equipment_payments")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("order_id", orderId)
+    .eq("status", "pending")
+    .select();
+}
+
+export async function updatePayment(admin: Client, id: string, data: Partial<EquipmentPayment>) {
+  return admin
+    .from("equipment_payments")
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq("id", id);
+}
+
+export async function insertEquipmentEvent(
+  admin: Client,
+  data: Pick<EquipmentEvent, "kind"> & Partial<Pick<EquipmentEvent, "unit_id" | "order_id" | "detail" | "actor_id">>
+) {
+  return admin.from("equipment_events").insert(data);
+}
+
+export async function listOrderEvents(supabase: Client, orderId: string) {
+  return supabase
+    .from("equipment_events")
+    .select("*")
+    .eq("order_id", orderId)
+    .is("unit_id", null)
+    .order("at", { ascending: false });
+}
+
+export async function listActiveMinistries(supabase: Client) {
+  return supabase.from("ministries").select("id,name").eq("is_active", true).order("sort_order").order("name");
+}
+
+/**
+ * Everyone who should hear about a ministry request or a problem: holders of
+ * equipment.manage (direct or via a role). Nobody else — an earlier fallback
+ * to every super admin sent a test request to five people. If nobody holds
+ * it, this returns [] and the caller logs it; the request still shows on
+ * the Orders page. Admin client.
+ */
+export async function getEquipmentManagerEmails(admin: Client): Promise<string[]> {
+  const userIds = new Set<string>();
+  const { data: perms } = await admin.from("permissions").select("id").eq("key", "equipment.manage");
+  const permIds = (perms ?? []).map((p: { id: string }) => p.id);
+  if (permIds.length) {
+    const { data: direct } = await admin.from("user_permissions").select("user_id").in("permission_id", permIds);
+    for (const r of direct ?? []) userIds.add(r.user_id as string);
+    const { data: rolePerms } = await admin.from("role_permissions").select("role_id").in("permission_id", permIds);
+    const roleIds = [...new Set((rolePerms ?? []).map((r: { role_id: string }) => r.role_id))];
+    if (roleIds.length) {
+      const { data: holders } = await admin.from("user_roles").select("user_id").in("role_id", roleIds);
+      for (const r of holders ?? []) userIds.add(r.user_id as string);
+    }
+  }
+  if (userIds.size === 0) return [];
+  const { data: users } = await admin.from("users").select("email").in("id", [...userIds]).eq("is_active", true);
+  return [...new Set((users ?? []).map((u: { email: string | null }) => u.email?.trim()).filter(Boolean) as string[])];
+}
+
+/**
+ * equipment_place_order (migration 380): lock, re-check and insert the whole
+ * order in one transaction. Service-role client only.
+ */
+export async function placeOrder(
+  admin: Client,
+  order: Record<string, unknown>,
+  lines: Record<string, unknown>[],
+  payments: Record<string, unknown>[]
+): Promise<{ data: { id: string; number: string; access_token: string } | null; error: { message: string } | null }> {
+  const { data, error } = await admin.rpc("equipment_place_order", {
+    p_order: order,
+    p_lines: lines,
+    p_payments: payments,
+  });
+  const row = Array.isArray(data) ? data[0] : data;
+  return { data: row ?? null, error };
+}
+
+export async function getProductsByIds(supabase: Client, ids: string[]) {
+  if (ids.length === 0) return { data: [] as EquipmentProduct[], error: null };
+  return supabase.from("equipment_products").select("*").in("id", ids);
+}
+
+/** A signed-in customer's own orders (RLS: customer_user_id = auth.uid()). */
+export async function listMyOrders(supabase: Client, userId: string) {
+  return supabase
+    .from("equipment_orders")
+    .select("id,number,kind,status,starts_on,ends_on,purpose,access_token,total_cents")
+    .eq("customer_user_id", userId)
+    .neq("status", "quote")
+    .order("starts_on", { ascending: false })
+    .limit(50);
 }
