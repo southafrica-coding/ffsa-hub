@@ -217,8 +217,41 @@
     },
     {
       "id": "workshop",
-      "title": "From the workshop report",
-      "instructions": "Copy what the mechanic’s report says for each point, and attach the report.",
+      "title": "The workshop’s 25-point check",
+      "instructions": "Copy the workshop’s 25-point check line by line: mark each point and type what the report says next to it. Attach the report at the end.",
+      "photos": false,
+      "items": [
+        "m25-oil",
+        "m25-trans",
+        "m25-ps",
+        "m25-windows",
+        "m25-brakes",
+        "m25-batt",
+        "m25-brakehyd",
+        "m25-belts",
+        "m25-clutchhyd",
+        "m25-plugs",
+        "m25-handbrake",
+        "m25-exhaust",
+        "m25-filters",
+        "m25-driveshaft",
+        "m25-shocks",
+        "m25-axle",
+        "m25-balljoints",
+        "m25-tyres",
+        "m25-signals",
+        "m25-radiator",
+        "m25-clutch",
+        "m25-aircon",
+        "m25-wipers",
+        "m25-restraint",
+        "m25-headlights"
+      ]
+    },
+    {
+      "id": "workshop-more",
+      "title": "If the workshop checked them",
+      "instructions": "Points the 25-point check doesn’t cover. Fill in only what the workshop checked; leave the rest.",
       "photos": false,
       "items": [
         "eng-atf",
@@ -4914,6 +4947,631 @@
         "markOk": "Correct.",
         "markMonitor": "Low: regas.",
         "markFixNow": "Empty or leaking.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-oil",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Engine oil",
+      "hint": "Line 1 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Oil keeps the engine’s moving parts from grinding together. Low or old oil wears the engine out fast.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "On the mark.",
+        "markMonitor": "A little low, or due for a change soon.",
+        "markFixNow": "Low, dirty or leaking.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-trans",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Transmission oil",
+      "hint": "Line 2 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "The gearbox needs its own oil to change gears smoothly.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "On the mark.",
+        "markMonitor": "A little low, or due for a change soon.",
+        "markFixNow": "Low, burnt or leaking.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-ps",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Power steering oil",
+      "hint": "Line 3 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Power steering oil makes the steering light. Low oil makes it heavy and can damage the pump.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "On the mark.",
+        "markMonitor": "Just below the mark: top up.",
+        "markFixNow": "Below the minimum, or leaking.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-windows",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Windows and switches",
+      "hint": "Line 4 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Windows and switches that work are part of a safe, usable vehicle.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "All working.",
+        "markMonitor": "Slow or sticky.",
+        "markFixNow": "Not working.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-brakes",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Condition of brakes",
+      "hint": "Line 5 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "The brakes stop the vehicle. Note the pad thickness front and rear if the report gives it.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Pads and discs fine (e.g. front 6 mm, rear 6 mm).",
+        "markMonitor": "Wearing: replace at the next service.",
+        "markFixNow": "Worn out, or the workshop says replace now.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-batt",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Battery",
+      "hint": "Line 6 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "A weak battery leaves the vehicle unable to start. Note the voltage if the report gives it.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Charging well (around 12.6 to 14.4 V).",
+        "markMonitor": "Weak, or getting old.",
+        "markFixNow": "Not holding charge, or needs replacing.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-brakehyd",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Brake hydraulic system",
+      "hint": "Line 7 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Brake fluid carries the push from the pedal to the brakes. A leak can make the brakes fail.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "No visible leaks.",
+        "markMonitor": "Fluid due for a change.",
+        "markFixNow": "Leaking, or the pedal goes soft.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-belts",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Drive belts adjustment",
+      "hint": "Line 8 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "The drive belts run the alternator, aircon and pumps. A loose or cracked belt can snap.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Good working condition.",
+        "markMonitor": "Worn or a little loose.",
+        "markFixNow": "Cracked, slipping or about to break.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-clutchhyd",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Clutch hydraulic and adjustment",
+      "hint": "Line 9 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "On a manual vehicle, the clutch hydraulics let you change gear. Mark N/A on an automatic.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Working properly.",
+        "markMonitor": "Needs adjusting soon.",
+        "markFixNow": "Leaking or slipping.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-plugs",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Spark plugs and wires",
+      "hint": "Line 10 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Petrol engines need good spark plugs to run smoothly. Mark N/A on a diesel.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Fine.",
+        "markMonitor": "Due for replacement soon.",
+        "markFixNow": "Worn or misfiring.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-handbrake",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Emergency brake (handbrake)",
+      "hint": "Line 11 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "The handbrake holds the vehicle when parked, and is the backup if the brakes fail.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Holds the vehicle.",
+        "markMonitor": "Needs adjusting.",
+        "markFixNow": "Doesn’t hold.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-exhaust",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Exhaust system",
+      "hint": "Line 12 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Exhaust leaks are noisy and can let fumes into the cabin.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "No visible leaks.",
+        "markMonitor": "Rust or a loose mounting.",
+        "markFixNow": "Leaking or hanging loose.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-filters",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Air and fuel filters",
+      "hint": "Line 13 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Clean filters keep dirt out of the engine and fuel system.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Good condition.",
+        "markMonitor": "Dirty: replace at the next service.",
+        "markFixNow": "Blocked: replace now.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-driveshaft",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Drive shaft and boots",
+      "hint": "Line 14 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "The drive shaft turns the wheels. Split boots let grease out and dirt in, which ruins the joints.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Fine, or N/A.",
+        "markMonitor": "Boot starting to crack.",
+        "markFixNow": "Boot split, or the joint clicks.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-shocks",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Struts and shocks",
+      "hint": "Line 15 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Shocks keep the tyres on the road. Worn shocks make the vehicle bounce and take longer to stop.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "No visible leaks.",
+        "markMonitor": "Getting soft.",
+        "markFixNow": "Leaking or worn out.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-axle",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Axle lubes",
+      "hint": "Line 16 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "The axles and diff need oil to stop the gears wearing.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "On the mark.",
+        "markMonitor": "A little low.",
+        "markFixNow": "Low or leaking.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-balljoints",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Ball joints and control arms",
+      "hint": "Line 17 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "These hold the wheels in place. Worn joints make the steering loose and can let a wheel fold under.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Good working condition.",
+        "markMonitor": "Slight play: watch it.",
+        "markFixNow": "Loose or worn: fix before driving far.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-tyres",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Tyre wear: front and back",
+      "hint": "Line 18 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Tyres are the only part touching the road. Note the tread depth front and rear if the report gives it.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Enough tread (e.g. front 4 mm, rear 4 mm), wearing evenly.",
+        "markMonitor": "Under 3 mm, or wearing unevenly.",
+        "markFixNow": "Under 1.6 mm (the legal limit), or damaged.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-signals",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Signal lights and globes",
+      "hint": "Line 19 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Indicators, brake lights and park lights let other drivers know what you’re doing.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "All working.",
+        "markMonitor": "A globe flickering.",
+        "markFixNow": "A light not working.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-radiator",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Radiator and coolant hoses",
+      "hint": "Line 20 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "The radiator and hoses stop the engine overheating.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "No visible leaks.",
+        "markMonitor": "Hoses getting hard or cracked.",
+        "markFixNow": "Leaking.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-clutch",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Clutch",
+      "hint": "Line 21 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "On a manual vehicle, a worn clutch slips and eventually stops the vehicle moving. Mark N/A on an automatic.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Fine.",
+        "markMonitor": "Starting to wear.",
+        "markFixNow": "Slipping.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-aircon",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Heater and aircon working",
+      "hint": "Line 22 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "A working heater and aircon keep the windscreen clear and the passengers comfortable.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Good working condition.",
+        "markMonitor": "Weak.",
+        "markFixNow": "Not working.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-wipers",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Wiper blades and horn",
+      "hint": "Line 23 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "You need to see in the rain and be heard in an emergency.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Blades clean the screen, horn works.",
+        "markMonitor": "Blades starting to smear.",
+        "markFixNow": "Blades worn, or the horn doesn’t work.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-restraint",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Restraint system",
+      "hint": "Line 24 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Seat belts and airbags protect everyone in a crash.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Good working condition.",
+        "markMonitor": "A belt slow to retract.",
+        "markFixNow": "A belt doesn’t lock, or an airbag light is on.",
+        "looksLike": "",
+        "whatGoesWrong": []
+      }
+    },
+    {
+      "id": "m25-headlights",
+      "section": "m25",
+      "sectionName": "Workshop 25-point check",
+      "text": "Headlights",
+      "hint": "Line 25 of the 25-point check",
+      "checks": [
+        "workshop"
+      ],
+      "measure": null,
+      "routeStage": "workshop",
+      "suggestMonthly": false,
+      "help": {
+        "why": "Headlights let you see and be seen at night.",
+        "safetyFirst": "",
+        "howToCheck": [
+          "Workshop check: copy what the 25-point check says on this line into the note, and mark it: Checked is OK, Attention needed is Monitor or Fix now."
+        ],
+        "markOk": "Good working condition.",
+        "markMonitor": "Aimed badly, or dim.",
+        "markFixNow": "Not working.",
         "looksLike": "",
         "whatGoesWrong": []
       }

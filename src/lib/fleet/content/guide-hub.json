@@ -190,7 +190,7 @@
             "Post-trip check ({post} points): when it comes back. New damage, km, fuel, cleanliness and anything the driver reports.",
             "Weekly check ({weekly} points): everything you can check by looking, listening and driving, on the vehicle’s inspection day.",
             "Monthly check ({monthly} points): the weekly points plus the slower once-a-month points. It replaces the weekly check on the vehicle’s first inspection day of the month.",
-            "Workshop report ({workshop} points): what only a mechanic can check. Copy the mechanic’s report into it and attach the report.",
+            "Workshop report ({workshop} points): what only a mechanic can check. It starts with the workshop’s 25-point check, in the same order and wording as Motech’s sheet: for each line, tap OK if it’s ticked as Checked, Monitor or Fix now if it’s ticked as Attention needed (N/A if it doesn’t apply, like spark plugs on a diesel), and type the sheet’s note in the box next to it. Mark the rest OK does the lines that are fine in one tap. Then fill in any points under “If the workshop checked them”, put anything else on the report (like “see diagnostic”) in What the workshop recommends, and attach the report.",
             "Mark each point OK, Monitor (keep an eye on it, book it soon) or Fix now (fix before the vehicle is used again). For Monitor and Fix now, write what you saw and add a photo.",
             "A half-done inspection is saved as a draft as you go, until you save or discard it. Continue it from the vehicle’s page."
           ]
@@ -333,6 +333,10 @@
     [
       "2026-11-19",
       "Move on the Calendar now tells the person who booked: they get a Slack message and an email saying their vehicle has been changed from the old one to the new one, with their booking details and a link. The booking’s Slack request message shows the new vehicle too."
+    ],
+    [
+      "2026-11-20",
+      "The Workshop report now starts with the workshop’s 25-point check, line for line like Motech’s sheet, with a note box and Add photo next to each point. The other mechanic points follow under “If the workshop checked them”. Fixed: on a phone, the Save bar sits right on top of the bottom tabs, with nothing showing in between."
     ]
   ]
 }

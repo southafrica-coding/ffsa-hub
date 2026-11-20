@@ -174,3 +174,23 @@ describe("inspection screen", () => {
     expect(localStorage.getItem(draftKey(v.id))).toBeNull();
   });
 });
+
+describe("Workshop report: the workshop's 25-point check (Gideon, 20 Nov 2026)", () => {
+  it("lists the 25 points first, in the sheet's order, then the rest, with a note next to each", async () => {
+    const { defaultChecklist } = await import("@/lib/fleet/content");
+    await open(props({ checklist: defaultChecklist(), defaultType: "workshop" }));
+    const groups = Array.from(host.querySelectorAll("details summary h2")).map((h) => h.textContent);
+    expect(groups).toEqual(["Workshop 25-point check", "If the workshop checked them"]);
+    const first = host.querySelector("details")!;
+    const points = Array.from(first.querySelectorAll("p.font-semibold")).map((p) => p.textContent);
+    expect(points).toHaveLength(25);
+    expect(points.slice(0, 3)).toEqual(["Engine oil", "Transmission oil", "Power steering oil"]);
+    expect(points[24]).toBe("Headlights");
+    // The note is always there, like the sheet's NOTES column.
+    expect(first.querySelectorAll('input[aria-label^="Note: "]').length).toBe(25);
+    // "Mark the rest OK" for the 25 lines, but not for the points the workshop may not have checked.
+    const [sheet, more] = Array.from(host.querySelectorAll("details"));
+    expect(Array.from(sheet.querySelectorAll("button")).some((b) => b.textContent === "Mark the rest OK")).toBe(true);
+    expect(Array.from(more.querySelectorAll("button")).some((b) => b.textContent === "Mark the rest OK")).toBe(false);
+  });
+});

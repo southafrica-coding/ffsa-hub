@@ -221,6 +221,7 @@ export function Point({
   onToggleMore,
   onPhotos,
   onRemovePhoto,
+  inlineNote,
 }: {
   it: PointItem;
   r: DraftResult;
@@ -238,6 +239,8 @@ export function Point({
   onToggleMore: () => void;
   onPhotos: (files: File[]) => void;
   onRemovePhoto: (id: string) => void;
+  /** Workshop report: the note sits next to the result, like the workshop's sheet. */
+  inlineNote?: boolean;
 }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const s = r.s || "";
@@ -313,6 +316,21 @@ export function Point({
             </button>
           ))}
         </div>
+        {inlineNote ? (
+          <>
+          <input
+            type="text"
+            data-note={it.id}
+            value={r.n || ""}
+            onChange={(e) => onNote(e.target.value)}
+            placeholder="What the report says, e.g. “Just below max mark”"
+            aria-label={`Note: ${it.t}`}
+            className="min-h-12 w-full border border-rule-strong bg-white px-3 text-[15px] focus:border-ink focus:outline-none"
+          />
+          <Thumbs ids={r.p} caption={it.t} onRemove={onRemovePhoto} />
+          <UploadButton label="Add photo" multiple busy={uploading} onFiles={onPhotos} />
+          </>
+        ) : (
         <button
           type="button"
           aria-expanded={showMore}
@@ -324,6 +342,7 @@ export function Point({
         >
           {moreLabel(r)}
         </button>
+        )}
       </div>
 
       {(guided || helpOpen) && hasHelp(it.id) && (
@@ -332,7 +351,7 @@ export function Point({
         </div>
       )}
 
-      {showMore && (
+      {showMore && !inlineNote && (
         <div className="mt-3 space-y-2 border-t border-rule pt-3">
           <textarea
             data-note={it.id}

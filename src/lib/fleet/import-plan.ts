@@ -3,6 +3,8 @@
 // scripts/fleet-import.ts reads the files, calls this, and writes the rows. SPEC section 9.
 
 import { randomUUID } from "node:crypto";
+import { withWorkshop25 } from "./content";
+import type { Checklist } from "./rules/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>;
@@ -185,7 +187,7 @@ export function planFleetImport(seed: Seed, hubVehicles: HubVehicle[], hubBookin
     max_per_day: sch.maxPerDay ?? 2,
     budget_hours: sch.budgetHours ?? 5,
     weekly_only: sch.weeklyOnly ?? [],
-    checklist: seed.config.checklist ?? null,
+    checklist: seed.config.checklist ? withWorkshop25(seed.config.checklist as unknown as Checklist) : null,
     notify: { email: !!seed.config.notify?.email, slack: !!seed.config.notify?.slack },
   };
 

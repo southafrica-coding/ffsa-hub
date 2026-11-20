@@ -167,8 +167,8 @@ describe("cleanChecklist (saving)", () => {
     const r = cleanChecklist(STD);
     if ("error" in r) throw new Error(r.error);
     const ids = r.checklist.sections.flatMap((s) => s.items.map((i) => i.id));
-    expect(ids.length).toBe(124);
-    expect(new Set(ids).size).toBe(124);
+    expect(ids.length).toBe(149);
+    expect(new Set(ids).size).toBe(149);
   });
 });
 
@@ -183,7 +183,7 @@ describe("filter and help", () => {
   it("has help for every standard point and none for points added by hand", () => {
     const ids = STD.sections.flatMap((s) => s.items.map((i) => i.id));
     const h = helpFor([...ids, "x123"]);
-    expect(Object.keys(h).length).toBe(124);
+    expect(Object.keys(h).length).toBe(149);
     expect(h["x123"]).toBeUndefined();
     expect(h[ids[0]].why).toBeTruthy();
   });

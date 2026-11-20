@@ -46,9 +46,9 @@ afterEach(() => {
 describe("Checklist view", () => {
   it("shows the counts per check and every point", () => {
     render();
-    expect(host.textContent).toContain("124 points in");
+    expect(host.textContent).toContain("149 points in");
     expect(host.textContent).toContain("customised for FFSA");
-    expect(host.querySelectorAll("li[data-item]").length).toBe(124);
+    expect(host.querySelectorAll("li[data-item]").length).toBe(149);
     const nums = [...host.querySelectorAll(".numeral")].map((n) => Number(n.textContent));
     expect(nums).toEqual(["pre", "post", "weekly", "monthly", "workshop"].map((t) => itemsFor(STD, t).length));
   });
@@ -64,7 +64,7 @@ describe("Checklist view", () => {
     expect(host.querySelectorAll("li[data-item]").length).toBe(itemsFor(STD, "pre").length);
     expect(button("Pre-trip check").getAttribute("aria-pressed")).toBe("true");
     click(button("All points"));
-    expect(host.querySelectorAll("li[data-item]").length).toBe(124);
+    expect(host.querySelectorAll("li[data-item]").length).toBe(149);
   });
 
   it("opens why and how for one point, or for every point", () => {
@@ -74,7 +74,7 @@ describe("Checklist view", () => {
     expect(buttons("Hide why and how").length).toBe(1);
     const box = host.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
     act(() => box.click());
-    expect(buttons("Hide why and how").length).toBe(124);
+    expect(buttons("Hide why and how").length).toBe(149);
     expect(host.textContent).toContain("How to mark it");
   });
 
@@ -114,7 +114,7 @@ describe("Sort weekly and monthly", () => {
     expect(url).toBe("/api/vehicles/fleet/settings");
     expect(init.method).toBe("PATCH");
     const sent = JSON.parse(String(init.body)).checklist as Checklist;
-    expect(checklistOrder(sent).length).toBe(124);
+    expect(checklistOrder(sent).length).toBe(149);
     expect(itemsFor(sent, "weekly").length).toBe(monthlyEligible - suggested + 1);
     expect(toast.success).toHaveBeenCalledWith("Checklist saved.");
     expect(refresh).toHaveBeenCalled();
@@ -175,6 +175,6 @@ describe("Edit checklist", () => {
     render({ checklist: small });
     click(button("Edit checklist"));
     click(button("Restore standard list"));
-    expect(host.querySelectorAll('input[aria-label="Point"]').length).toBe(124);
+    expect(host.querySelectorAll('input[aria-label="Point"]').length).toBe(149);
   });
 });

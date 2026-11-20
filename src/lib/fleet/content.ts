@@ -23,3 +23,20 @@ export function defaultChecklist(): Checklist {
   }
   return { sections };
 }
+
+/** The workshop's 25-point check (Motech's sheet, Gideon 20 Nov 2026): its own section. */
+export const WORKSHOP_25_SECTION = "m25";
+
+/**
+ * A checklist with the workshop's 25-point check added when it isn't there yet. The old
+ * Fleet app's live checklist predates it, so the import adds it rather than drop it.
+ * Nothing else in the checklist changes.
+ */
+export function withWorkshop25(cl: Checklist): Checklist {
+  if (cl.sections.some((s) => s.id === WORKSHOP_25_SECTION)) return cl;
+  const sheet = defaultChecklist().sections.find((s) => s.id === WORKSHOP_25_SECTION);
+  if (!sheet) return cl;
+  const taken = new Set(cl.sections.flatMap((s) => s.items.map((i) => i.id)));
+  const items = sheet.items.filter((i) => !taken.has(i.id));
+  return items.length ? { ...cl, sections: [...cl.sections, { ...sheet, items }] } : cl;
+}

@@ -6,7 +6,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { planFleetImport, normReg, type HubBooking, type HubVehicle } from "./import-plan";
 import { fleetDataFromRows } from "./mapping";
-import { defaultChecklist } from "./content";
+import { defaultChecklist, withWorkshop25, WORKSHOP_25_SECTION } from "./content";
+import type { Checklist } from "./rules/types";
 import { seedFleetData } from "./testing/seed";
 import { buildReminder, todayTasks, vehicleAlerts } from "./rules";
 
@@ -132,10 +133,22 @@ describe("fleet import plan", () => {
 });
 
 describe("default checklist", () => {
-  it("has the same 124 points and sections as the live one", () => {
+  it("is the live one's 124 points and sections, plus the workshop's 25-point check", () => {
     const d = defaultChecklist();
     const live = seed.config.checklist as { sections: { id: string; items: { id: string }[] }[] };
-    expect(d.sections.map((s) => s.id)).toEqual(live.sections.map((s) => s.id));
-    expect(d.sections.flatMap((s) => s.items.map((i) => i.id))).toEqual(live.sections.flatMap((s) => s.items.map((i) => i.id)));
+    expect(d.sections.map((s) => s.id)).toEqual([...live.sections.map((s) => s.id), WORKSHOP_25_SECTION]);
+    const ids = d.sections.flatMap((s) => s.items.map((i) => i.id));
+    expect(ids.slice(0, 124)).toEqual(live.sections.flatMap((s) => s.items.map((i) => i.id)));
+    expect(ids.slice(124)).toHaveLength(25);
+    expect(ids.slice(124).every((id) => id.startsWith("m25-"))).toBe(true);
+  });
+
+  it("the import adds the 25-point check to the live checklist, once, and changes nothing else", () => {
+    const live = seed.config.checklist as unknown as Checklist;
+    const out = withWorkshop25(live);
+    expect(out.sections.slice(0, -1)).toEqual(live.sections);
+    expect(out.sections.at(-1)).toMatchObject({ id: WORKSHOP_25_SECTION });
+    expect(out.sections.at(-1)!.items.map((i: { t: string }) => i.t).slice(0, 3)).toEqual(["Engine oil", "Transmission oil", "Power steering oil"]);
+    expect(withWorkshop25(out)).toBe(out);
   });
 });
