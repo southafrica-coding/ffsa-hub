@@ -70,15 +70,38 @@ REVOKE ALL ON TABLE public.missio_care_requests FROM PUBLIC, anon;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.missio_care_requests TO authenticated;
 GRANT ALL ON TABLE public.missio_care_requests TO service_role;
 
+-- Pastors read and move every request; they log by hand, but only the
+-- public form (service role) writes source care_form.
 DROP POLICY IF EXISTS "Pastors manage care requests" ON public.missio_care_requests;
-CREATE POLICY "Pastors manage care requests"
+DROP POLICY IF EXISTS "Pastors read care requests" ON public.missio_care_requests;
+CREATE POLICY "Pastors read care requests"
   ON public.missio_care_requests
-  FOR ALL
+  FOR SELECT
+  TO authenticated
+  USING (
+    (SELECT public.has_org_role('missio', ARRAY['pastor']))
+    AND org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
+  );
+
+DROP POLICY IF EXISTS "Pastors update care requests" ON public.missio_care_requests;
+CREATE POLICY "Pastors update care requests"
+  ON public.missio_care_requests
+  FOR UPDATE
   TO authenticated
   USING (
     (SELECT public.has_org_role('missio', ARRAY['pastor']))
     AND org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
   )
+  WITH CHECK (
+    (SELECT public.has_org_role('missio', ARRAY['pastor']))
+    AND org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
+  );
+
+DROP POLICY IF EXISTS "Pastors log care requests" ON public.missio_care_requests;
+CREATE POLICY "Pastors log care requests"
+  ON public.missio_care_requests
+  FOR INSERT
+  TO authenticated
   WITH CHECK (
     (SELECT public.has_org_role('missio', ARRAY['pastor']))
     AND org_id = (SELECT o.id FROM public.organisations o WHERE o.slug = 'missio')
