@@ -892,7 +892,32 @@ async function loadKids(auth: OrgAccess, membersByHouse: Map<string, string[]>):
   return counts;
 }
 
-function summaryFrom(house: HouseRow, members: HouseChurchMemberView[], coaches: CoachRef[] = [], kidsCount = 0): HouseChurchSummary {
+/** People ready to lead per house (board M12d, migration 342). Best effort: none before 342. */
+async function loadReady(auth: OrgAccess, houseIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (houseIds.length === 0) return counts;
+  try {
+    const rows = await auth.supabase
+      .from("missio_next_leaders")
+      .select("house_church_id")
+      .in("house_church_id", houseIds)
+      .eq("stage", "ready")
+      .is("ended_at", null);
+    if (rows.error || !rows.data) return counts;
+    for (const row of rows.data as Array<{ house_church_id: string }>) counts.set(row.house_church_id, (counts.get(row.house_church_id) ?? 0) + 1);
+  } catch (error) {
+    console.error("[missio] ready count failed", error instanceof Error ? error.message : "unknown");
+  }
+  return counts;
+}
+
+function summaryFrom(
+  house: HouseRow,
+  members: HouseChurchMemberView[],
+  coaches: CoachRef[] = [],
+  kidsCount = 0,
+  readyToLead = 0
+): HouseChurchSummary {
   return {
     id: house.id,
     number: Number(house.number),
@@ -902,6 +927,7 @@ function summaryFrom(house: HouseRow, members: HouseChurchMemberView[], coaches:
     location: blankToNull(house.location),
     memberCount: members.length,
     kidsCount,
+    readyToLead,
     leaders: members.filter((member) => member.role === "leader").map(asPersonRef).sort(compareNames),
     coLeaders: members.filter((member) => member.role === "co_leader").map(asPersonRef).sort(compareNames),
     coaches,
@@ -1147,11 +1173,15 @@ export async function listHouses(
     auth,
     new Map([...membersByHouse].map(([houseId, list]) => [houseId, list.map((member) => member.contactId)]))
   );
+  const ready = await loadReady(
+    auth,
+    houseRows.map((house) => house.id)
+  );
   const body: HouseChurchListResponse = {
     canWrite: abilities.place,
     abilities,
     houses: houseRows.map((house) =>
-      summaryFrom(house, membersByHouse.get(house.id) ?? [], coaches.map.get(house.id) ?? [], kids.get(house.id) ?? 0)
+      summaryFrom(house, membersByHouse.get(house.id) ?? [], coaches.map.get(house.id) ?? [], kids.get(house.id) ?? 0, ready.get(house.id) ?? 0)
     ),
   };
   return { ok: true, body };
@@ -1197,7 +1227,13 @@ export async function getHouse(
   const current = members.filter((member) => !member.leftMissio);
   const kids = await loadKids(auth, new Map([[loaded.house.id, current.map((member) => member.contactId)]]));
   const house: HouseChurchDetail = {
-    ...summaryFrom(loaded.house, current, coaches.map.get(loaded.house.id) ?? [], kids.get(loaded.house.id) ?? 0),
+    ...summaryFrom(
+      loaded.house,
+      current,
+      coaches.map.get(loaded.house.id) ?? [],
+      kids.get(loaded.house.id) ?? 0,
+      (await loadReady(auth, [loaded.house.id])).get(loaded.house.id) ?? 0
+    ),
     leaderNotes: blankToNull(loaded.house.leader_notes),
     members,
   };

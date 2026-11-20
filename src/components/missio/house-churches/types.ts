@@ -42,6 +42,8 @@ export interface HouseSummary {
   memberCount: number;
   /** Children of households in this house. Not in memberCount; the size dots stay adults only. */
   kidsCount?: number;
+  /** People ready to lead (board M12d). "Ready to multiply" needs a full house and at least one. */
+  readyToLead?: number;
   leaders: PersonRef[];
   coLeaders: PersonRef[];
   /** Pastoral covering for the leaders. A house can have several. */

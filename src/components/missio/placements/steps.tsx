@@ -2,7 +2,7 @@ import type { PlacementView } from "@/lib/missio/placements";
 import shell from "../shell.module.css";
 import styles from "./placements.module.css";
 
-const short = new Intl.DateTimeFormat("en-ZA", { day: "numeric", month: "short", timeZone: "Africa/Johannesburg" });
+const short = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Johannesburg" });
 
 export function shortDate(value: string | null): string {
   if (!value) return "";

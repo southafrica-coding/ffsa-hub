@@ -22,8 +22,8 @@ export const STAGE_LABEL: Record<NextLeaderStage, string> = {
 };
 const ORDER: NextLeaderStage[] = ["spotted", "in_training", "ready"];
 
-const dayMonth = new Intl.DateTimeFormat("en-ZA", { day: "numeric", month: "short", timeZone: "Africa/Johannesburg" });
-const monthYear = new Intl.DateTimeFormat("en-ZA", { month: "short", year: "numeric", timeZone: "Africa/Johannesburg" });
+const dayMonth = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Johannesburg" });
+const monthYear = new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "Africa/Johannesburg" });
 
 function sinceLine(leader: NextLeader): string | null {
   if (!leader.since) return null;

@@ -104,7 +104,7 @@ export function personHref(person: Pick<PersonRef, "orgPersonId">): string | nul
   return id ? `/missio/people/${encodeURIComponent(id)}` : null;
 }
 
-/** A house this size with a co-leader in place can send people out. */
+/** A house this size, with someone ready to lead, can send people out. */
 export const MULTIPLY_AT = 18;
 /** The size a house is drawn against. */
 export const HOUSE_SEATS = 24;
@@ -118,12 +118,22 @@ export const SIGNAL_LABEL: Record<HouseSignal, string> = {
   no_coach: "No coach yet",
 };
 
+/**
+ * Full, and someone ready to lead the next house (board M12d). Before the
+ * pipeline existed a co-leader stood in for that; data without a ready count
+ * still uses it.
+ */
+export function readyToMultiply(house: Pick<HouseSummary, "memberCount" | "coLeaders"> & { readyToLead?: number }): boolean {
+  if (house.memberCount < MULTIPLY_AT) return false;
+  return house.readyToLead === undefined ? house.coLeaders.length > 0 : house.readyToLead > 0;
+}
+
 /** The signals a house shows on the grid and its page. Same rules as Home. */
 export function houseSignals(
-  house: Pick<HouseSummary, "memberCount" | "leaders" | "coLeaders"> & { coaches?: HouseSummary["coaches"] }
+  house: Pick<HouseSummary, "memberCount" | "leaders" | "coLeaders"> & { coaches?: HouseSummary["coaches"]; readyToLead?: number }
 ): HouseSignal[] {
   const signals: HouseSignal[] = [];
-  if (house.memberCount >= MULTIPLY_AT && house.coLeaders.length > 0) signals.push("ready");
+  if (readyToMultiply(house)) signals.push("ready");
   if (house.memberCount > 0 && house.leaders.length === 0) signals.push("no_leader");
   if (house.memberCount > 0 && house.coLeaders.length === 0) signals.push("no_co_leader");
   if (house.memberCount > 0 && house.coaches?.length === 0) signals.push("no_coach");

@@ -1,0 +1,288 @@
+/* Board M14b: the care form and the Care board. */
+
+/* Form */
+
+.help {
+  margin: -6px 0 0;
+  font-size: 14px;
+  color: var(--sub, #6e685b);
+}
+
+.danger {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--accent-soft, #f6e4d9);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.danger a {
+  font-weight: 700;
+  color: inherit;
+}
+
+.consentText {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.page button.back,
+.back {
+  min-height: 44px;
+  border: 0 !important;
+  background: none !important;
+  color: var(--ink, #1c1b17) !important;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.thanks h1 {
+  margin-top: 24px;
+}
+
+/* Board */
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.headActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--quiet, #6e685b);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+@media (max-width: 860px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.column {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--panel, #f3f0e8);
+}
+
+.column h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.column h2 span {
+  color: var(--quiet, #6e685b);
+  font-weight: 500;
+}
+
+.column ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--quiet, #6e685b);
+}
+
+.card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule, #e7e2d5);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.cardUrgent {
+  border-color: #e4c3be;
+  box-shadow: 0 0 0 1px #e4c3be;
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cardTop div {
+  display: grid;
+  min-width: 0;
+}
+
+.cardTop b {
+  font-weight: 600;
+}
+
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--quiet, #6e685b);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--panel, #f3f0e8);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chipUrgent {
+  background: #f6dcd8;
+  color: #8e2a1f;
+}
+
+.body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.privacy {
+  font-size: 12px;
+  color: var(--quiet, #6e685b);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.take {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-text, #8e3d1f);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.link {
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link, #2f5d50);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.take:disabled,
+.link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.checkIn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gold-text, #7a5a12);
+}
+
+.footnote {
+  margin: 18px 0 0;
+  font-size: 13px;
+  color: var(--quiet, #6e685b);
+}
+
+.message {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.needs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 14px;
+}
+
+.needs label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { missioSkinVars } from "../access";
 import { MissioApiError } from "../api";
 import { missioFixedCopy } from "../errors";
@@ -109,6 +110,9 @@ export function ConnectForm({ client = connectClient }: { client?: ConnectClient
             {house === "yes"
               ? "Someone from Missio will WhatsApp you this week, and we’ll help you find a house church near you."
               : "Someone from Missio will WhatsApp you this week."}
+          </p>
+          <p className={styles.thanksBody}>
+            Going through something? <Link href="/serve/missio/care">Ask for prayer or help</Link>. You choose who knows.
           </p>
           <button
             type="button"

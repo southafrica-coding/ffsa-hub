@@ -157,6 +157,8 @@ export type HouseChurchSummary = {
   memberCount: number;
   /** Children of households with an adult in this house (migration 341). Not counted in memberCount. */
   kidsCount: number;
+  /** People marked ready to lead in this house (migration 342). */
+  readyToLead: number;
   leaders: PersonRef[];
   coLeaders: PersonRef[];
   /** The house's coaches, longest-serving first. Empty when none (or before migration 337). */

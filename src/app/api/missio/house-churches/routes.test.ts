@@ -741,6 +741,7 @@ describe("GET /api/missio/house-churches", () => {
       location: "Lounge",
       memberCount: 2,
       kidsCount: 0,
+      readyToLead: 0,
       leaders: [
         {
           contactId: ADA,

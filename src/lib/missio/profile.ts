@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { OrgAccess } from "@/lib/missio/access";
+import { nextLeaderJourney } from "@/lib/missio/next-leaders";
 import { loadPerson } from "@/lib/missio/people";
 import type { HouseChurchRole, MissioErrorCode, MissioPerson } from "@/lib/missio/types";
 
@@ -30,6 +31,15 @@ export type JourneyEvent =
   | { id: string; at: string; type: "joined_house" | "left_house"; houseId: string; number: number; name: string | null; role: HouseChurchRole }
   | { id: string; at: string; type: "followup_stage"; stage: FollowupStage }
   | { id: string; at: string; type: "followup_note"; note: string }
+  | {
+      id: string;
+      at: string;
+      type: "next_leader";
+      stage: "spotted" | "in_training" | "ready";
+      trainer: string | null;
+      number: number;
+      name: string | null;
+    }
   | {
       id: string;
       at: string;
@@ -125,6 +135,11 @@ export async function getPersonProfile(
       if (Boolean(a.endedAt) !== Boolean(b.endedAt)) return a.endedAt ? 1 : -1;
       return instant(b.startedAt) - instant(a.startedAt);
     });
+  }
+
+  // Next leaders (board M12d). Best effort.
+  for (const step of await nextLeaderJourney(auth, contactId)) {
+    journey.push({ id: step.id, at: step.at, type: "next_leader", stage: step.stage, trainer: step.trainer, number: step.houseNumber, name: step.houseName });
   }
 
   // Follow-up history and connect cards.

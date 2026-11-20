@@ -12,7 +12,7 @@ import { coachNames } from "./house-churches/format";
 import styles from "./shell.module.css";
 import { useMissioViewer } from "./viewer";
 
-import { HOUSE_SEATS, MULTIPLY_AT } from "./house-churches/format";
+import { HOUSE_SEATS, MULTIPLY_AT, readyToMultiply as isReadyToMultiply } from "./house-churches/format";
 
 export { HOUSE_SEATS, MULTIPLY_AT };
 
@@ -53,7 +53,7 @@ export function houseOverview(houses: HouseSummary[]): HouseOverview {
   let noCoach = 0;
   const bars = sorted.map((house) => {
     people += house.memberCount;
-    const ready = house.memberCount >= MULTIPLY_AT && house.coLeaders.length > 0;
+    const ready = isReadyToMultiply(house);
     if (ready) readyToMultiply += 1;
     if (house.memberCount > 0 && house.coLeaders.length === 0) noCoLeader += 1;
     if (house.memberCount > 0 && house.leaders.length === 0) noLeader += 1;

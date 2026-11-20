@@ -427,7 +427,7 @@ function HealthNote({ house }: { house: HouseDetail }) {
   const signals = houseSignals(house);
   let sentence = "Healthy size, with a leader and co-leader in place.";
   if (signals.includes("ready")) {
-    sentence = "The house is full and a co-leader is in place. This is the moment to talk about sending some people out.";
+    sentence = "The house is full and someone is ready to lead. This is the moment to talk about sending some people out.";
   } else if (signals.includes("no_leader")) {
     sentence = "This house has no leader yet. Add one below.";
   } else if (signals.includes("no_co_leader")) {
@@ -435,7 +435,7 @@ function HealthNote({ house }: { house: HouseDetail }) {
   } else if (house.memberCount === 0) {
     sentence = "No one is in this house yet.";
   } else if (house.memberCount < MULTIPLY_AT) {
-    sentence = `Room to grow. At ${MULTIPLY_AT} people with a co-leader, it’s ready to multiply.`;
+    sentence = `Room to grow. At ${MULTIPLY_AT} people, with someone ready to lead, it’s ready to multiply.`;
   }
   return (
     <>

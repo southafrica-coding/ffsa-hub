@@ -253,6 +253,7 @@ function summary(value: unknown): HouseSummary {
     location: optionalString(row.location),
     memberCount: row.memberCount,
     kidsCount: typeof row.kidsCount === "number" ? row.kidsCount : 0,
+    ...(typeof row.readyToLead === "number" ? { readyToLead: row.readyToLead } : {}),
     leaders: people(row.leaders),
     coLeaders: people(row.coLeaders),
     coaches: coachesOf(row.coaches),

@@ -52,7 +52,7 @@ export function initials(name: string): string {
 
 function inFilter(event: JourneyEvent, filter: Filter): boolean {
   if (filter === "all") return true;
-  const house = event.type === "joined_house" || event.type === "left_house";
+  const house = event.type === "joined_house" || event.type === "left_house" || event.type === "next_leader";
   if (filter === "houses") return house;
   return !house && event.type !== "added";
 }
@@ -75,6 +75,12 @@ export function journeyCopy(event: JourneyEvent): { title: string; detail: strin
       return { title: "Follow-up opened", detail: null };
     case "followup_note":
       return { title: "Follow-up note", detail: event.note };
+    case "next_leader": {
+      const where = houseTitle(event);
+      if (event.stage === "spotted") return { title: "Spotted as a next leader", detail: where };
+      if (event.stage === "in_training") return { title: event.trainer ? `In training with ${event.trainer}` : "In training to lead", detail: where };
+      return { title: "Ready to lead", detail: where };
+    }
     case "connect_card": {
       const parts: string[] = [];
       if (event.visitType) parts.push(VISIT_LABEL[event.visitType]);

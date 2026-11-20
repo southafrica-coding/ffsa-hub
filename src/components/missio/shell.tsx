@@ -189,6 +189,8 @@ function MissioSidebar({
   const pastor = isMissioPastor(me);
   const housesLabel = housesNavLabel(me);
   const volunteers = pathname.startsWith("/missio/volunteers");
+  const nextLeaders = pathname.startsWith("/missio/next-leaders");
+  const care = pathname.startsWith("/missio/care");
 
   const orgNode = <OrgHeader state={header} />;
 
@@ -222,6 +224,16 @@ function MissioSidebar({
           <HouseIcon />
           <span>{housesLabel}</span>
         </Link>
+        <Link
+          href="/missio/next-leaders"
+          className={`${styles.navLink} ${nextLeaders ? styles.navOn : ""}`}
+          aria-current={nextLeaders ? "page" : undefined}
+          data-testid="missio-nav-next-leaders"
+          onClick={onNavigate}
+        >
+          <SproutIcon />
+          <span>Next leaders</span>
+        </Link>
         {pastor ? (
           <Link
             href="/missio/follow-up"
@@ -232,6 +244,18 @@ function MissioSidebar({
           >
             <FollowIcon />
             <span>Follow-up</span>
+          </Link>
+        ) : null}
+        {pastor ? (
+          <Link
+            href="/missio/care"
+            className={`${styles.navLink} ${care ? styles.navOn : ""}`}
+            aria-current={care ? "page" : undefined}
+            data-testid="missio-nav-care"
+            onClick={onNavigate}
+          >
+            <HeartIcon />
+            <span>Care</span>
           </Link>
         ) : null}
         {pastor ? (
@@ -468,6 +492,24 @@ function CalendarIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
       <rect x="3.5" y="5" width="17" height="15" />
       <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" />
+    </svg>
+  );
+}
+
+function HeartIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" />
+    </svg>
+  );
+}
+
+function SproutIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 21v-9" />
+      <path d="M12 12c0-4 3-7 7-7 0 4-3 7-7 7Z" />
+      <path d="M12 14c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5Z" />
     </svg>
   );
 }
