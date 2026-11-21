@@ -31,12 +31,12 @@ export default function LoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("error");
-    const message = loginErrorFromParam(code);
+    const message = loginErrorFromParam(code, params.get("opens"));
     if (message) setError(message);
     // A deactivated account still has a session. Clear it here so the next
     // click is not bounced back to the dashboard. A failed sign-out has
     // already cleared what it could; signing out again is not useful.
-    if (code === "deactivated") {
+    if (code === "deactivated" || code === "not_open") {
       supabase.auth.signOut().catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
