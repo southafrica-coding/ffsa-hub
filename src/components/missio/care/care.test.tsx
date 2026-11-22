@@ -39,6 +39,7 @@ const request = (over: Partial<CareRequest>): CareRequest => ({
   urgent: false,
   status: "new",
   house: null,
+  canStep: true,
   takenBy: null,
   createdAt: new Date(Date.now() - 26 * 3600000).toISOString(),
   takenAt: null,
@@ -93,7 +94,7 @@ describe("CareBoard", () => {
       request({ id: "d", name: "Mia Grobler", status: "done", takenBy: { id: "x", name: "Gabriël V" }, doneAt: "2026-11-01T08:00:00Z", checkIn: true }),
     ];
     const client: CareClient = {
-      list: async () => ({ requests: rows, me: "Gabriël" }),
+      list: async () => ({ requests: rows, me: "Gabriël", pastor: true }),
       step: async (id, action) => {
         steps.push([id, action]);
         rows = rows.map((row) => (row.id === id && action === "take" ? { ...row, status: "on_it", takenBy: { id: "me", name: "Gabriël V" } } : row));
@@ -118,6 +119,47 @@ describe("CareBoard", () => {
     await settle();
     expect(steps).toEqual([["r1", "take"]]);
     expect(host.querySelector("[data-testid=care-on_it]")?.textContent).toContain("Thabo Nkosi");
+  });
+
+  it("lets a house leader take what was shared, without logging by hand", async () => {
+    // Placeholder number, not a real one.
+    const rows = [
+      request({ id: "l", name: "Shared", phone: "082 000 0000", privacy: "pastors_leaders", house: { id: "h13", number: 13, name: null } }),
+      request({ id: "o", name: "Taken", status: "on_it", takenBy: { id: "p", name: "Gabriël V" }, privacy: "house", house: { id: "h13", number: 13, name: null } }),
+    ];
+    const client: CareClient = { list: async () => ({ requests: rows, me: "Lerato", pastor: false }), step: async () => undefined, log: async () => undefined };
+    const host = mount(<CareBoard client={client} origin="https://hub.example" />);
+    await settle();
+    expect(button(host, "Log a need")).toBeUndefined();
+    expect(host.textContent).toContain("Prayer and care your house church chose to share with you");
+    expect(button(host.querySelector("[data-testid=care-new]")!, "I’ll take it")).toBeDefined();
+    expect(button(host.querySelector("[data-testid=care-on_it]")!, "Done")).toBeDefined();
+    expect(host.textContent).toContain("Phone numbers stay with pastors and leaders.");
+  });
+
+  it("shows a house member what the house may pray for, with nothing to press", async () => {
+    const rows = [
+      request({ id: "h", name: "Naledi", phone: null, privacy: "house", canStep: false, house: { id: "h13", number: 13, name: null } }),
+      request({ id: "o", name: "Taken", status: "on_it", canStep: false, takenBy: { id: "p", name: "Lerato M" }, privacy: "house" }),
+      request({ id: "d", name: "Done", status: "done", canStep: false, takenBy: { id: "p", name: "Lerato M" }, doneAt: "2026-11-01T08:00:00Z", checkIn: true }),
+    ];
+    const client: CareClient = { list: async () => ({ requests: rows, me: "Sipho", pastor: false }), step: async () => undefined, log: async () => undefined };
+    const host = mount(<CareBoard client={client} origin="https://hub.example" />);
+    await settle();
+    expect(host.querySelectorAll("[data-testid=care-card]")).toHaveLength(3);
+    expect(host.textContent).toContain("Naledi");
+    expect(host.textContent).toContain("Lerato M");
+    for (const label of ["Log a need", "I’ll take it", "Done", "Checked back in"]) expect(button(host, label)).toBeUndefined();
+    expect(host.textContent).not.toContain("Two weeks on");
+    expect(host.querySelector("a[href*='wa.me']")).toBeNull();
+  });
+
+  it("tells a leader with nothing shared what will show up here", async () => {
+    const client: CareClient = { list: async () => ({ requests: [], me: "Lerato", pastor: false }), step: async () => undefined, log: async () => undefined };
+    const host = mount(<CareBoard client={client} origin="https://hub.example" />);
+    await settle();
+    expect(host.querySelector("[data-testid=care-nothing-shared]")?.textContent).toContain("Nothing has been shared with you right now.");
+    expect(host.querySelector("[data-testid=care-new]")).toBeNull();
   });
 
   it("words the time and an anonymous reply", () => {

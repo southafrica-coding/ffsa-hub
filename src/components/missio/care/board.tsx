@@ -60,7 +60,11 @@ function initials(name: string): string {
   return (parts.length > 1 ? `${parts[0]![0]}${parts[parts.length - 1]![0]}` : (parts[0] ?? "?").slice(0, 2)).toUpperCase();
 }
 
-/** Board M14b. Prayer and care from every door, in one place. Pastors. */
+/**
+ * Board M14b. Prayer and care from every door, in one place. Pastors see it
+ * all; house leaders and members see only what the person shared with them
+ * (RLS, migration 354). Only pastors log by hand; members only read.
+ */
 export function CareBoard({ client = careClient, origin }: { client?: CareClient; origin?: string }) {
   const { state, retry } = useMissioLoad(() => client.list(), [client]);
   const [taking, setTaking] = useState<CareRequest | null>(null);
@@ -84,6 +88,8 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
     }
   }
 
+  const pastor = data?.pastor ?? false;
+  const nothingShared = data !== null && !pastor && data.requests.length === 0;
   const counts = new Map<CareSource, number>();
   for (const request of data?.requests ?? []) counts.set(request.source, (counts.get(request.source) ?? 0) + 1);
 
@@ -92,7 +98,9 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
       <div className={styles.head}>
         <div>
           <h1 className={content.title}>Care</h1>
-          <p className={`${shell.lede} ${content.lede}`}>Prayer and care requests from every door, in one place</p>
+          <p className={`${shell.lede} ${content.lede}`}>
+            {data && !pastor ? "Prayer and care your house church chose to share with you" : "Prayer and care requests from every door, in one place"}
+          </p>
         </div>
         <div className={styles.headActions}>
           <button
@@ -105,9 +113,11 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
           >
             Copy the care link
           </button>
-          <button type="button" className={shell.primary} onClick={() => setLogging(true)}>
-            Log a need
-          </button>
+          {pastor ? (
+            <button type="button" className={shell.primary} onClick={() => setLogging(true)}>
+              Log a need
+            </button>
+          ) : null}
         </div>
       </div>
       {data && counts.size > 0 ? (
@@ -129,7 +139,13 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
           {notice}
         </p>
       ) : null}
-      {data ? (
+      {nothingShared ? (
+        <p className={styles.nothing} data-testid="care-nothing-shared">
+          Nothing has been shared with you right now. When someone in your house church asks for prayer or help and lets their
+          leaders or their house know, it shows up here.
+        </p>
+      ) : null}
+      {data && !nothingShared ? (
         <div className={styles.columns}>
           {COLUMNS.map((column) => {
             const cards = data.requests.filter((request) => request.status === column.status);
@@ -167,17 +183,19 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
                         <div className={styles.foot}>
                           <span className={styles.privacy}>{PRIVACY_LABEL[request.privacy]}</span>
                           <div className={styles.actions}>
-                            {request.status === "new" ? (
+                            {request.status === "new" && request.canStep ? (
                               <button type="button" className={styles.take} disabled={busy === request.id} onClick={() => setTaking(request)}>
                                 I’ll take it
                               </button>
                             ) : null}
                             {request.status === "on_it" ? (
                               <>
-                                <span className={styles.meta}>{request.takenBy?.name ?? "A pastor"}</span>
-                                <button type="button" className={styles.link} disabled={busy === request.id} onClick={() => void step(request, "done")}>
-                                  Done
-                                </button>
+                                <span className={styles.meta}>{request.takenBy?.name ?? "Someone"}</span>
+                                {request.canStep ? (
+                                  <button type="button" className={styles.link} disabled={busy === request.id} onClick={() => void step(request, "done")}>
+                                    Done
+                                  </button>
+                                ) : null}
                               </>
                             ) : null}
                             {request.status === "done" ? (
@@ -186,7 +204,7 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
                                   {request.takenBy?.name.split(" ")[0] ?? "Done"}
                                   {request.doneAt ? ` · ${dayMonth.format(new Date(request.doneAt))}` : ""}
                                 </span>
-                                {request.checkIn ? (
+                                {request.checkIn && request.canStep ? (
                                   <button type="button" className={styles.link} disabled={busy === request.id} onClick={() => void step(request, "checked_in")}>
                                     Checked back in
                                   </button>
@@ -195,7 +213,7 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
                             ) : null}
                           </div>
                         </div>
-                        {request.checkIn ? <span className={styles.checkIn}>Two weeks on: how are things now?</span> : null}
+                        {request.checkIn && request.canStep ? <span className={styles.checkIn}>Two weeks on: how are things now?</span> : null}
                       </li>
                     );
                   })}
@@ -206,13 +224,15 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
         </div>
       ) : null}
       <p className={styles.footnote}>
-        The person chose who may know, and only pastors see this board for now. Two weeks after “done”, the card asks whoever took
-        it to check back in. Urgent requests go to the top in red.
+        {pastor
+          ? "The person chose who may know. Pastors see every request; house leaders see what was shared with their house’s leaders or the house, and house members see only what the house may pray for. Two weeks after “done”, the card asks whoever took it to check back in. Urgent requests go to the top in red."
+          : "The person chose who may know. You see what they shared with your house’s leaders or the whole house. Leaders can take a request and mark it done; house members pray. Phone numbers stay with pastors and leaders."}
       </p>
       {taking && data ? (
         <TakeDialog
           request={taking}
           me={data.me}
+          pastor={pastor}
           onClose={() => setTaking(null)}
           onTake={async () => {
             await step(taking, "take");
@@ -243,7 +263,19 @@ export function takeMessage(request: CareRequest, me: string): string {
   return `${hello}${from}. Thank you for telling us.${pray} How are you doing?`;
 }
 
-function TakeDialog({ request, me, onClose, onTake }: { request: CareRequest; me: string; onClose: () => void; onTake: () => Promise<void> }) {
+function TakeDialog({
+  request,
+  me,
+  pastor,
+  onClose,
+  onTake,
+}: {
+  request: CareRequest;
+  me: string;
+  pastor: boolean;
+  onClose: () => void;
+  onTake: () => Promise<void>;
+}) {
   const [message, setMessage] = useState(() => takeMessage(request, me));
   const [pending, setPending] = useState(false);
   const chat = whatsAppHref(request.phone);
@@ -257,7 +289,13 @@ function TakeDialog({ request, me, onClose, onTake }: { request: CareRequest; me
           <textarea className={styles.message} value={message} onChange={(event) => setMessage(event.target.value)} />
         </label>
       ) : (
-        <p className={styles.meta}>{request.source === "house_feedback" ? "This came from house feedback. Talk to the leader." : "No number, so there’s no one to message. Take it to pray."}</p>
+        <p className={styles.meta}>
+          {request.source === "house_feedback"
+            ? pastor
+              ? "This came from house feedback. Talk to the leader."
+              : "This came from your house’s feedback. Take it to follow up in person."
+            : "No number, so there’s no one to message. Take it to pray."}
+        </p>
       )}
       <div className={shell.actions}>
         <button type="button" className={shell.ghost} onClick={onClose}>

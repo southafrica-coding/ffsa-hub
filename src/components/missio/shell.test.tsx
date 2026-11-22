@@ -196,6 +196,27 @@ describe("Missio access state", () => {
     expect(bar.textContent?.toLowerCase()).not.toContain("soon");
   });
 
+  it("gives a house leader Care, in the menu and the phone tab bar", async () => {
+    nav.pathname = "/missio/care";
+    const leader: MissioMe = {
+      orgs: [{ id: "org-missio", slug: "missio", name: "Missio Church" }],
+      rolesByOrg: { missio: ["house_church_leader"] },
+      currentOrg: "missio",
+    };
+    const { host, root } = render(
+      <MissioFrame client={client(async () => leader)} loadFfsaRoles={noRoles}>
+        <p>Care lives here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+    expect(host.querySelector("[data-testid=missio-nav-care]")).not.toBeNull();
+    const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
+    expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care"]);
+    expect(host.querySelector("[data-testid=missio-tab-care]")?.getAttribute("aria-current")).toBe("page");
+  });
+
   it("marks Volunteers, not Home, on the volunteers page", async () => {
     nav.pathname = "/missio/volunteers";
     const { host, root } = render(

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { MISSIO_PEOPLE_ROLES, MISSIO_SLUG, requireOrgRole } from "@/lib/missio/access";
+import { MISSIO_HOUSE_ROLES, MISSIO_SLUG, requireOrgRole } from "@/lib/missio/access";
 import { stepCare } from "@/lib/missio/care";
 import { missioRateLimit } from "@/lib/missio/limit";
 
-// PATCH /api/missio/care/:id   { action: "take" | "done" | "reopen" | "checked_in", note? }  Pastors.
+// PATCH /api/missio/care/:id   { action: "take" | "done" | "reopen" | "checked_in", note? }
+// Pastors: any request. House leaders: take / done / checked_in on their house's shared
+// requests. Anyone else who can read a request (a house member) gets 403.
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ function json(body: unknown, status = 200) {
 }
 
 export async function PATCH(request: Request, context: Ctx) {
-  const auth = await requireOrgRole(MISSIO_SLUG, MISSIO_PEOPLE_ROLES);
+  const auth = await requireOrgRole(MISSIO_SLUG, MISSIO_HOUSE_ROLES);
   if ("response" in auth) return auth.response;
   const limited = await missioRateLimit(auth.user.id, "house-church-write");
   if (limited) return limited;

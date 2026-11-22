@@ -13,7 +13,16 @@ import type { MissioErrorCode } from "@/lib/missio/types";
  * One board fed from every door: the public care form, prayer on connect
  * cards, prayer from weekly house feedback, and needs a pastor logs by hand.
  * Connect cards and feedback are pulled in when the board loads (once each,
- * by source + id). New → someone's on it → done. Pastors only for now.
+ * by source + id). New → someone's on it → done.
+ *
+ * Who sees what is the person's choice (privacy), enforced by RLS
+ * (migrations 343 and 354), never filtered here:
+ *   pastors          pastors only
+ *   pastors_leaders  pastors + current leaders / co-leaders of the house
+ *   house            those, plus anyone in the house (read only)
+ * No house church: pastors only. Pastors log, reopen and pull sources in;
+ * house leaders take, finish and check back in on what they can see.
+ * Phones come from missio_care_phones(): pastors and house leaders only.
  */
 
 export type CareNeed = "prayer" | "talk" | "practical";
@@ -26,6 +35,7 @@ export type CareRequest = {
   source: CareSource;
   /** Null for an anonymous prayer request. */
   name: string | null;
+  /** Pastors and the house's leaders only. Null for everyone else. */
   phone: string | null;
   needs: CareNeed[];
   body: string | null;
@@ -33,6 +43,8 @@ export type CareRequest = {
   urgent: boolean;
   status: CareStatus;
   house: { id: string; number: number; name: string | null } | null;
+  /** The viewer may take, finish and check back in on this one (pastor, or a leader of its house). */
+  canStep: boolean;
   takenBy: { id: string; name: string } | null;
   createdAt: string;
   takenAt: string | null;
@@ -53,7 +65,6 @@ type Row = {
   id: string;
   source: CareSource;
   name: string | null;
-  phone: string | null;
   needs: CareNeed[];
   body: string | null;
   privacy: CarePrivacy;
@@ -67,8 +78,9 @@ type Row = {
   done_note: string | null;
   checked_in_at: string | null;
 };
+// No phone: authenticated users cannot read that column (354). See phonesFor.
 const COLUMNS =
-  "id, source, name, phone, needs, body, privacy, urgent, status, house_church_id, taken_by, created_at, taken_at, done_at, done_note, checked_in_at";
+  "id, source, name, needs, body, privacy, urgent, status, house_church_id, taken_by, created_at, taken_at, done_at, done_note, checked_in_at";
 
 const CHECK_IN_DAYS = 14;
 const PULL_DAYS = 60;
@@ -81,6 +93,34 @@ function admin(): Db | null {
     console.error("[missio] admin client unavailable", error instanceof Error ? error.message : "missing env");
     return null;
   }
+}
+
+const isPastor = (auth: OrgAccess) => auth.roles.includes("pastor");
+
+/** Houses the caller leads or co-leads (338). Null when the lookup fails. */
+async function ledHouseIds(auth: OrgAccess): Promise<Set<string> | null> {
+  const { data, error } = await auth.supabase.rpc("missio_led_house_ids");
+  if (error) {
+    console.error("[missio] missio_led_house_ids failed", error.message ?? "rpc error");
+    return null;
+  }
+  const ids = ((Array.isArray(data) ? data : []) as unknown[]).map((row) =>
+    typeof row === "string" ? row : (row as Record<string, unknown> | null)?.missio_led_house_ids
+  );
+  return new Set(ids.filter((id): id is string => typeof id === "string"));
+}
+
+/** Phones the caller may reply to, by request id (354). Empty on failure. */
+async function phonesFor(auth: OrgAccess, ids: string[]): Promise<Map<string, string>> {
+  const phones = new Map<string, string>();
+  if (ids.length === 0) return phones;
+  const { data, error } = await auth.supabase.rpc("missio_care_phones", { p_ids: ids });
+  if (error) {
+    console.error("[missio] missio_care_phones failed", error.message ?? "rpc error");
+    return phones;
+  }
+  for (const row of (data ?? []) as Array<{ id: string; phone: string | null }>) if (row.phone) phones.set(row.id, row.phone);
+  return phones;
 }
 
 /** Bring connect-card and house-feedback prayer onto the board, once each. Best effort. */
@@ -149,7 +189,7 @@ async function pullSources(auth: OrgAccess, now: Date) {
   }
 }
 
-async function shape(auth: OrgAccess, rows: Row[], now: Date): Promise<CareRequest[]> {
+async function shape(auth: OrgAccess, rows: Row[], led: Set<string> | "all", now: Date): Promise<CareRequest[]> {
   const houseIds = [...new Set(rows.map((row) => row.house_church_id).filter((id): id is string => Boolean(id)))];
   const userIds = [...new Set(rows.map((row) => row.taken_by).filter((id): id is string => Boolean(id)))];
   const houses = new Map<string, { id: string; number: number; name: string | null }>();
@@ -162,22 +202,24 @@ async function shape(auth: OrgAccess, rows: Row[], now: Date): Promise<CareReque
     const db = admin();
     const read = db ? await db.from("users").select("id, first_name, last_name, preferred_name").in("id", userIds) : { data: [] };
     for (const user of (read.data ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; preferred_name: string | null }>) {
-      users.set(user.id, [user.preferred_name || user.first_name, user.last_name].filter(Boolean).join(" ") || "A pastor");
+      users.set(user.id, [user.preferred_name || user.first_name, user.last_name].filter(Boolean).join(" ") || "Someone");
     }
   }
+  const phones = await phonesFor(auth, rows.map((row) => row.id));
   const checkBefore = now.getTime() - CHECK_IN_DAYS * 86400000;
   return rows.map((row) => ({
     id: row.id,
     source: row.source,
     name: row.name,
-    phone: row.phone,
+    phone: phones.get(row.id) ?? null,
     needs: (row.needs ?? ["prayer"]).filter((need): need is CareNeed => (NEEDS as readonly string[]).includes(need)),
     body: row.body,
     privacy: row.privacy,
     urgent: row.urgent,
     status: row.status,
     house: row.house_church_id ? (houses.get(row.house_church_id) ?? null) : null,
-    takenBy: row.taken_by ? { id: row.taken_by, name: users.get(row.taken_by) ?? "A pastor" } : null,
+    canStep: led === "all" || (row.house_church_id !== null && led.has(row.house_church_id)),
+    takenBy: row.taken_by ? { id: row.taken_by, name: users.get(row.taken_by) ?? "Someone" } : null,
     createdAt: row.created_at,
     takenAt: row.taken_at,
     doneAt: row.done_at,
@@ -186,9 +228,18 @@ async function shape(auth: OrgAccess, rows: Row[], now: Date): Promise<CareReque
   }));
 }
 
-/** The board: everything new or on it, plus what was done in the last 45 days. Urgent first. */
-export async function listCare(auth: OrgAccess, now = new Date()): Promise<{ ok: true; requests: CareRequest[]; me: string } | Fail> {
-  await pullSources(auth, now);
+/**
+ * The board: everything new or on it, plus what was done in the last 45 days. Urgent first.
+ * Only the rows RLS lets this caller read. `pastor` opens logging by hand.
+ */
+export async function listCare(
+  auth: OrgAccess,
+  now = new Date()
+): Promise<{ ok: true; requests: CareRequest[]; me: string; pastor: boolean } | Fail> {
+  const pastor = isPastor(auth);
+  if (pastor) await pullSources(auth, now);
+  const led = pastor ? ("all" as const) : await ledHouseIds(auth);
+  if (!led) return broken();
   const recent = new Date(now.getTime() - 45 * 86400000).toISOString();
   const [open, done] = await Promise.all([
     auth.supabase.from("missio_care_requests").select(COLUMNS).eq("org_id", auth.orgId).in("status", ["new", "on_it"]).limit(500),
@@ -201,13 +252,13 @@ export async function listCare(auth: OrgAccess, now = new Date()): Promise<{ ok:
   const rows = [...((open.data ?? []) as Row[]), ...((done.data ?? []) as Row[])].sort(
     (a, b) => Number(b.urgent && b.status !== "done") - Number(a.urgent && a.status !== "done") || b.created_at.localeCompare(a.created_at)
   );
-  const requests = await shape(auth, rows, now);
+  const requests = await shape(auth, rows, led, now);
   const db = admin();
   const me = db ? await db.from("users").select("first_name, preferred_name").eq("id", auth.user.id).maybeSingle() : { data: null };
   const meName = ((me.data as { first_name?: string | null; preferred_name?: string | null } | null)?.preferred_name ||
     (me.data as { first_name?: string | null } | null)?.first_name ||
     "") as string;
-  return { ok: true, requests, me: meName };
+  return { ok: true, requests, me: meName, pastor };
 }
 
 const stepSchema = z
@@ -217,16 +268,30 @@ const stepSchema = z
   })
   .strict();
 
-/** I'll take it / Done / Back to new / Checked back in. */
+/**
+ * I'll take it / Done / Back to new / Checked back in. Pastors: any request.
+ * Leaders: take, done and checked back in, on requests from a house they
+ * lead that RLS lets them read. Members of a house read only.
+ */
 export async function stepCare(auth: OrgAccess, id: string, body: unknown, now = new Date()) {
   const parsed = stepSchema.safeParse(body);
   if (!parsed.success) return fail(400, "invalid_input", "Check the fields and try again.");
-  const read = await auth.supabase.from("missio_care_requests").select("id, status").eq("id", id).eq("org_id", auth.orgId).maybeSingle();
+  const read = await auth.supabase
+    .from("missio_care_requests")
+    .select("id, status, house_church_id")
+    .eq("id", id)
+    .eq("org_id", auth.orgId)
+    .maybeSingle();
   if (read.error) return broken();
   if (!read.data) return fail(404, "not_found", "Not found.");
   const at = now.toISOString();
-  const status = (read.data as { status: CareStatus }).status;
+  const { status, house_church_id: houseId } = read.data as { status: CareStatus; house_church_id: string | null };
   const { action, note } = parsed.data;
+  if (!isPastor(auth)) {
+    const led = await ledHouseIds(auth);
+    if (!led) return broken();
+    if (action === "reopen" || !houseId || !led.has(houseId)) return fail(403, "forbidden", "Not authorized");
+  }
   let patch: Record<string, unknown>;
   if (action === "take") {
     if (status !== "new") return fail(409, "already_resolved", "Someone already took this.");
@@ -257,8 +322,9 @@ const logSchema = z
   })
   .strict();
 
-/** A pastor logs a need by hand (ministry time, a phone call). */
+/** A pastor logs a need by hand (ministry time, a phone call). Pastors only. */
 export async function logCare(auth: OrgAccess, body: unknown) {
+  if (!isPastor(auth)) return fail(403, "forbidden", "Not authorized");
   const parsed = logSchema.safeParse(body);
   if (!parsed.success) return fail(400, "invalid_input", "Check the fields and try again.");
   const input = parsed.data;

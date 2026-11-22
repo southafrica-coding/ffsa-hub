@@ -23,7 +23,8 @@ async function call(url: string, init?: RequestInit) {
 export type CareLog = { name?: string; phone?: string; needs: CareNeed[]; body: string; privacy: CarePrivacy; urgent: boolean };
 
 export type CareClient = {
-  list(): Promise<{ requests: CareRequest[]; me: string }>;
+  /** `pastor` is false for a coach or house leader: they see only what was shared with them. */
+  list(): Promise<{ requests: CareRequest[]; me: string; pastor: boolean }>;
   step(id: string, action: "take" | "done" | "reopen" | "checked_in", note?: string): Promise<void>;
   log(input: CareLog): Promise<void>;
 };
@@ -31,7 +32,7 @@ export type CareClient = {
 export const careClient: CareClient = {
   async list() {
     const body = await call("/api/missio/care");
-    return { requests: (body.requests as CareRequest[]) ?? [], me: typeof body.me === "string" ? body.me : "" };
+    return { requests: (body.requests as CareRequest[]) ?? [], me: typeof body.me === "string" ? body.me : "", pastor: body.pastor === true };
   },
   async step(id, action, note) {
     await call(`/api/missio/care/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ action, ...(note ? { note } : {}) }) });

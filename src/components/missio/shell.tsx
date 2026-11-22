@@ -246,18 +246,16 @@ function MissioSidebar({
             <span>Follow-up</span>
           </Link>
         ) : null}
-        {pastor ? (
-          <Link
-            href="/missio/care"
-            className={`${styles.navLink} ${care ? styles.navOn : ""}`}
-            aria-current={care ? "page" : undefined}
-            data-testid="missio-nav-care"
-            onClick={onNavigate}
-          >
-            <HeartIcon />
-            <span>Care</span>
-          </Link>
-        ) : null}
+        <Link
+          href="/missio/care"
+          className={`${styles.navLink} ${care ? styles.navOn : ""}`}
+          aria-current={care ? "page" : undefined}
+          data-testid="missio-nav-care"
+          onClick={onNavigate}
+        >
+          <HeartIcon />
+          <span>Care</span>
+        </Link>
         {pastor ? (
           <Link
             href="/missio/volunteers"
@@ -313,6 +311,8 @@ function MissioTabBar({ me }: { me: MissioMe }) {
       on: section === "houses",
       icon: <HouseIcon />,
     });
+    // Leaders and members see what their house shared with them (migration 354).
+    tabs.push({ key: "care", href: "/missio/care", label: "Care", on: pathname.startsWith("/missio/care"), icon: <HeartIcon /> });
   }
   if (pastor) {
     tabs.push(
