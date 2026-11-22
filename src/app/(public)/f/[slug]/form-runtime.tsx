@@ -7,7 +7,9 @@ import {
   fieldKey,
   buildFieldsById,
   isFieldVisible,
+  numericBounds,
 } from "@/lib/forms/schema";
+import { LinearScaleInput, StepperInput } from "./numeric-fields";
 import { DateInput } from "@/components/ui/date-input";
 import {
   PublicFormShell,
@@ -17,6 +19,20 @@ import {
 } from "@/components/public-form-shell";
 
 type Values = Record<string, unknown>;
+
+/**
+ * A counter always shows a number, so it starts at its lowest value and
+ * that is the answer unless they change it.
+ */
+export function initialValues(schema: FormSchema): Values {
+  const out: Values = {};
+  for (const step of schema.steps) {
+    for (const field of step.fields) {
+      if (field.type === "stepper") out[fieldKey(field)] = numericBounds(field).min;
+    }
+  }
+  return out;
+}
 
 export function FormRuntime({
   slug,
@@ -48,7 +64,7 @@ export function FormRuntime({
       : eventLogoUrl || schema.branding.logoUrl || null;
   const steps = schema.steps;
   const [stepIdx, setStepIdx] = useState(0);
-  const [values, setValues] = useState<Values>({});
+  const [values, setValues] = useState<Values>(() => initialValues(schema));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -91,6 +107,13 @@ export function FormRuntime({
       if (!empty && field.type === "email" && typeof raw === "string") {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.trim())) {
           stepErrors[k] = "Enter a valid email address";
+        }
+      }
+      if (!empty && (field.type === "linear_scale" || field.type === "stepper")) {
+        const { min, max } = numericBounds(field);
+        const n = typeof raw === "number" ? raw : Number(raw);
+        if (!Number.isInteger(n) || n < min || (max != null && n > max)) {
+          stepErrors[k] = max != null ? `Pick a number from ${min} to ${max}` : `Enter ${min} or more`;
         }
       }
     }
@@ -341,7 +364,11 @@ function FieldInput({
 
   let control: React.ReactNode = null;
 
-  if (field.type === "date") {
+  if (field.type === "linear_scale") {
+    control = <LinearScaleInput field={field} value={value} onChange={onChange} tokens={T} />;
+  } else if (field.type === "stepper") {
+    control = <StepperInput field={field} value={value} onChange={onChange} tokens={T} />;
+  } else if (field.type === "date") {
     control = <DateInput value={str} onChange={(v) => onChange(v)} />;
   } else if (
     field.type === "text" ||

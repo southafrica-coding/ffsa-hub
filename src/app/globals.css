@@ -692,6 +692,22 @@ html.dark [data-shell-rail] { box-shadow: inset -1px 0 0 #302E27; }
   input.masthead-title:not([type="checkbox"]):not([type="radio"]):hover  { border-bottom-color: var(--rule-strong) !important; }
   input.masthead-title:not([type="checkbox"]):not([type="radio"]):focus  { border-bottom-color: var(--ink) !important; }
 
+  /* An EDITABLE section-bar title (the form builder's section names). Same
+     reason as input.masthead-title: out-rank the global input rule. */
+  input.section-bar-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+    font-family: var(--font-condensed) !important;
+    font-size: 16px !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    color: var(--on-ink) !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-bottom: 1px solid transparent !important;
+    padding: 0 !important;
+  }
+  input.section-bar-input:not([type="checkbox"]):not([type="radio"]):focus { border-bottom-color: var(--yellow) !important; }
+
   /* Black section bar — the header for any panel or table group */
   .section-bar {
     display: flex; align-items: center; justify-content: space-between;

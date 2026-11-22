@@ -92,3 +92,21 @@ export async function generateUniqueFormSlug(
     candidate = `${base}-${n}`;
   }
 }
+
+// ────────────────────────────────────────────────────────────
+// Hub Forms (/forms) — every form, with its response count
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Every form, most recently changed first. kind and access_mode come from
+ * migration 390; event forms carry their event so the list can link to
+ * the event builder.
+ */
+export async function listAllForms(supabase: Client) {
+  return supabase
+    .from("forms")
+    .select(
+      "id, slug, name, is_active, event_id, kind, access_mode, updated_at, events(id, title), form_submissions(count)"
+    )
+    .order("updated_at", { ascending: false });
+}

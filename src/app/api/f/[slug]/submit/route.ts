@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { accessModeOf, formAccessDecision } from "@/lib/forms/access";
 import { getFormBySlug } from "@/services/forms";
 import { upsertContactWithDedup } from "@/services/contact-upsert";
 import { addLabelToContact } from "@/services/labels";
@@ -36,6 +38,23 @@ export async function POST(
   }
   if (!form.is_active) {
     return NextResponse.json({ error: "This form is not currently open" }, { status: 403 });
+  }
+
+  // Same rule as the page (migration 390): logged_in needs a Hub session,
+  // token forms stay closed until per-subject links exist.
+  const accessMode = accessModeOf((form as { access_mode?: unknown }).access_mode);
+  if (accessMode !== "public") {
+    const auth = await createClient();
+    const {
+      data: { user },
+    } = await auth.auth.getUser();
+    const decision = formAccessDecision(accessMode, Boolean(user));
+    if (decision === "sign_in") {
+      return NextResponse.json({ error: "Sign in to the Hub to send this form" }, { status: 401 });
+    }
+    if (decision === "closed") {
+      return NextResponse.json({ error: "This form opens from a personal link" }, { status: 403 });
+    }
   }
 
   let body: { data?: Record<string, unknown> };

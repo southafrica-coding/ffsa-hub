@@ -1,0 +1,74 @@
+[
+  {
+    "width": 360,
+    "view": "library",
+    "scrollWidth": 360,
+    "viewport": 360,
+    "horizontalOverflow": false,
+    "offenders": []
+  },
+  {
+    "width": 360,
+    "view": "builder",
+    "scrollWidth": 360,
+    "viewport": 360,
+    "horizontalOverflow": false,
+    "offenders": []
+  },
+  {
+    "width": 360,
+    "view": "routing",
+    "scrollWidth": 360,
+    "viewport": 360,
+    "horizontalOverflow": false,
+    "offenders": []
+  },
+  {
+    "width": 390,
+    "view": "library",
+    "scrollWidth": 390,
+    "viewport": 390,
+    "horizontalOverflow": false,
+    "offenders": []
+  },
+  {
+    "width": 390,
+    "view": "builder",
+    "scrollWidth": 390,
+    "viewport": 390,
+    "horizontalOverflow": false,
+    "offenders": []
+  },
+  {
+    "width": 390,
+    "view": "routing",
+    "scrollWidth": 390,
+    "viewport": 390,
+    "horizontalOverflow": false,
+    "offenders": []
+  },
+  {
+    "width": 430,
+    "view": "library",
+    "scrollWidth": 430,
+    "viewport": 430,
+    "horizontalOverflow": false,
+    "offenders": []
+  },
+  {
+    "width": 430,
+    "view": "builder",
+    "scrollWidth": 430,
+    "viewport": 430,
+    "horizontalOverflow": false,
+    "offenders": []
+  },
+  {
+    "width": 430,
+    "view": "routing",
+    "scrollWidth": 430,
+    "viewport": 430,
+    "horizontalOverflow": false,
+    "offenders": []
+  }
+]

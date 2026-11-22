@@ -154,4 +154,13 @@ describe("getSidebarAccess", () => {
     const { roundTrips } = await measure(20, () => getSidebarAccess(f.client));
     expect(roundTrips).toBeLessThanOrEqual(4);
   });
+
+  it("an unscoped comms_admin gets Forms; staff and events_admin do not", async () => {
+    const comms = await getSidebarAccess(client({ roles: [{ id: "r1", name: "comms_admin" }], direct: [] }).client);
+    expect(comms.permittedModules.has("forms")).toBe(true);
+    const others = await getSidebarAccess(
+      client({ roles: [{ id: "r1", name: "staff" }, { id: "r2", name: "events_admin" }], direct: [] }).client
+    );
+    expect(others.permittedModules.has("forms")).toBe(false);
+  });
 });

@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { accessModeOf, formAccessDecision } from "@/lib/forms/access";
 import { getFormBySlug } from "@/services/forms";
 import { emptyFormSchema, type FormSchema } from "@/lib/forms/schema";
 import { FormRuntime } from "./form-runtime";
@@ -76,6 +78,32 @@ export default async function PublicFormPage({
         body="This form may have closed or the link is incorrect. Please check with the sender for an updated link."
       />
     );
+  }
+
+  // Who may fill it (migration 390). Public forms never touch the session.
+  const accessMode = accessModeOf((form as { access_mode?: unknown }).access_mode);
+  if (accessMode !== "public") {
+    const auth = await createClient();
+    const {
+      data: { user },
+    } = await auth.auth.getUser();
+    const decision = formAccessDecision(accessMode, Boolean(user));
+    if (decision === "sign_in") {
+      return (
+        <PublicFormNotice
+          heading="Sign in to fill this in"
+          body="This form is for people with an FFSA Hub login. Sign in to the Hub, then open this link again."
+        />
+      );
+    }
+    if (decision === "closed") {
+      return (
+        <PublicFormNotice
+          heading="Form not available"
+          body="This form opens from a personal link. Please use the link you were sent."
+        />
+      );
+    }
   }
 
   const schema: FormSchema =

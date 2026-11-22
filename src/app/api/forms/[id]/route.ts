@@ -11,10 +11,30 @@ import {
   writeBlocked,
 } from "@/lib/auth/event-access";
 import { gateEvent } from "@/lib/auth/event-route";
+import { previewWriteRefusal } from "@/lib/preview-writes";
+import { validateFormSchema, type FormSchema } from "@/lib/forms/schema";
 import type { Json } from "@/types/database";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
+
+/** Who can fill a Hub form. "token" needs per-subject links (F4), so not yet. */
+const SETTABLE_ACCESS_MODES = ["public", "logged_in"] as const;
+
+/**
+ * Hub forms (no event) are new with /forms, so they get the preview
+ * guard: a preview shares the production database. Event forms keep
+ * saving as they always have.
+ */
+function hubFormPreviewRefusal(form: { event_id?: string | null }) {
+  if (form.event_id) return null;
+  const refusal = previewWriteRefusal();
+  if (!refusal) return null;
+  return NextResponse.json(
+    { ...refusal.body, message: "This preview deployment cannot change forms." },
+    { status: refusal.status }
+  );
+}
 
 /** Forms with an event use the event gate. Forms with none are admin or comms_admin only. */
 async function gateForm(supabase: Client, userId: string, formId: string, write: boolean) {
@@ -58,6 +78,8 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const gated = await gateForm(supabase, user.id, id, true);
   if ("error" in gated && gated.error) return gated.error;
+  const previewRefusal = hubFormPreviewRefusal(gated.form);
+  if (previewRefusal) return previewRefusal;
 
   let body: {
     name?: string;
@@ -66,6 +88,7 @@ export async function PATCH(
     records_attendance?: boolean;
     is_active?: boolean;
     redirect_url?: string | null;
+    access_mode?: unknown;
   };
   try {
     body = await request.json();
@@ -75,7 +98,33 @@ export async function PATCH(
 
   const patch: Record<string, unknown> = {};
   if (body.name !== undefined) patch.name = body.name.trim();
-  if (body.schema !== undefined) patch.schema = body.schema as Json;
+  if (body.schema !== undefined) {
+    // Scale / counter bounds and route rules are checked before they are
+    // stored (validateFormSchema, F1). Routes are only stored here; the
+    // runner that acts on them is F3.
+    const schema = body.schema as FormSchema | null;
+    if (!schema || typeof schema !== "object" || !Array.isArray(schema.steps)) {
+      return NextResponse.json({ error: "schema must have steps" }, { status: 400 });
+    }
+    const problems = validateFormSchema(schema);
+    if (Object.keys(problems).length > 0) {
+      return NextResponse.json(
+        { error: "Some questions need fixing", fieldErrors: problems },
+        { status: 400 }
+      );
+    }
+    patch.schema = body.schema as Json;
+  }
+  if (body.access_mode !== undefined) {
+    // Only Hub forms choose who can fill them; event forms stay public.
+    if (gated.form.event_id) {
+      return NextResponse.json({ error: "Event forms are always public" }, { status: 400 });
+    }
+    if (!(SETTABLE_ACCESS_MODES as readonly unknown[]).includes(body.access_mode)) {
+      return NextResponse.json({ error: "access_mode must be public or logged_in" }, { status: 400 });
+    }
+    patch.access_mode = body.access_mode;
+  }
   if (body.label_id !== undefined) patch.label_id = body.label_id;
   if (body.records_attendance !== undefined)
     patch.records_attendance = body.records_attendance;
@@ -102,6 +151,8 @@ export async function DELETE(
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const gated = await gateForm(supabase, user.id, id, true);
   if ("error" in gated && gated.error) return gated.error;
+  const previewRefusal = hubFormPreviewRefusal(gated.form);
+  if (previewRefusal) return previewRefusal;
 
   const { data, error } = await deleteForm(supabase, id);
   if (writeBlocked(error, data)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });

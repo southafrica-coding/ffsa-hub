@@ -184,6 +184,10 @@ export async function getSidebarAccess(
         if (perm.module === "vehicles" || perm.module === "equipment") result.permittedModules.add("bookings");
       }
 
+      // Forms has no permission module of its own: an unscoped comms_admin
+      // manages Hub forms (canManageHubForms), so the role lights it.
+      if (result.userRoles.includes("comms_admin")) result.permittedModules.add("forms");
+
       if (schoolsAccess === "all" || schoolsAccess.length > 0) result.permittedModules.add("schools");
       if (staffSeat.length > 0) result.permittedModules.add("schools");
     }

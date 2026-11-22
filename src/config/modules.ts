@@ -23,6 +23,7 @@ import {
   Megaphone,
   UserCheck,
   Car,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 
@@ -76,6 +77,17 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     icon: Calendar,
     description: "Events, registrations, and attendance",
     requiredRoles: ["super_admin", "admin", "events_admin"],
+  },
+  {
+    // Hub Forms: forms with no event, plus a list of every event form.
+    // Same rule as /api/forms/[id] for forms with no event: admins, and
+    // comms_admin via sidebar-access.ts. Event forms stay on their event.
+    id: "forms",
+    label: "Forms",
+    href: "/forms",
+    icon: ClipboardList,
+    description: "Build forms, route answers, share links and read responses",
+    requiredRoles: ["super_admin", "admin", "comms_admin"],
   },
   {
     id: "bookings",
