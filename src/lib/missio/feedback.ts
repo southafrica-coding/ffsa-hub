@@ -1,6 +1,5 @@
 import "server-only";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { OrgAccess } from "@/lib/missio/access";
 import { requireAvailabilityTokenSecret } from "@/lib/missio/availability/token";
@@ -8,6 +7,10 @@ import type { HouseScope } from "@/lib/missio/house-churches";
 
 /**
  * Weekly house feedback (boards M4a, M4b). Migration 339.
+ *
+ * The four-question M4a form is gone: the link now opens the full
+ * weekly form (F4, lib/missio/weekly-feedback.ts). Links, the meeting
+ * date and the history board stay here.
  *
  * One link per house. The raw link is an HMAC of the house id and a stored
  * nonce, so a pastor can copy it again later; only its SHA-256 hash is
@@ -28,13 +31,6 @@ export type FeedbackEntry = {
   prayer: string | null;
   notes: string | null;
   submittedAt: string;
-};
-
-export type PublicFeedbackView = {
-  houseTitle: string;
-  meetingDate: string;
-  lastAttendance: number | null;
-  existing: FeedbackEntry | null;
 };
 
 export type HouseFeedbackRow = {
@@ -109,7 +105,7 @@ const ENTRY_COLUMNS = "house_church_id, meeting_date, attendance, mood, new_name
 export async function houseFeedbackLink(
   db: Admin,
   houseId: string,
-  userId: string,
+  userId: string | null,
   rotate = false
 ): Promise<{ ok: true; path: string } | Fail> {
   let secret: string;
@@ -139,7 +135,8 @@ export async function houseFeedbackLink(
   return { ok: true, path: feedbackPath(raw) };
 }
 
-async function linkFor(db: Admin, raw: string): Promise<{ ok: true; linkId: string; houseId: string } | Fail> {
+/** The house a raw link belongs to. The raw token is never logged. */
+export async function resolveFeedbackLink(db: Admin, raw: string): Promise<{ ok: true; linkId: string; houseId: string } | Fail> {
   if (!FEEDBACK_TOKEN_PATTERN.test(raw)) return fail(404, "invalid_token", "This link isn’t right.");
   const tokenHash = hashToken(raw);
   const found = await db.from("missio_feedback_links").select("id, house_church_id, token_hash").eq("token_hash", tokenHash).maybeSingle();
@@ -152,99 +149,6 @@ async function linkFor(db: Admin, raw: string): Promise<{ ok: true; linkId: stri
     return fail(404, "invalid_token", "This link isn’t right.");
   }
   return { ok: true, linkId: row.id, houseId: row.house_church_id };
-}
-
-async function houseFor(db: Admin, houseId: string) {
-  const house = await db.from("house_churches").select("id, number, name, meeting_day").eq("id", houseId).maybeSingle();
-  if (house.error || !house.data) return null;
-  return house.data as { id: string; number: number; name: string | null; meeting_day: string | null };
-}
-
-export async function loadPublicFeedback(db: Admin, raw: string, now = new Date()): Promise<{ ok: true; view: PublicFeedbackView } | Fail> {
-  const link = await linkFor(db, raw);
-  if (!link.ok) return link;
-  const house = await houseFor(db, link.houseId);
-  if (!house) return fail(404, "invalid_token", "This link isn’t right.");
-  const meetingDate = meetingDateFor(house.meeting_day, now);
-  const recent = await db
-    .from("missio_house_feedback")
-    .select(ENTRY_COLUMNS)
-    .eq("house_church_id", house.id)
-    .lte("meeting_date", meetingDate)
-    .order("meeting_date", { ascending: false })
-    .limit(2);
-  if (recent.error) {
-    console.error("[missio] feedback read failed", recent.error.message);
-    return fail(500, "server_error", "Something went wrong.");
-  }
-  const rows = ((recent.data ?? []) as Record<string, unknown>[]).map(toEntry);
-  const existing = rows.find((row) => row.meetingDate === meetingDate) ?? null;
-  const previous = rows.find((row) => row.meetingDate !== meetingDate) ?? null;
-  return {
-    ok: true,
-    view: {
-      houseTitle: house.name?.trim() || `House ${house.number}`,
-      meetingDate,
-      lastAttendance: previous?.attendance ?? null,
-      existing,
-    },
-  };
-}
-
-const optionalText = z
-  .string()
-  .trim()
-  .max(2000)
-  .optional()
-  .transform((value) => (value ? value : null));
-
-const submitSchema = z
-  .object({
-    attendance: z.number().int().min(0).max(500),
-    mood: z.enum(MOODS),
-    newNames: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
-    prayer: optionalText,
-    notes: optionalText,
-  })
-  .strict();
-
-/** Save this week's answers. Sending again the same week updates the row. */
-export async function savePublicFeedback(
-  db: Admin,
-  raw: string,
-  body: unknown,
-  now = new Date()
-): Promise<{ ok: true; entry: FeedbackEntry } | Fail> {
-  const parsed = submitSchema.safeParse(body);
-  if (!parsed.success) return fail(400, "invalid_input", "Check the answers and try again.");
-  const link = await linkFor(db, raw);
-  if (!link.ok) return link;
-  const house = await houseFor(db, link.houseId);
-  if (!house) return fail(404, "invalid_token", "This link isn’t right.");
-  const meetingDate = meetingDateFor(house.meeting_day, now);
-  const saved = await db
-    .from("missio_house_feedback")
-    .upsert(
-      {
-        house_church_id: house.id,
-        meeting_date: meetingDate,
-        attendance: parsed.data.attendance,
-        mood: parsed.data.mood,
-        new_names: [...new Set(parsed.data.newNames ?? [])],
-        prayer: parsed.data.prayer,
-        notes: parsed.data.notes,
-        link_id: link.linkId,
-        submitted_at: now.toISOString(),
-      },
-      { onConflict: "house_church_id,meeting_date" }
-    )
-    .select(ENTRY_COLUMNS)
-    .single();
-  if (saved.error || !saved.data) {
-    console.error("[missio] feedback save failed", saved.error?.message ?? "no row");
-    return fail(500, "server_error", "Something went wrong.");
-  }
-  return { ok: true, entry: toEntry(saved.data as Record<string, unknown>) };
 }
 
 /**

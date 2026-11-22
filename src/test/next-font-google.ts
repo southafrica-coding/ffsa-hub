@@ -18,3 +18,5 @@ export const Roboto_Mono = face("Roboto_Mono");
 export const Bebas_Neue = face("Bebas_Neue");
 export const Anton = face("Anton");
 export const Space_Mono = face("Space_Mono");
+export const Cormorant_Garamond = face("Cormorant_Garamond");
+export const DM_Sans = face("DM_Sans");

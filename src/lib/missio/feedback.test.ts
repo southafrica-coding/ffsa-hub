@@ -58,7 +58,7 @@ function from(table: string) {
 }
 const db = { from };
 
-const { houseFeedbackLink, loadPublicFeedback, meetingDateFor, savePublicFeedback } = await import("./feedback");
+const { houseFeedbackLink, meetingDateFor, resolveFeedbackLink } = await import("./feedback");
 
 beforeEach(() => {
   for (const key of Object.keys(tables)) delete tables[key];
@@ -89,38 +89,12 @@ describe("weekly feedback", () => {
     const rotated = await houseFeedbackLink(db, "h5", "pastor", true);
     if (!rotated.ok) throw new Error("expected a link");
     expect(rotated.path).not.toBe(first.path);
-    expect((await loadPublicFeedback(db, raw(first.path))).ok).toBe(false);
-    expect((await loadPublicFeedback(db, raw(rotated.path))).ok).toBe(true);
+    expect((await resolveFeedbackLink(db, raw(first.path))).ok).toBe(false);
+    expect(await resolveFeedbackLink(db, raw(rotated.path))).toMatchObject({ ok: true, houseId: "h5" });
   });
 
-  it("saves this week's answers once, updates them on a second send, and starts from last week's count", async () => {
-    const link = await houseFeedbackLink(db, "h5", "pastor");
-    if (!link.ok) throw new Error("expected a link");
-    const token = raw(link.path);
-    const lastWeek = new Date("2026-11-12T06:00:00Z");
-    const thisWeek = new Date("2026-11-19T06:00:00Z");
-
-    expect((await savePublicFeedback(db, token, { attendance: 21, mood: "good" }, lastWeek)).ok).toBe(true);
-    const view = await loadPublicFeedback(db, token, thisWeek);
-    if (!view.ok) throw new Error("expected a view");
-    expect(view.view).toMatchObject({ houseTitle: "House 5", meetingDate: "2026-11-18", lastAttendance: 21, existing: null });
-
-    const body = { attendance: 22, mood: "great", newNames: ["Thabo Nkosi", "Thabo Nkosi"], prayer: "Thabo’s mom", notes: "" };
-    const saved = await savePublicFeedback(db, token, body, thisWeek);
-    if (!saved.ok) throw new Error("expected a save");
-    expect(saved.entry).toMatchObject({ meetingDate: "2026-11-18", attendance: 22, newNames: ["Thabo Nkosi"], notes: null });
-    expect((await savePublicFeedback(db, token, { ...body, attendance: 23 }, thisWeek)).ok).toBe(true);
-    expect(tables.missio_house_feedback).toHaveLength(2);
-    const again = await loadPublicFeedback(db, token, thisWeek);
-    expect(again.ok && again.view.existing?.attendance).toBe(23);
-  });
-
-  it("refuses a bad token and bad answers", async () => {
-    expect(await loadPublicFeedback(db, "short")).toMatchObject({ ok: false, code: "invalid_token" });
-    expect(await savePublicFeedback(db, "A".repeat(43), { attendance: 3, mood: "good" })).toMatchObject({ ok: false, code: "invalid_token" });
-    const link = await houseFeedbackLink(db, "h5", "pastor");
-    if (!link.ok) throw new Error("expected a link");
-    expect(await savePublicFeedback(db, raw(link.path), { attendance: -1, mood: "good" })).toMatchObject({ ok: false, code: "invalid_input" });
-    expect(await savePublicFeedback(db, raw(link.path), { attendance: 3, mood: "meh" })).toMatchObject({ ok: false, code: "invalid_input" });
+  it("refuses a bad token", async () => {
+    expect(await resolveFeedbackLink(db, "short")).toMatchObject({ ok: false, code: "invalid_token" });
+    expect(await resolveFeedbackLink(db, "A".repeat(43))).toMatchObject({ ok: false, code: "invalid_token" });
   });
 });

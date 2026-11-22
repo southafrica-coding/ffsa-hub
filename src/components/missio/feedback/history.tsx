@@ -92,6 +92,11 @@ export function FeedbackHistory({ client = houseChurchesClient }: { client?: Hou
     <div className={`${content.page} ${styles.root}`}>
       <AllHousesLink />
       <h1 className={content.title}>Weekly feedback</h1>
+      <p className={content.lede}>
+        <Link href="/missio-feedback" data-testid="feedback-sunday-results">
+          This Sunday’s results ↗
+        </Link>
+      </p>
       {state.phase === "ready" ? (
         <p className={`${shell.lede} ${content.lede}`} data-testid="feedback-summary">
           {reportedLastWeek.length} of {houses.length} houses sent feedback in the last 7 days · {cameLastWeek} came
@@ -238,16 +243,20 @@ export function HouseFeedbackPanel({
               <EntryItem entry={last} />
             </ol>
           ) : (
-            <p className={styles.quiet}>Nothing sent yet. Send the leader the link below; it takes them a minute after the meeting.</p>
+            <p className={styles.quiet}>Nothing sent yet. Fill it in, or send the leader the link below; it takes about five minutes after the meeting.</p>
           )}
         </>
       ) : null}
       <div className={styles.linkRow}>
+        {/* Signed-in leaders fill it here; the link is for sending on. */}
+        <Link className={shell.ghost} href={`/missio-feedback/${houseId}`} data-testid="feedback-fill">
+          Fill in this week
+        </Link>
         <button type="button" className={shell.ghost} disabled={pending} onClick={() => void getLink(false)} data-testid="feedback-copy">
           Copy the leader’s link
         </button>
         {link ? (
-          <a className={shell.ghost} href={`https://wa.me/?text=${encodeURIComponent(`How was house church this week? It takes a minute: ${link}`)}`} target="_blank" rel="noopener noreferrer">
+          <a className={shell.ghost} href={`https://wa.me/?text=${encodeURIComponent(`How was house church this week? It takes about five minutes: ${link}`)}`} target="_blank" rel="noopener noreferrer">
             Send on WhatsApp
           </a>
         ) : null}

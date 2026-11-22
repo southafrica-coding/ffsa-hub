@@ -172,6 +172,25 @@ export function FormsLibrary({
       </div>
 
       <div className="section-bar">
+        <span className="section-bar-title">Templates</span>
+      </div>
+      <div className="px-5 py-3 md:px-8">
+        <ul className="border border-[color:var(--rule-strong)]">
+          <li className="flex items-start gap-3 px-3.5 py-3">
+            <div className="min-w-0 flex-1">
+              <Link href="/forms/templates/missio-weekly-feedback" className="text-[15px] font-bold underline-offset-2 hover:underline">
+                Missio weekly feedback
+              </Link>
+              <p className="mt-0.5 text-[13px] text-[color:var(--text-secondary)]">
+                One per house church each Sunday. Every question and where it goes.
+              </p>
+            </div>
+            <StatusPill>Template</StatusPill>
+          </li>
+        </ul>
+      </div>
+
+      <div className="section-bar">
         <span className="section-bar-title">Coming later</span>
       </div>
       <div className="px-5 py-3 pb-6 md:px-8">

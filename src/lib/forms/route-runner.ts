@@ -53,16 +53,30 @@ export type RunFormRoutesInput = {
   contactId: string | null;
   /**
    * What the submission is about, decided by the server (never the
-   * browser). A house comes from its per-house link (F4); until then
-   * the house routes skip with "no_house".
+   * browser). A house comes from its per-house link or the signed-in
+   * leader's house (F4, lib/missio/weekly-feedback.ts); without one the
+   * house routes skip with "no_house".
    */
   subject: RouteSubject | null;
+  /**
+   * Extra columns for the typed feedback row, set by the server (never
+   * the browser): the M4a link it came through, and the mood 339 still
+   * requires. Written only when a write_column route writes the row.
+   */
+  rowExtras?: { link_id?: string | null; mood?: "hard" | "okay" | "good" | "great" };
 };
+
+/** A house subject, from its per-house link or a leader's login (F4). */
+export function houseSubject(houseId: string): RouteSubject {
+  return { type: "house", id: houseId };
+}
 
 /**
  * The subject the server can vouch for, from the form's subject_type
- * (migration 390). A house needs its per-house link (F4), so it is
- * null here until then and the house routes skip.
+ * (migration 390). A house is never taken from the form row: only the
+ * weekly feedback path (lib/missio/weekly-feedback.ts) knows it, from
+ * the link or the login, and passes houseSubject(). /f/<slug> has
+ * neither, so it gets null here and the house routes skip.
  */
 export function submissionSubject(
   form: { subject_type?: unknown; event_id?: string | null; department_id?: string | null },
@@ -214,6 +228,18 @@ function meetingDate(data: Record<string, unknown>, house: House, now: Date): st
   }
   return meetingDateFor(house.meeting_day, now);
 }
+
+const MOODS = ["hard", "okay", "good", "great"];
+
+/** Only the two extras the server may set, and only well-formed. */
+function cleanExtras(extras: RunFormRoutesInput["rowExtras"]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (extras?.link_id && UUID_RE.test(extras.link_id)) out.link_id = extras.link_id;
+  if (extras?.mood && MOODS.includes(extras.mood)) out.mood = extras.mood;
+  return out;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const result = (f: FiredRoute, status: RouteRunStatus, reason?: string): RouteRunResult => ({
   fieldId: f.field.id,
@@ -412,6 +438,8 @@ async function writeColumns(
     .from("missio_house_feedback")
     .upsert(
       {
+        // A real answer (a mood question) wins over the derived extra.
+        ...cleanExtras(input.rowExtras),
         ...row,
         house_church_id: house.id,
         meeting_date: date,
