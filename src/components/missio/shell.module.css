@@ -1,6 +1,6 @@
 .shell {
-  --display: var(--font-missio-display), Fraunces, Georgia, serif;
-  --body: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  --display: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
+  --body: var(--font-missio-body), "DM Sans", system-ui, sans-serif;
   display: flex;
   min-height: 100vh;
   height: 100vh;
@@ -11,25 +11,36 @@
   line-height: 22px;
 }
 
+/* Brand Guide display: Cormorant Garamond 500, large and tight, sentence case. */
 .shell h1,
 .shell h2,
 .denied h1 {
   font-family: var(--display);
-  font-weight: 560;
+  font-weight: 500;
   text-transform: none;
-  letter-spacing: -0.4px;
-  line-height: 1.25;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
   color: var(--ink);
+  font-variant-numeric: lining-nums;
 }
 
 .shell h1 {
-  font-size: 32px;
+  font-size: 42px;
   margin: 2px 0 0;
 }
 
 .shell h2 {
-  font-size: 22px;
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: -0.03em;
   margin: 0;
+}
+
+/* The one phrase that matters: italic Cormorant in sun. */
+.shell h1 em,
+.shell h2 em {
+  font-style: italic;
+  color: var(--em);
 }
 
 .shell a {
@@ -42,7 +53,7 @@
 }
 
 /* FFSA's global button and label rules are mono, uppercase and wide-tracked.
-   Missio uses Archivo in sentence case. */
+   Missio uses DM Sans in sentence case. */
 .shell button,
 .shell [role="button"] {
   font-family: var(--body) !important;
@@ -121,9 +132,9 @@
   margin-top: 6px;
   padding: 0 8px;
   box-sizing: border-box;
-  border-radius: 6px;
-  background: #28322c;
-  border: 1px solid #313b34;
+  border-radius: 0;
+  background: var(--side-hover);
+  border: 1px solid var(--side-rule);
   color: var(--side-sub);
 }
 
@@ -141,13 +152,13 @@
   padding: 0 2px !important;
   border: 0 !important;
   border-radius: 0 !important;
-  background: #28322c !important;
-  background-color: #28322c !important;
+  background: var(--side-hover) !important;
+  background-color: var(--side-hover) !important;
   box-shadow: none !important;
-  color: #f3efe4 !important;
-  -webkit-text-fill-color: #f3efe4;
-  caret-color: #f3efe4;
-  font-family: var(--body), Archivo, system-ui, sans-serif !important;
+  color: var(--side-ink) !important;
+  -webkit-text-fill-color: var(--side-ink);
+  caret-color: var(--side-ink);
+  font-family: var(--body), "DM Sans", system-ui, sans-serif !important;
   font-size: 15px !important;
   font-weight: 400 !important;
   line-height: 22px !important;
@@ -175,7 +186,7 @@
   gap: 9px;
   height: 40px;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: 0;
   color: var(--side-ink);
   font-size: 15px;
 }
@@ -184,15 +195,65 @@
   background: var(--side-hover);
 }
 
+/* On the ink rail the active section is a lime strip (lime on ink, never on paper). */
 .navOn {
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
+  background: var(--side-on);
+  color: var(--side-on-ink);
+  font-weight: 650;
 }
 
 .navOn:hover {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--side-on);
+  color: var(--side-on-ink);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 8px 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--side-rule);
+  color: var(--side-ink);
+  /* SA is lime on the ink rail. */
+  --ink: var(--side-ink);
+  --sa: var(--side-on);
+}
+
+.shell .brand:hover,
+.drawer .brand:hover {
+  color: var(--side-ink);
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--side-ink);
+  outline-offset: 2px;
+}
+
+.themeToggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.themeToggle:hover {
+  opacity: 0.65;
+}
+
+.themeToggle:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
 .soon {
@@ -206,7 +267,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   border: 1px solid var(--side-rule);
-  border-radius: 999px;
+  border-radius: 0;
   padding: 0 6px;
   line-height: 18px;
 }
@@ -223,7 +284,7 @@
 .avatar {
   width: 28px;
   height: 28px;
-  border-radius: 999px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   background: var(--side-ink);
@@ -279,9 +340,9 @@
   gap: 6px;
   height: 26px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--accent-soft);
-  color: #8e3d1f;
+  color: var(--ink);
   font-size: 13px;
   font-weight: 600;
 }
@@ -289,8 +350,8 @@
 .dot {
   width: 7px;
   height: 7px;
-  border-radius: 99px;
-  background: var(--accent);
+  border-radius: 50%;
+  background: var(--ink);
 }
 
 .content {
@@ -305,9 +366,13 @@
   display: none;
 }
 
+/* Brand Guide label: DM Sans 650, caps, wide tracking. */
 .eyebrow {
   color: var(--quiet);
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .lede {
@@ -327,13 +392,13 @@
 .card {
   background: var(--panel);
   border: 1px solid var(--rule);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 16px;
   display: block;
 }
 
 .card:hover {
-  border-color: #cfc8b6;
+  border-color: var(--rule-strong);
 }
 
 .cardTitle {
@@ -351,9 +416,9 @@
   align-items: center;
   height: 24px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--accent-soft);
-  color: #8e3d1f;
+  color: var(--ink);
   font-size: 12px;
   font-weight: 600;
 }
@@ -381,7 +446,7 @@
 .filterLabel {
   font-size: 12px;
   font-weight: 600;
-  color: var(--quiet, #6e685b);
+  color: var(--quiet, rgb(23 55 47 / 0.72));
 }
 
 .select,
@@ -390,11 +455,11 @@
 .field select {
   box-sizing: border-box;
   height: 36px;
-  border: 1px solid #ddd7c8 !important;
-  border-radius: 6px !important;
-  background: #fff !important;
-  color: #1c1b17 !important;
-  font-family: var(--body), Archivo, system-ui, sans-serif !important;
+  border: 1px solid var(--ink) !important;
+  border-radius: 0 !important;
+  background: var(--field) !important;
+  color: var(--ink) !important;
+  font-family: var(--body), "DM Sans", system-ui, sans-serif !important;
   font-size: 15px !important;
   font-weight: 400 !important;
   line-height: 22px !important;
@@ -422,7 +487,7 @@
   gap: 6px;
   height: 36px;
   padding: 0 12px;
-  border-radius: 6px;
+  border-radius: 0;
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -433,9 +498,9 @@
 .dialog .primary:hover,
 .dialog .primary:focus,
 .dialog .primary:focus-visible {
-  background: var(--accent, #b4532e);
-  border: 1px solid var(--accent, #b4532e);
-  color: var(--accent-ink, #fff8ee);
+  background: var(--accent, #17372F);
+  border: 1px solid var(--accent, #17372F);
+  color: var(--accent-ink, #FFFAF0);
 }
 
 .primary:disabled,
@@ -453,15 +518,15 @@
 .dialog .textButton:hover,
 .dialog .textButton:focus,
 .dialog .textButton:focus-visible {
-  background: var(--panel, #fbf9f4);
-  border: 1px solid var(--rule, #ddd7c8);
-  color: var(--ink, #1c1b17);
+  background: var(--panel, #FFFAF0);
+  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  color: var(--ink, #17372F);
 }
 
 .dialog .primary:focus-visible,
 .dialog .ghost:focus-visible,
 .dialog .textButton:focus-visible {
-  outline: 2px solid var(--ink, #1c1b17);
+  outline: 2px solid var(--ink, #17372F);
   outline-offset: 2px;
 }
 
@@ -471,12 +536,12 @@
 .dialog button:hover,
 .dialog button:focus,
 .dialog button:focus-visible {
-  font-family: var(--body), Archivo, system-ui, sans-serif !important;
+  font-family: var(--body), "DM Sans", system-ui, sans-serif !important;
   font-weight: 600 !important;
   font-size: 14px;
   letter-spacing: 0;
   text-transform: none;
-  border-radius: 6px;
+  border-radius: 0;
 }
 
 .headRow {
@@ -492,7 +557,7 @@
 .tableCard {
   background: var(--panel);
   border: 1px solid var(--rule);
-  border-radius: 10px;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -565,7 +630,7 @@
 }
 
 .table tbody tr:hover td {
-  background: #f7f4ec;
+  background: var(--subtle);
 }
 
 .personName {
@@ -577,7 +642,7 @@
   align-items: center;
   height: 24px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 12px;
   font-weight: 600;
 }
@@ -589,7 +654,7 @@
 
 .badgeVisitor {
   background: var(--warn-soft);
-  color: var(--warn);
+  color: var(--warn-text, #17372F);
 }
 
 .badgeInactive {
@@ -651,7 +716,8 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(28, 27, 23, 0.28);
+  /* Deep ink veil: the Guide allows tints of its own colours, never a grey. */
+  background: rgb(13 41 35 / 0.45);
   z-index: 90;
   display: grid;
   place-items: center;
@@ -667,25 +733,26 @@
   width: min(520px, calc(100% - 32px));
   max-height: min(92vh, 100%);
   overflow: auto;
-  background: var(--panel, #fbf9f4);
-  color: var(--ink, #1c1b17);
-  border: 1px solid var(--rule, #ddd7c8);
-  border-radius: 10px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+  background: var(--panel, #FFFAF0);
+  color: var(--ink, #17372F);
+  border: 1px solid var(--ink, #17372F);
+  border-radius: 0;
+  box-shadow: none;
   padding: 18px 18px 16px;
-  font-family: var(--body), Archivo, system-ui, sans-serif;
+  font-family: var(--body), "DM Sans", system-ui, sans-serif;
 }
 
 .dialog h2,
 .dialogTitle,
 .dialogTitle:focus {
-  font-family: var(--display), Fraunces, Georgia, serif;
-  font-weight: 560;
-  font-size: 22px;
-  letter-spacing: -0.3px;
+  font-family: var(--display), "Cormorant Garamond", Georgia, serif;
+  font-variant-numeric: lining-nums;
+  font-weight: 500;
+  font-size: 26px;
+  letter-spacing: -0.02em;
   text-transform: none;
-  line-height: 1.25;
-  color: var(--ink, #1c1b17);
+  line-height: 1.05;
+  color: var(--ink, #17372F);
   margin: 0 0 8px;
 }
 
@@ -707,20 +774,20 @@
 }
 
 .dateReadout {
-  font-family: var(--body), Archivo, system-ui, sans-serif;
+  font-family: var(--body), "DM Sans", system-ui, sans-serif;
   font-weight: 500;
   font-size: 14px;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--ink, #1c1b17);
+  color: var(--ink, #17372F);
 }
 
 .field input,
 .field select {
   height: 34px;
   border: 1px solid var(--rule);
-  border-radius: 6px;
-  background: #fff;
+  border-radius: 0;
+  background: var(--field);
   color: var(--ink);
   font: inherit;
   font-weight: 400;
@@ -743,19 +810,19 @@
 .alert {
   margin: 0 0 12px;
   padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--warn-soft, #f5e8cf);
-  color: var(--warn, #94631a);
+  border-radius: 0;
+  background: var(--warn-soft, rgb(241 143 59 / 0.22));
+  color: var(--warn-text, #17372F);
   font-size: 14px;
 }
 
 .info {
   margin: 0 0 12px;
   padding: 10px 12px;
-  border-radius: 6px;
-  background: var(--accent-soft, #f6e4d9);
-  color: var(--ink, #1c1b17);
-  border: 1px solid var(--accent, #b4532e);
+  border-radius: 0;
+  background: var(--accent-soft, #D9F45A);
+  color: var(--ink, #17372F);
+  border: 1px solid var(--accent, #17372F);
   font-size: 15px;
   line-height: 1.45;
 }
@@ -763,7 +830,7 @@
 .success {
   margin: 0 0 12px;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: 0;
   background: var(--ok-soft);
   color: var(--ok);
   font-size: 14px;
@@ -792,7 +859,7 @@
 }
 
 .note {
-  color: var(--warn);
+  color: var(--warn-text, #17372F);
   font-size: 13px;
   font-weight: 600;
 }
@@ -811,7 +878,7 @@
   width: min(480px, 100%);
   background: var(--panel);
   border: 1px solid var(--rule);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 28px 24px;
 }
 
@@ -824,14 +891,14 @@
   display: inline-flex;
   margin-top: 16px;
   font-weight: 600;
-  color: var(--accent-text, #8e3d1f);
+  color: var(--accent-text, #17372F);
 }
 
 .markInactive {
   margin-right: auto;
   background: transparent;
   border: 0;
-  color: var(--warn);
+  color: var(--warn-text, #17372F);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -860,8 +927,8 @@
   padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
   gap: 0 !important;
   border: 0 !important;
-  background: var(--side, #1d2520) !important;
-  color: var(--side-ink, #f3efe4) !important;
+  background: var(--side, #17372F) !important;
+  color: var(--side-ink, #FFFAF0) !important;
   box-shadow: none !important;
   /* The sheet's slide-in translate parks the panel a few pixels off the
      left edge while it runs, which eats this sidebar's inset. */
@@ -871,7 +938,7 @@
 
 .drawer > button {
   background: transparent !important;
-  color: #f3efe4 !important;
+  color: var(--side-ink) !important;
 }
 
 .sideDrawer {
@@ -918,7 +985,7 @@
   }
 
   .shell h1 {
-    font-size: 28px;
+    font-size: 36px;
   }
 
   /* iOS zooms the page when a focused control is under 16px. */
@@ -965,9 +1032,12 @@
     white-space: nowrap;
   }
 
+  /* Active tab: a lime strip on paper (ink type), a lime tint on ink. */
   .shell .tabOn,
   .shell .tabOn:hover {
-    color: var(--accent-text, #8e3d1f);
+    background: var(--accent-soft, #D9F45A);
+    color: var(--ink, #17372F);
+    font-weight: 650;
   }
 
   .tab:active {
@@ -975,7 +1045,7 @@
   }
 
   .tab:focus-visible {
-    outline: 2px solid var(--link, #2f5d50);
+    outline: 2px solid var(--link, #17372F);
     outline-offset: -2px;
   }
 
@@ -1032,10 +1102,9 @@
     display: none;
   }
 
+  /* The crumb already names the church; the phone bar keeps room for Auto / Light / Dark. */
   .ent {
-    flex: 0 1 auto;
-    max-width: 42%;
-    min-width: 0;
+    display: none;
   }
 
   .entName {
@@ -1108,7 +1177,7 @@
 .personLink {
   color: inherit;
   text-decoration: underline;
-  text-decoration-color: var(--rule-strong, #cfc8b6);
+  text-decoration-color: var(--rule-strong, rgb(23 55 47 / 0.4));
   text-underline-offset: 3px;
 }
 

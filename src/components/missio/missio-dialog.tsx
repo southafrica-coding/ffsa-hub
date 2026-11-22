@@ -13,8 +13,8 @@ import styles from "./shell.module.css";
  * the shell, so the skin tokens and both faces are copied onto the dialog.
  */
 function dialogStyle(): { style: CSSProperties; display: string } {
-  let display = "Fraunces, Georgia, serif";
-  let body = "Archivo, system-ui, sans-serif";
+  let display = "\"Cormorant Garamond\", Georgia, serif";
+  let body = "\"DM Sans\", system-ui, sans-serif";
   if (typeof document !== "undefined") {
     const source = document.querySelector("[data-missio-font]");
     if (source) {
@@ -64,6 +64,7 @@ export function MissioDialog({
           aria-describedby={undefined}
           data-testid={testId}
           data-missio-dialog=""
+          data-skin="missio"
           onCloseAutoFocus={(event) => {
             if (!returnFocus) event.preventDefault();
           }}

@@ -15,7 +15,7 @@
   gap: 2px;
   text-align: center;
   font-size: 12px;
-  color: var(--quiet, #6e685b);
+  color: var(--quiet, rgb(23 55 47 / 0.72));
 }
 
 .steps li::before {
@@ -25,7 +25,7 @@
   left: -50%;
   width: 100%;
   height: 2px;
-  background: var(--rule, #ddd7c8);
+  background: var(--rule, rgb(23 55 47 / 0.22));
   z-index: 0;
 }
 
@@ -35,7 +35,7 @@
 
 .stepDone::before,
 .stepNow::before {
-  background: var(--olive, #4e6b4f) !important;
+  background: var(--olive, #17372F) !important;
 }
 
 .dot {
@@ -44,26 +44,26 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--panel, #fbf9f4);
-  border: 2px solid var(--rule-strong, #cfc8b6);
+  background: var(--panel, #FFFAF0);
+  border: 2px solid var(--rule-strong, rgb(23 55 47 / 0.4));
 }
 
 .stepDone .dot {
-  background: var(--olive, #4e6b4f);
-  border-color: var(--olive, #4e6b4f);
+  background: var(--olive, #17372F);
+  border-color: var(--olive, #17372F);
 }
 
 .stepNow .dot {
-  border-color: var(--accent, #b4532e);
-  box-shadow: 0 0 0 3px var(--accent-soft, #f6e4d9);
+  border-color: var(--accent, #17372F);
+  outline: 3px solid var(--accent-soft, #D9F45A);
 }
 
 .stepDone {
-  color: var(--ink, #1c1b17);
+  color: var(--ink, #17372F);
 }
 
 .stepNow {
-  color: var(--accent-text, #8e3d1f);
+  color: var(--accent-text, #17372F);
   font-weight: 600;
 }
 
@@ -73,7 +73,7 @@
 
 .stepDate {
   font-size: 11px;
-  color: var(--sub, #5b574d);
+  color: var(--sub, rgb(23 55 47 / 0.78));
 }
 
 .stepsCompact li {
@@ -94,9 +94,9 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   padding: 14px 16px;
-  border: 1px solid var(--rule, #ddd7c8);
-  border-radius: var(--radius-md, 14px);
-  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  border-radius: var(--radius-md, 0);
+  background: var(--panel, #FFFAF0);
   min-width: 0;
 }
 
@@ -108,7 +108,7 @@
 }
 
 .rowOverdue {
-  border-color: var(--gold, #b98a2e);
+  border-color: var(--gold, #F18F3B);
 }
 
 .who {
@@ -124,13 +124,13 @@
 
 .meta {
   font-size: 14px;
-  color: var(--sub, #5b574d);
+  color: var(--sub, rgb(23 55 47 / 0.78));
 }
 
 .warn {
   font-size: 13px;
   font-weight: 600;
-  color: var(--gold-text, #7a5a17);
+  color: var(--gold-text, #17372F);
 }
 
 .actions {
@@ -150,7 +150,7 @@
 .links a,
 .links button {
   font-weight: 600;
-  color: var(--link, #2f5d50);
+  color: var(--link, #17372F);
   text-decoration: underline;
   text-underline-offset: 3px;
   background: none;
@@ -183,10 +183,10 @@
   width: 100%;
   min-height: 52px;
   padding: 10px 12px !important;
-  border: 1px solid var(--rule, #ddd7c8) !important;
-  border-radius: var(--radius-sm, 10px) !important;
-  background: #fff !important;
-  color: var(--ink, #1c1b17) !important;
+  border: 1px solid var(--rule, rgb(23 55 47 / 0.22)) !important;
+  border-radius: var(--radius-sm, 0) !important;
+  background: var(--field, #FFFAF0) !important;
+  color: var(--ink, #17372F) !important;
   text-align: left;
   cursor: pointer;
 }
@@ -198,20 +198,20 @@
 .houseChoice span {
   font-size: 13px;
   font-weight: 400;
-  color: var(--sub, #5b574d);
+  color: var(--sub, rgb(23 55 47 / 0.78));
 }
 
 .houseOn {
-  border: 2px solid var(--accent, #b4532e) !important;
-  background: var(--accent-soft, #f6e4d9) !important;
+  border: 2px solid var(--accent, #17372F) !important;
+  background: var(--accent-soft, #D9F45A) !important;
 }
 
 .message {
   margin: 0;
   padding: 10px 12px;
-  border-radius: 10px;
-  background: #dcf8c6;
-  color: #1c1b17;
+  border-radius: 0;
+  background: var(--accent-soft, #D9F45A);
+  color: var(--ink, #17372F);
   font-size: 14px;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -225,7 +225,7 @@
   margin: 12px 0 6px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--sub, #5b574d);
+  color: var(--sub, rgb(23 55 47 / 0.78));
 }
 
 .footer {
@@ -240,9 +240,9 @@
 .card {
   margin-top: 16px;
   padding: 16px;
-  border: 1px solid var(--rule, #ddd7c8);
-  border-radius: 14px;
-  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  border-radius: 0;
+  background: var(--panel, #FFFAF0);
 }
 
 .card p {
@@ -250,8 +250,9 @@
 }
 
 .bigLine {
-  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
-  font-size: 22px;
+  font-family: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
+  font-variant-numeric: lining-nums;
+  font-size: 26px;
   font-weight: 600;
 }
 
@@ -261,10 +262,10 @@
   justify-content: center;
   min-height: 48px;
   padding: 12px 16px;
-  border: 1px solid var(--rule-strong, #cfc8b6);
-  border-radius: 6px;
-  background: #fff;
-  color: var(--ink, #1c1b17);
+  border: 1px solid var(--rule-strong, rgb(23 55 47 / 0.4));
+  border-radius: 0;
+  background: var(--field, #FFFAF0);
+  color: var(--ink, #17372F);
   font-weight: 600;
   text-decoration: none;
 }
@@ -272,9 +273,9 @@
 .family {
   margin: 0 0 14px;
   padding: 12px 14px;
-  border: 1px solid var(--rule, #e7e2d5);
-  border-radius: 10px;
-  background: var(--panel, #f3f0e8);
+  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  border-radius: 0;
+  background: var(--panel, #FFFAF0);
 }
 
 .family ul {
@@ -287,7 +288,7 @@
 }
 
 .family li span {
-  color: var(--quiet, #6e685b);
+  color: var(--quiet, rgb(23 55 47 / 0.72));
 }
 
 .familyToggle {

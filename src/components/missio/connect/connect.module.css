@@ -1,16 +1,16 @@
 /* Public connect card. Phone-first, Missio faces, no app shell. */
 
 .page {
-  --display: var(--font-missio-display), Fraunces, Georgia, serif;
-  --body: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  --display: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
+  --body: var(--font-missio-body), "DM Sans", system-ui, sans-serif;
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
   min-height: 100vh;
   margin: 0;
   padding: 24px 16px 40px;
-  background: var(--page, #f3f0e8);
-  color: var(--ink, #1c1b17);
+  background: var(--page, #F2EFE6);
+  color: var(--ink, #17372F);
   font-family: var(--body);
   font-size: 15px;
   line-height: 1.6;
@@ -24,22 +24,24 @@
   min-width: 0;
 }
 
+/* MISSIŌ + SA, with a hairline under it like the Guide's header. */
 .mark {
-  display: block;
-  width: 168px;
-  max-width: 100%;
-  height: auto;
+  display: flex;
+  width: 100%;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--rule, rgb(23 55 47 / 0.22));
 }
 
 .page h1 {
-  font-family: var(--display), Fraunces, Georgia, serif !important;
-  font-weight: 600 !important;
-  font-size: 40px !important;
-  line-height: 1.15 !important;
-  letter-spacing: -0.01em !important;
+  font-family: var(--display), "Cormorant Garamond", Georgia, serif !important;
+  font-weight: 500 !important;
+  font-size: 46px !important;
+  line-height: 0.92 !important;
+  letter-spacing: -0.04em !important;
   text-transform: none !important;
-  color: var(--ink, #1c1b17) !important;
-  margin: 16px 0 0;
+  color: var(--ink, #17372F) !important;
+  margin: 24px 0 0;
+  font-variant-numeric: lining-nums;
   max-width: 100%;
   overflow-wrap: anywhere;
 }
@@ -49,7 +51,7 @@
   margin: 12px 0 0;
   font-size: 15px;
   line-height: 1.6;
-  color: var(--sub, #5b574d);
+  color: var(--sub, rgb(23 55 47 / 0.78));
   max-width: 100%;
   overflow-wrap: anywhere;
 }
@@ -65,21 +67,21 @@
   display: grid;
   gap: 8px;
   min-width: 0;
-  font-family: var(--body), Archivo, system-ui, sans-serif !important;
+  font-family: var(--body), "DM Sans", system-ui, sans-serif !important;
   font-size: 15px !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  color: var(--ink, #1c1b17) !important;
+  color: var(--ink, #17372F) !important;
 }
 
 .fieldLabel {
   margin: 0;
-  font-family: var(--body), Archivo, system-ui, sans-serif;
+  font-family: var(--body), "DM Sans", system-ui, sans-serif;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
-  color: var(--ink, #1c1b17);
+  color: var(--ink, #17372F);
 }
 
 .page input:not([type="checkbox"]):not([type="radio"]),
@@ -89,16 +91,18 @@
   max-width: 100%;
   min-width: 0 !important;
   min-height: 48px;
-  font-family: var(--body), Archivo, system-ui, sans-serif !important;
+  font-family: var(--body), "DM Sans", system-ui, sans-serif !important;
   font-size: 15px !important;
   font-weight: 400 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
   line-height: 1.5 !important;
-  border-radius: 6px !important;
+  border-radius: 0 !important;
   padding: 12px !important;
-  color: var(--ink, #1c1b17) !important;
-  background: #fff !important;
+  color: var(--ink, #17372F) !important;
+  background: var(--field, #FFFAF0) !important;
+  border: 1px solid var(--ink, #17372F) !important;
+  box-shadow: none !important;
 }
 
 .page textarea {
@@ -108,7 +112,7 @@
 
 .optional {
   font-weight: 400;
-  color: var(--quiet, #6e685b);
+  color: var(--quiet, rgb(23 55 47 / 0.72));
 }
 
 .choices {
@@ -116,8 +120,8 @@
   gap: 0;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--rule, #ddd7c8);
-  border-radius: 6px;
+  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  border-radius: 0;
   overflow: hidden;
   min-width: 0;
 }
@@ -133,16 +137,16 @@
   min-height: 44px;
   margin: 0;
   padding: 8px 12px;
-  background: var(--panel, #fbf9f4);
-  border-top: 1px solid var(--rule, #ddd7c8);
+  background: var(--panel, #FFFAF0);
+  border-top: 1px solid var(--rule, rgb(23 55 47 / 0.22));
   cursor: pointer;
   overflow-wrap: anywhere;
-  font-family: var(--body), Archivo, system-ui, sans-serif !important;
+  font-family: var(--body), "DM Sans", system-ui, sans-serif !important;
   font-size: 15px !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  color: var(--ink, #1c1b17) !important;
+  color: var(--ink, #17372F) !important;
 }
 
 .choices .choice:first-child {
@@ -151,13 +155,13 @@
 
 .page label.toggle {
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   padding: 8px 12px;
 }
 
 .choiceOn {
-  background: var(--accent-soft, #f6e4d9);
+  background: var(--accent-soft, #D9F45A);
 }
 
 .page label.choice input,
@@ -166,6 +170,7 @@
   height: 20px;
   margin: 0;
   flex: none;
+  accent-color: var(--accent, #17372F);
 }
 
 .page input.honeypot {
@@ -189,15 +194,16 @@
   width: 100%;
   min-height: 48px;
   padding: 12px 16px !important;
-  font-family: var(--body), Archivo, system-ui, sans-serif !important;
-  font-weight: 600 !important;
-  font-size: 16px !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-  border-radius: 6px !important;
-  background: var(--accent, #b4532e) !important;
-  border: 1px solid var(--accent, #b4532e) !important;
-  color: var(--accent-ink, #fff8ee) !important;
+  /* Brand Guide action label: DM Sans 650, caps, tracked. */
+  font-family: var(--body), "DM Sans", system-ui, sans-serif !important;
+  font-weight: 650 !important;
+  font-size: 12px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  border-radius: 0 !important;
+  background: var(--accent, #17372F) !important;
+  border: 1px solid var(--accent, #17372F) !important;
+  color: var(--accent-ink, #FFFAF0) !important;
   cursor: pointer;
 }
 
@@ -207,8 +213,8 @@
 .page button.quiet:focus-visible {
   margin-top: 24px;
   background: transparent !important;
-  border: 1px solid var(--rule, #ddd7c8) !important;
-  color: var(--ink, #1c1b17) !important;
+  border: 1px solid var(--ink, #17372F) !important;
+  color: var(--ink, #17372F) !important;
 }
 
 .page button:disabled {
@@ -219,14 +225,14 @@
 .page button:focus-visible,
 .choice:focus-within,
 .toggle:focus-within {
-  outline: 2px solid var(--ink, #1c1b17);
+  outline: 2px solid var(--ink, #17372F);
   outline-offset: 2px;
 }
 
 .fieldError,
 .banner {
   margin: 0;
-  color: var(--bad, #a3261b);
+  color: var(--bad-text, #17372F);
   font-size: 15px;
   line-height: 1.5;
   font-weight: 400;
@@ -235,8 +241,9 @@
 
 .banner {
   padding: 12px;
-  border-radius: 6px;
-  background: var(--bad-soft, #f6deda);
+  border-radius: 0;
+  border-left: 3px solid var(--bad, #F18F3B);
+  background: var(--bad-soft, rgb(241 143 59 / 0.22));
 }
 
 .honeypot {
@@ -256,11 +263,11 @@
   margin: 4px 0 0;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--sub, #5b574d);
+  color: var(--sub, rgb(23 55 47 / 0.78));
 }
 
 .consent a {
-  color: var(--link, #2f5d50);
+  color: var(--link, #17372F);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -270,7 +277,7 @@
   margin: -8px 0 0;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--quiet, #6e685b);
+  color: var(--quiet, rgb(23 55 47 / 0.72));
 }
 
 .group {
@@ -291,12 +298,12 @@
 }
 
 .pair .choice {
-  border: 1px solid var(--rule, #ddd7c8);
-  border-radius: 6px;
+  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  border-radius: 0;
 }
 
 .page h1.stepTitle {
-  font-size: 32px !important;
+  font-size: 38px !important;
 }
 
 .page h1.stepTitle:focus {

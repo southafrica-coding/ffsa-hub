@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { missioSkinVars } from "@/components/missio/access";
 import { missioBody, missioDisplay } from "@/components/missio/fonts";
 import connect from "../connect/connect.module.css";
+import { MissioWordmark } from "../wordmark";
 import styles from "./care.module.css";
 
 type Need = "prayer" | "talk" | "practical";
@@ -83,6 +84,7 @@ export function CareForm({ submit = defaultSubmit }: { submit?: CareSubmit }) {
   return (
     <main className={`${missioBody.variable} ${missioDisplay.variable} ${missioBody.className} ${connect.page}`} style={missioSkinVars()} data-skin="missio" data-care={step}>
       <div className={connect.column}>
+        <MissioWordmark className={connect.mark} />
         {step === 3 ? (
           <div className={styles.thanks} data-testid="care-thanks">
             <h1>We’ve got you{first ? `, ${first}` : ""}.</h1>

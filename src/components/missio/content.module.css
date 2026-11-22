@@ -4,7 +4,7 @@
 .page {
   font-size: 15px;
   line-height: 1.6;
-  color: var(--ink, #1c1b17);
+  color: var(--ink, #17372F);
 }
 
 /* Resting state is fully opaque. The animation is the only thing that
@@ -134,7 +134,7 @@
 }
 
 .page .card:hover {
-  border-color: var(--ink, #1c1b17);
+  border-color: var(--ink, #17372F);
 }
 
 .page .toolbar {
@@ -187,8 +187,8 @@
 }
 
 .page .card {
-  border-radius: var(--radius-md, 14px);
-  box-shadow: var(--shadow-1, 0 1px 2px rgba(28, 27, 23, 0.05));
+  border-radius: var(--radius-md, 0);
+  box-shadow: var(--shadow-1, none);
 }
 
 .homeGrid .card {
@@ -219,7 +219,7 @@
 }
 
 .page .cardLink {
-  color: var(--link, #2f5d50);
+  color: var(--link, #17372F);
   font-size: 14px;
   font-weight: 600;
   min-height: 44px;
@@ -232,11 +232,11 @@
 .page .cardLink:focus-visible {
   text-decoration: underline;
   text-underline-offset: 3px;
-  color: var(--link, #2f5d50);
+  color: var(--link, #17372F);
 }
 
 .go {
-  color: var(--quiet, #6e685b);
+  color: var(--quiet, rgb(23 55 47 / 0.72));
   font-size: 18px;
   flex: none;
 }
@@ -250,7 +250,7 @@
 .stats dd {
   margin: 0;
   font-family: var(--display);
-  font-weight: 560;
+  font-weight: 500;
   font-size: 40px;
   line-height: 44px;
   letter-spacing: -0.02em;
@@ -258,7 +258,7 @@
 }
 
 .stats dt {
-  color: var(--sub, #5b574d);
+  color: var(--sub, rgb(23 55 47 / 0.78));
   font-size: 14px;
   line-height: 20px;
 }
@@ -274,7 +274,7 @@
 
 .big {
   font-family: var(--display);
-  font-weight: 560;
+  font-weight: 500;
   font-size: 56px;
   line-height: 56px;
   letter-spacing: -0.02em;
@@ -291,16 +291,17 @@
 .bars span {
   flex: 1 1 0;
   min-width: 0;
-  border-radius: 3px;
-  background: var(--rule-strong, #cfc8b6);
+  border-radius: 0;
+  /* Sage, the Guide's quiet third colour; ink-at-40% read as grey. */
+  background: var(--olive-soft, #A8BAA6);
 }
 
 .bars .barReady {
-  background: var(--olive, #4e6b4f);
+  background: var(--olive, #17372F);
 }
 
 .caption {
-  color: var(--sub, #5b574d);
+  color: var(--sub, rgb(23 55 47 / 0.78));
   font-size: 13px;
   line-height: 18px;
   margin: -6px 0 0;
@@ -321,19 +322,19 @@
   align-items: center;
   min-height: 26px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 13px;
   font-weight: 600;
 }
 
 .chipOlive {
-  background: var(--olive-soft, #e3eadf);
-  color: var(--olive-text, #3f5940);
+  background: var(--olive-soft, #A8BAA6);
+  color: var(--olive-text, #17372F);
 }
 
 .chipGold {
-  background: var(--gold-soft, #f4ead2);
-  color: var(--gold-text, #7a5a17);
+  background: var(--gold-soft, rgb(241 143 59 / 0.22));
+  color: var(--gold-text, #17372F);
 }
 
 .page .notice {
@@ -343,9 +344,9 @@
   gap: 12px;
   min-height: 44px;
   padding: 10px 14px;
-  border-radius: var(--radius-sm, 10px);
-  background: var(--gold-soft, #f4ead2);
-  color: var(--ink, #1c1b17);
+  border-radius: var(--radius-sm, 0);
+  background: var(--gold-soft, rgb(241 143 59 / 0.22));
+  color: var(--ink, #17372F);
   font-size: 14px;
   line-height: 20px;
 }
@@ -357,9 +358,9 @@
   align-self: flex-start;
   min-height: 44px;
   padding: 0 18px;
-  border-radius: var(--radius-sm, 10px);
-  background: var(--accent, #b4532e);
-  color: #ffffff;
+  border-radius: var(--radius-sm, 0);
+  background: var(--accent, #17372F);
+  color: var(--accent-ink, #FFFAF0);
   font-size: 15px;
   font-weight: 600;
   margin-top: auto;
@@ -367,14 +368,14 @@
 
 .page .action:hover,
 .page .action:focus-visible {
-  background: var(--accent-text, #8e3d1f);
-  color: #ffffff;
+  background: var(--accent-soft, #D9F45A);
+  color: var(--ink, #17372F);
 }
 
 .page .action:focus-visible,
 .page .notice:focus-visible,
 .page .cardLink:focus-visible {
-  outline: 2px solid var(--link, #2f5d50);
+  outline: 2px solid var(--link, #17372F);
   outline-offset: 2px;
 }
 
@@ -384,7 +385,7 @@
   justify-content: space-between;
   gap: 12px;
   font-size: 14px;
-  color: var(--bad, #a3261b);
+  color: var(--bad-text, #17372F);
 }
 
 .skeleton {
@@ -395,8 +396,8 @@
 
 .skeleton span {
   height: 14px;
-  border-radius: 6px;
-  background: var(--subtle, #eeeadf);
+  border-radius: 0;
+  background: var(--subtle, rgb(23 55 47 / 0.05));
 }
 
 .skeleton span:nth-child(1) {

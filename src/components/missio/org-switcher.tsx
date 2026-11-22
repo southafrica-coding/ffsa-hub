@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
-import { orgHref } from "./access";
+import { missioSkinVars, orgHref } from "./access";
 import styles from "./org-switcher.module.css";
 import { useOrgSwitcher, type OrgSwitcherProps } from "./use-org-switcher";
 
@@ -44,15 +44,19 @@ export function OrgSwitcher({ orgs, currentOrg, onSwitch, compact = false }: Org
   if (!visible || !current) return null;
 
   const rect = open ? buttonRef.current?.getBoundingClientRect() : null;
+  // In Missio the menu portals out of the shell, so it carries the Missio skin itself.
+  const missio = skin === "missio";
   const menu = open ? (
     <>
-      <button type="button" className={styles.dim} aria-label="Close organisations" onClick={() => setOpen(false)} />
+      <button type="button" className={`${styles.dim} ${missio ? styles.dimMi : ""}`} aria-label="Close organisations" onClick={() => setOpen(false)} />
       <div
         id={menuId}
         role="listbox"
         aria-label="Organisations"
-        className={styles.menu}
+        className={`${styles.menu} ${missio ? styles.menuMi : ""}`}
+        data-skin={missio ? "missio" : undefined}
         style={{
+          ...(missio ? missioSkinVars() : null),
           top: Math.max(8, rect?.top ?? 8),
           left: Math.min((rect?.right ?? 80) + 12, Math.max(8, window.innerWidth - 336)),
         }}

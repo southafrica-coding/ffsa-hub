@@ -6,8 +6,8 @@ import { emptyPublicView, filledPublicView } from "@/lib/missio/availability/fix
 import { AvailabilityStatus, PublicAvailabilityForm } from "./public-form";
 
 vi.mock("next/font/google", () => ({
-  Archivo: () => ({ variable: "--font-missio-body", className: "missio-body" }),
-  Fraunces: () => ({ variable: "--font-missio-display", className: "missio-display" }),
+  DM_Sans: () => ({ variable: "--font-missio-body", className: "missio-body" }),
+  Cormorant_Garamond: () => ({ variable: "--font-missio-display", className: "missio-display" }),
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

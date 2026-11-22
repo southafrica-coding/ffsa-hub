@@ -91,6 +91,7 @@ export function TimelineSheet({
         side="right"
         className={missioPortalClass(styles.sheet)}
         style={missioSkinVars()}
+        data-skin="missio"
         data-testid="follow-up-timeline"
       >
         <SheetTitle className={styles.sheetTitle}>{person.displayName}</SheetTitle>

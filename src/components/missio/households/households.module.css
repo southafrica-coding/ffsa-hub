@@ -15,7 +15,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--link, #2f5d50);
+  color: var(--link, #17372F);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -44,7 +44,7 @@
   gap: 12px;
   min-height: 56px;
   padding: 6px 0;
-  border-bottom: 1px solid var(--rule, #e7e2d5);
+  border-bottom: 1px solid var(--rule, rgb(23 55 47 / 0.22));
 }
 
 .member:last-child {
@@ -58,15 +58,15 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--olive-soft, #e3eadf);
-  color: var(--olive-text, #3f5940);
+  background: var(--olive-soft, #A8BAA6);
+  color: var(--olive-text, #17372F);
   font-weight: 700;
   font-size: 13px;
 }
 
 .avatarChild {
-  background: var(--gold-soft, #f3ead2);
-  color: var(--gold-text, #7a5a12);
+  background: var(--gold-soft, rgb(241 143 59 / 0.22));
+  color: var(--gold-text, #17372F);
 }
 
 .who {
@@ -101,16 +101,16 @@
   gap: 4px;
   padding: 4px;
   margin: 0 0 14px;
-  border-radius: 10px;
-  background: var(--panel, #f3f0e8);
+  border-radius: 0;
+  background: var(--panel, #FFFAF0);
 }
 
 .seg button {
   min-height: 40px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   background: none;
-  color: var(--ink, #1c1b17);
+  color: var(--ink, #17372F);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -120,23 +120,23 @@
 }
 
 .seg .segOn {
-  background: var(--ink, #1d2520);
-  color: #fff;
+  background: var(--ink, #17372F);
+  color: var(--page, #F2EFE6);
 }
 
 .help {
   margin: 0;
   font-size: 13px;
   line-height: 1.45;
-  color: var(--quiet, #6e685b);
+  color: var(--quiet, rgb(23 55 47 / 0.72));
 }
 
 .results {
   list-style: none;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--rule, #e7e2d5);
-  border-radius: 8px;
+  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -145,9 +145,9 @@
   min-height: 44px;
   padding: 0 12px;
   border: 0;
-  border-bottom: 1px solid var(--rule, #e7e2d5);
-  background: #fff;
-  color: var(--ink, #1c1b17);
+  border-bottom: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  background: var(--field, #FFFAF0);
+  color: var(--ink, #17372F);
   font: inherit;
   font-weight: 500;
   letter-spacing: 0;
@@ -182,9 +182,9 @@
   width: 100%;
   min-height: 64px;
   padding: 10px 14px;
-  border: 1px solid var(--rule, #e7e2d5);
-  border-radius: 12px;
-  background: #fff;
+  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  border-radius: 0;
+  background: var(--field, #FFFAF0);
   color: inherit;
   font: inherit;
   letter-spacing: 0;
@@ -202,7 +202,7 @@
   width: 30px;
   height: 30px;
   font-size: 11px;
-  border: 2px solid #fff;
+  border: 2px solid var(--panel, #FFFAF0);
 }
 
 .stack .avatar + .avatar {

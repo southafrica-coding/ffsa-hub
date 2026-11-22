@@ -34,10 +34,10 @@
 }
 
 .groupCount {
-  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif;
   font-size: 13px;
   font-weight: 600;
-  color: var(--quiet, #6e685b);
+  color: var(--quiet, rgb(23 55 47 / 0.72));
 }
 
 .houseList {
@@ -56,10 +56,10 @@
   width: 100%;
   min-height: 48px;
   padding: 6px 12px !important;
-  border: 1px solid var(--rule, #ddd7c8) !important;
-  border-radius: var(--radius-sm, 10px) !important;
-  background: var(--panel, #fbf9f4) !important;
-  color: var(--ink, #1c1b17) !important;
+  border: 1px solid var(--rule, rgb(23 55 47 / 0.22)) !important;
+  border-radius: var(--radius-sm, 0) !important;
+  background: var(--panel, #FFFAF0) !important;
+  color: var(--ink, #17372F) !important;
   text-align: left;
   font-size: 14px !important;
   cursor: pointer;
@@ -80,7 +80,7 @@
 }
 
 .root .houseOn {
-  border: 2px solid var(--accent, #b4532e) !important;
+  border: 2px solid var(--accent, #17372F) !important;
 }
 
 .houseName {
@@ -90,7 +90,7 @@
 
 .houseDay,
 .houseLast {
-  color: var(--sub, #5b574d);
+  color: var(--sub, rgb(23 55 47 / 0.78));
   font-weight: 400;
 }
 
@@ -109,36 +109,36 @@
 .bar,
 .gap {
   display: block;
-  border-radius: 2px;
+  border-radius: 0;
 }
 
 .bar {
-  background: var(--olive, #4e6b4f);
+  background: var(--olive, #17372F);
 }
 
 .gap {
   height: 3px;
-  background: var(--rule, #ddd7c8);
+  background: var(--rule, rgb(23 55 47 / 0.22));
 }
 
 .mood_hard {
-  background: var(--gold, #b98a2e);
+  background: var(--gold, #F18F3B);
 }
 
 .mood_okay {
-  background: #8c9a7b;
+  background: #A8BAA6;
 }
 
 .mood_good,
 .mood_great {
-  background: var(--olive, #4e6b4f);
+  background: var(--olive, #17372F);
 }
 
 .detail {
   padding: 16px;
-  border: 1px solid var(--rule, #ddd7c8);
-  border-radius: var(--radius-md, 14px);
-  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  border-radius: var(--radius-md, 0);
+  background: var(--panel, #FFFAF0);
   min-width: 0;
 }
 
@@ -157,13 +157,13 @@
 
 .open {
   font-weight: 600;
-  color: var(--link, #2f5d50);
+  color: var(--link, #17372F);
   text-underline-offset: 3px;
 }
 
 .quiet {
   margin: 8px 0 0;
-  color: var(--quiet, #6e685b);
+  color: var(--quiet, rgb(23 55 47 / 0.72));
   font-size: 14px;
 }
 
@@ -177,7 +177,7 @@
 
 .entry {
   padding-top: 12px;
-  border-top: 1px solid var(--rule, #ddd7c8);
+  border-top: 1px solid var(--rule, rgb(23 55 47 / 0.22));
 }
 
 .entryHead {
@@ -190,20 +190,21 @@
 
 .moodTag {
   padding: 1px 8px;
-  border-radius: 999px;
-  color: #fff;
+  border-radius: 0;
+  color: var(--accent-ink, #FFFAF0);
   font-size: 12px;
   font-weight: 600;
 }
 
+/* Sun and sage grounds take brand ink type on both themes. */
 .moodTag.mood_okay,
 .moodTag.mood_hard {
-  color: #1c1b17;
+  color: #17372F;
 }
 
 .entryLine {
   margin: 4px 0 0;
-  color: var(--sub, #5b574d);
+  color: var(--sub, rgb(23 55 47 / 0.78));
   font-size: 14px;
   overflow-wrap: anywhere;
 }

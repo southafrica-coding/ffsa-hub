@@ -2,30 +2,30 @@
    This class carries the skin faces onto that content. */
 
 .surface {
-  --display: var(--font-missio-display), Fraunces, Georgia, serif;
-  --body: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  --display: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
+  --body: var(--font-missio-body), "DM Sans", system-ui, sans-serif;
   font-family: var(--body);
-  color: var(--ink, #1c1b17);
-  background: var(--panel, #fbf9f4);
+  color: var(--ink, #17372F);
+  background: var(--panel, #FFFAF0);
 }
 
 .surface h1,
 .surface h2,
 .surface h3 {
   font-family: var(--display) !important;
-  font-weight: 600 !important;
-  letter-spacing: -0.01em !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.03em !important;
   text-transform: none !important;
-  line-height: 1.25 !important;
-  color: var(--ink, #1c1b17) !important;
+  line-height: 1 !important;
+  color: var(--ink, #17372F) !important;
 }
 
 .surface h1 {
-  font-size: 22px !important;
+  font-size: 30px !important;
 }
 
 .surface h2 {
-  font-size: 22px !important;
+  font-size: 30px !important;
 }
 
 .surface label {
@@ -34,7 +34,7 @@
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  color: var(--sub, #5b574d) !important;
+  color: var(--sub, rgb(23 55 47 / 0.78)) !important;
 }
 
 .surface button,
@@ -47,7 +47,7 @@
   font-size: 15px !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  border-radius: 6px !important;
+  border-radius: 0 !important;
   min-height: 44px !important;
   height: auto !important;
 }
@@ -65,12 +65,12 @@
   letter-spacing: 0 !important;
   text-transform: none !important;
   line-height: 1.5 !important;
-  border-radius: 6px !important;
-  color: var(--ink, #1c1b17) !important;
+  border-radius: 0 !important;
+  color: var(--ink, #17372F) !important;
 }
 
 /* Hub dark mode: .theme-light (added in portal.ts) sets the Hub's own ink as
    the text colour; keep Missio's warmer ink instead. */
 :global(html.dark) .surface.surface {
-  color: var(--ink, #1c1b17);
+  color: var(--ink, #17372F);
 }

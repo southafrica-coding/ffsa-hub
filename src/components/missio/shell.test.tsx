@@ -106,10 +106,13 @@ describe("Missio access state", () => {
     const shell = host.querySelector("[data-missio-shell]") as HTMLElement;
     expect(shell.getAttribute("data-skin")).toBe("missio");
     expect(shell.getAttribute("data-access")).toBe("ready");
-    expect(shell.style.getPropertyValue("--side").trim()).toBe("#1D2520");
-    expect(shell.style.getPropertyValue("--accent").trim()).toBe("#B4532E");
-    expect(shell.style.getPropertyValue("--page").trim()).toBe("#F3F0E8");
-    expect(shell.style.getPropertyValue("--panel").trim()).toBe("#FBF9F4");
+    // MissioSA Brand Guide: ink rail, ink primary action on paper, cream panels, square corners.
+    expect(shell.style.getPropertyValue("--side").trim()).toBe("#17372F");
+    expect(shell.style.getPropertyValue("--accent").trim()).toBe("#17372F");
+    expect(shell.style.getPropertyValue("--page").trim()).toBe("#F2EFE6");
+    expect(shell.style.getPropertyValue("--panel").trim()).toBe("#FFFAF0");
+    expect(shell.style.getPropertyValue("--radius-md").trim()).toBe("0");
+    expect(shell.style.getPropertyValue("--shadow-2").trim()).toBe("none");
     expect(host.textContent).toContain("People live here");
     expect(host.textContent).toContain("Volunteers");
     expect(host.textContent).toContain("House churches");

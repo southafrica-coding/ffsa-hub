@@ -5,6 +5,7 @@ import { missioSkinVars } from "@/components/missio/access";
 import { missioBody, missioDisplay } from "@/components/missio/fonts";
 import type { PlacementView } from "@/lib/missio/placements";
 import connect from "../connect/connect.module.css";
+import { MissioWordmark } from "../wordmark";
 import { telHref, whatsAppHref } from "../follow-up/whatsapp";
 import { PlacementSteps, shortDate } from "./steps";
 import styles from "./placements.module.css";
@@ -32,7 +33,10 @@ function nextMeeting(day: string | null, now = new Date()): string | null {
 function Shell({ children, state }: { children: React.ReactNode; state: string }) {
   return (
     <main className={`${missioBody.variable} ${missioDisplay.variable} ${missioBody.className} ${connect.page}`} style={missioSkinVars()} data-skin="missio" data-placement={state}>
-      <div className={connect.column}>{children}</div>
+      <div className={connect.column}>
+        <MissioWordmark className={connect.mark} />
+        {children}
+      </div>
     </main>
   );
 }
