@@ -36,6 +36,9 @@ import {
 import * as slack from "@/lib/slack/client";
 import { parsePullChange, VIEW_PULL_CHANGE } from "@/lib/slack/outreach/pull-logic";
 import { ACTION_CARD_CONFIRM } from "@/lib/slack/outreach/card-logic";
+import { ACTION_REPAY } from "@/lib/slack/outreach/no-receipt";
+import { confirmRepayment } from "@/lib/slack/outreach/repayments";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -46,6 +49,8 @@ type Payload = {
   trigger_id?: string;
   response_url?: string;
   channel?: { id: string };
+  message?: { ts?: string };
+  container?: { message_ts?: string };
   actions?: { action_id: string; value?: string; selected_option?: { value: string } }[];
   view?: {
     callback_id: string;
@@ -119,6 +124,21 @@ export async function POST(request: Request) {
           confirmCardPayment(draftId, expenseId, slackUserId, reply).catch((e) => console.error("[slack/outreach] card confirm", e))
         );
       }
+      return new NextResponse(null, { status: 200 });
+    }
+    if (action?.action_id === ACTION_REPAY) {
+      const reply = ephemeral(payload.response_url);
+      after(async () => {
+        try {
+          // Card message.ts only. action_ts changes on every tap and is not the key.
+          const result = await confirmRepayment(createAdminClient(), slackUserId, action.value, {
+            messageTs: payload.message?.ts ?? payload.container?.message_ts ?? null,
+          });
+          await reply(result.text);
+        } catch (e) {
+          console.error("[slack/outreach] repay", e);
+        }
+      });
       return new NextResponse(null, { status: 200 });
     }
     const draftId = action?.value;
