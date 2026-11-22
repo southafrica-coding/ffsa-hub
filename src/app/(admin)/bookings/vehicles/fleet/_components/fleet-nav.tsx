@@ -20,8 +20,10 @@ const TABS = [
 export function FleetNav() {
   const path = usePathname() || "";
   return (
-    // One row that scrolls inside itself on a phone (the page never scrolls sideways).
-    <nav aria-label="Fleet" className="flex items-end overflow-x-auto border-b border-ink px-5 pt-3 [scrollbar-width:none] md:flex-wrap md:px-8">
+    // Phones: two rows of four, so every tab — and the one you're on — is
+    // visible. A single scrolling row clipped "Workshops" to "WOR" and hid
+    // Checklist, Guide and Settings off the edge. One row from md up.
+    <nav aria-label="Fleet" className="grid grid-cols-4 border-b border-ink px-3 pt-3 md:flex md:flex-wrap md:items-end md:px-8">
       {TABS.map((t) => {
         const on = t.match ? t.match(path) : path.startsWith(t.href);
         return (
@@ -30,8 +32,8 @@ export function FleetNav() {
             href={t.href}
             aria-current={on ? "page" : undefined}
             className={cn(
-              "flex min-h-11 shrink-0 items-center whitespace-nowrap px-3.5 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]",
-              on ? "bg-ink text-white" : "text-[#7C786C] hover:text-ink"
+              "flex min-h-11 min-w-0 items-center justify-center whitespace-nowrap px-1 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em] md:shrink-0 md:justify-start md:px-3.5 md:tracking-[0.14em]",
+              on ? "bg-ink text-white" : "text-[color:var(--text-tertiary)] hover:text-ink"
             )}
           >
             {t.label}

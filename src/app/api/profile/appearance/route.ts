@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser } from "@/lib/api-auth";
 import { setMyColorScheme } from "@/services/users";
-import { isColorScheme, THEME_COOKIE, THEME_COOKIE_MAX_AGE } from "@/lib/theme";
+import { isThemePreference, THEME_COOKIE, THEME_COOKIE_MAX_AGE } from "@/lib/theme";
 
-// PUT /api/profile/appearance  { colorScheme: "light" | "dark" }
+// PUT /api/profile/appearance  { colorScheme: "system" | "light" | "dark" }
 // Saves the caller's own Hub theme to their profile (migration 344) and
 // mirrors it into the cookie the no-flash script reads, so the next page
 // paints in the right mode on this device. The RPC writes only the caller's
@@ -18,11 +18,12 @@ export async function PUT(request: Request) {
 
   const body = await request.json().catch(() => null);
   const scheme = (body as { colorScheme?: unknown } | null)?.colorScheme;
-  if (!isColorScheme(scheme)) {
-    return NextResponse.json({ error: "Pick light or dark." }, { status: 400 });
+  if (!isThemePreference(scheme)) {
+    return NextResponse.json({ error: "Pick System, Light or Dark." }, { status: 400 });
   }
 
-  const { error } = await setMyColorScheme(supabase, scheme);
+  // "system" is stored as NULL: follow the device.
+  const { error } = await setMyColorScheme(supabase, scheme === "system" ? null : scheme);
   if (error) {
     console.error("[appearance] save failed", error);
     return NextResponse.json(

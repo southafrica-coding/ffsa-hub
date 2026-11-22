@@ -18,6 +18,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
+import { ThemeQuickSwitch } from "@/components/theme-switch";
 import { LogOut, Menu, KeyRound, RefreshCw, Briefcase, User, Settings } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { OrgSwitcherMount } from "@/components/missio/org-switcher-mount";
@@ -67,7 +68,7 @@ function Rail({
 }) {
   return (
     // theme-light: the rail is black in both modes.
-    <div className="theme-light hidden md:flex w-[74px] shrink-0 flex-col items-center bg-ink py-[18px] gap-1.5">
+    <div data-shell-rail className="theme-light hidden md:flex w-[74px] shrink-0 flex-col items-center bg-ink py-[18px] gap-1.5">
       <OrgSwitcherMount compact />
       <Link href="/dashboard" className="mb-3.5 block">
         <Image src="/brand/ff-mark-white.png" alt="Fire & Fragrance" width={34} height={34}
@@ -184,12 +185,17 @@ function ModulePanel({
         </Link>
       )}
 
+      {area === "personal" && !inDrawer && (
+        <ThemeQuickSwitch className="border-t border-ink px-[18px] py-3.5" />
+      )}
+
       {inDrawer && (
         <div className="mt-auto border-t border-ink">
+          <ThemeQuickSwitch className="px-[18px] py-3.5" />
           <Link
             href="/profile"
             onClick={onNavClick}
-            className="flex items-center gap-2.5 px-[18px] py-3 text-[13px] font-semibold text-[color:var(--text-strong)] hover:bg-bone-3"
+            className="flex items-center gap-2.5 border-t border-rule px-[18px] py-3 text-[13px] font-semibold text-[color:var(--text-strong)] hover:bg-bone-3"
           >
             <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center bg-ink font-display text-[11px] font-black text-white">
               {initials || "\u00B7"}
@@ -253,7 +259,7 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
       </div>
 
       {/* ── Mobile: black top bar + drawer ── */}
-      <div className="theme-light fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between bg-ink px-4 md:hidden">
+      <div data-shell-topbar className="theme-light fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between bg-ink px-4 md:hidden">
         <span className="flex min-w-0 items-center gap-2">
           <OrgSwitcherMount compact />
           <Image src="/brand/ff-wordmark-white.png" alt="Fire & Fragrance" width={120} height={14}

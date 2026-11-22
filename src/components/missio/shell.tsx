@@ -158,7 +158,7 @@ function MissioReady({
           <MissioTabBar me={me} />
         </div>
       </div>
-      <SheetContent side="left" id="missio-nav" className={styles.drawer} style={skinStyle}>
+      <SheetContent side="left" id="missio-nav" className={`theme-light ${styles.drawer}`} style={skinStyle}>
         <SheetTitle className={styles.visuallyHidden}>Missio navigation</SheetTitle>
         <SheetDescription className={styles.visuallyHidden}>Sections in this church</SheetDescription>
         <MissioSidebar me={me} ffsaRoleNames={ffsaRoleNames} inDrawer onNavigate={() => setNavOpen(false)} />

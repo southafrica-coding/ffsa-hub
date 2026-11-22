@@ -368,7 +368,7 @@ export default async function ProfilePage({
               </div>
             </section>
 
-            <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
+            <section id="appearance" className="scroll-mt-20 space-y-3 px-5 pb-6 md:px-8 md:pb-7">
               <div>
                 <p className="page-eyebrow">HUB SETTINGS</p>
                 <h2 className="text-xl font-semibold">Appearance</h2>

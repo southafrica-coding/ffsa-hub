@@ -68,3 +68,9 @@
   border-radius: 6px !important;
   color: var(--ink, #1c1b17) !important;
 }
+
+/* Hub dark mode: .theme-light (added in portal.ts) sets the Hub's own ink as
+   the text colour; keep Missio's warmer ink instead. */
+:global(html.dark) .surface.surface {
+  color: var(--ink, #1c1b17);
+}
