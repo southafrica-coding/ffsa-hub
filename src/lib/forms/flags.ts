@@ -3,8 +3,8 @@ import { previewWritesDisabled } from "@/lib/preview-writes";
 /**
  * Slack DMs from form routes (the `slack` route action) stay off until
  * HUB_FORMS_SLACK_ENABLED is "1" or "true", and even then only on the live
- * site. Nothing sends yet: the route runner is F3. The flag is named now so
- * F3 cannot ship switched on.
+ * site. The route runner (route-slack.ts) checks this before any Slack
+ * call or tracking read, so a preview or a flag left off sends nothing.
  */
 export const HUB_FORMS_SLACK_ENABLED = "HUB_FORMS_SLACK_ENABLED";
 

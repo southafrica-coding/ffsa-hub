@@ -13,6 +13,8 @@ import {
   createEnrollment,
 } from "@/services/workflows";
 import { runEnrollment } from "@/lib/workflows/runner";
+import { previewWriteRefusal } from "@/lib/preview-writes";
+import { runFormRoutes, submissionSubject } from "@/lib/forms/route-runner";
 import { evaluateTrigger, type WorkflowTrigger } from "@/lib/workflows/types";
 import {
   isContactFieldKey,
@@ -54,6 +56,20 @@ export async function POST(
     }
     if (decision === "closed") {
       return NextResponse.json({ error: "This form opens from a personal link" }, { status: 403 });
+    }
+  }
+
+  // Hub forms (no event) are new with /forms: a preview deployment shares
+  // the production database, so it saves nothing and runs no routes. Event
+  // forms keep working as before; their routes are skipped on a preview
+  // by the runner.
+  if (!form.event_id) {
+    const refusal = previewWriteRefusal();
+    if (refusal) {
+      return NextResponse.json(
+        { ...refusal.body, message: "This preview deployment cannot send Hub forms. Use the live Hub." },
+        { status: refusal.status }
+      );
     }
   }
 
@@ -124,6 +140,34 @@ export async function POST(
     .single();
   if (subErr) {
     return NextResponse.json({ error: subErr.message }, { status: 500 });
+  }
+
+  // 2a. Routes (Hub Forms F3): run what fired for each answer. Best
+  //     effort: a route problem never fails the submission.
+  try {
+    const run = await runFormRoutes(supabase, {
+      form: {
+        id: form.id,
+        name: form.name,
+        slug: form.slug,
+        event_id: form.event_id,
+        department_id: (form as { department_id?: string | null }).department_id ?? null,
+      },
+      schema,
+      data,
+      submissionId: submission.id,
+      contactId,
+      subject: submissionSubject(form as { subject_type?: unknown; event_id?: string | null; department_id?: string | null }, contactId),
+    });
+    if (run.length > 0) {
+      console.info(
+        "[form submit] routes",
+        form.id,
+        run.map((r) => `${r.action}:${r.status}${r.reason ? `:${r.reason}` : ""}`).join(" ")
+      );
+    }
+  } catch (e) {
+    console.error("[form submit] routes failed", e);
   }
 
   // If the contact was queued for manual review, stop here — labels and

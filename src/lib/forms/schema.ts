@@ -57,7 +57,7 @@ export type FormField = {
   /**
    * What happens to the answer after it is saved. Each route fires when
    * its rule matches (see `routeMatches`). F1 only describes and matches
-   * routes; nothing here writes to the database or Slack.
+   * routes; route-runner.ts runs them after a submission is saved.
    */
   routes?: FormRoute[];
 };
@@ -480,7 +480,7 @@ function routeProblem(route: FormRoute): string | null {
 }
 
 // ────────────────────────────────────────────────────────────
-// Route matching — pure; the runner that acts on it is F3
+// Route matching — pure; route-runner.ts acts on it
 // ────────────────────────────────────────────────────────────
 
 function toNumber(raw: unknown): number | null {
