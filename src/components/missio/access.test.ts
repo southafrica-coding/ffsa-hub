@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CAMPUS_LABEL,
   canAccessMissio,
+  canSeeMissioCare,
   isMissioPastor,
   classifyContactQuery,
   clampPeopleLimit,
@@ -12,6 +13,7 @@ import {
   skinForOrg,
   validateNewPerson,
 } from "./access";
+import { MISSIO_HOUSE_ROLES } from "@/lib/missio/house-roles";
 import type { MissioMe } from "./types-shim";
 
 function me(partial: Partial<MissioMe> & Pick<MissioMe, "currentOrg" | "rolesByOrg">): MissioMe {
@@ -148,5 +150,21 @@ describe("display", () => {
     expect(CAMPUS_LABEL.jhb).toBe("Missio JHB");
     expect(formatJoined(null)).toBe("—");
     expect(formatJoined("2024-03-12")).toBe("12 Mar 2024");
+  });
+});
+
+describe("Care visibility", () => {
+  it("matches MISSIO_HOUSE_ROLES, the GET /api/missio/care gate", () => {
+    for (const role of MISSIO_HOUSE_ROLES) {
+      expect(canSeeMissioCare(me({ rolesByOrg: { missio: [role] }, currentOrg: "missio" }))).toBe(true);
+    }
+    for (const role of ["admin", "team_leader", "finance"] as const) {
+      expect(canSeeMissioCare(me({ rolesByOrg: { missio: [role] }, currentOrg: "missio" }))).toBe(false);
+    }
+  });
+
+  it("refuses when currentOrg is null or only an FFSA role is held", () => {
+    expect(canSeeMissioCare(me({ rolesByOrg: { missio: ["pastor"] }, currentOrg: null }))).toBe(false);
+    expect(canSeeMissioCare(me({ rolesByOrg: { ffsa: ["admin"] }, currentOrg: null }))).toBe(false);
   });
 });

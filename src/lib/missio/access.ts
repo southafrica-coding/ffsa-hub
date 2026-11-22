@@ -19,8 +19,8 @@ const KNOWN_ORG_SLUGS = new Set(["ffsa", "missio"]);
 /** Phase 0 people, search, and create/update routes. Pastors only. */
 export const MISSIO_PEOPLE_ROLES = ["pastor"] as const;
 
-/** Roles that open house churches. Coaches and leaders see only their own houses. */
-export const MISSIO_HOUSE_ROLES = ["pastor", "coach", "house_church_leader"] as const;
+/** Roles that open house churches. Lives in ./house-roles so the client shell shares it. */
+export { MISSIO_HOUSE_ROLES } from "./house-roles";
 
 export const MISSIO_SLUG = "missio";
 

@@ -25,6 +25,18 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: () => {} }),
 }));
 
+// Lets a test widen canAccessMissio (e.g. to ordinary members) without
+// touching canSeeMissioCare, so Care must follow the API's role list alone.
+const gate = vi.hoisted(() => ({ widen: false }));
+
+vi.mock("./access", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./access")>();
+  return {
+    ...actual,
+    canAccessMissio: (me: MissioMe) => (gate.widen && me.currentOrg === "missio") || actual.canAccessMissio(me),
+  };
+});
+
 const pastor: MissioMe = {
   orgs: [
     { id: "org-ffsa", slug: "ffsa", name: "Fire & Fragrance SA" },
@@ -68,6 +80,7 @@ describe("Missio access state", () => {
 
   afterEach(() => {
     nav.pathname = "/missio";
+    gate.widen = false;
     while (roots.length) act(() => roots.pop()?.unmount());
     while (hosts.length) hosts.pop()?.remove();
     document.body.innerHTML = "";
@@ -215,6 +228,66 @@ describe("Missio access state", () => {
     const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
     expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care"]);
     expect(host.querySelector("[data-testid=missio-tab-care]")?.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("gives a coach Care, in the menu and the phone tab bar", async () => {
+    const coach: MissioMe = {
+      orgs: [{ id: "org-missio", slug: "missio", name: "Missio Church" }],
+      rolesByOrg: { missio: ["coach"] },
+      currentOrg: "missio",
+    };
+    const { host, root } = render(
+      <MissioFrame client={client(async () => coach)} loadFfsaRoles={noRoles}>
+        <p>Home lives here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+    expect(host.querySelector("[data-testid=missio-nav-care]")?.getAttribute("href")).toBe("/missio/care");
+    const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
+    expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care"]);
+    expect(host.querySelector("[data-testid=missio-tab-care]")).not.toBeNull();
+  });
+
+  it("gives a pastor Care in the menu but leaves the pastor tab bar without it", async () => {
+    const { host, root } = render(
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
+        <p>Home lives here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+    expect(host.querySelector("[data-testid=missio-nav-care]")?.getAttribute("href")).toBe("/missio/care");
+    expect(host.querySelector("[data-testid=missio-tab-care]")).toBeNull();
+    const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
+    expect(tabs.map((tab) => tab.getAttribute("href"))).not.toContain("/missio/care");
+  });
+
+  it("hides Care from a Missio viewer outside the house roles, even if they can open Missio", async () => {
+    // Today canAccessMissio refuses this role. Widen it as a later change might:
+    // Care must still follow GET /api/missio/care (MISSIO_HOUSE_ROLES).
+    gate.widen = true;
+    const member: MissioMe = {
+      orgs: [{ id: "org-missio", slug: "missio", name: "Missio Church" }],
+      rolesByOrg: { missio: ["team_leader"] },
+      currentOrg: "missio",
+    };
+    const { host, root } = render(
+      <MissioFrame client={client(async () => member)} loadFfsaRoles={noRoles}>
+        <p>Home lives here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+    expect(host.querySelector("[data-missio-shell]")?.getAttribute("data-access")).toBe("ready");
+    expect(host.querySelector("[data-testid=missio-nav-care]")).toBeNull();
+    expect(host.querySelector("[data-testid=missio-tab-care]")).toBeNull();
+    expect(host.querySelector("a[href='/missio/care']")).toBeNull();
+    const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
+    expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches"]);
   });
 
   it("marks Volunteers, not Home, on the volunteers page", async () => {
@@ -412,6 +485,7 @@ describe("org switcher for a real FFSA and Missio user", () => {
 
   afterEach(() => {
     nav.pathname = "/missio";
+    gate.widen = false;
     while (roots.length) act(() => roots.pop()?.unmount());
     while (hosts.length) hosts.pop()?.remove();
     document.body.innerHTML = "";

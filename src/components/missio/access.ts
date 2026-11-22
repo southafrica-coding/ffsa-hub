@@ -1,3 +1,4 @@
+import { holdsMissioHouseRole } from "@/lib/missio/house-roles";
 import type { MissioCampus, MissioMe, MissioStatus } from "./types-shim";
 
 export const DEFAULT_PEOPLE_LIMIT = 50;
@@ -46,6 +47,16 @@ export function canAccessMissio(me: MissioMe): boolean {
   if (me.currentOrg !== "missio") return false;
   const roles: readonly string[] = me.rolesByOrg.missio ?? [];
   return roles.includes("pastor") || roles.includes("coach") || roles.includes("house_church_leader");
+}
+
+/**
+ * Care in the nav and tab bar. Same role list as GET /api/missio/care
+ * (MISSIO_HOUSE_ROLES), not canAccessMissio, so widening who opens Missio
+ * never shows Care to someone the API refuses.
+ */
+export function canSeeMissioCare(me: MissioMe): boolean {
+  if (me.currentOrg !== "missio") return false;
+  return holdsMissioHouseRole(me.rolesByOrg.missio ?? []);
 }
 
 /** Pastors see everything: people, follow-up, volunteers, review, placing. */
