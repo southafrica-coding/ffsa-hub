@@ -64,7 +64,6 @@ function client(overrides: Partial<HouseChurchesClient> = {}): HouseChurchesClie
     searchReviewContacts: async () => ({ matches: [] }),
     setCoach: async () => ({ coaches: [] }),
     feedbackHistory: async () => ({ houses: [], since: "2026-08-27" }),
-    feedbackLink: async () => ({ path: "/serve/missio/feedback/abc" }),
     listHouses: async () => ({ houses: [], canWrite: true }),
     getHouse: async () => ({ house, canWrite: true }),
     addMember: async () => ({ member }),

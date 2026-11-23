@@ -92,7 +92,7 @@ describe("weekly feedback", () => {
     expect(host.querySelector("[aria-label='1 of the last 4 weeks reported']")?.children).toHaveLength(4);
   });
 
-  function historyClient(linkCalls: Array<[string, boolean]>) {
+  function historyClient() {
     return {
       feedbackHistory: async () => ({
         since: "2026-01-01",
@@ -107,10 +107,6 @@ describe("weekly feedback", () => {
           },
         ],
       }),
-      feedbackLink: async (houseId: string, rotate = false) => {
-        linkCalls.push([houseId, rotate]);
-        return { path: `/serve/missio/feedback/tok-${linkCalls.length}` };
-      },
     } as unknown as HouseChurchesClient;
   }
 
@@ -126,8 +122,7 @@ describe("weekly feedback", () => {
   }
 
   it("Weekly feedback has one Copy public link and Send on WhatsApp, and no per-house link", async () => {
-    const calls: Array<[string, boolean]> = [];
-    const host = mount(<FeedbackHistory client={historyClient(calls)} />);
+    const host = mount(<FeedbackHistory client={historyClient()} />);
     await settle();
     const block = host.querySelector("[data-testid=public-feedback-link]") as HTMLElement;
     expect(block).not.toBeNull();
@@ -153,7 +148,6 @@ describe("weekly feedback", () => {
     expect(host.querySelector("[data-testid=feedback-whatsapp]")).toBeNull();
     expect(host.textContent).not.toContain("Copy the leader");
     expect(host.textContent).not.toContain("Make a new link");
-    expect(calls).toEqual([]);
   });
 
   it("Copy public link copies the absolute /f/missio-weekly-feedback URL", async () => {
@@ -162,7 +156,7 @@ describe("weekly feedback", () => {
       configurable: true,
       value: { writeText: async (t: string) => void written.push(t) },
     });
-    const host = mount(<FeedbackHistory client={historyClient([])} />);
+    const host = mount(<FeedbackHistory client={historyClient()} />);
     await settle();
     await act(async () => {
       (host.querySelector("[data-testid=public-feedback-copy]") as HTMLButtonElement).click();
@@ -179,7 +173,7 @@ describe("weekly feedback", () => {
     for (const roles of [["pastor"], ["coach"], ["house_church_leader"]]) {
       const host = mount(
         <MissioViewerProvider me={me(roles)}>
-          <FeedbackHistory client={historyClient([])} />
+          <FeedbackHistory client={historyClient()} />
         </MissioViewerProvider>
       );
       await settle();

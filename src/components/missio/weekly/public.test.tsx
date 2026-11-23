@@ -12,8 +12,9 @@ import { WeeklyFeedbackFill, type SubmitMeta, type SubmitOutcome } from "./fill"
 const H4 = "44444444-4444-4444-8444-444444444444";
 const H7 = "77777777-7777-4777-8777-777777777777";
 const HOUSES = [
-  { id: H4, number: 4, name: "Sipho & Naledi" },
-  { id: H7, number: 7, name: null },
+  // 22 Nov 2026 is a Sunday; House 7 meets on a Saturday.
+  { id: H4, number: 4, name: "Sipho & Naledi", meetingDate: "2026-11-22" },
+  { id: H7, number: 7, name: null, meetingDate: "2026-11-21" },
 ];
 
 describe("public weekly feedback (house picker)", () => {
@@ -98,6 +99,25 @@ describe("public weekly feedback (house picker)", () => {
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toMatchObject({ houseId: H4, website: "" });
     expect(bodies[0]).toHaveProperty("answers");
+  });
+
+  it("the heading says this week until a house is chosen, then that house's own meeting day", async () => {
+    // FIXTURE_FILL's own meetingDate is a Sunday: the public form must not use it.
+    const host = mount(<WeeklyFeedbackFill {...FIXTURE_FILL} endpoint="/x" picker={{ houses: HOUSES }} />);
+    const eyebrow = () => host.querySelector("main p")?.textContent ?? "";
+    const h1 = () => host.querySelector("h1")?.textContent ?? "";
+    expect(eyebrow()).toBe("House church feedback · This week");
+    expect(h1()).toBe("How was it this week?");
+    // The heading block (eyebrow, h1, lede) never names a day before a house is chosen.
+    expect(host.querySelector("main > div")?.textContent).not.toMatch(/Sunday|Saturday/);
+
+    await pick(host, H7);
+    expect(eyebrow()).toBe("House 7 · Saturday 21 Nov 2026");
+    expect(h1()).toBe("How was it this Saturday?");
+
+    await pick(host, H4);
+    expect(eyebrow()).toBe("House 4 · Sunday 22 Nov 2026");
+    expect(h1()).toBe("How was it this Sunday?");
   });
 
   it("the house link and the signed-in page show no picker and send answers only", async () => {

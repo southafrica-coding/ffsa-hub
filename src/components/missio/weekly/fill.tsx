@@ -37,6 +37,7 @@ import styles from "./guide.module.css";
 export type WeeklyFillProps = {
   houseNumber: number;
   leaders: string | null;
+  /** This week's meeting (YYYY-MM-DD). Ignored with `picker`: each house carries its own. */
   meetingDate: string;
   lastAttendance: number | null;
   initial: Record<string, unknown>;
@@ -48,7 +49,7 @@ export type WeeklyFillProps = {
   houseHref?: string | null;
   /**
    * The public link only: "Which house church are you in?" comes first.
-   * Houses carry id, number and name, nothing else.
+   * Houses carry id, number, name and this week's meeting date, nothing else.
    */
   picker?: { houses: PublicHouse[] } | null;
   /** Tests and screenshots: stands in for the POST. */
@@ -194,8 +195,11 @@ export function WeeklyFeedbackFill(props: WeeklyFillProps) {
   const [sent, setSent] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const fieldsById = useMemo(() => buildFieldsById(schema), [schema]);
-  const when = meetingLabel(meetingDate);
   const chosen = picker ? picker.houses.find((h) => h.id === houseId) ?? null : null;
+  // The public form has no house until one is chosen, so no day either: the
+  // heading says "this week" until then, then the chosen house's own meeting.
+  const when = picker ? (chosen ? meetingLabel(chosen.meetingDate) : { day: "", date: "" }) : meetingLabel(meetingDate);
+  const whenText = when.day ? `${when.day} ${when.date}` : when.date || "This week";
   const houseLabel = picker ? (chosen ? `House ${chosen.number}` : "Weekly feedback") : `House ${houseNumber}`;
   const nav = { label: houseLabel, href: houseHref ?? undefined };
 
@@ -471,7 +475,7 @@ export function WeeklyFeedbackFill(props: WeeklyFillProps) {
         <main>
           <div className={styles.intro}>
             <p className={`${styles.eyebrow} ${styles.nums}`}>
-              {picker ? (chosen ? `House ${chosen.number}` : "House church feedback") : `House ${houseNumber}`} · {when.day} {when.date}
+              {picker ? (chosen ? `House ${chosen.number}` : "House church feedback") : `House ${houseNumber}`} · {whenText}
             </p>
             <h1 className={styles.h1}>
               How was it <em>this {when.day || "week"}?</em>

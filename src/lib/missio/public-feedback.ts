@@ -4,8 +4,9 @@ import { NextResponse } from "next/server";
 import { previewWritesDisabled } from "@/lib/preview-writes";
 import { clientIp, getRateLimiter, retryAfterSeconds, type RateLimiter } from "@/lib/rate-limit";
 import type { RunDeps } from "@/lib/forms/route-runner";
+import type { FormField, FormSchema } from "@/lib/forms/schema";
 import { PUBLIC_FEEDBACK_HONEYPOT, PUBLIC_HOUSE_QUESTION, type PublicHouse } from "./public-feedback-link";
-import { saveWeeklyFeedback, type WeeklyHouse } from "./weekly-feedback";
+import { feedbackSunday, saveWeeklyFeedback, type WeeklyHouse } from "./weekly-feedback";
 
 // ============================================================
 // Missio weekly feedback — the one public link (server)
@@ -17,7 +18,10 @@ import { saveWeeklyFeedback, type WeeklyHouse } from "./weekly-feedback";
 // missio_house_feedback row. The meeting date is the server's.
 //
 // What a stranger can learn from this page: the Missio house numbers
-// and names. Nothing else is selected, so nothing else can leak.
+// and names, each house's next meeting date, and the questions. The
+// schema goes through publicRenderSchema first, so where answers go
+// (routes: write_column, slack, care_board, follow-ups, contacts) stays
+// on the server. The server still saves with the full stored schema.
 //
 // Abuse: a per-IP write limit, a per-house write limit, a honeypot
 // that saves nothing, and the house id checked against the Missio
@@ -35,25 +39,73 @@ async function missioOrgId(db: Db): Promise<string | null> {
   return String((data as { id: string }).id);
 }
 
+// ────────────────────────────────────────────────────────────
+// What the browser gets
+// ────────────────────────────────────────────────────────────
+
+/** The only parts of a question the public page needs to draw it and post its answer. */
+const RENDER_KEYS = [
+  "id",
+  "type",
+  "label",
+  "key",
+  "required",
+  "options",
+  "helpText",
+  "parentFieldId",
+  "showWhenValue",
+  "min",
+  "max",
+  "minLabel",
+  "maxLabel",
+] as const satisfies ReadonlyArray<keyof FormField>;
+
 /**
- * Every Missio house church, number order, as { id, number, name } only.
+ * The schema as a stranger may see it: steps, questions and the thank-you
+ * text. Built from a whitelist, so routes (and anything added to a field
+ * later) never reach the browser. Only for the public page: validation and
+ * saveWeeklyFeedback load the full stored schema themselves.
+ */
+export function publicRenderSchema(schema: FormSchema): FormSchema {
+  return {
+    version: 1,
+    branding: {},
+    steps: schema.steps.map((step) => ({
+      id: String(step.id),
+      title: String(step.title ?? ""),
+      fields: step.fields.map((field) => {
+        const out: Record<string, unknown> = {};
+        for (const k of RENDER_KEYS) if (field[k] !== undefined) out[k] = Array.isArray(field[k]) ? [...(field[k] as string[])] : field[k];
+        return out as FormField;
+      }),
+    })),
+    thankYou: { heading: String(schema.thankYou?.heading ?? ""), message: String(schema.thankYou?.message ?? "") },
+  };
+}
+
+/**
+ * Every Missio house church, number order, as { id, number, name,
+ * meetingDate } only. meetingDate is the server's date for this week's
+ * meeting (feedbackSunday: the house's meeting day, Sunday when unset), so
+ * the heading can say the right day once a house is chosen.
  * house_churches has no active / archived column (migration 331), so every
  * house in the Missio org is listed (the 20 on campus Potch).
  */
-export async function listPublicHouses(db: Db): Promise<PublicHouse[]> {
+export async function listPublicHouses(db: Db, now = new Date()): Promise<PublicHouse[]> {
   const orgId = await missioOrgId(db);
   if (!orgId) return [];
   const { data, error } = await db
     .from("house_churches")
-    .select("id, number, name")
+    .select("id, number, name, meeting_day")
     .eq("org_id", orgId)
     .order("number");
   if (error || !Array.isArray(data)) return [];
-  // Project again: whatever the query returns, only these three leave.
+  // Project again: whatever the query returns, only these four leave.
   return (data as Record<string, unknown>[]).map((row) => ({
     id: String(row.id),
     number: Number(row.number),
     name: typeof row.name === "string" && row.name.trim() ? row.name.trim() : null,
+    meetingDate: feedbackSunday(typeof row.meeting_day === "string" ? row.meeting_day : null, now),
   }));
 }
 

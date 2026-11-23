@@ -17,8 +17,11 @@ export const PUBLIC_HOUSE_QUESTION = "Which house church are you in?";
 /** The honeypot field's name in the public POST body. Always empty for a person. */
 export const PUBLIC_FEEDBACK_HONEYPOT = "website";
 
-/** What a public visitor may see of a house: nothing else, ever. */
-export type PublicHouse = { id: string; number: number; name: string | null };
+/**
+ * What a public visitor may see of a house: nothing else, ever.
+ * meetingDate is this week's meeting (YYYY-MM-DD), worked out on the server.
+ */
+export type PublicHouse = { id: string; number: number; name: string | null; meetingDate: string };
 
 /** True only for the seeded Missio weekly feedback form (no event). */
 export function isMissioPublicFeedbackForm(form: {

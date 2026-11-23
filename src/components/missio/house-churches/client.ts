@@ -97,8 +97,6 @@ export interface HouseChurchesClient {
   removeMember(houseId: string, contactId: string): Promise<{ ok: true }>;
   /** Weekly feedback for every house this user may see. */
   feedbackHistory(weeks?: number): Promise<FeedbackHistoryResponse>;
-  /** The house's weekly feedback link (made on first use). rotate: pastors only. */
-  feedbackLink(houseId: string, rotate?: boolean): Promise<{ path: string }>;
   /** Add or remove one of the house's coaches. Pastors only. */
   setCoach(houseId: string, contactId: string, on: boolean): Promise<CoachResponse>;
   listReview(): Promise<ReviewListResponse>;
@@ -436,14 +434,6 @@ export function createHouseChurchesClient(fetchImpl: FetchLike = fetch): HouseCh
       const body = await request(`/api/missio/house-churches/feedback?weeks=${encodeURIComponent(String(weeks))}`);
       if (!Array.isArray(body.houses)) throw new MissioApiError(500, UNEXPECTED, null, "server_error");
       return { houses: body.houses as FeedbackHouse[], since: String(body.since ?? "") };
-    },
-    async feedbackLink(houseId, rotate = false) {
-      const body = await request(`/api/missio/house-churches/${encodeURIComponent(houseId)}/feedback/link`, {
-        method: "POST",
-        body: JSON.stringify({ rotate }),
-      });
-      if (typeof body.path !== "string") throw new MissioApiError(500, UNEXPECTED, null, "server_error");
-      return { path: body.path };
     },
     async listReview() {
       return reviewResponse(await request(`${houseChurchesApi.review}?status=pending`));

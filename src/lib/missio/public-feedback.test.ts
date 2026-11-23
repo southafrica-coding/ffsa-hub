@@ -7,7 +7,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => null }));
 const save = vi.hoisted(() => vi.fn());
-vi.mock("./weekly-feedback", () => ({ saveWeeklyFeedback: save }));
+vi.mock("./weekly-feedback", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./weekly-feedback")>()),
+  saveWeeklyFeedback: save,
+}));
 
 import { InMemoryRateLimiter } from "@/lib/rate-limit";
 import { handlePublicWeeklyFeedback, listPublicHouses, loadPublicHouse } from "./public-feedback";
@@ -72,18 +75,19 @@ beforeEach(() => {
 });
 
 describe("listPublicHouses", () => {
-  it("lists every Missio house, number order, with id, number and name only", async () => {
-    const houses = await listPublicHouses(fakeDb());
+  it("lists every Missio house, number order, with id, number, name and this week's meeting only", async () => {
+    // Monday 23 Nov 2026, 09:00 SAST: House 4 (no day) met Sunday 22nd, House 7 Wednesday 18th.
+    const houses = await listPublicHouses(fakeDb(), new Date("2026-11-23T07:00:00Z"));
     expect(houses).toEqual([
-      { id: H4, number: 4, name: "Sipho & Naledi" },
-      { id: H7, number: 7, name: null },
+      { id: H4, number: 4, name: "Sipho & Naledi", meetingDate: "2026-11-22" },
+      { id: H7, number: 7, name: null, meetingDate: "2026-11-18" },
     ]);
-    for (const h of houses) expect(Object.keys(h).sort()).toEqual(["id", "name", "number"]);
+    for (const h of houses) expect(Object.keys(h).sort()).toEqual(["id", "meetingDate", "name", "number"]);
     const text = JSON.stringify(houses);
     for (const secret of ["Secret", "private", "leader_notes", "location", "Not Missio"]) expect(text).not.toContain(secret);
     // It asks the database for no more than that, scoped to the Missio org.
     const q = queries.find((x) => x.table === "house_churches");
-    expect(q?.select).toBe("id, number, name");
+    expect(q?.select).toBe("id, number, name, meeting_day");
     expect(q?.filters).toEqual([["org_id", ORG]]);
     // No members, coaches or people tables are touched.
     expect(queries.map((x) => x.table).sort()).toEqual(["house_churches", "organisations"]);

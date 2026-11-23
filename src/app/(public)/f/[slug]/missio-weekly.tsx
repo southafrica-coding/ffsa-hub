@@ -2,9 +2,8 @@ import { headers } from "next/headers";
 import { WeeklyFeedbackFill } from "@/components/missio/weekly/fill";
 import { GuideStatus } from "@/components/missio/weekly/surface";
 import { serveAvailabilityLimit } from "@/lib/missio/availability/limit";
-import { listPublicHouses } from "@/lib/missio/public-feedback";
+import { listPublicHouses, publicRenderSchema } from "@/lib/missio/public-feedback";
 import { MISSIO_PUBLIC_FEEDBACK_PATH } from "@/lib/missio/public-feedback-link";
-import { feedbackSunday } from "@/lib/missio/weekly-feedback";
 import { missioWeeklyFeedbackSchema } from "@/lib/forms/templates/missio-weekly-feedback";
 import type { FormSchema } from "@/lib/forms/schema";
 
@@ -15,7 +14,9 @@ import type { FormSchema } from "@/lib/forms/schema";
 // is the same weekly form the house links show. Nothing about a house
 // is prefilled here (anyone can open this page, so last week's answers
 // and counts stay off it), and the page carries only each house's id,
-// number and name.
+// number, name and meeting date, and the questions without their
+// routes (publicRenderSchema). The submit route saves with the full
+// stored schema.
 // ============================================================
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,13 +47,13 @@ export async function MissioPublicWeeklyFeedback({ db, schema }: { db: Db; schem
     <WeeklyFeedbackFill
       houseNumber={0}
       leaders={null}
-      // For the heading only: every house meets on Sunday today. The saved
-      // date is worked out per house on the server (feedbackSunday).
-      meetingDate={feedbackSunday(null)}
+      // Unused with a picker: the heading takes the chosen house's own
+      // meetingDate (worked out per house on the server, as the save does).
+      meetingDate=""
       lastAttendance={null}
       initial={{}}
       sentBefore={false}
-      schema={isSchema(schema) ? schema : missioWeeklyFeedbackSchema()}
+      schema={publicRenderSchema(isSchema(schema) ? schema : missioWeeklyFeedbackSchema())}
       endpoint={`/api${MISSIO_PUBLIC_FEEDBACK_PATH}/submit`}
       picker={{ houses }}
     />
