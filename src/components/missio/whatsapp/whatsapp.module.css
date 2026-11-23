@@ -377,6 +377,23 @@
   color: var(--bad, #a3261b);
 }
 
+/* Bot / Handed off / Serve: a word each, the colour only backs it up. */
+.flagBot {
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-ink, #3f5940);
+}
+
+.flagHandoff {
+  background: #f6e7c9;
+  color: #6b4a07;
+}
+
+.flagServe {
+  border: 1px solid var(--rule-strong, #cfc8b6);
+  background: var(--panel, #fbf9f4);
+  color: var(--ink, #1c1b17);
+}
+
 .status {
   display: inline-flex;
   align-items: center;
@@ -452,6 +469,90 @@
   padding: 0 4px 0 8px;
   font-weight: 600;
   color: var(--link, #2f5d50) !important;
+}
+
+/* ── Who has the chat (menu bot) ───────────────────────── */
+
+.botBar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--page, #f3f0e8);
+}
+
+.botBar[data-mode="handed_off"] {
+  border-color: #e2c88f;
+}
+
+.botLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink, #1c1b17);
+}
+
+.botTag {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--olive-ink, #3f5940);
+}
+
+.botActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.botActions > button {
+  flex: 1 1 auto;
+}
+
+.serving {
+  padding: 10px 12px;
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--panel, #fbf9f4);
+}
+
+.page .servingTitle {
+  margin: 0 0 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2, #5b574d);
+}
+
+.servingList {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.servingList > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.servingList dt {
+  font-weight: 600;
+  color: var(--ink-2, #5b574d);
+}
+
+.servingList dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .messages {

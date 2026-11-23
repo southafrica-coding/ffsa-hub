@@ -7,7 +7,7 @@ import { sendConfig } from "@/lib/missio/whatsapp/config";
 import { messageView } from "@/lib/missio/whatsapp/inbox";
 import { whatsAppE164 } from "@/lib/missio/whatsapp/phone";
 import { MAX_TEXT_LENGTH, MAX_VARIABLE_LENGTH } from "@/lib/missio/whatsapp/rules";
-import { sendFromHub, SEND_MESSAGES, type SendTarget } from "@/lib/missio/whatsapp/send";
+import { pauseBotAfterPastorSend, sendFromHub, SEND_MESSAGES, type SendTarget } from "@/lib/missio/whatsapp/send";
 import { isMissingRelation } from "@/lib/missio/whatsapp/store";
 import { supabaseWhatsAppStore } from "@/lib/missio/whatsapp/supabase-store";
 import { approvedTemplates, MISSIO_WHATSAPP_ROLES, threadDeps, whatsAppError } from "@/lib/missio/whatsapp/server";
@@ -22,6 +22,8 @@ import type { SendResponse } from "@/lib/missio/whatsapp/types";
 // nothing is written or sent until every check passes: pastor → WhatsApp
 // switched on (503) → rate limit → input → the person's number → opted out
 // → 24-hour window or an approved template. See lib/missio/whatsapp/send.ts.
+// A reply that WhatsApp accepts pauses the menu bot on that thread (397),
+// so the bot can't talk over the pastor. Resume it from the thread.
 
 export const dynamic = "force-dynamic";
 
@@ -85,9 +87,10 @@ export async function POST(request: Request) {
     to = { e164: thread.phone_e164, contactId: thread.contact_id };
   }
 
+  const store = supabaseWhatsAppStore(createAdminClient());
   const result = await sendFromHub(
     {
-      store: supabaseWhatsAppStore(createAdminClient()),
+      store,
       config,
       loadTemplates: () => approvedTemplates(config),
     },
@@ -101,6 +104,7 @@ export async function POST(request: Request) {
   if (!result.ok) return whatsAppError(result.status, result.code, result.error);
 
   const body: SendResponse = { message: messageView(result.message), threadId: result.threadId };
+  if (result.message.status !== "failed") await pauseBotAfterPastorSend(store, result.threadId, access.user.id);
   if (result.message.status === "failed") {
     // Kept in the thread so the pastor sees what didn't go, and why.
     return NextResponse.json({ ...body, error: `WhatsApp didn't take it: ${body.message.error ?? "unknown error"}`, code: "send_failed" }, { status: 502 });

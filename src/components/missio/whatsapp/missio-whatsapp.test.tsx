@@ -89,6 +89,7 @@ function fakeClient(over: Partial<WhatsAppClient> = {}): WhatsAppClient & { sent
       sent.push(body);
       return { threadId: "t1", message: msg({ direction: "out", body: "text" in body ? body.text : "Hi Kea, it's Missio.", status: "accepted", at: NOW.toISOString() }) };
     },
+    botMode: async (_threadId, action) => ({ ok: true, bot: { mode: action === "resume" ? "on" : "paused", reason: action === "take_over" ? "pastor" : null, pausedAt: null } }),
     ...over,
   };
 }
@@ -288,5 +289,110 @@ describe("the WhatsApp button on a person", () => {
 
   it("names the page in the top bar", () => {
     expect(missioCrumbLabel("/missio/whatsapp")).toBe("WhatsApp");
+  });
+});
+
+describe("the WhatsApp menu in the inbox (397)", () => {
+  const roots: Array<ReturnType<typeof render>["root"]> = [];
+  const hosts: HTMLElement[] = [];
+  afterEach(() => {
+    cleanup(roots, hosts);
+    nav.search = "";
+  });
+  function mount(node: ReactNode) {
+    const view = render(<MissioViewerProvider me={pastor}>{node}</MissioViewerProvider>);
+    roots.push(view.root);
+    hosts.push(view.host);
+    return view.host;
+  }
+
+  const botInbox: InboxResponse = {
+    setup: "ready",
+    threads: [
+      { ...inbox.threads[0], id: "b1", bot: { mode: "on", reason: null, active: true, flow: "serve" }, serving: 0 },
+      { ...inbox.threads[0], id: "b2", bot: { mode: "handed_off", reason: "human", active: false, flow: null }, serving: 0 },
+      { ...inbox.threads[0], id: "b3", bot: { mode: "on", reason: null, active: false, flow: null }, serving: 1 },
+      { ...inbox.threads[0], id: "b4", bot: { mode: "paused", reason: "pastor", active: false, flow: null }, serving: 0 },
+      { ...inbox.threads[0], id: "b5", bot: null },
+    ],
+  };
+
+  it("badges each thread in words: Bot, Handed off, Serve, Pastor has it", async () => {
+    const host = mount(<MissioWhatsApp client={fakeClient({ inbox: async () => botInbox })} now={() => NOW} />);
+    await settle();
+    const rows = [...host.querySelectorAll("[data-testid=whatsapp-thread-row]")];
+    const flags = rows.map((r) => [...r.querySelectorAll("[data-testid^=flag-]")].map((f) => f.textContent));
+    expect(flags).toEqual([["Bot"], ["Handed off"], ["Serve"], ["Pastor has it"], []]);
+  });
+
+  const asking = threadOf({
+    bot: { mode: "on", reason: null, active: true, flow: "serve", pausedAt: null, statusLine: "Bot is asking which team" },
+    serving: [],
+    messages: [
+      msg({ body: "I want to serve" }),
+      msg({ direction: "out", bot: true, body: "We’d love to have you serve with us. Which team interests you?\n\nChoices: Kids · Welcome · Other", status: "delivered" }),
+    ],
+  });
+
+  it("shows what the bot is asking, marks its messages, and offers Take over and Pause", async () => {
+    nav.search = "thread=t1";
+    const host = mount(<MissioWhatsApp client={fakeClient({ thread: async () => asking })} now={() => NOW} />);
+    await settle();
+    expect(host.querySelector("[data-testid=whatsapp-bot-status]")?.textContent).toContain("Bot is asking which team");
+    const buttons = [...host.querySelectorAll("[data-testid=whatsapp-bot-bar] button")].map((b) => b.textContent);
+    expect(buttons).toEqual(["Take over", "Pause bot"]);
+    const out = host.querySelectorAll("[data-testid=whatsapp-messages] li[data-direction=out]")[0];
+    expect(out.textContent).toContain("Missio menu");
+    expect(out.textContent).toContain("The Missio menu sent:");
+  });
+
+  it("Take over pauses the bot and sends no message", async () => {
+    nav.search = "thread=t1";
+    const calls: unknown[] = [];
+    const client = fakeClient({
+      thread: async () => asking,
+      botMode: async (threadId, action) => {
+        calls.push([threadId, action]);
+        return { ok: true, bot: { mode: "paused", reason: "pastor", pausedAt: NOW.toISOString() } };
+      },
+    });
+    const host = mount(<MissioWhatsApp client={client} now={() => NOW} />);
+    await settle();
+    (host.querySelector("[data-testid=bot-take_over]") as HTMLButtonElement).click();
+    await settle();
+    expect(calls).toEqual([["t1", "take_over"]]);
+    expect(client.sent).toEqual([]);
+  });
+
+  it("a handed-off thread says a pastor has it and offers Resume", async () => {
+    nav.search = "thread=t1";
+    const calls: unknown[] = [];
+    const handed = threadOf({
+      bot: { mode: "handed_off", reason: "human", active: false, flow: null, pausedAt: "2026-11-23T13:00:00Z", statusLine: "They asked for a person. A pastor has this chat." },
+      serving: [{ id: "i1", teams: ["Kids", "Welcome"], availability: "Most Sundays", experience: "A little", note: "Mornings work", status: "new", at: "2026-11-23T13:00:00Z" }],
+    });
+    const client = fakeClient({
+      thread: async () => handed,
+      botMode: async (threadId, action) => {
+        calls.push([threadId, action]);
+        return { ok: true, bot: { mode: "on", reason: null, pausedAt: null } };
+      },
+    });
+    const host = mount(<MissioWhatsApp client={client} now={() => NOW} />);
+    await settle();
+    expect(host.querySelector("[data-testid=whatsapp-bot-status]")?.textContent).toContain("A pastor has this chat");
+    expect(host.querySelector("[data-testid=whatsapp-serving]")?.textContent).toContain("Kids, Welcome");
+    const resume = host.querySelector("[data-testid=bot-resume]") as HTMLButtonElement;
+    expect(resume.textContent).toBe("Resume bot");
+    resume.click();
+    await settle();
+    expect(calls).toEqual([["t1", "resume"]]);
+  });
+
+  it("before 397: no bot bar at all", async () => {
+    nav.search = "thread=t1";
+    const host = mount(<MissioWhatsApp client={fakeClient()} now={() => NOW} />);
+    await settle();
+    expect(host.querySelector("[data-testid=whatsapp-bot-bar]")).toBeNull();
   });
 });

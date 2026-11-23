@@ -20,10 +20,52 @@ export type TemplatePayload = {
   components: Array<{ type: "header" | "body"; parameters: Array<{ type: "text"; text: string; parameter_name?: string }> }>;
 };
 
+/** Reply buttons (at most 3). Only inside the 24-hour window. */
+export type ButtonsPayload = { kind: "buttons"; to: string; body: string; buttons: Array<{ id: string; title: string }> };
+/** A list (at most 10 rows) behind one button. Only inside the 24-hour window. */
+export type ListPayload = {
+  kind: "list";
+  to: string;
+  body: string;
+  button: string;
+  rows: Array<{ id: string; title: string; description?: string }>;
+};
+
+export type GraphPayload = TextPayload | TemplatePayload | ButtonsPayload | ListPayload;
+
 /** The exact JSON posted to {phone number id}/messages. `to` is E.164 with the plus. */
-export function messageBody(payload: TextPayload | TemplatePayload): Record<string, unknown> {
+export function messageBody(payload: GraphPayload): Record<string, unknown> {
   const base = { messaging_product: "whatsapp", recipient_type: "individual", to: payload.to };
   if (payload.kind === "text") return { ...base, type: "text", text: { preview_url: false, body: payload.body } };
+  if (payload.kind === "buttons") {
+    return {
+      ...base,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: payload.body },
+        action: { buttons: payload.buttons.map((b) => ({ type: "reply", reply: { id: b.id, title: b.title } })) },
+      },
+    };
+  }
+  if (payload.kind === "list") {
+    return {
+      ...base,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        body: { text: payload.body },
+        action: {
+          button: payload.button,
+          sections: [
+            {
+              rows: payload.rows.map((r) => (r.description ? { id: r.id, title: r.title, description: r.description } : { id: r.id, title: r.title })),
+            },
+          ],
+        },
+      },
+    };
+  }
   const template: Record<string, unknown> = { name: payload.name, language: { code: payload.language } };
   if (payload.components.length > 0) template.components = payload.components;
   return { ...base, type: "template", template };
@@ -41,7 +83,7 @@ function graphError(json: unknown, status: number): GraphError {
 
 export async function sendWhatsApp(
   config: SendConfig,
-  payload: TextPayload | TemplatePayload,
+  payload: GraphPayload,
   fetcher: FetchLike = fetch
 ): Promise<{ ok: true; wamid: string } | { ok: false; error: GraphError }> {
   let res: Response;

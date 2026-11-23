@@ -20,6 +20,7 @@ import {
   templateValuesProblem,
   type TemplateView,
 } from "./rules";
+import type { BotStore } from "./bot/types";
 import { WhatsAppNotInstalledError, type MessageRow, type WhatsAppStore } from "./store";
 import type { WhatsAppErrorCode } from "./types";
 
@@ -132,5 +133,29 @@ export async function sendFromHub(
     if (error instanceof WhatsAppNotInstalledError) return fail(503, "not_installed", SEND_MESSAGES.not_installed);
     console.error("[missio-whatsapp] send failed", error instanceof Error ? error.message : "unknown");
     return fail(500, "server_error", "Something went wrong. Nothing was sent.");
+  }
+}
+
+/**
+ * A pastor's reply went out: pause the menu on that thread so it can't talk
+ * over them (reason "pastor"). Only when the bot is on; a thread the person
+ * handed to a person stays handed off. Never blocks the send: before 397 is
+ * applied, or on any error, it logs and returns false.
+ */
+export async function pauseBotAfterPastorSend(
+  store: Pick<BotStore, "getThread" | "setBotMode" | "closeSession">,
+  threadId: string,
+  userId: string,
+  now: Date = new Date()
+): Promise<boolean> {
+  try {
+    const thread = await store.getThread(threadId);
+    if (!thread || thread.bot_mode !== "on") return false;
+    await store.setBotMode(threadId, { mode: "paused", reason: "pastor", by: userId, at: now.toISOString() });
+    await store.closeSession(threadId, "paused");
+    return true;
+  } catch {
+    console.error("[missio-whatsapp] bot auto-pause skipped");
+    return false;
   }
 }

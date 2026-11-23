@@ -3,7 +3,16 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { InboxResponse, MessageView, ThreadResponse, ThreadSummary, WhatsAppSetup } from "@/lib/missio/whatsapp/types";
+import type {
+  BotModeAction,
+  InboxResponse,
+  MessageView,
+  ServingInterestView,
+  ThreadBotDetail,
+  ThreadResponse,
+  ThreadSummary,
+  WhatsAppSetup,
+} from "@/lib/missio/whatsapp/types";
 import { isMissioPastor } from "../access";
 import { useMissioViewer } from "../viewer";
 import content from "../content.module.css";
@@ -232,10 +241,40 @@ function ThreadRow({ thread, on, now }: { thread: ThreadSummary; on: boolean; no
             {thread.lastDirection === "in" ? <span className={styles.flag}>They wrote</span> : null}
             {!thread.name ? <span className={styles.flag}>Not in People yet</span> : null}
             {thread.optedOut ? <span className={`${styles.flag} ${styles.flagBad}`}>Opted out</span> : null}
+            <BotFlags thread={thread} />
           </span>
         </span>
       </Link>
     </li>
+  );
+}
+
+/** Who has the chat, in words: Bot / Handed off / Bot paused, and Serve for a new serving interest. */
+function BotFlags({ thread }: { thread: ThreadSummary }) {
+  const bot = thread.bot;
+  return (
+    <>
+      {bot?.mode === "on" && bot.active ? (
+        <span className={`${styles.flag} ${styles.flagBot}`} data-testid="flag-bot">
+          Bot
+        </span>
+      ) : null}
+      {bot?.mode === "handed_off" ? (
+        <span className={`${styles.flag} ${styles.flagHandoff}`} data-testid="flag-handed-off">
+          Handed off
+        </span>
+      ) : null}
+      {bot?.mode === "paused" ? (
+        <span className={styles.flag} data-testid="flag-paused">
+          {bot.reason === "pastor" ? "Pastor has it" : "Bot paused"}
+        </span>
+      ) : null}
+      {(thread.serving ?? 0) > 0 ? (
+        <span className={`${styles.flag} ${styles.flagServe}`} data-testid="flag-serve">
+          Serve
+        </span>
+      ) : null}
+    </>
   );
 }
 
@@ -377,6 +416,8 @@ function ThreadPanel({
         ) : null}
       </header>
 
+      {data.serving && data.serving.length > 0 ? <ServingCard interests={data.serving} /> : null}
+
       <ol className={styles.messages} aria-label="Messages" data-testid="whatsapp-messages">
         {data.messages.length === 0 ? (
           <li className={styles.noMessages}>No messages with them yet.</li>
@@ -390,6 +431,19 @@ function ThreadPanel({
         )}
       </ol>
 
+      {/* Beside the composer, where the pastor is: who has the chat, Take over / Pause / Resume. */}
+      {data.bot && data.thread ? (
+        <BotBar
+          threadId={data.thread.id}
+          bot={data.bot}
+          client={client}
+          onChanged={(bot) => {
+            setState((prev) => (prev.kind === "ready" ? { ...prev, data: { ...prev.data, bot } } : prev));
+            void load();
+            onSent();
+          }}
+        />
+      ) : null}
       <Composer
         thread={data}
         threadKey={threadKey}
@@ -406,6 +460,122 @@ function ThreadPanel({
       {/* Scrolled to on open and on each new message, so the newest message and the composer are in view. */}
       <div ref={bottom} className={styles.end} aria-hidden="true" />
     </div>
+  );
+}
+
+const BOT_ACTION_WORD: Record<BotModeAction, string> = { take_over: "Take over", pause: "Pause bot", resume: "Resume bot" };
+
+/**
+ * The slim line under the header: who has the chat, and the buttons to
+ * change it. Take over sends nothing — the pastor writes in the composer.
+ */
+function BotBar({
+  threadId,
+  bot,
+  client,
+  onChanged,
+}: {
+  threadId: string;
+  bot: ThreadBotDetail;
+  client: WhatsAppClient;
+  onChanged: (bot: ThreadBotDetail) => void;
+}) {
+  const [busy, setBusy] = useState<BotModeAction | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const actions: BotModeAction[] = bot.mode === "on" ? ["take_over", "pause"] : ["resume"];
+
+  const run = (action: BotModeAction) => {
+    setBusy(action);
+    setError(null);
+    client.botMode(threadId, action).then(
+      (res) => {
+        setBusy(null);
+        const pastorHas = res.bot.mode === "paused" && res.bot.reason === "pastor";
+        onChanged({
+          ...bot,
+          mode: res.bot.mode,
+          reason: res.bot.reason,
+          pausedAt: res.bot.pausedAt,
+          active: false,
+          flow: null,
+          statusLine:
+            res.bot.mode === "on"
+              ? "Bot is on. It answers new messages with the menu."
+              : pastorHas
+                ? "A pastor has this chat. The bot is quiet."
+                : "Bot is paused. It stays quiet until a pastor resumes it.",
+        });
+      },
+      (err: unknown) => {
+        setBusy(null);
+        setError(err instanceof WhatsAppApiError ? err.message : "Something went wrong. Nothing was changed.");
+      }
+    );
+  };
+
+  return (
+    <section className={styles.botBar} aria-label="WhatsApp menu" data-testid="whatsapp-bot-bar" data-mode={bot.mode}>
+      <p className={styles.botLine} role="status" data-testid="whatsapp-bot-status">
+        <span className={styles.botTag}>{bot.mode === "on" ? "Menu on" : bot.mode === "handed_off" ? "Handed off" : "Menu paused"}</span>
+        <span>{bot.statusLine}</span>
+      </p>
+      <div className={styles.botActions}>
+        {actions.map((action) => (
+          <button
+            key={action}
+            type="button"
+            className={styles.secondary}
+            disabled={busy !== null}
+            onClick={() => run(action)}
+            data-testid={`bot-${action}`}
+          >
+            {busy === action ? "Saving…" : BOT_ACTION_WORD[action]}
+          </button>
+        ))}
+      </div>
+      {error ? (
+        <p className={styles.formError} role="alert">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/** What they told the menu about serving. Pastors pass it on; leaders don't see the inbox. */
+function ServingCard({ interests }: { interests: ServingInterestView[] }) {
+  const latest = interests[0];
+  return (
+    <section className={styles.serving} aria-label="Wants to serve" data-testid="whatsapp-serving">
+      <p className={styles.servingTitle}>
+        Wants to serve{latest.status !== "new" ? ` · ${latest.status}` : ""}
+        {interests.length > 1 ? ` · ${interests.length} times` : ""}
+      </p>
+      <dl className={styles.servingList}>
+        <div>
+          <dt>Teams</dt>
+          <dd>{latest.teams.join(", ") || "—"}</dd>
+        </div>
+        {latest.availability ? (
+          <div>
+            <dt>How often</dt>
+            <dd>{latest.availability}</dd>
+          </div>
+        ) : null}
+        {latest.experience ? (
+          <div>
+            <dt>Served before</dt>
+            <dd>{latest.experience}</dd>
+          </div>
+        ) : null}
+        {latest.note ? (
+          <div>
+            <dt>Note</dt>
+            <dd>{latest.note}</dd>
+          </div>
+        ) : null}
+      </dl>
+    </section>
   );
 }
 
@@ -427,7 +597,8 @@ function MessageItem({ message, dayBreak }: { message: MessageView; dayBreak: st
         </li>
       ) : null}
       <li className={`${styles.message} ${out ? styles.out : styles.in}`} data-direction={message.direction} data-status={message.status}>
-        <span className={styles.visuallyHidden}>{out ? "You sent:" : "They wrote:"}</span>
+        <span className={styles.visuallyHidden}>{message.bot ? "The Missio menu sent:" : out ? "You sent:" : "They wrote:"}</span>
+        {message.bot ? <span className={styles.templateTag}>Missio menu</span> : null}
         {message.kind === "template" ? (
           <span className={styles.templateTag}>Approved message{message.templateName ? ` · ${message.templateName.replace(/_/g, " ")}` : ""}</span>
         ) : null}

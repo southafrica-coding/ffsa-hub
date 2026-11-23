@@ -5,7 +5,11 @@ import { inboundPayload, statusPayload, TEST_PHONE_NUMBER_ID } from "@/lib/missi
 import { WhatsAppNotInstalledError } from "@/lib/missio/whatsapp/store";
 
 // Fakes only: the store is in memory and no admin client reaches a DB.
-const state = vi.hoisted(() => ({ store: null as unknown, adminCreated: 0 }));
+const state = vi.hoisted(() => ({
+  store: null as unknown,
+  adminCreated: 0,
+  scheduled: [] as Array<{ jobs: unknown[]; storedAtSchedule: number }>,
+}));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => {
@@ -14,6 +18,12 @@ vi.mock("@/lib/supabase/admin", () => ({
   },
 }));
 vi.mock("@/lib/missio/whatsapp/supabase-store", () => ({ supabaseWhatsAppStore: () => state.store }));
+// The menu bot only gets scheduled here (it runs after the response); record what was handed over.
+vi.mock("@/lib/missio/whatsapp/bot/schedule", () => ({
+  scheduleBotWork: (jobs: unknown[]) => {
+    state.scheduled.push({ jobs, storedAtSchedule: (state.store as { messages: unknown[] }).messages.length });
+  },
+}));
 
 import { GET, POST } from "./route";
 
@@ -33,6 +43,7 @@ beforeEach(() => {
   store = memoryStore();
   state.store = store;
   state.adminCreated = 0;
+  state.scheduled = [];
   vi.stubEnv("MISSIO_WHATSAPP_APP_SECRET", SECRET);
   vi.stubEnv("MISSIO_WHATSAPP_VERIFY_TOKEN", "verify-test-token");
   vi.stubEnv("MISSIO_WHATSAPP_PHONE_NUMBER_ID", TEST_PHONE_NUMBER_ID);
@@ -107,6 +118,35 @@ describe("POST", () => {
 
   it("refuses a signed body that isn't JSON", async () => {
     expect((await POST(post("not json"))).status).toBe(400);
+  });
+
+  it("hands newly stored messages to the menu bot after the store, and still answers 200", async () => {
+    const res = await POST(post(inboundPayload({ wamid: "wamid.B1", text: "Hi" })));
+    expect(res.status).toBe(200);
+    expect(state.scheduled).toHaveLength(1);
+    expect(state.scheduled[0].storedAtSchedule).toBe(1);
+    expect(state.scheduled[0].jobs).toEqual([
+      expect.objectContaining({ wamid: "wamid.B1", text: "Hi", kind: "text", replyId: null, optChange: null, wasOptedOut: false }),
+    ]);
+  });
+
+  it("a retried delivery hands the bot nothing new", async () => {
+    const payload = inboundPayload({ wamid: "wamid.B2" });
+    await POST(post(payload));
+    await POST(post(payload));
+    expect(state.scheduled.map((s) => s.jobs.length)).toEqual([1, 0]);
+  });
+
+  it("passes the tapped reply id through, with the title as the readable body", async () => {
+    await POST(post(inboundPayload({ wamid: "wamid.B3", reply: { kind: "list", id: "serve", title: "I want to serve" } })));
+    expect(store.messages[0]).toMatchObject({ body: "I want to serve", wa_reply_id: "serve", wa_type: "interactive" });
+    expect(state.scheduled[0].jobs[0]).toMatchObject({ replyId: "serve", text: "I want to serve" });
+  });
+
+  it("never schedules bot work before a verified signature", async () => {
+    await POST(post(inboundPayload({ wamid: "wamid.B4" }), null));
+    await POST(post(inboundPayload({ wamid: "wamid.B4" }), "sha256=" + "0".repeat(64)));
+    expect(state.scheduled).toHaveLength(0);
   });
 
   it("applies signed status updates", async () => {

@@ -1,4 +1,6 @@
 import type {
+  BotModeAction,
+  BotModeResponse,
   InboxResponse,
   SendResponse,
   TemplatesResponse,
@@ -35,6 +37,8 @@ export type WhatsAppClient = {
   markRead(threadId: string): Promise<void>;
   templates(fresh?: boolean): Promise<TemplatesResponse>;
   send(body: SendBody): Promise<SendResponse>;
+  /** Take over, pause or resume the menu bot on a thread. Sends nothing. */
+  botMode(threadId: string, action: BotModeAction): Promise<BotModeResponse>;
 };
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
@@ -74,4 +78,5 @@ export const whatsAppClient: WhatsAppClient = {
     }
   },
   send: (body) => call<SendResponse>("/api/missio/whatsapp/send", json(body)),
+  botMode: (threadId, action) => call<BotModeResponse>("/api/missio/whatsapp/thread/bot", json({ threadId, action })),
 };

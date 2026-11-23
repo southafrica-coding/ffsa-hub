@@ -14,9 +14,11 @@ export function inboundPayload(opts: {
   at?: string;
   name?: string;
   phoneNumberId?: string;
+  /** A tapped menu row or button (type becomes "interactive"). */
+  reply?: { kind: "list" | "button"; id: string; title: string };
 }): WebhookPayload {
   const from = opts.from ?? TEST_WA_ID;
-  const type = opts.type ?? "text";
+  const type = opts.reply ? "interactive" : (opts.type ?? "text");
   return {
     object: "whatsapp_business_account",
     entry: [
@@ -36,6 +38,14 @@ export function inboundPayload(opts: {
                   timestamp: unix(opts.at ?? "2026-11-23T12:00:00Z"),
                   type,
                   ...(type === "text" ? { text: { body: opts.text ?? "Hello" } } : {}),
+                  ...(opts.reply
+                    ? {
+                        interactive:
+                          opts.reply.kind === "list"
+                            ? { type: "list_reply", list_reply: { id: opts.reply.id, title: opts.reply.title } }
+                            : { type: "button_reply", button_reply: { id: opts.reply.id, title: opts.reply.title } },
+                      }
+                    : {}),
                 },
               ],
             },

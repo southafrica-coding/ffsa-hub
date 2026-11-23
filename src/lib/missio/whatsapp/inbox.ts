@@ -11,13 +11,25 @@ import {
   getWhatsAppThreadById,
   getWhatsAppThreadByPhone,
   listMissioNamesByContact,
+  listOpenBotSessions,
+  listServingInterestsForThreads,
   listWhatsAppMessages,
   listWhatsAppThreads,
 } from "@/services/missio-whatsapp";
+import { AVAILABILITY, botStatusLine, EXPERIENCE } from "./bot/copy";
 import { formatE164, whatsAppE164 } from "./phone";
 import { serviceWindowEndsAt, type MessageStatus } from "./rules";
-import { isMissingRelation, type ThreadRow } from "./store";
-import type { InboxResponse, MessageView, ThreadResponse, ThreadSummary, WhatsAppSetup } from "./types";
+import { isMissingColumn, isMissingRelation, type ThreadRow } from "./store";
+import type {
+  InboxResponse,
+  MessageView,
+  ServingInterestView,
+  ThreadBot,
+  ThreadBotDetail,
+  ThreadResponse,
+  ThreadSummary,
+  WhatsAppSetup,
+} from "./types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -55,8 +67,67 @@ async function namesFor(supabase: Client, orgId: string, contactIds: string[]): 
   return out;
 }
 
+type DbResult = { data: unknown; error: DbError };
+
+/** Read with the 397 columns; if 397 isn't applied yet, read again without them. */
+async function withBotColumns(read: (bot: boolean) => Promise<DbResult>): Promise<DbResult & { bot: boolean }> {
+  const first = await read(true);
+  if (!isMissingColumn(first.error)) return { ...first, bot: true };
+  return { ...(await read(false)), bot: false };
+}
+
+type SessionLite = { thread_id: string; flow: string; step: string; updated_at: string };
+type InterestDb = {
+  id: string;
+  thread_id: string | null;
+  teams: Array<{ id?: string | null; name?: string }> | null;
+  availability: string | null;
+  experience: string | null;
+  note: string | null;
+  status: ServingInterestView["status"];
+  created_at: string;
+};
+
+/** Open sessions and serving interests for these threads. Empty (not an error) when 397 isn't applied. */
+async function botExtras(supabase: Client, orgId: string, threadIds: string[], options?: { newOnly?: boolean }) {
+  const sessions = new Map<string, SessionLite>();
+  const interests: InterestDb[] = [];
+  if (threadIds.length === 0) return { sessions, interests };
+  const [s, i] = await Promise.all([
+    listOpenBotSessions(supabase, orgId, threadIds),
+    listServingInterestsForThreads(supabase, orgId, threadIds, options?.newOnly ? { status: "new" } : undefined),
+  ]);
+  if (s.error) {
+    if (!isMissingRelation(s.error)) console.error("[missio-whatsapp] bot sessions failed", (s.error as DbError)?.code ?? "db error");
+  } else for (const row of (s.data ?? []) as SessionLite[]) sessions.set(row.thread_id, row);
+  if (i.error) {
+    if (!isMissingRelation(i.error)) console.error("[missio-whatsapp] serving interests failed", (i.error as DbError)?.code ?? "db error");
+  } else interests.push(...((i.data ?? []) as InterestDb[]));
+  return { sessions, interests };
+}
+
+function threadBot(t: ThreadRow, session: SessionLite | undefined): ThreadBot | null {
+  if (!t.bot_mode) return null;
+  const active = t.bot_mode === "on" && Boolean(session) && session?.flow !== "rest";
+  return { mode: t.bot_mode, reason: t.bot_handoff_reason ?? null, active, flow: active ? (session?.flow ?? null) : null };
+}
+
+const titleOf = (list: ReadonlyArray<{ id: string; title: string }>, id: string | null) => (id ? (list.find((x) => x.id === id)?.title ?? id) : null);
+
+export function servingView(row: InterestDb): ServingInterestView {
+  return {
+    id: row.id,
+    teams: (row.teams ?? []).map((t) => t?.name ?? "").filter(Boolean),
+    availability: titleOf(AVAILABILITY, row.availability),
+    experience: titleOf(EXPERIENCE, row.experience),
+    note: row.note,
+    status: row.status,
+    at: row.created_at,
+  };
+}
+
 export async function loadInbox(supabase: Client, orgId: string, sendReady: boolean): Promise<InboxResponse | ReadFailure> {
-  const { data, error } = await listWhatsAppThreads(supabase, orgId);
+  const { data, error, bot } = await withBotColumns((withBot) => listWhatsAppThreads(supabase, orgId, { bot: withBot }));
   if (error) {
     if (isMissingRelation(error)) return { setup: "not_installed", threads: [] };
     console.error("[missio-whatsapp] inbox failed", (error as DbError)?.code ?? "db error");
@@ -70,6 +141,12 @@ export async function loadInbox(supabase: Client, orgId: string, sendReady: bool
   if (lastIds.length > 0) {
     const res = await getWhatsAppMessageStatuses(supabase, orgId, lastIds);
     for (const row of (res.data ?? []) as Array<{ id: string; status: MessageStatus }>) statuses.set(row.id, row.status);
+  }
+
+  const extras = bot ? await botExtras(supabase, orgId, threads.map((t) => t.id), { newOnly: true }) : null;
+  const servingCount = new Map<string, number>();
+  for (const row of extras?.interests ?? []) {
+    if (row.thread_id) servingCount.set(row.thread_id, (servingCount.get(row.thread_id) ?? 0) + 1);
   }
 
   const summaries: ThreadSummary[] = threads.map((t) => {
@@ -86,6 +163,8 @@ export async function loadInbox(supabase: Client, orgId: string, sendReady: bool
       lastStatus: t.last_message_id ? (statuses.get(t.last_message_id) ?? null) : null,
       unread: t.unread_count,
       optedOut: Boolean(t.opted_out_at),
+      bot: bot ? threadBot(t, extras?.sessions.get(t.id)) : null,
+      serving: servingCount.get(t.id) ?? 0,
     };
   });
   return { setup: sendReady ? "ready" : "not_configured", threads: summaries };
@@ -102,10 +181,12 @@ type MessageDbRow = {
   error_title: string | null;
   opt_change: "opt_out" | "opt_in" | null;
   sent_at: string;
+  sent_by_bot?: boolean | null;
 };
 
 export function messageView(row: MessageDbRow): MessageView {
   return {
+    ...(row.sent_by_bot ? { bot: true } : {}),
     id: row.id,
     direction: row.direction,
     kind: row.kind,
@@ -155,14 +236,14 @@ export async function loadThread(deps: ThreadDeps, key: ThreadKey): Promise<Thre
     if (!raw) blocked = "no_phone";
     else if (!e164) blocked = "bad_phone";
     if (!e164) return { ...emptyThread(setup), person, blocked };
-    const res = await getWhatsAppThreadByPhone(supabase, orgId, e164);
+    const res = await withBotColumns((bot) => getWhatsAppThreadByPhone(supabase, orgId, e164, { bot }));
     if (res.error) {
       if (isMissingRelation(res.error)) return { ...emptyThread("not_installed"), person, blocked };
       return { ok: false, status: 500, code: "server_error", error: "Something went wrong." };
     }
     thread = res.data as ThreadRow | null;
   } else {
-    const res = await getWhatsAppThreadById(supabase, orgId, key.threadId);
+    const res = await withBotColumns((bot) => getWhatsAppThreadById(supabase, orgId, key.threadId, { bot }));
     if (res.error) {
       if (isMissingRelation(res.error)) return { ...emptyThread("not_installed"), person, blocked: null };
       return { ok: false, status: 500, code: "server_error", error: "Something went wrong." };
@@ -177,12 +258,26 @@ export async function loadThread(deps: ThreadDeps, key: ThreadKey): Promise<Thre
   if (!thread) return { ...emptyThread(setup), person, blocked };
   person.profileName = thread.profile_name;
 
-  const res = await listWhatsAppMessages(supabase, orgId, thread.id);
+  const res = await withBotColumns((bot) => listWhatsAppMessages(supabase, orgId, thread.id, { bot }));
   if (res.error) {
     console.error("[missio-whatsapp] messages failed", (res.error as DbError)?.code ?? "db error");
     return { ok: false, status: 500, code: "server_error", error: "Something went wrong." };
   }
   const messages = ((res.data ?? []) as MessageDbRow[]).map(messageView).reverse();
+
+  let botDetail: ThreadBotDetail | null = null;
+  let serving: ServingInterestView[] = [];
+  if (thread.bot_mode) {
+    const extras = await botExtras(supabase, orgId, [thread.id]);
+    const session = extras.sessions.get(thread.id);
+    const base = threadBot(thread, session) as ThreadBot;
+    botDetail = {
+      ...base,
+      pausedAt: thread.bot_paused_at ?? null,
+      statusLine: botStatusLine({ mode: base.mode, reason: base.reason, flow: session?.flow ?? null, step: session?.step ?? null }),
+    };
+    serving = extras.interests.map(servingView);
+  }
   return {
     setup,
     thread: { id: thread.id, unread: thread.unread_count },
@@ -193,5 +288,7 @@ export async function loadThread(deps: ThreadDeps, key: ThreadKey): Promise<Thre
     lastInboundAt: thread.last_inbound_at,
     windowEndsAt: serviceWindowEndsAt(thread.last_inbound_at, deps.now),
     messages,
+    bot: botDetail,
+    serving,
   };
 }

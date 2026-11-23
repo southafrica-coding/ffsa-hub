@@ -4,6 +4,7 @@
 // Client-safe. No token, secret or raw Graph payload ever appears here.
 
 import type { MessageStatus, OptChange, TemplateView } from "./rules";
+import type { BotHandoffReason, BotMode } from "./store";
 
 /**
  * ready          sending works
@@ -26,6 +27,30 @@ export type ThreadSummary = {
   lastStatus: MessageStatus | null;
   unread: number;
   optedOut: boolean;
+  /** The menu bot on this thread. Null until database update 397 is applied. */
+  bot?: ThreadBot | null;
+  /** New serving interests from this thread ("Serve" badge). */
+  serving?: number;
+};
+
+/** Who has the chat. */
+export type ThreadBot = {
+  mode: BotMode;
+  reason: BotHandoffReason | null;
+  /** The bot is mid-flow (a menu or a serving question is open). */
+  active: boolean;
+  /** The flow that's open, e.g. "serve". */
+  flow: string | null;
+};
+
+export type ServingInterestView = {
+  id: string;
+  teams: string[];
+  availability: string | null;
+  experience: string | null;
+  note: string | null;
+  status: "new" | "contacted" | "placed" | "closed";
+  at: string;
 };
 
 export type InboxResponse = { setup: WhatsAppSetup; threads: ThreadSummary[] };
@@ -40,6 +65,14 @@ export type MessageView = {
   error: string | null;
   at: string;
   optChange: OptChange | null;
+  /** The menu sent it, not a pastor. */
+  bot?: boolean;
+};
+
+export type ThreadBotDetail = ThreadBot & {
+  pausedAt: string | null;
+  /** Plain words for the pastor: "Bot is asking which team", "A pastor has this chat". */
+  statusLine: string;
 };
 
 export type ThreadResponse = {
@@ -55,7 +88,13 @@ export type ThreadResponse = {
   lastInboundAt: string | null;
   windowEndsAt: string | null;
   messages: MessageView[];
+  /** Null until database update 397 is applied, or before anyone has written. */
+  bot?: ThreadBotDetail | null;
+  serving?: ServingInterestView[];
 };
+
+export type BotModeAction = "take_over" | "pause" | "resume";
+export type BotModeResponse = { ok: true; bot: { mode: BotMode; reason: BotHandoffReason | null; pausedAt: string | null } };
 
 export type TemplatesResponse =
   | { state: "ok"; templates: TemplateView[] }

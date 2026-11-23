@@ -32,7 +32,15 @@ export type ThreadRow = {
   opt_changed_at: string | null;
   created_at: string;
   updated_at: string;
+  /** 397. Missing (undefined) until it is applied; treat missing as "on" only where the bot tables exist. */
+  bot_mode?: BotMode;
+  bot_paused_at?: string | null;
+  bot_paused_by?: string | null;
+  bot_handoff_reason?: BotHandoffReason | null;
 };
+
+export type BotMode = "on" | "paused" | "handed_off";
+export type BotHandoffReason = "human" | "care" | "pastor" | "deferred";
 
 export type MessageRow = {
   id: string;
@@ -54,6 +62,9 @@ export type MessageRow = {
   sent_at: string;
   status_at: string | null;
   created_at: string;
+  /** 397. Missing (undefined) until it is applied. */
+  wa_reply_id?: string | null;
+  sent_by_bot?: boolean;
 };
 
 export type InboundInput = {
@@ -65,6 +76,8 @@ export type InboundInput = {
   body: string;
   at: string;
   optChange: OptChange | null;
+  /** The id of a tapped button or list row (397). Null for anything else. */
+  replyId?: string | null;
 };
 
 export type OutboundInput = {
@@ -75,8 +88,13 @@ export type OutboundInput = {
   templateName: string | null;
   templateLanguage: string | null;
   templateVars: Record<string, string> | null;
-  sentBy: string;
+  /** The pastor. Null only for the menu bot (sentByBot). */
+  sentBy: string | null;
   at: string;
+  /** The menu sent it (397). Plain text or interactive. */
+  sentByBot?: boolean;
+  /** WhatsApp's type when it isn't the kind ("interactive"). */
+  waType?: string;
 };
 
 export type StatusInput = {
@@ -126,4 +144,11 @@ export function isMissingRelation(error: { code?: string; message?: string } | n
   if (!error) return false;
   if (error.code === "42P01" || error.code === "PGRST205" || error.code === "42883" || error.code === "PGRST202") return true;
   return /missio_whatsapp_/.test(error.message ?? "") && /does not exist|schema cache|could not find/i.test(error.message ?? "");
+}
+
+/** Postgres / PostgREST "that column isn't there" — 397 not applied yet. */
+export function isMissingColumn(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  if (error.code === "42703" || error.code === "PGRST204") return true;
+  return /column .* does not exist|could not find the .* column/i.test(error.message ?? "");
 }

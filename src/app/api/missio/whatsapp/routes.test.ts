@@ -61,6 +61,7 @@ import { GET as thread } from "./thread/route";
 import { POST as markRead } from "./thread/read/route";
 import { GET as templates } from "./templates/route";
 import { POST as send } from "./send/route";
+import { POST as botMode } from "./thread/bot/route";
 
 const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ messages: [{ id: "wamid.T1" }] })));
 const PERSON = "00000000-0000-4000-8000-000000000001";
@@ -229,5 +230,103 @@ describe("Missio WhatsApp routes: reads", () => {
     expect(res.status).toBe(200);
     expect(state.updates).toHaveLength(1);
     expect(Object.keys(state.updates[0] as object).sort()).toEqual(["last_read_at", "unread_count"]);
+  });
+});
+
+describe("Missio WhatsApp routes: who has the chat (menu bot, 397)", () => {
+  it("asks for the Missio pastor role", async () => {
+    state.threadRow = { id: THREAD, bot_mode: "paused", bot_paused_at: null, bot_handoff_reason: "pastor" };
+    await botMode(postJson("/api/missio/whatsapp/thread/bot", { threadId: THREAD, action: "take_over" }));
+    expect(state.calls).toEqual([{ slug: "missio", roles: ["pastor"] }]);
+  });
+
+  it("401 signed out and 403 for anyone but a pastor, before any write", async () => {
+    for (const allow of ["signed-out", "forbidden"] as const) {
+      state.allow = allow;
+      const res = await botMode(postJson("/api/missio/whatsapp/thread/bot", { threadId: THREAD, action: "pause" }));
+      expect(res.status).toBe(allow === "signed-out" ? 401 : 403);
+    }
+    expect(state.updates).toHaveLength(0);
+    expect(state.adminCreated).toBe(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("take over pauses the bot with reason pastor, closes the open menu step, and sends nothing", async () => {
+    await store.saveSession({ orgId: "org-missio", threadId: THREAD, flow: "serve", step: "teams", data: {}, failures: 0, wamid: null });
+    state.threadRow = { id: THREAD, bot_mode: "paused", bot_paused_at: "2026-11-23T12:00:00Z", bot_handoff_reason: "pastor" };
+    const res = await botMode(postJson("/api/missio/whatsapp/thread/bot", { threadId: THREAD, action: "take_over" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, bot: { mode: "paused", reason: "pastor", pausedAt: "2026-11-23T12:00:00Z" } });
+    expect(state.updates).toEqual([{ bot_mode: "paused", bot_handoff_reason: "pastor" }]);
+    expect(store.sessions).toEqual([expect.objectContaining({ thread_id: THREAD, closed_reason: "paused" })]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(store.messages).toHaveLength(0);
+  });
+
+  it("pause and resume write only the bot columns (who and when come from the 397 trigger)", async () => {
+    state.threadRow = { id: THREAD, bot_mode: "paused", bot_paused_at: null, bot_handoff_reason: null };
+    expect((await botMode(postJson("/api/missio/whatsapp/thread/bot", { threadId: THREAD, action: "pause" }))).status).toBe(200);
+    state.threadRow = { id: THREAD, bot_mode: "on", bot_paused_at: null, bot_handoff_reason: null };
+    const res = await botMode(postJson("/api/missio/whatsapp/thread/bot", { threadId: THREAD, action: "resume" }));
+    expect(await res.json()).toMatchObject({ bot: { mode: "on", reason: null } });
+    expect(state.updates).toEqual([
+      { bot_mode: "paused", bot_handoff_reason: null },
+      { bot_mode: "on", bot_handoff_reason: null },
+    ]);
+  });
+
+  it("refuses bad input and unknown threads", async () => {
+    for (const body of [{ threadId: THREAD }, { threadId: THREAD, action: "delete" }, { threadId: "nope", action: "pause" }, { threadId: THREAD, action: "pause", by: "x" }]) {
+      expect((await botMode(postJson("/api/missio/whatsapp/thread/bot", body))).status).toBe(400);
+    }
+    state.threadRow = null;
+    expect((await botMode(postJson("/api/missio/whatsapp/thread/bot", { threadId: THREAD, action: "pause" }))).status).toBe(404);
+  });
+
+  it("answers 503 not_installed while 397 isn't applied", async () => {
+    state.userTableError = { code: "42703", message: 'column "bot_mode" of relation "missio_whatsapp_threads" does not exist' };
+    const res = await botMode(postJson("/api/missio/whatsapp/thread/bot", { threadId: THREAD, action: "pause" }));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: "not_installed" });
+  });
+});
+
+describe("Missio WhatsApp routes: a pastor's reply pauses the menu", () => {
+  async function openThread(over: Record<string, unknown> = {}) {
+    const t = await store.ensureThread({ orgId: "org-missio", e164: "+27820000001", waId: "27820000001", contactId: "c1", profileName: null });
+    t.last_inbound_at = new Date(Date.now() - 60_000).toISOString();
+    Object.assign(t, over);
+    return t;
+  }
+
+  it("a sent reply pauses the bot with reason pastor and closes the menu step", async () => {
+    const t = await openThread();
+    await store.saveSession({ orgId: "org-missio", threadId: t.id, flow: "menu", step: "main", data: {}, failures: 0, wamid: null });
+    const res = await send(postJson("/api/missio/whatsapp/send", { personId: PERSON, text: "Hi, it's Pastor Sam" }));
+    expect(res.status).toBe(200);
+    expect(t).toMatchObject({ bot_mode: "paused", bot_handoff_reason: "pastor", bot_paused_by: "pastor-1" });
+    expect(store.sessions.every((x) => x.closed_reason === "paused")).toBe(true);
+    // The composer's own bucket and route are unchanged: one Graph call, the pastor's text.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("a reply WhatsApp refused doesn't pause anything", async () => {
+    const t = await openThread();
+    fetchSpy.mockImplementationOnce(async () => new Response(JSON.stringify({ error: { code: 131026, message: "Undeliverable" } }), { status: 400 }));
+    const res = await send(postJson("/api/missio/whatsapp/send", { personId: PERSON, text: "Hi" }));
+    expect(res.status).toBe(502);
+    expect(t.bot_mode).toBe("on");
+  });
+
+  it("a thread the person handed to a person stays handed off", async () => {
+    const t = await openThread({ bot_mode: "handed_off", bot_handoff_reason: "human" });
+    await send(postJson("/api/missio/whatsapp/send", { personId: PERSON, text: "Hi" }));
+    expect(t).toMatchObject({ bot_mode: "handed_off", bot_handoff_reason: "human" });
+  });
+
+  it("still sends when 397 isn't applied (the pause is skipped)", async () => {
+    await openThread({ bot_mode: undefined });
+    const res = await send(postJson("/api/missio/whatsapp/send", { personId: PERSON, text: "Hi" }));
+    expect(res.status).toBe(200);
   });
 });

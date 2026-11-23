@@ -14,8 +14,10 @@
  *         No secret configured 503; database update 396 missing 503, so
  *         Meta retries once it's applied.
  *
- * The work is a handful of small writes, so it runs in the request and the
- * 200 means it's stored.
+ * The store is a handful of small writes, so it runs in the request and the
+ * 200 means it's stored. The menu bot (397) is only scheduled here, for
+ * newly stored messages: it runs after the response (next/server after()),
+ * so Graph is never called inside this request. See lib/missio/whatsapp/bot.
  */
 
 import { NextResponse } from "next/server";
@@ -25,6 +27,7 @@ import { verifyHandshake, verifyMetaSignature } from "@/lib/missio/whatsapp/sign
 import { WhatsAppNotInstalledError } from "@/lib/missio/whatsapp/store";
 import { supabaseWhatsAppStore } from "@/lib/missio/whatsapp/supabase-store";
 import { handleWebhook, type WebhookPayload } from "@/lib/missio/whatsapp/webhook";
+import { scheduleBotWork } from "@/lib/missio/whatsapp/bot/schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +59,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    await handleWebhook(payload, supabaseWhatsAppStore(createAdminClient()), { phoneNumberId });
+    const outcome = await handleWebhook(payload, supabaseWhatsAppStore(createAdminClient()), { phoneNumberId });
+    scheduleBotWork(outcome.jobs);
   } catch (error) {
     if (error instanceof WhatsAppNotInstalledError) return NextResponse.json({ error: "not_installed" }, { status: 503 });
     console.error("[missio-whatsapp] webhook failed", error instanceof Error ? error.message : "unknown");
