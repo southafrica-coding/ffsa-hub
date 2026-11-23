@@ -77,7 +77,7 @@
 }
 .mark {
   display: block;
-  height: 22px;
+  height: 16px;
   width: auto;
 }
 .surface .navlabel {
@@ -101,12 +101,13 @@
 /* ── intro ─────────────────────────────────────────────── */
 
 .intro {
-  padding: 16px 16px 8px;
+  padding: 18px 16px 8px;
   max-width: 640px;
   margin: 0 auto;
 }
 .eyebrow {
   font-size: 14px;
+  font-weight: 600;
   line-height: 20px;
   color: var(--ink-2, #5b574d);
   margin: 0 0 4px;
@@ -125,9 +126,9 @@
   font-style: normal;
 }
 .lede {
-  margin: 8px 0 0;
-  font-size: 16px;
-  line-height: 24px;
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--ink-2, #5b574d);
   max-width: 34em;
 }
@@ -145,21 +146,20 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── sections: one panel card per step ─────────────────── */
+/* ── sections: flat, as board M4a. A step after the first starts
+   under a hairline with its title as a quiet section label. ─── */
 
 .surface section {
   max-width: 640px;
-  margin: 16px 16px 0;
-  background: var(--panel, #fbf9f4);
-  border: 1px solid var(--rule, #ddd7c8);
-  border-radius: var(--radius-md, 14px);
-  box-shadow: var(--shadow-1, 0 1px 2px rgba(28, 27, 23, 0.05));
+  margin: 0 auto;
+  padding: 0 16px;
 }
-@media (min-width: 672px) {
-  .surface section {
-    margin-left: auto;
-    margin-right: auto;
-  }
+.surface section + section {
+  margin-top: 8px;
+}
+.surface section + section .sect {
+  border-top: 1px solid #e7e2d5;
+  padding-top: 16px;
 }
 
 .sect {
@@ -171,27 +171,22 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 16px 4px;
+  padding: 12px 0 0;
   margin: 0;
 }
 .sectN {
-  font-family: var(--display);
-  font-weight: 560;
-  font-size: 22px;
-  line-height: 28px;
-  letter-spacing: -0.01em;
-  color: var(--ink, #1c1b17);
-}
-.sectN + .sectN {
   font-family: var(--body);
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 400;
-  letter-spacing: 0;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
   color: var(--ink-2, #5b574d);
 }
+.sectN + .sectN {
+  font-weight: 400;
+}
 .pad {
-  padding: 8px 16px 16px;
+  padding: 12px 0 8px;
 }
 
 .field {
@@ -279,13 +274,21 @@
   color: var(--ink, #1c1b17) !important;
 }
 /* The lone headline count is the big number on the screen (stat 56). */
-.stepperWide .stepBtn {
+.surface .stepperWide {
+  gap: 12px;
+}
+.surface .stepperWide .stepBtn {
   width: 56px;
   height: 56px;
+  font-size: 24px !important;
 }
 .surface .stepperWide input.stepVal:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
   height: 56px;
-  font-size: 40px !important;
+  font-size: 48px !important;
+  line-height: 56px;
+}
+.helpCentre {
+  text-align: center;
 }
 
 .two {
@@ -781,4 +784,68 @@
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* ── sent (board M4a, 2) ──────────────────────────────── */
+
+.done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 48px 24px 24px;
+}
+.done .lede {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  max-width: 300px;
+}
+.done .h1 {
+  font-size: 34px;
+  line-height: 38px;
+  margin-top: 6px;
+}
+.doneMark {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-ink, #3f5940);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.doneStat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 10px;
+  padding: 12px 16px;
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(28, 27, 23, 0.05);
+  text-align: left;
+}
+.doneStat b {
+  font-family: var(--display);
+  font-weight: 560;
+  font-size: 28px;
+  line-height: 30px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.doneStat span {
+  font-size: 12px;
+  color: var(--ink-2, #5b574d);
+}
+.surface .done .quietBtn {
+  margin-top: 12px;
+  border: 0;
+  background: none;
+  color: var(--link, #2f5d50);
+  padding: 0 8px !important;
 }

@@ -1,11 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useState, type FormEvent } from "react";
 import { missioSkinVars } from "@/components/missio/access";
 import { missioBody, missioDisplay } from "@/components/missio/fonts";
 import { MissioPublicMark } from "@/components/missio/public-mark";
-import connect from "../connect/connect.module.css";
-import styles from "./care.module.css";
+import styles from "./care-form.module.css";
 
 type Need = "prayer" | "talk" | "practical";
 type Privacy = "pastors" | "pastors_leaders" | "house";
@@ -81,90 +81,109 @@ export function CareForm({ submit = defaultSubmit }: { submit?: CareSubmit }) {
     }
   }
 
-  return (
-    <main className={`${missioBody.variable} ${missioDisplay.variable} ${missioBody.className} ${connect.page}`} style={missioSkinVars()} data-skin="missio" data-care={step}>
-      <div className={connect.column}>
-        <MissioPublicMark />
-        {step === 3 ? (
-          <div className={styles.thanks} data-testid="care-thanks">
-            <h1>We’ve got you{first ? `, ${first}` : ""}.</h1>
-            <p className={connect.lede}>
-              {replies ? "A pastor will WhatsApp you within a day. " : ""}
-              We’re praying for you.
-            </p>
-            {urgent ? <p className={connect.lede}>Because it’s urgent, a pastor will phone you today.</p> : null}
-          </div>
-        ) : null}
+  const page = `${missioBody.variable} ${missioDisplay.variable} ${missioBody.className} ${styles.page}`;
 
+  if (step === 3) {
+    return (
+      <main className={`${page} ${styles.thanksPage}`} style={missioSkinVars()} data-skin="missio" data-care={step}>
+        <div className={styles.thanks} data-testid="care-thanks">
+          <Image src="/brands/missio/missio-wordmark-paper.png" alt="Missio" width={677} height={188} className={styles.paperMark} priority />
+          <h1>We’ve got you{first ? `, ${first}` : ""}.</h1>
+          <p>
+            {replies ? "A pastor will WhatsApp you within a day. " : ""}
+            We’re praying for you.
+          </p>
+          {urgent ? <p>Because it’s urgent, a pastor will phone you today.</p> : null}
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className={page} style={missioSkinVars()} data-skin="missio" data-care={step}>
+      <div className={styles.column}>
+        <MissioPublicMark />
         {step === 1 ? (
-          <form className={connect.form} onSubmit={next} noValidate data-testid="care-step-1">
-            <h1>How can we stand with you?</h1>
-            <div className={connect.group}>
-              <p className={connect.fieldLabel}>I’d like…</p>
-              <div className={connect.choices}>
+          <form className={styles.form} onSubmit={next} noValidate data-testid="care-step-1">
+            <h1>
+              How can we <br className={styles.br} />
+              stand with you?
+            </h1>
+            <div className={styles.field}>
+              <p className={styles.flabel} id="care-needs">
+                I’d like…
+              </p>
+              <div className={styles.opts} role="group" aria-labelledby="care-needs">
                 {(Object.keys(NEED_LABEL) as Need[]).map((need) => (
-                  <label key={need} className={`${connect.choice} ${needs.includes(need) ? connect.choiceOn : ""}`}>
-                    <input type="checkbox" checked={needs.includes(need)} onChange={() => toggle(need)} />
+                  <label key={need} className={styles.opt} data-on={needs.includes(need)}>
+                    <input type="checkbox" className={styles.box} checked={needs.includes(need)} onChange={() => toggle(need)} />
                     <span>{NEED_LABEL[need]}</span>
                   </label>
                 ))}
               </div>
             </div>
-            <label>
-              <span>
-                Tell us a little <span className={connect.optional}>· as much as you like</span>
+            <label className={styles.field}>
+              <span className={styles.flabel}>
+                Tell us a little <span className={styles.optional}>· as much as you like</span>
               </span>
-              <textarea value={body} maxLength={2000} onChange={(event) => setBody(event.target.value)} />
+              <textarea className={styles.input} value={body} maxLength={2000} onChange={(event) => setBody(event.target.value)} />
             </label>
             {error ? (
-              <p className={connect.banner} role="alert">
+              <p className={styles.error} role="alert">
                 {error}
               </p>
             ) : null}
-            <button type="submit">Next</button>
+            <button type="submit" className={styles.primary}>
+              Next
+            </button>
           </form>
         ) : null}
 
         {step === 2 ? (
-          <form className={connect.form} onSubmit={(event) => void send(event)} noValidate data-testid="care-step-2">
-            <h1>Who can know about this?</h1>
-            <div className={connect.choices} role="radiogroup" aria-label="Who can know">
-              {(Object.keys(PRIVACY_LABEL) as Privacy[]).map((value) => (
-                <label key={value} className={`${connect.choice} ${privacy === value ? connect.choiceOn : ""}`}>
-                  <input type="radio" name="privacy" checked={privacy === value} onChange={() => setPrivacy(value)} />
-                  <span>{PRIVACY_LABEL[value]}</span>
-                </label>
-              ))}
+          <form className={styles.form} onSubmit={(event) => void send(event)} noValidate data-testid="care-step-2">
+            <div className={styles.field}>
+              <h1 className={styles.flabel} id="care-privacy">
+                Who can know about this?
+              </h1>
+              <div className={styles.opts} role="radiogroup" aria-labelledby="care-privacy">
+                {(Object.keys(PRIVACY_LABEL) as Privacy[]).map((value) => (
+                  <label key={value} className={styles.opt} data-on={privacy === value}>
+                    <input type="radio" className={styles.radio} name="privacy" checked={privacy === value} onChange={() => setPrivacy(value)} />
+                    <span className={styles.optText}>{PRIVACY_LABEL[value]}</span>
+                    {value === "pastors" ? <LockIcon /> : null}
+                  </label>
+                ))}
+              </div>
             </div>
-            <label>
-              <span>
-                Your name {replies ? null : <span className={connect.optional}>· optional</span>}
+            <label className={styles.field}>
+              <span className={styles.flabel}>
+                Your name {replies ? null : <span className={styles.optional}>· optional</span>}
               </span>
-              <input value={name} maxLength={80} autoComplete="name" onChange={(event) => setName(event.target.value)} />
+              <input className={styles.input} value={name} maxLength={80} autoComplete="name" onChange={(event) => setName(event.target.value)} />
             </label>
-            <label>
-              <span>
-                Phone {replies ? null : <span className={connect.optional}>· optional</span>}
+            <label className={styles.field}>
+              <span className={styles.flabel}>
+                Phone {replies ? null : <span className={styles.optional}>· optional</span>}
               </span>
-              <input value={phone} maxLength={40} inputMode="tel" autoComplete="tel" onChange={(event) => setPhone(event.target.value)} />
+              <input className={styles.input} value={phone} maxLength={40} inputMode="tel" autoComplete="tel" onChange={(event) => setPhone(event.target.value)} />
+              {!replies ? <span className={styles.help}>For prayer only, you can leave both blank.</span> : null}
             </label>
-            {!replies ? <p className={styles.help}>For prayer only, you can leave both blank.</p> : null}
             <p className={styles.danger}>
-              In danger right now? Call <a href="tel:112">112</a> from any cellphone, or tick “urgent” and a pastor will phone you today.
+              <b>In danger right now?</b> Call <a href="tel:112">112</a> from any cellphone, or tick “urgent” and a pastor will phone you today.
             </p>
-            <label className={connect.toggle}>
-              <input type="checkbox" checked={urgent} onChange={(event) => setUrgent(event.target.checked)} />
+            <label className={styles.check}>
+              <input type="checkbox" className={styles.box} checked={urgent} onChange={(event) => setUrgent(event.target.checked)} />
               <span>It’s urgent</span>
             </label>
-            <label className={connect.toggle}>
-              <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
-              <span className={styles.consentText}>
+            <label className={`${styles.check} ${styles.consent}`}>
+              <input type="checkbox" className={styles.box} checked={consent} onChange={(event) => setConsent(event.target.checked)} />
+              <span>
                 I’m happy for Missio to keep this to care for me. Only the people I chose above will see it, and I can ask for it to
                 be removed anytime.
               </span>
             </label>
             <input
-              className={connect.honeypot}
+              className={styles.honeypot}
               tabIndex={-1}
               autoComplete="off"
               aria-hidden="true"
@@ -173,11 +192,11 @@ export function CareForm({ submit = defaultSubmit }: { submit?: CareSubmit }) {
               onChange={(event) => setWebsite(event.target.value)}
             />
             {error ? (
-              <p className={connect.banner} role="alert">
+              <p className={styles.error} role="alert">
                 {error}
               </p>
             ) : null}
-            <button type="submit" disabled={pending}>
+            <button type="submit" className={styles.primary} disabled={pending}>
               {pending ? "Sending…" : "Send to the pastors"}
             </button>
             <button type="button" className={styles.back} onClick={() => setStep(1)}>
@@ -187,6 +206,15 @@ export function CareForm({ submit = defaultSubmit }: { submit?: CareSubmit }) {
         ) : null}
       </div>
     </main>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
   );
 }
 

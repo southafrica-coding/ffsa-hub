@@ -26,10 +26,10 @@ const SOURCE_LABEL: Record<CareSource, string> = {
   house_feedback: "House feedback",
   manual: "Logged by hand",
 };
-const COLUMNS: Array<{ status: CareStatus; label: string }> = [
-  { status: "new", label: "New" },
-  { status: "on_it", label: "Someone’s on it" },
-  { status: "done", label: "Done" },
+const COLUMNS: Array<{ status: CareStatus; label: string; short: string }> = [
+  { status: "new", label: "New", short: "New" },
+  { status: "on_it", label: "Someone’s on it", short: "On it" },
+  { status: "done", label: "Done", short: "Done" },
 ];
 
 const dayMonth = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Johannesburg" });
@@ -71,6 +71,7 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
   const [logging, setLogging] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [tab, setTab] = useState<CareStatus>("new");
   const data = state.phase === "ready" ? state.data : null;
   const link = `${origin ?? (typeof window === "undefined" ? "" : window.location.origin)}/serve/missio/care`;
 
@@ -93,6 +94,26 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
   const counts = new Map<CareSource, number>();
   for (const request of data?.requests ?? []) counts.set(request.source, (counts.get(request.source) ?? 0) + 1);
 
+  const actions = (
+    <>
+          <button
+            type="button"
+            className={`${shell.ghost} ${styles.headButton}`}
+            onClick={() => {
+              void navigator.clipboard?.writeText(link);
+              setNotice(`Care link copied: ${link}`);
+            }}
+          >
+            Copy the care link
+          </button>
+          {pastor ? (
+            <button type="button" className={`${shell.primary} ${styles.headButton}`} onClick={() => setLogging(true)}>
+              Log a need
+            </button>
+          ) : null}
+    </>
+  );
+
   return (
     <div className={content.page}>
       <div className={styles.head}>
@@ -102,23 +123,7 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
             {data && !pastor ? "Prayer and care your house church chose to share with you" : "Prayer and care requests from every door, in one place"}
           </p>
         </div>
-        <div className={styles.headActions}>
-          <button
-            type="button"
-            className={shell.ghost}
-            onClick={() => {
-              void navigator.clipboard?.writeText(link);
-              setNotice(`Care link copied: ${link}`);
-            }}
-          >
-            Copy the care link
-          </button>
-          {pastor ? (
-            <button type="button" className={shell.primary} onClick={() => setLogging(true)}>
-              Log a need
-            </button>
-          ) : null}
-        </div>
+        <div className={styles.headActions}>{actions}</div>
       </div>
       {data && counts.size > 0 ? (
         <p className={styles.sources} data-testid="care-sources">
@@ -146,13 +151,31 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
         </p>
       ) : null}
       {data && !nothingShared ? (
+        <>
+        <div className={styles.stabs} role="group" aria-label="Show">
+          {COLUMNS.map((column) => (
+            <button
+              key={column.status}
+              type="button"
+              className={styles.stab}
+              aria-pressed={tab === column.status}
+              onClick={() => setTab(column.status)}
+            >
+              <b>{data.requests.filter((request) => request.status === column.status).length}</b>
+              {column.short}
+            </button>
+          ))}
+        </div>
         <div className={styles.columns}>
           {COLUMNS.map((column) => {
             const cards = data.requests.filter((request) => request.status === column.status);
             return (
-              <section key={column.status} className={styles.column} data-testid={`care-${column.status}`}>
+              <section key={column.status} className={styles.column} data-active={tab === column.status} data-testid={`care-${column.status}`}>
                 <h2>
-                  {column.label} <span>{cards.length}</span>
+                  <span className={styles.colChip} data-status={column.status}>
+                    {column.label}
+                  </span>
+                  <span className={styles.colCount}>{cards.length}</span>
                 </h2>
                 {cards.length === 0 ? <p className={styles.empty}>{column.status === "new" ? "Nothing waiting." : "No one yet."}</p> : null}
                 <ul>
@@ -172,16 +195,24 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
                           </div>
                         </div>
                         <div className={styles.chips}>
-                          {request.urgent ? <span className={`${styles.chip} ${styles.chipUrgent}`}>Urgent</span> : null}
+                          {request.urgent ? (
+                            <span className={`${styles.chip} ${styles.chipUrgent}`}>
+                              <AlertIcon />
+                              Urgent
+                            </span>
+                          ) : null}
                           {request.needs.map((need) => (
-                            <span key={need} className={styles.chip}>
+                            <span key={need} className={styles.chip} data-need={need}>
                               {NEED_LABEL[need]}
                             </span>
                           ))}
                         </div>
                         {request.body ? <p className={styles.body}>{request.body}</p> : null}
                         <div className={styles.foot}>
-                          <span className={styles.privacy}>{PRIVACY_LABEL[request.privacy]}</span>
+                          <span className={styles.privacy} data-privacy={request.privacy}>
+                            {request.privacy === "pastors" ? <LockIcon /> : null}
+                            {PRIVACY_LABEL[request.privacy]}
+                          </span>
                           <div className={styles.actions}>
                             {request.status === "new" && request.canStep ? (
                               <button type="button" className={styles.take} disabled={busy === request.id} onClick={() => setTaking(request)}>
@@ -222,7 +253,9 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
             );
           })}
         </div>
+        </>
       ) : null}
+      <div className={styles.phoneActions}>{actions}</div>
       <p className={styles.footnote}>
         {pastor
           ? "The person chose who may know. Pastors see every request; house leaders see what was shared with their house’s leaders or the house, and house members see only what the house may pray for. Two weeks after “done”, the card asks whoever took it to check back in. Urgent requests go to the top in red."
@@ -251,6 +284,23 @@ export function CareBoard({ client = careClient, origin }: { client?: CareClient
         />
       ) : null}
     </div>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0ZM12 9v4M12 17h.01" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
   );
 }
 

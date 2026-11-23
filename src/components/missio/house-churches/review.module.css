@@ -1,0 +1,348 @@
+/* Import review queue (board M4c, #M4). One name at a time: the name in a
+   white card, the best guess on top in sage, the actions under the thumb. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  max-width: 560px;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: -8px 0 4px -10px;
+}
+
+.top .close.close {
+  color: var(--ink, #1c1b17);
+}
+
+.top .title {
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  letter-spacing: 0;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.progressRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.track {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--subtle, #eeeadf);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  background: var(--olive, #4e6b4f);
+  border-radius: 4px;
+  transition: width 0.32s ease;
+}
+
+.count {
+  font-size: 12px;
+  color: var(--ink-2, #5b574d);
+  flex: none;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 16px;
+  flex: 1 0 auto;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1 0 auto;
+}
+
+.state {
+  padding: 18px;
+  color: var(--ink-2, #5b574d);
+}
+
+.alert {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm, 10px);
+  background: #f5deda;
+  color: var(--bad, #a3261b);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.alert:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.item .nameCard {
+  padding: 18px;
+  text-align: center;
+  background: #ffffff;
+}
+
+.source {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2, #5b574d);
+}
+
+.nameCard .name {
+  margin: 0;
+  font-size: 36px;
+  line-height: 42px;
+  margin-top: 4px !important;
+  overflow-wrap: anywhere;
+}
+
+.name:focus {
+  outline: none;
+}
+
+.facts {
+  margin-top: 8px !important;
+  font-size: 13px;
+  color: var(--ink-2, #5b574d);
+}
+
+.note {
+  margin-top: 6px !important;
+  font-size: 13px;
+  color: var(--ink-3, #6e685b);
+  font-style: italic;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.section[hidden] {
+  display: none;
+}
+
+.section .panelTitle,
+.form .panelTitle {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+}
+
+.list {
+  overflow: hidden;
+}
+
+/* A whole row is the button; the Link pill on the right says what it does. */
+.row {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e7e2d5;
+  cursor: pointer;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  color: var(--ink, #1c1b17);
+  transition: background-color 0.16s ease;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row:hover:not(:disabled) {
+  background: #f7f4ec;
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: -2px;
+}
+
+.row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.best,
+.best:hover:not(:disabled) {
+  background: #f3f7f1;
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.centre {
+  text-align: center;
+}
+
+.item .added {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--olive-soft, #e3eadf);
+  border-color: transparent;
+}
+
+.added .addedTitle {
+  margin: 0;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  letter-spacing: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--olive-ink, #3f5940);
+}
+
+.addedList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 15px;
+}
+
+.added button {
+  align-self: flex-start;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.form button[type="submit"] {
+  align-self: flex-start;
+}
+
+.searchForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.searchRow {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.searchRow input {
+  flex: 1;
+}
+
+.existing {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 56px 24px;
+  text-align: center;
+}
+
+.done .doneTitle {
+  margin: 0;
+  font-size: 28px;
+  line-height: 34px;
+}
+
+.doneTitle:focus {
+  outline: none;
+}
+
+/* Bottom action bar: Search · New · Skip (M4c). Pinned under the thumb. */
+.bar {
+  position: sticky;
+  bottom: -32px;
+  margin: auto -16px -32px;
+  padding: 10px 16px 16px;
+  border-top: 1px solid #e7e2d5;
+  background: var(--panel, #fbf9f4);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2;
+}
+
+.barButtons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bar .barButtons .barButton {
+  height: 52px;
+  padding: 0;
+}
+
+.bar .barButtons .skip {
+  color: var(--ink-2, #5b574d);
+}
+
+.skipNote summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--link, #2f5d50);
+  font-weight: 600;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.skipNote textarea {
+  margin-top: 4px;
+}
+
+@media (min-width: 768px) {
+  .top {
+    margin-left: -10px;
+  }
+
+  .bar {
+    position: static;
+    margin: 8px 0 0;
+    border: 1px solid var(--rule, #ddd7c8);
+    border-radius: var(--radius-md, 14px);
+  }
+}
+
+.section .sectLabel {
+  margin: 0;
+  text-transform: none;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-2, #5b574d);
+}

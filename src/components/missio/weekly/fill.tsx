@@ -231,17 +231,26 @@ export function WeeklyFeedbackFill(props: WeeklyFillProps) {
   }
 
   if (sent) {
+    const tonight = typeof values.attendance === "number" ? values.attendance : null;
     return (
       <GuideSurface nav={nav} state="sent">
-        <main className={styles.intro}>
-          <p className={styles.eyebrow}>
-            House {houseNumber} · {when.day} {when.date}
-          </p>
+        <main className={styles.done}>
+          <span className={styles.doneMark} aria-hidden="true">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12.5l4.5 4.5L19 7.5" />
+            </svg>
+          </span>
           <h1 className={styles.h1}>
             Thank <em>you.</em>
           </h1>
           <p className={styles.lede}>{schema.thankYou?.message || "We are praying for you and your house church this week."}</p>
           <p className={styles.lede}>Your coach and the pastors have it. If something changes, send it again: it updates this week.</p>
+          {tonight != null ? (
+            <div className={styles.doneStat}>
+              <b>{tonight}</b>
+              <span>this {when.day ? when.day : "week"}</span>
+            </div>
+          ) : null}
           <button type="button" className={styles.quietBtn} onClick={() => setSent(false)}>
             Change what I sent
           </button>
@@ -415,7 +424,7 @@ export function WeeklyFeedbackFill(props: WeeklyFillProps) {
         <Label field={f} id={id} />
         <Stepper field={f} value={Number(values[key] ?? 0)} onChange={(n) => set(key, n)} wide={wide} labelledBy={id} />
         {f.helpText ? (
-          <p className={styles.help}>
+          <p className={`${styles.help} ${wide ? styles.helpCentre : ""}`}>
             {key === "attendance" && lastAttendance != null ? `${f.helpText} Last week: ${lastAttendance}.` : f.helpText}
           </p>
         ) : null}
@@ -435,19 +444,15 @@ export function WeeklyFeedbackFill(props: WeeklyFillProps) {
       <form ref={formRef} onSubmit={(e) => void onSubmit(e)} noValidate data-testid="weekly-feedback-form">
         <main>
           <div className={styles.intro}>
-            <p className={styles.eyebrow}>Weekly feedback</p>
+            <p className={`${styles.eyebrow} ${styles.nums}`}>
+              House {houseNumber} · {when.day} {when.date}
+            </p>
             <h1 className={styles.h1}>
               How was it <em>this {when.day || "week"}?</em>
             </h1>
             <p className={styles.lede}>
               {leaders ? `${leaders}. ` : ""}Fill this in once for the house, about five minutes. Please do not write names of guests or
               personal details.
-            </p>
-            <p className={`${styles.meta} ${styles.nums}`}>
-              <b>
-                {when.day} · {when.date}
-              </b>{" "}
-              · House {houseNumber}
             </p>
             {sentBefore ? <p className={styles.meta}>You already sent this week. Change anything and send again.</p> : null}
           </div>
@@ -461,12 +466,12 @@ export function WeeklyFeedbackFill(props: WeeklyFillProps) {
               </h2>
               <div className={styles.pad}>
                 {planStep(step.fields.filter(shown)).map((block) => {
-                  if (block.kind === "count") return countField(block.field, false);
+                  if (block.kind === "count") return countField(block.field, true);
                   if (block.kind === "pair") {
                     return (
                       <div className={styles.two} key={block.a.id}>
-                        {countField(block.a, true)}
-                        {countField(block.b, true)}
+                        {countField(block.a, false)}
+                        {countField(block.b, false)}
                       </div>
                     );
                   }

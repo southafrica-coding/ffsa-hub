@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { CAMPUS_LABEL } from "../access";
 import type { HouseChurchesClient } from "./client";
@@ -17,7 +18,8 @@ import {
   shortDay,
   sortMembers,
 } from "./format";
-import { SizeDots } from "./house-grid";
+import { SizeDots, tintOf } from "./house-grid";
+import type { HouseSignal } from "./format";
 import type { HouseDetail, HouseSummary } from "./types";
 import styles from "./house-map.module.css";
 
@@ -68,119 +70,159 @@ export function coachBranches(houses: HouseSummary[]): Branch[] {
 /**
  * The map (boards M3a, M3b): Missio at the top, then coaches, then a
  * coach's houses, then the people in a house. One branch open at a time;
- * the open path is terracotta.
+ * the open path is terracotta. The "Needs you" signals light the houses
+ * (and the coaches over them) that carry that signal.
  */
 export function HouseMap({
   houses,
   client,
   linkProfiles = true,
+  signals = [],
 }: {
   houses: HouseSummary[];
   client: Pick<HouseChurchesClient, "getHouse">;
   /** Profiles are pastors only for now. */
   linkProfiles?: boolean;
+  /** Signal counts across every house, most actionable first. */
+  signals?: { signal: HouseSignal; count: number }[];
 }) {
   const branches = useMemo(() => coachBranches(houses), [houses]);
   const [coachKey, setCoachKey] = useState<string | null>(null);
   const [houseId, setHouseId] = useState<string | null>(null);
+  const [lit, setLit] = useState<HouseSignal | null>(null);
   const open = branches.find((branch) => branch.key === coachKey) ?? null;
-  const openHouse = open?.houses.find((house) => house.id === houseId) ?? null;
+  const people = houses.reduce((sum, house) => sum + Math.max(0, house.memberCount), 0);
+  const hits = (house: HouseSummary) => lit != null && houseSignals(house).includes(lit);
 
   return (
-    <div className={styles.map} data-testid="house-map">
-      <div className={`${styles.root} ${coachKey ? styles.lit : ""}`}>
-        <span className={styles.rootMark} aria-hidden="true">
-          M
-        </span>
-        Missio
-      </div>
-      <span className={`${styles.stem} ${coachKey ? styles.stemLit : ""}`} aria-hidden="true" />
-
-      <ul className={styles.coaches} aria-label="Coaches">
-        {branches.map((branch) => {
-          const selected = branch.key === coachKey;
-          return (
-            <li key={branch.key}>
+    <div className={styles.wrap}>
+      {signals.length > 0 ? (
+        <div className={styles.signals} role="group" aria-label="Needs you">
+          <span className={styles.signalsLabel}>Needs you</span>
+          {signals.map(({ signal, count }) => {
+            const on = lit === signal;
+            return (
               <button
+                key={signal}
                 type="button"
-                className={`${styles.coach} ${selected ? styles.coachOn : ""} ${branch.key === NO_COACH ? styles.coachNone : ""}`}
-                aria-expanded={selected}
-                onClick={() => {
-                  setCoachKey(selected ? null : branch.key);
-                  setHouseId(null);
-                }}
+                className={`${styles.sg} ${on ? styles.sgOn : ""}`}
+                aria-pressed={on}
+                onClick={() => setLit(on ? null : signal)}
               >
-                <span className={styles.coachFace} aria-hidden="true">
-                  {branch.initials}
-                  {branch.attention > 0 ? <span className={styles.coachHits}>{branch.attention}</span> : null}
-                </span>
-                <span className={styles.coachName}>{branch.name}</span>
-                <span className={styles.coachMeta}>
-                  {branch.houses.length === 1 ? "1 house" : `${branch.houses.length} houses`} · {branch.people}{" "}
-                  {branch.people === 1 ? "person" : "people"}
-                </span>
-                {branch.attention > 0 ? (
-                  <span className={styles.visuallyHidden}>
-                    , {branch.attention} {branch.attention === 1 ? "house needs" : "houses need"} attention
-                  </span>
-                ) : null}
+                <span className={styles.sgn}>{count}</span>
+                {SIGNAL_LABEL[signal]}
               </button>
-            </li>
-          );
-        })}
-      </ul>
-
-      {open ? (
-        <>
-          <span className={`${styles.stem} ${styles.stemLit}`} aria-hidden="true" />
-          <ul className={styles.houses} aria-label={`Houses coached by ${open.name}`}>
-            {open.houses.map((house) => {
-              const selected = house.id === houseId;
-              const signal = houseSignals(house).find((item) => item !== "no_coach");
-              return (
-                <li key={house.id}>
-                  <button
-                    type="button"
-                    className={`${styles.house} ${selected ? styles.houseOn : ""} ${signal && signal !== "ready" ? styles.houseFlag : ""}`}
-                    aria-expanded={selected}
-                    onClick={() => setHouseId(selected ? null : house.id)}
-                  >
-                    <span className={styles.houseTop}>
-                      <span className={styles.houseName}>{houseTitle(house)}</span>
-                      <span className={styles.houseDay}>{shortDay(house.meetingDay)}</span>
-                    </span>
-                    <span className={styles.houseSize}>
-                      <b>{house.memberCount}</b> {house.memberCount === 1 ? "person" : "people"}
-                    </span>
-                    <SizeDots count={house.memberCount} />
-                    <span className={styles.houseLead}>{leadingLine(house)}</span>
-                    {signal ? (
-                      <span className={`${styles.badge} ${signal === "ready" ? styles.badgeReady : styles.badgeWarn}`}>
-                        {SIGNAL_LABEL[signal]}
-                      </span>
-                    ) : null}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      ) : (
-        <p className={styles.hint}>Choose a coach to see their houses.</p>
-      )}
-
-      {open && !openHouse ? <p className={styles.hint}>Choose a house to see its people.</p> : null}
-      {openHouse ? (
-        <>
-          <span className={`${styles.stem} ${styles.stemLit}`} aria-hidden="true" />
-          <HouseTray
-            house={openHouse}
-            coachName={openHouse.coaches.length > 0 ? coachNames(openHouse.coaches) : null}
-            client={client}
-            linkProfiles={linkProfiles}
-          />
-        </>
+            );
+          })}
+        </div>
       ) : null}
+
+      <div className={styles.map} data-testid="house-map">
+        <div className={styles.rootRow}>
+          <div className={styles.root}>
+            <Image src="/brands/missio/missio-wordmark-paper.png" alt="Missio" width={677} height={188} className={styles.wordmark} />
+            <span className={styles.rootMeta}>
+              {houses.length === 1 ? "1 house" : `${houses.length} houses`} · {people} {people === 1 ? "person" : "people"}
+            </span>
+          </div>
+        </div>
+        <span className={`${styles.stem} ${coachKey ? styles.stemLit : ""}`} aria-hidden="true" />
+
+        <ul className={styles.coaches} aria-label="Coaches">
+          {branches.map((branch) => {
+            const selected = branch.key === coachKey;
+            const hitCount = lit ? branch.houses.filter(hits).length : 0;
+            return (
+              <li key={branch.key}>
+                <button
+                  type="button"
+                  className={`${styles.coach} ${selected ? styles.coachOn : ""} ${branch.key === NO_COACH ? styles.coachNone : ""} ${
+                    lit && hitCount === 0 ? styles.dim : ""
+                  }`}
+                  aria-expanded={selected}
+                  onClick={() => {
+                    setCoachKey(selected ? null : branch.key);
+                    setHouseId(null);
+                  }}
+                >
+                  <span className={`${styles.cav} ${branch.key === NO_COACH ? "" : styles[tintOf(branch.key)]}`} aria-hidden="true">
+                    {branch.initials}
+                    {hitCount > 0 ? <span className={styles.hitn}>{hitCount}</span> : null}
+                  </span>
+                  <span className={styles.coachName}>{branch.name}</span>
+                  <span className={styles.coachMeta}>
+                    {branch.houses.length === 1 ? "1 house" : `${branch.houses.length} houses`}
+                    <span className={styles.coachPeople}>
+                      {" "}
+                      · {branch.people} {branch.people === 1 ? "person" : "people"}
+                    </span>
+                  </span>
+                  {hitCount > 0 ? (
+                    <span className={styles.visuallyHidden}>
+                      , {hitCount} {hitCount === 1 ? "house" : "houses"} with {SIGNAL_LABEL[lit!].toLowerCase()}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        {open ? (
+          <>
+            <span className={styles.drop} aria-hidden="true">
+              <span className={styles.joint} />
+            </span>
+            <ul className={styles.houses} aria-label={`Houses coached by ${open.name}`}>
+              {open.houses.map((house) => {
+                const selected = house.id === houseId;
+                const signal = houseSignals(house).find((item) => item !== "no_coach");
+                const leaders = house.leaders.length + house.coLeaders.length;
+                return (
+                  <li key={house.id} className={`${styles.houseItem} ${selected ? styles.houseItemOpen : ""}`}>
+                    <button
+                      type="button"
+                      className={`${styles.house} ${selected ? styles.houseOn : ""} ${hits(house) ? styles.houseHit : ""} ${
+                        lit && !hits(house) ? styles.dim : ""
+                      }`}
+                      aria-expanded={selected}
+                      onClick={() => setHouseId(selected ? null : house.id)}
+                    >
+                      <span className={styles.houseTop}>
+                        <span className={styles.houseName}>{houseTitle(house)}</span>
+                        <span className={styles.houseDay}>{shortDay(house.meetingDay)}</span>
+                        <span className={styles.houseSize}>
+                          <b>{house.memberCount}</b> {house.memberCount === 1 ? "person" : "people"}
+                        </span>
+                      </span>
+                      <SizeDots count={house.memberCount} leaders={leaders} />
+                      <span className={styles.houseFoot}>
+                        <span className={styles.houseLead}>{leadingLine(house)}</span>
+                        {signal ? (
+                          <span className={`${styles.badge} ${signal === "ready" ? styles.badgeReady : styles.badgeWarn}`}>
+                            {SIGNAL_LABEL[signal]}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                    {selected ? (
+                      <HouseTray
+                        house={house}
+                        coachName={house.coaches.length > 0 ? coachNames(house.coaches) : null}
+                        client={client}
+                        linkProfiles={linkProfiles}
+                      />
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+            {!houseId ? <p className={styles.hint}>Choose a house to see its people.</p> : null}
+          </>
+        ) : (
+          <p className={styles.hint}>Choose a coach to see their houses.</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -223,11 +265,12 @@ function HouseTray({
   const line = [day ? `${day}s` : null, coachName ? `coached by ${coachName}` : "no coach yet", CAMPUS_LABEL[house.campus]]
     .filter(Boolean)
     .join(" · ");
+  const SHOWN = 12;
 
   return (
     <section className={styles.tray} data-testid="house-tray" aria-label={houseTitle(house)}>
       <div className={styles.trayHead}>
-        <div>
+        <div className={styles.trayTitle}>
           <h2>{houseTitle(house)}</h2>
           <p className={styles.trayLine}>{line}</p>
         </div>
@@ -241,14 +284,16 @@ function HouseTray({
         <div className={styles.trayCols}>
           <div>
             <h3>Leading</h3>
-            {leading.length === 0 ? <p className={styles.hint}>No leader yet</p> : null}
+            {leading.length === 0 ? <p className={styles.trayEmpty}>No leader yet</p> : null}
             <ul className={styles.people}>
               {leading.map((member) => (
                 <Person
                   key={member.contactId}
+                  id={member.contactId}
                   name={member.displayName}
                   href={linkProfiles ? personHref(member) : null}
                   tag={ROLE_LABEL[member.role]}
+                  lead
                 />
               ))}
             </ul>
@@ -256,11 +301,22 @@ function HouseTray({
           <div>
             <h3>Members · {rest.length}</h3>
             <ul className={styles.people}>
-              {rest.slice(0, 12).map((member) => (
-                <Person key={member.contactId} name={member.displayName} href={linkProfiles ? personHref(member) : null} />
+              {rest.slice(0, SHOWN).map((member) => (
+                <Person
+                  key={member.contactId}
+                  id={member.contactId}
+                  name={member.displayName}
+                  href={linkProfiles ? personHref(member) : null}
+                />
               ))}
+              {rest.length > SHOWN ? (
+                <li>
+                  <Link href={`/missio/house-churches/${encodeURIComponent(house.id)}`} className={styles.more}>
+                    + {rest.length - SHOWN} more
+                  </Link>
+                </li>
+              ) : null}
             </ul>
-            {rest.length > 12 ? <p className={styles.hint}>+ {rest.length - 12} more</p> : null}
           </div>
         </div>
       ) : null}
@@ -268,14 +324,25 @@ function HouseTray({
   );
 }
 
-function Person({ name, href, tag }: { name: string; href: string | null; tag?: string }) {
-  return (
-    <li>
-      <span className={styles.face} aria-hidden="true">
+function Person({ id, name, href, tag, lead = false }: { id: string; name: string; href: string | null; tag?: string; lead?: boolean }) {
+  const body = (
+    <>
+      <span className={`${styles.face} ${lead ? "" : styles[tintOf(id)]}`} aria-hidden="true">
         {initialsOf(name)}
       </span>
-      {href ? <Link href={href}>{name}</Link> : <span>{name}</span>}
-      {tag ? <span className={styles.tag}>{tag}</span> : null}
+      <span className={styles.personName}>{name}</span>
+      {tag ? <span className={styles.visuallyHidden}>, {tag}</span> : null}
+    </>
+  );
+  return (
+    <li>
+      {href ? (
+        <Link href={href} className={`${styles.person} ${lead ? styles.personLead : ""}`}>
+          {body}
+        </Link>
+      ) : (
+        <span className={`${styles.person} ${lead ? styles.personLead : ""}`}>{body}</span>
+      )}
     </li>
   );
 }

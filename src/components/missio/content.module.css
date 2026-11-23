@@ -1,5 +1,6 @@
 /* Page content only. The shell, sidebar, top bar, and their breakpoints
-   stay in shell.module.css so the mobile shell can change on its own. */
+   stay in shell.module.css so the mobile shell can change on its own.
+   Home has its own home.module.css (board M11a). */
 
 .page {
   font-size: 15px;
@@ -14,7 +15,7 @@
 .reveal {
   opacity: 1;
   transform: none;
-  animation: contentIn 0.25s ease both;
+  animation: contentIn 0.32s ease both;
 }
 
 @keyframes contentIn {
@@ -36,57 +37,19 @@
   }
 }
 
-.page .eyebrow {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
 .page .title {
-  font-size: 40px;
-  font-weight: 600;
-  line-height: 1.15;
+  font-size: 32px;
+  font-weight: 560;
+  line-height: 38px;
   letter-spacing: -0.01em;
   margin: 8px 0 0;
   max-width: 100%;
 }
 
-/* Home greeting (board M11a): the one warm moment, a frame-dark panel that
-   fades out to the right. A real Sunday photo can go behind it later. */
-.page .hero {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  min-height: 180px;
-  padding: 24px 18px 20px;
-  border-radius: var(--radius-lg, 20px);
-  background: linear-gradient(100deg, #2a332d 0%, #3d4740 55%, #747a73 100%);
-  color: var(--frame-ink, #f3efe4);
-}
-
-.page .hero .eyebrow {
-  color: rgba(243, 239, 228, 0.82);
-  font-weight: 400;
-  font-size: 14px;
-}
-
-.page .hero .title {
-  color: var(--frame-ink, #f3efe4);
-  font-weight: 560;
-  font-size: 34px;
-  line-height: 38px;
-  margin-top: 4px;
-}
-
-@media (min-width: 768px) {
-  .page .hero {
-    min-height: 200px;
-    padding: 32px 40px;
-  }
-
-  .page .hero .title {
-    font-size: 44px;
-    line-height: 48px;
+@media (max-width: 767px) {
+  .page .title {
+    font-size: 28px;
+    line-height: 34px;
   }
 }
 
@@ -95,326 +58,6 @@
   line-height: 1.6;
   margin: 12px 0 0;
   max-width: 40rem;
-}
-
-.page .grid {
-  margin-top: 24px;
-  gap: 16px;
-  align-items: stretch;
-}
-
-.solo {
-  display: block;
-  width: 100%;
-  max-width: 22rem;
-  margin-top: 24px;
-}
-
-.pair {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 24px;
-}
-
-.pair > * {
-  min-width: 0;
-  margin-top: 0;
-}
-
-.cards {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  margin-top: 24px;
-}
-
-.cards > * {
-  min-width: 0;
-  margin-top: 0;
-}
-
-@media (max-width: 767px) {
-  .pair {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (min-width: 1100px) {
-  .cards {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-.page .grid + .grid {
-  margin-top: 16px;
-}
-
-.page .cardTitle {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.25;
-}
-
-.page .cardBody {
-  font-size: 15px;
-  line-height: 1.5;
-  margin-top: 8px;
-}
-
-.page .tag {
-  max-width: 100%;
-  height: auto;
-  white-space: normal;
-}
-
-.card {
-  transition: border-color 0.15s ease;
-}
-
-.page .card:hover {
-  border-color: var(--ink, #1c1b17);
-}
-
-.page .toolbar {
-  gap: 8px;
-  margin: 16px 0 12px;
-}
-
-.page .table th,
-.page .table td {
-  padding: 12px 16px;
-  text-align: left;
-  vertical-align: middle;
-}
-
-.page .table th {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0;
-  line-height: 1.5;
-  text-transform: none;
-}
-
-.page .table td {
-  font-size: 15px;
-  line-height: 1.5;
-}
-
-/* ── Home ─────────────────────────────────────────────── */
-
-.homeGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  margin-top: 24px;
-}
-
-.homeGrid > * {
-  min-width: 0;
-}
-
-@media (min-width: 1000px) {
-  .homeGrid {
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    gap: 24px;
-  }
-
-  .homeGrid .wide {
-    grid-row: span 2;
-  }
-}
-
-.page .card {
-  border-radius: var(--radius-md, 14px);
-  box-shadow: var(--shadow-1, 0 1px 2px rgba(28, 27, 23, 0.05));
-}
-
-.homeGrid .card {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.homeGrid .rowCard {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 64px;
-}
-
-.cardHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.page .cardHeading {
-  font-size: 22px;
-  line-height: 28px;
-  margin: 0;
-}
-
-.page .cardLink {
-  color: var(--link, #2f5d50);
-  font-size: 14px;
-  font-weight: 600;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  margin: -12px 0;
-}
-
-.page .cardLink:hover,
-.page .cardLink:focus-visible {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  color: var(--link, #2f5d50);
-}
-
-.go {
-  color: var(--quiet, #6e685b);
-  font-size: 18px;
-  flex: none;
-}
-
-.stats {
-  display: flex;
-  gap: 40px;
-  margin: 0;
-}
-
-.stats dd {
-  margin: 0;
-  font-family: var(--display);
-  font-weight: 560;
-  font-size: 40px;
-  line-height: 44px;
-  letter-spacing: -0.02em;
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.stats dt {
-  color: var(--sub, #5b574d);
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.statsSmall {
-  gap: 24px;
-}
-
-.statsSmall dd {
-  font-size: 22px;
-  line-height: 26px;
-}
-
-.big {
-  font-family: var(--display);
-  font-weight: 560;
-  font-size: 56px;
-  line-height: 56px;
-  letter-spacing: -0.02em;
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  height: 72px;
-}
-
-.bars span {
-  flex: 1 1 0;
-  min-width: 0;
-  border-radius: 3px;
-  background: var(--rule-strong, #cfc8b6);
-}
-
-.bars .barReady {
-  background: var(--olive, #4e6b4f);
-}
-
-.caption {
-  color: var(--sub, #5b574d);
-  font-size: 13px;
-  line-height: 18px;
-  margin: -6px 0 0;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chips:empty {
-  display: none;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.chipOlive {
-  background: var(--olive-soft, #e3eadf);
-  color: var(--olive-text, #3f5940);
-}
-
-.chipGold {
-  background: var(--gold-soft, #f4ead2);
-  color: var(--gold-text, #7a5a17);
-}
-
-.page .notice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 44px;
-  padding: 10px 14px;
-  border-radius: var(--radius-sm, 10px);
-  background: var(--gold-soft, #f4ead2);
-  color: var(--ink, #1c1b17);
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.page .action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  align-self: flex-start;
-  min-height: 44px;
-  padding: 0 18px;
-  border-radius: var(--radius-sm, 10px);
-  background: var(--accent, #b4532e);
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 600;
-  margin-top: auto;
-}
-
-.page .action:hover,
-.page .action:focus-visible {
-  background: var(--accent-text, #8e3d1f);
-  color: #ffffff;
-}
-
-.page .action:focus-visible,
-.page .notice:focus-visible,
-.page .cardLink:focus-visible {
-  outline: 2px solid var(--link, #2f5d50);
-  outline-offset: 2px;
 }
 
 .cardError {
@@ -450,28 +93,4 @@
 
 .skeleton span:nth-child(3) {
   width: 60%;
-}
-
-@media (max-width: 767px) {
-  .homeGrid .card {
-    padding: 16px;
-  }
-
-  .stats {
-    gap: 28px;
-  }
-
-  .stats dd {
-    font-size: 32px;
-    line-height: 36px;
-  }
-
-  .statsSmall dd {
-    font-size: 20px;
-    line-height: 24px;
-  }
-
-  .page .action {
-    align-self: stretch;
-  }
 }

@@ -98,9 +98,11 @@ export function PlaceDialog({
         <p className={styles.messageHead}>
           <span>{first} gets</span>
         </p>
-        <p className={styles.message} data-testid="msg-person">
-          {toPerson}
-        </p>
+        <div className={styles.tray}>
+          <p className={styles.message} data-testid="msg-person">
+            {toPerson}
+          </p>
+        </div>
         <div className={styles.footer}>
           {personChat ? (
             <a className={shell.ghost} href={`${personChat}?text=${encodeURIComponent(toPerson)}`} target="_blank" rel="noopener noreferrer">
@@ -113,9 +115,11 @@ export function PlaceDialog({
         <p className={styles.messageHead}>
           <span>{placed.leaders[0]?.name.split(" ")[0] || "The leader"} gets</span>
         </p>
-        <p className={styles.message} data-testid="msg-leader">
-          {toLeader}
-        </p>
+        <div className={styles.tray}>
+          <p className={styles.message} data-testid="msg-leader">
+            {toLeader}
+          </p>
+        </div>
         <div className={styles.footer}>
           {leaderChat ? (
             <a className={shell.ghost} href={`${leaderChat}?text=${encodeURIComponent(toLeader)}`} target="_blank" rel="noopener noreferrer">
@@ -171,6 +175,8 @@ export function PlaceDialog({
               className={`${styles.houseChoice} ${houseId === house.id ? styles.houseOn : ""}`}
               onClick={() => setHouseId(house.id)}
             >
+              <span className={`${styles.radio} ${houseId === house.id ? styles.radioOn : ""}`} aria-hidden="true" />
+              <span className={styles.choiceText}>
               <b>
                 {houseTitle(house)}
                 {house.meetingDay ? ` · ${meetingDayLabel(house.meetingDay)}s` : ""}
@@ -178,6 +184,7 @@ export function PlaceDialog({
               <span>
                 {leadingLine(house)} · {house.memberCount} {sizeWord(house)}
                 {house.coaches.length > 0 ? ` · coached by ${coachNames(house.coaches)}` : ""}
+              </span>
               </span>
             </button>
           </li>

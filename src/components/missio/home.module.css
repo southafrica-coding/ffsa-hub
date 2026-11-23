@@ -1,0 +1,697 @@
+/* Missio Home (board M11a). Phone first: one column of cards. From 1000px the
+   board's desktop grid: house churches and Sunday on the left (7 of 12),
+   "Not in a house yet" and the quick links on the right (5 of 12). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Greeting ─────────────────────────────────────────── */
+
+/* The Sunday photo slot. Empty until real photography is in, so the warm
+   neutral shows through the board's dark fade. */
+.hero {
+  position: relative;
+  flex: none;
+  height: 180px;
+  overflow: hidden;
+  border-radius: var(--radius-lg, 20px);
+  background:
+    linear-gradient(0deg, rgba(29, 37, 32, 0.88) 0%, rgba(29, 37, 32, 0.15) 70%),
+    #cbc5b8;
+}
+
+.heroText {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 16px;
+  color: var(--frame-ink, #f3efe4);
+}
+
+.hero .heroDate {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  opacity: 0.9;
+}
+
+.hero .heroTitle {
+  margin: 0;
+  color: var(--frame-ink, #f3efe4);
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 560;
+  line-height: 36px;
+  letter-spacing: -0.01em;
+}
+
+@media (min-width: 768px) {
+  .hero {
+    height: 200px;
+    background:
+      linear-gradient(90deg, rgba(29, 37, 32, 0.92) 0%, rgba(29, 37, 32, 0.5) 45%, rgba(29, 37, 32, 0) 80%),
+      #cbc5b8;
+  }
+
+  .heroText {
+    left: 40px;
+    bottom: 32px;
+  }
+
+  .hero .heroDate {
+    font-size: 15px;
+  }
+
+  .hero .heroTitle {
+    font-size: 44px;
+    line-height: 48px;
+  }
+}
+
+/* ── Cards ────────────────────────────────────────────── */
+
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.grid > * {
+  min-width: 0;
+}
+
+.card {
+  position: relative;
+  box-sizing: border-box;
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-md, 14px);
+  background: var(--panel, #fbf9f4);
+  box-shadow: var(--shadow-1, 0 1px 2px rgba(28, 27, 23, 0.05));
+  color: var(--ink, #1c1b17);
+  transition: box-shadow 0.16s ease;
+}
+
+a.card:hover,
+.houses:hover {
+  box-shadow: var(--shadow-2, 0 6px 18px rgba(28, 27, 23, 0.1));
+  color: var(--ink, #1c1b17);
+}
+
+a.card:focus-visible,
+.stretch:focus-visible::after {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.card .cardTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 560;
+  line-height: 26px;
+  letter-spacing: -0.01em;
+  color: var(--ink, #1c1b17);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The whole card opens House churches; the chips that link sit above it. */
+.stretch {
+  color: inherit;
+}
+
+.stretch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md, 14px);
+}
+
+.headLink {
+  display: none;
+  color: var(--link, #2f5d50);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chevPhone,
+.chev {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--ink-3, #6e685b);
+}
+
+/* House churches */
+
+.houses {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.stats dd {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 560;
+  line-height: 32px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.stats dt {
+  color: var(--ink-2, #5b574d);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* One bar per house (div bars + aria-label, guide §3). */
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 32px;
+}
+
+.bars span {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 2px;
+  background: var(--rule-strong, #cfc8b6);
+}
+
+.bars .barReady {
+  background: var(--olive, #4e6b4f);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips:empty {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.chipOlive {
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-ink, #3f5940);
+}
+
+.chipGold {
+  background: var(--gold-soft, #f4ead2);
+  color: var(--gold-ink, #7a5a17);
+}
+
+/* Sits above the card's stretched link, with a 44px tall hit area. */
+.chipLink {
+  position: relative;
+  z-index: 1;
+}
+
+.chipLink::before {
+  content: "";
+  position: absolute;
+  inset: -10px 0;
+}
+
+a.chipLink:hover,
+a.chipLink:focus-visible {
+  color: var(--gold-ink, #7a5a17);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Not in a house yet: one row on the phone (number · words · button). */
+
+.notIn {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "num head act"
+    "num sub act";
+  align-items: center;
+  column-gap: 14px;
+  padding: 16px;
+}
+
+.notIn > [aria-hidden="true"],
+.notIn > [role="alert"] {
+  grid-column: 1 / -1;
+}
+
+.notInHead {
+  grid-area: head;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.card .notInTitle {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: 0;
+}
+
+.notInNum {
+  grid-area: num;
+  font-family: var(--display);
+  font-size: 44px;
+  font-weight: 560;
+  line-height: 44px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.notIn .notInSub {
+  grid-area: sub;
+  margin: 0;
+  color: var(--ink-2, #5b574d);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.notInActions {
+  grid-area: act;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stageBar,
+.stageStats,
+.desk {
+  display: none;
+}
+
+.button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 9px;
+  background: var(--terra, #b4532e);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 44px hit area around the 36px button. */
+.button::before {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+
+/* .shell a sets colour: inherit, so this needs the extra class. */
+.notInActions .button,
+.notInActions .button:hover {
+  color: #ffffff;
+}
+
+.notInActions .button:hover,
+.notInActions .button:focus-visible {
+  background: var(--terra-ink, #8e3d1f);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+/* This Sunday */
+
+.sunday {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.sundayHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--subtle, #eeeadf);
+  color: var(--ink-2, #5b574d);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sundayLead {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.sundayText {
+  margin-top: -8px;
+  color: var(--ink-2, #5b574d);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* Row cards: want to serve, find someone, a leader's houses. */
+
+.side,
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 4px 16px 4px 14px;
+}
+
+.rowIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--subtle, #eeeadf);
+  color: var(--ink-2, #5b574d);
+}
+
+.rowIcon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.rowIconLink {
+  background: #dde8e3;
+  color: var(--link, #2f5d50);
+}
+
+.rowText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rowTitle {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.rowSub {
+  color: var(--ink-2, #5b574d);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.find {
+  display: none;
+}
+
+/* ── Desktop (board M11a desktop) ─────────────────────── */
+
+@media (min-width: 1000px) {
+  .page {
+    gap: 20px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 24px;
+    align-items: start;
+  }
+
+  .houses,
+  .sunday {
+    grid-column: span 7;
+  }
+
+  .notIn,
+  .side {
+    grid-column: span 5;
+  }
+
+  .notIn {
+    align-self: stretch;
+  }
+
+  .houses {
+    gap: 16px;
+    padding: 24px;
+  }
+
+  .card .cardTitle {
+    font-size: 22px;
+    line-height: 28px;
+  }
+
+  .headLink {
+    display: inline;
+  }
+
+  .chevPhone {
+    display: none;
+  }
+
+  .stats {
+    display: flex;
+    gap: 44px;
+  }
+
+  .stats dd {
+    font-size: 40px;
+    line-height: 44px;
+  }
+
+  .stats dt {
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .bars {
+    gap: 6px;
+    height: 72px;
+  }
+
+  .bars span {
+    border-radius: 3px;
+  }
+
+  .chip {
+    height: 26px;
+    font-size: 13px;
+  }
+
+  .notIn {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 24px;
+  }
+
+  .card .notInTitle {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 560;
+    line-height: 28px;
+    letter-spacing: -0.01em;
+  }
+
+  .desk {
+    display: inline-flex;
+    color: var(--ink-2, #5b574d);
+    font-size: 14px;
+  }
+
+  .notInNum {
+    font-size: 56px;
+    line-height: 56px;
+  }
+
+  .notIn .notInSub {
+    display: none;
+  }
+
+  .stageBar {
+    display: flex;
+    gap: 2px;
+    height: 10px;
+    overflow: hidden;
+    border-radius: 5px;
+  }
+
+  .stageBar span[data-stage="new"] {
+    background: var(--terra, #b4532e);
+  }
+
+  .stageBar span[data-stage="contacted"] {
+    background: var(--link, #2f5d50);
+  }
+
+  .stageBar span[data-stage="visited_house"] {
+    background: var(--gold, #b98a2e);
+  }
+
+  .stageStats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    font-size: 14px;
+  }
+
+  .stageStats dd {
+    margin: 0;
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 560;
+    line-height: 26px;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  .stageStats dt {
+    color: var(--ink-2, #5b574d);
+  }
+
+  .notInActions {
+    margin-top: auto;
+    align-self: flex-start;
+  }
+
+  .button {
+    height: 44px;
+    padding: 0 18px;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+
+  .button::before {
+    display: none;
+  }
+
+  .sunday {
+    padding: 20px;
+  }
+
+  .phoneOnly {
+    display: none;
+  }
+
+  .find {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 18px 20px;
+  }
+
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 48px;
+    padding: 0 14px;
+    box-sizing: border-box;
+    border: 1px solid var(--rule-strong, #cfc8b6);
+    border-radius: 10px;
+    background: #ffffff;
+    color: var(--ink-3, #6e685b);
+  }
+
+  .search:focus-within {
+    outline: 2px solid var(--link, #2f5d50);
+    outline-offset: 2px;
+  }
+
+  .search svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+  }
+
+  /* Beats the Hub's global input rule (0,3,1 !important). */
+  .find .search input[name="q"]:not([type="checkbox"]) {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 44px !important;
+    margin: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none;
+    color: var(--ink, #1c1b17) !important;
+    font-family: var(--body) !important;
+    font-size: 16px !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+    outline: none !important;
+  }
+
+  .search input::placeholder {
+    color: var(--ink-3, #6e685b);
+  }
+}

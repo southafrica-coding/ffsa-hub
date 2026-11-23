@@ -4,18 +4,21 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { canAccessMissio, canSeeMissioCare, isMissioPastor, missioSkinVars } from "./access";
+import { Calendar, Heart, House, Mail, Settings, Sprout, Sunrise, UserCheck, Users, UsersRound, Wallet } from "lucide-react";
+import { canAccessMissio, canSeeMissioCare, isMissioPastor, missioSkinVars, orgHref, sortOrgs } from "./access";
 import { MissioViewerProvider } from "./viewer";
 import { MissioApiError, missioClient, type MissioClient } from "./api";
 import { loadFfsaRoleNames } from "./ffsa-roles";
 import { missioCrumbLabel } from "./crumb";
 import { BACK_TO_FFSA_HUB, missioOrgHeader, needsPlatformRoleLookup, type OrgHeaderState } from "./org-header";
 import { OrgSwitcher, OrgTile } from "./org-switcher";
+import type { OrgSwitcherOrg } from "./use-org-switcher";
 import type { MissioMe } from "./types-shim";
 import styles from "./shell.module.css";
 
-export function missioSection(pathname: string): "home" | "people" | "houses" | "follow" {
+export function missioSection(pathname: string): "home" | "people" | "houses" | "follow" | "sundays" {
   if (pathname.includes("/missio/people")) return "people";
+  if (pathname.includes("/missio/sundays")) return "sundays";
   if (pathname.includes("/missio/house-churches")) return "houses";
   if (pathname.includes("/missio/follow-up")) return "follow";
   return "home";
@@ -151,7 +154,7 @@ function MissioReady({
           <MissioSidebar me={me} ffsaRoleNames={ffsaRoleNames} />
         </div>
         <div className={styles.main}>
-          <MissioTop me={me} ffsaRoleNames={ffsaRoleNames} navOpen={navOpen} />
+          <MissioTop me={me} navOpen={navOpen} />
           <div className={styles.content} data-missio-content="">
             <MissioViewerProvider me={me}>{children}</MissioViewerProvider>
           </div>
@@ -183,150 +186,169 @@ function MissioSidebar({
   const missio = me.orgs.find((org) => org.slug === "missio");
   const section = missioSection(pathname);
   const home = section === "home" && (pathname === "/missio" || pathname.endsWith("/missio"));
-  const people = section === "people";
-  const houses = section === "houses";
-  const follow = section === "follow";
   const pastor = isMissioPastor(me);
-  const housesLabel = housesNavLabel(me);
-  const volunteers = pathname.startsWith("/missio/volunteers");
-  const nextLeaders = pathname.startsWith("/missio/next-leaders");
-  const care = pathname.startsWith("/missio/care");
   const showCare = canSeeMissioCare(me);
 
-  const orgNode = <OrgHeader state={header} />;
+  // Board M11a menu: Home · People · House churches · Follow-up · Care · Sundays ·
+  // Volunteers, then the modules that aren't built yet under "Later".
+  // Next leaders has no other way in, so it stays beside House churches.
+  const items: Array<{ key: string; href: string; label: string; on: boolean; icon: ReactNode; show: boolean }> = [
+    { key: "home", href: "/missio", label: "Home", on: home, icon: <Sunrise />, show: true },
+    { key: "people", href: "/missio/people", label: "People", on: section === "people", icon: <Users />, show: pastor },
+    {
+      key: "house-churches",
+      href: "/missio/house-churches",
+      label: housesNavLabel(me),
+      on: section === "houses",
+      icon: <House />,
+      show: true,
+    },
+    {
+      key: "next-leaders",
+      href: "/missio/next-leaders",
+      label: "Next leaders",
+      on: pathname.startsWith("/missio/next-leaders"),
+      icon: <Sprout />,
+      show: true,
+    },
+    { key: "follow-up", href: "/missio/follow-up", label: "Follow-up", on: section === "follow", icon: <UserCheck />, show: pastor },
+    { key: "care", href: "/missio/care", label: "Care", on: pathname.startsWith("/missio/care"), icon: <Heart />, show: showCare },
+    { key: "sundays", href: "/missio/sundays", label: "Sundays", on: section === "sundays", icon: <Calendar />, show: true },
+    {
+      key: "volunteers",
+      href: "/missio/volunteers",
+      label: "Volunteers",
+      on: pathname.startsWith("/missio/volunteers"),
+      icon: <UsersRound />,
+      show: pastor,
+    },
+  ];
 
   return (
     <aside className={`${styles.side} ${inDrawer ? styles.sideDrawer : ""}`}>
-      {inDrawer ? <div className={styles.drawerOrg}>{orgNode}</div> : orgNode}
-      {pastor ? (
-        <form className={styles.search} action="/missio/people" onSubmit={() => onNavigate?.()}>
-          <SearchIcon />
-          <input name="q" placeholder="Search" aria-label="Search Missio" />
-        </form>
+      {inDrawer ? (
+        <div className={styles.drawerHead}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- static brand mark */}
+          <img src="/brands/missio/missio-wordmark-paper.png" alt="Missio" className={styles.wordmark} />
+        </div>
       ) : null}
+      {inDrawer && header.kind === "switcher" ? (
+        <OrgSegmented orgs={header.orgs} />
+      ) : (
+        <div className={inDrawer ? styles.drawerOrg : styles.sideOrg}>
+          <OrgHeader state={header} />
+        </div>
+      )}
       <nav className={styles.nav} aria-label="Missio">
-        <Link href="/missio" className={`${styles.navLink} ${home ? styles.navOn : ""}`} aria-current={home ? "page" : undefined} onClick={onNavigate}>
-          <HomeIcon />
-          <span>Home</span>
-        </Link>
-        {pastor ? (
-          <Link href="/missio/people" className={`${styles.navLink} ${people ? styles.navOn : ""}`} aria-current={people ? "page" : undefined} onClick={onNavigate}>
-            <PeopleIcon />
-            <span>People</span>
-          </Link>
-        ) : null}
-        <Link
-          href="/missio/house-churches"
-          className={`${styles.navLink} ${houses ? styles.navOn : ""}`}
-          aria-current={houses ? "page" : undefined}
-          data-testid="missio-nav-house-churches"
-          onClick={onNavigate}
-        >
-          <HouseIcon />
-          <span>{housesLabel}</span>
-        </Link>
-        <Link
-          href="/missio/next-leaders"
-          className={`${styles.navLink} ${nextLeaders ? styles.navOn : ""}`}
-          aria-current={nextLeaders ? "page" : undefined}
-          data-testid="missio-nav-next-leaders"
-          onClick={onNavigate}
-        >
-          <SproutIcon />
-          <span>Next leaders</span>
-        </Link>
-        {pastor ? (
-          <Link
-            href="/missio/follow-up"
-            className={`${styles.navLink} ${follow ? styles.navOn : ""}`}
-            aria-current={follow ? "page" : undefined}
-            data-testid="missio-nav-follow-up"
-            onClick={onNavigate}
-          >
-            <FollowIcon />
-            <span>Follow-up</span>
-          </Link>
-        ) : null}
-        {showCare ? (
-          <Link
-            href="/missio/care"
-            className={`${styles.navLink} ${care ? styles.navOn : ""}`}
-            aria-current={care ? "page" : undefined}
-            data-testid="missio-nav-care"
-            onClick={onNavigate}
-          >
-            <HeartIcon />
-            <span>Care</span>
-          </Link>
-        ) : null}
-        {pastor ? (
-          <Link
-            href="/missio/volunteers"
-            className={`${styles.navLink} ${volunteers ? styles.navOn : ""}`}
-            aria-current={volunteers ? "page" : undefined}
-            data-testid="missio-nav-volunteers"
-            onClick={onNavigate}
-          >
-            <CalendarIcon />
-            <span>Volunteers</span>
-          </Link>
-        ) : null}
-        <div className={styles.soon} aria-disabled="true">
-          <PeopleIcon />
-          <span>Teams</span>
+        {items
+          .filter((item) => item.show)
+          .map((item) => (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={`${styles.navLink} ${item.on ? styles.navOn : ""}`}
+              aria-current={item.on ? "page" : undefined}
+              data-testid={item.key === "home" ? undefined : `missio-nav-${item.key}`}
+              onClick={onNavigate}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        <div className={styles.sgroup}>Later</div>
+        {[
+          { key: "teams", label: "Teams", icon: <UsersRound /> },
+          { key: "communications", label: "Communications", icon: <Mail /> },
+          { key: "finance", label: "Finance", icon: <Wallet /> },
+        ].map((item) => (
+          <div key={item.key} className={styles.soon} aria-disabled="true" data-testid={`missio-soon-${item.key}`}>
+            {item.icon}
+            <span>{item.label}</span>
+            <span className={styles.soonTag}>Soon</span>
+          </div>
+        ))}
+      </nav>
+      <div className={styles.foot}>
+        <div className={styles.soon} aria-disabled="true" data-testid="missio-soon-settings">
+          <Settings />
+          <span>Settings</span>
           <span className={styles.soonTag}>Soon</span>
         </div>
-      </nav>
-      <div className={styles.me}>
-        <span className={styles.avatar}>M</span>
-        <div>
-          <div className={styles.who}>{roleLabel(me.rolesByOrg.missio ?? [])}</div>
-          <div className={styles.role}>{missio?.name ?? "Missio"}</div>
+        <div className={styles.me}>
+          <span className={styles.avatar}>M</span>
+          <div>
+            <div className={styles.who}>{roleLabel(me.rolesByOrg.missio ?? [])}</div>
+            <div className={styles.role}>{missio?.name ?? "Missio"}</div>
+          </div>
         </div>
       </div>
     </aside>
   );
 }
 
+/** Phone menu (boards M1c, M11a): the two orgs side by side, the current one lifted. */
+function OrgSegmented({ orgs }: { orgs: OrgSwitcherOrg[] }) {
+  const ordered = sortOrgs(orgs);
+  return (
+    <div className={styles.orgSeg} role="group" aria-label="Organisations" data-org-switcher="segmented">
+      {ordered.map((org) => {
+        const current = org.slug === "missio";
+        const label = org.slug === "ffsa" ? "FFSA" : org.slug === "missio" ? "Missio" : org.name;
+        return current ? (
+          <span key={org.id} className={`${styles.orgSegItem} ${styles.orgSegOn}`} aria-current="true" title={org.name}>
+            <OrgTile slug={org.slug} />
+            {label}
+          </span>
+        ) : (
+          <a key={org.id} href={org.href || orgHref(org.slug)} className={styles.orgSegItem} title={org.name}>
+            {label}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
- * Phone only (CSS hides it from 768px). The daily sections, one thumb away.
- * The drawer keeps the org switcher, search and everything else.
+ * Phone only (CSS hides it from 768px). Board M11a: Home · People · Houses ·
+ * Sundays · Follow-up for pastors. The drawer keeps the org switcher and the rest.
  */
 function MissioTabBar({ me }: { me: MissioMe }) {
   const pathname = usePathname();
   const section = missioSection(pathname);
   const pastor = isMissioPastor(me);
-  const volunteers = pathname.startsWith("/missio/volunteers");
-  const tabs: Array<{ key: string; href: string; label: string; on: boolean; icon: ReactNode }> = [
-    {
-      key: "home",
-      href: "/missio",
-      label: "Home",
-      on: section === "home" && !volunteers,
-      icon: <HomeIcon />,
-    },
-  ];
-  if (!pastor) {
+  const homeTab = {
+    key: "home",
+    href: "/missio",
+    label: "Home",
+    // Only Home itself. Pages without a tab (Care for pastors, Next leaders,
+    // Volunteers) leave every tab unlit rather than pretending to be Home.
+    on: pathname === "/missio" || pathname === "/missio/",
+    icon: <Sunrise />,
+  };
+  const sundays = { key: "sundays", href: "/missio/sundays", label: "Sundays", on: section === "sundays", icon: <Calendar /> };
+  const tabs: Array<{ key: string; href: string; label: string; on: boolean; icon: ReactNode }> = [homeTab];
+  if (pastor) {
+    tabs.push(
+      { key: "people", href: "/missio/people", label: "People", on: section === "people", icon: <Users /> },
+      { key: "house-churches", href: "/missio/house-churches", label: "Houses", on: section === "houses", icon: <House /> },
+      sundays,
+      { key: "follow-up", href: "/missio/follow-up", label: "Follow-up", on: section === "follow", icon: <UserCheck /> }
+    );
+  } else {
     tabs.push({
       key: "house-churches",
       href: "/missio/house-churches",
-      label: housesNavLabel(me) === "My house" ? "My house" : "Houses",
+      label: housesNavLabel(me) === "My house" ? "My house" : "My houses",
       on: section === "houses",
-      icon: <HouseIcon />,
+      icon: <House />,
     });
     // Leaders see what their house shared with them (migration 354). Same
     // role list as GET /api/missio/care, so nobody gets a tab the API refuses.
     if (canSeeMissioCare(me)) {
-      tabs.push({ key: "care", href: "/missio/care", label: "Care", on: pathname.startsWith("/missio/care"), icon: <HeartIcon /> });
+      tabs.push({ key: "care", href: "/missio/care", label: "Care", on: pathname.startsWith("/missio/care"), icon: <Heart /> });
     }
-  }
-  if (pastor) {
-    tabs.push(
-      { key: "people", href: "/missio/people", label: "People", on: section === "people", icon: <PeopleIcon /> },
-      { key: "house-churches", href: "/missio/house-churches", label: "Houses", on: section === "houses", icon: <HouseIcon /> },
-      { key: "follow-up", href: "/missio/follow-up", label: "Follow-up", on: section === "follow", icon: <FollowIcon /> },
-      { key: "volunteers", href: "/missio/volunteers", label: "Volunteers", on: volunteers, icon: <CalendarIcon /> }
-    );
+    tabs.push(sundays);
   }
   return (
     <nav className={styles.tabBar} aria-label="Missio sections" data-testid="missio-tab-bar">
@@ -348,7 +370,7 @@ function MissioTabBar({ me }: { me: MissioMe }) {
 
 function OrgHeader({ state }: { state: OrgHeaderState }) {
   if (state.kind === "switcher") {
-    return <OrgSwitcher orgs={state.orgs} currentOrg="missio" />;
+    return <OrgSwitcher orgs={state.orgs} currentOrg="missio" sub="Switch org" />;
   }
   if (state.kind === "back") {
     return (
@@ -365,19 +387,11 @@ function OrgHeader({ state }: { state: OrgHeaderState }) {
   );
 }
 
-function MissioTop({
-  me,
-  ffsaRoleNames,
-  navOpen,
-}: {
-  me: MissioMe;
-  ffsaRoleNames: string[] | null;
-  navOpen: boolean;
-}) {
+function MissioTop({ me, navOpen }: { me: MissioMe; navOpen: boolean }) {
   const pathname = usePathname();
   const section = missioCrumbLabel(pathname);
   const orgName = me.orgs.find((org) => org.slug === "missio")?.name ?? "Missio";
-  const header = missioOrgHeader({ orgs: me.orgs, ffsaRoleNames });
+  // Phone top bar (board M11a): the Missio tile opens the menu, then the page's name.
   return (
     <div className={styles.top}>
       <SheetTrigger asChild>
@@ -388,22 +402,12 @@ function MissioTop({
           aria-expanded={navOpen}
           aria-controls={navOpen ? "missio-nav" : undefined}
         >
-          <MenuIcon />
+          <OrgTile slug="missio" />
         </button>
       </SheetTrigger>
-      {header.kind === "switcher" ? (
-        <div className={styles.topOrg}>
-          <OrgSwitcher orgs={header.orgs} currentOrg="missio" compact />
-        </div>
-      ) : null}
       <span className={styles.crumb}>
         <span className={styles.crumbOrg}>{orgName} / </span>
         <b>{section}</b>
-      </span>
-      <span className={styles.spacer} />
-      <span className={styles.ent}>
-        <span className={styles.dot} />
-        <span className={styles.entName}>{orgName}</span>
       </span>
     </div>
   );
@@ -446,87 +450,5 @@ export function NoAccess({ status }: { status: 401 | 403 }) {
         Back to the FFSA Hub
       </Link>
     </section>
-  );
-}
-
-function MenuIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-      <path d="M4 7h16M4 12h16M4 17h16" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-      <circle cx="11" cy="11" r="6.5" />
-      <path d="m20 20-4.2-4.2" />
-    </svg>
-  );
-}
-
-function HomeIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-      <path d="M3 10.5 12 3l9 7.5" />
-      <path d="M5 9.5V21h14V9.5" />
-    </svg>
-  );
-}
-
-function HouseIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-      <path d="M4 10.5 12 4l8 6.5" />
-      <path d="M7 9.8V20h10V9.8" />
-      <path d="M10 20v-5h4v5" />
-    </svg>
-  );
-}
-
-function FollowIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-      <rect x="5" y="3.5" width="14" height="17" rx="1.5" />
-      <path d="M8.5 8h7M8.5 12h7M8.5 16h4" />
-    </svg>
-  );
-}
-
-function CalendarIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-      <rect x="3.5" y="5" width="17" height="15" />
-      <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" />
-    </svg>
-  );
-}
-
-function HeartIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" />
-    </svg>
-  );
-}
-
-function SproutIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M12 21v-9" />
-      <path d="M12 12c0-4 3-7 7-7 0 4-3 7-7 7Z" />
-      <path d="M12 14c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5Z" />
-    </svg>
-  );
-}
-
-function PeopleIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-      <circle cx="9" cy="8" r="3.5" />
-      <path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5" />
-      <path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.8.8 3 2.6 3.5 5.2" />
-    </svg>
   );
 }

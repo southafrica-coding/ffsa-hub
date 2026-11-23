@@ -123,8 +123,8 @@ describe("follow-up board", () => {
     expect(leratoCard.querySelector("a[href='tel:0825550142']")).toBeTruthy();
     expect(leratoCard.querySelector("a[href='https://wa.me/27825550142']")).toBeTruthy();
     expect(leratoCard.textContent).not.toContain("secret@");
-    expect(leratoCard.textContent).toContain("16 Nov 2026 · first time");
-    expect(leratoCard.textContent).toContain("Wants a house church");
+    expect(leratoCard.textContent).toContain("Mon 16 Nov · first time");
+    expect(leratoCard.textContent).toContain("Wants a house");
     expect(leratoCard.textContent).toContain("Wants prayer");
     const siphoCard = cards[1] as HTMLElement;
     expect(siphoCard.querySelector("a")).toBeNull();
@@ -360,8 +360,12 @@ describe("follow-up board", () => {
       />
     );
     await settle();
+    // New cards place people; adding straight to a house lives in their timeline sheet.
+    expect(host.querySelector("#follow-up-add-r_response-1")).toBeNull();
+    act(() => (host.querySelector("#follow-up-open-r_response-1") as HTMLButtonElement).click());
+    await settle();
     act(() => {
-      (host.querySelector("#follow-up-add-r_response-1") as HTMLButtonElement).click();
+      (document.body.querySelector("#follow-up-add-r_response-1") as HTMLButtonElement).click();
     });
     await settle();
     expect(document.body.textContent).toContain("Thursday");
@@ -395,7 +399,9 @@ describe("follow-up board", () => {
       />
     );
     await settle();
-    act(() => (host.querySelector("#follow-up-add-r_response-1") as HTMLButtonElement).click());
+    act(() => (host.querySelector("#follow-up-open-r_response-1") as HTMLButtonElement).click());
+    await settle();
+    act(() => (document.body.querySelector("#follow-up-add-r_response-1") as HTMLButtonElement).click());
     await settle();
     act(() => (document.body.querySelector("[data-testid=add-house] button") as HTMLButtonElement).click());
     await settle();
@@ -433,18 +439,26 @@ describe("follow-up board", () => {
       />
     );
     await settle();
+    // Phone: a banner above the stage tabs opens the review, one card at a time.
+    expect(host.querySelector("[data-testid=needs-review-panel]")).toBeNull();
+    const banner = host.querySelector("[data-testid=needs-review-banner]") as HTMLButtonElement;
+    expect(banner.textContent).toContain("1 needs review");
+    act(() => banner.click());
+    await settle();
     const panel = host.querySelector("[data-testid=needs-review-panel]") as HTMLElement;
     expect(panel.textContent).toContain("Needs review · 1");
+    expect(panel.textContent).toContain("1 of 1");
     const review = panel.querySelector("[data-testid=needs-review]") as HTMLElement;
-    expect(review.textContent).toContain("In People");
+    expect(review.textContent).toContain("Already in People");
     expect(review.textContent).toContain("Naledi Khumalo");
     // The card's own phone shows; the suggested contact's never does.
     expect(review.textContent).toContain("083 555 0199");
     expect(host.textContent).not.toContain("Should stay hidden");
-    const confirm = [...review.querySelectorAll("button")].find((item) => item.textContent === "Confirm, it’s Naledi") as HTMLButtonElement;
+    const confirm = [...review.querySelectorAll("button")].find((item) => item.textContent === "Confirm") as HTMLButtonElement;
     act(() => confirm.click());
     await settle();
     expect(host.querySelector("[data-testid=needs-review-panel]")).toBeNull();
+    expect(host.querySelector("[data-testid=needs-review-banner]")).toBeNull();
     expect(host.textContent).toContain("Naledi Khumalo");
   });
 
@@ -460,10 +474,12 @@ describe("follow-up board", () => {
       />
     );
     await settle();
+    expect(host.querySelector("[data-testid=follow-up-card]")?.textContent).toContain("Needs review");
+    act(() => (host.querySelector("[data-testid=needs-review-banner]") as HTMLButtonElement).click());
+    await settle();
     const review = host.querySelector("[data-testid=needs-review]") as HTMLElement;
     expect(review.textContent).toContain("No one suggested yet.");
     expect(review.querySelector("button")).toBeNull();
-    expect(host.querySelector("[data-testid=follow-up-card]")?.textContent).toContain("Needs review");
   });
 
   it("says someone already sorted a match and refetches", async () => {
@@ -484,6 +500,8 @@ describe("follow-up board", () => {
         })}
       />
     );
+    await settle();
+    act(() => (host.querySelector("[data-testid=needs-review-banner]") as HTMLButtonElement).click());
     await settle();
     const before = calls;
     const confirm = [...host.querySelectorAll("button")].find((item) => item.textContent?.startsWith("Confirm")) as HTMLButtonElement;
@@ -511,6 +529,9 @@ describe("follow-up board", () => {
       />
     );
     await settle();
+    act(() => (host.querySelector("[data-testid=needs-review-banner]") as HTMLButtonElement).click());
+    await settle();
+    expect(host.textContent).toContain("1 of 2");
     expect(host.textContent).toContain("Not this person");
     const decline = [...host.querySelectorAll("button")].find((item) => item.textContent === "Not this person") as HTMLButtonElement;
     act(() => decline.click());
@@ -518,6 +539,7 @@ describe("follow-up board", () => {
     expect(host.textContent).not.toContain("Not this person");
     expect(host.textContent).toContain("That didn’t work. Please try again.");
     expect(host.textContent).not.toContain("RAW SERVER TEXT");
+    act(() => ([...host.querySelectorAll("button")].find((item) => item.textContent === "Next card") as HTMLButtonElement).click());
     expect(host.textContent).toContain("Ayesha Patel");
   });
 });

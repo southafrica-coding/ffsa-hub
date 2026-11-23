@@ -37,6 +37,20 @@ function initials(name: string): string {
   return (parts.length > 1 ? `${parts[0]![0]}${parts[parts.length - 1]![0]}` : (parts[0] ?? "?").slice(0, 2)).toUpperCase();
 }
 
+function tintFor(id: string): number {
+  let sum = 0;
+  for (const char of id) sum = (sum + char.charCodeAt(0)) % 5;
+  return sum + 1;
+}
+
+function CheckIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
+  );
+}
+
 const first = (name: string) => name.split(" ")[0] || name;
 
 /** "2 houses can multiply now: House 5 has 24 people and Daniel is ready to lead." */
@@ -72,6 +86,7 @@ export function NextLeadersBoard({
   const [editing, setEditing] = useState<NextLeader | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [tab, setTab] = useState<NextLeaderStage>("spotted");
 
   async function move(leader: NextLeader, change: Parameters<NextLeadersClient["move"]>[1]) {
     setBusy(leader.id);
@@ -93,7 +108,7 @@ export function NextLeadersBoard({
     <div className={content.page}>
       <div className={styles.head}>
         <div>
-          <h1 className={content.title}>Next leaders</h1>
+          <h1 className={`${content.title} ${styles.title}`}>Next leaders</h1>
           <p className={`${shell.lede} ${content.lede}`}>Who’s being trained up, house by house</p>
         </div>
         {data && data.houses.length > 0 ? (
@@ -105,9 +120,19 @@ export function NextLeadersBoard({
       {state.phase === "loading" ? <p className={shell.state}>Loading…</p> : null}
       {state.phase === "error" ? <HouseStatus error={state.error} fallback="Next leaders didn’t load." onRetry={retry} /> : null}
       {banner ? (
-        <p className={styles.banner} data-testid="multiply-banner">
-          {banner}
-        </p>
+        <div className={styles.banner}>
+          <CheckIcon />
+          <p data-testid="multiply-banner">
+            {banner.includes("multiply now:") ? (
+              <>
+                <b>{banner.slice(0, banner.indexOf("multiply now:") + "multiply now:".length)}</b>
+                {banner.slice(banner.indexOf("multiply now:") + "multiply now:".length)}
+              </>
+            ) : (
+              banner
+            )}
+          </p>
+        </div>
       ) : null}
       {notice ? (
         <p className={shell.alert} role="alert">
@@ -116,13 +141,31 @@ export function NextLeadersBoard({
       ) : null}
       {data && data.houses.length === 0 ? <p className={shell.state}>No houses yet.</p> : null}
       {data && data.houses.length > 0 ? (
+        <>
+        <div className={styles.stabs} role="group" aria-label="Show">
+          {ORDER.map((stage) => (
+            <button key={stage} type="button" className={styles.stab} aria-pressed={tab === stage} onClick={() => setTab(stage)}>
+              <b>{data.leaders.filter((leader) => leader.stage === stage).length}</b>
+              {STAGE_LABEL[stage]}
+            </button>
+          ))}
+        </div>
         <div className={styles.columns}>
           {ORDER.map((stage, index) => {
             const cards = data.leaders.filter((leader) => leader.stage === stage);
             return (
-              <section key={stage} className={styles.column} aria-labelledby={`nl-${stage}`} data-testid={`nl-${stage}`}>
+              <section
+                key={stage}
+                className={styles.column}
+                data-active={tab === stage}
+                aria-labelledby={`nl-${stage}`}
+                data-testid={`nl-${stage}`}
+              >
                 <h2 id={`nl-${stage}`}>
-                  {STAGE_LABEL[stage]} <span>{cards.length}</span>
+                  <span className={styles.colChip} data-stage={stage}>
+                    {STAGE_LABEL[stage]}
+                  </span>{" "}
+                  <span className={styles.colCount}>{cards.length}</span>
                 </h2>
                 {cards.length === 0 ? <p className={styles.empty}>No one yet.</p> : null}
                 <ul>
@@ -133,7 +176,7 @@ export function NextLeadersBoard({
                     return (
                       <li key={leader.id} className={styles.card} data-testid="nl-card">
                         <div className={styles.cardTop}>
-                          <span className={styles.avatar} aria-hidden="true">
+                          <span className={styles.avatar} data-tint={tintFor(leader.id)} aria-hidden="true">
                             {initials(leader.name)}
                           </span>
                           <div>
@@ -145,7 +188,7 @@ export function NextLeadersBoard({
                           </div>
                         </div>
                         {leader.note ? <p className={styles.note}>{leader.note}</p> : null}
-                        {since ? <p className={styles.meta}>{since}</p> : null}
+                        {since ? <p className={styles.since}>{since}</p> : null}
                         <div className={styles.actions}>
                           {next ? (
                             <button type="button" className={styles.move} disabled={busy === leader.id} onClick={() => void move(leader, { stage: next })}>
@@ -180,6 +223,7 @@ export function NextLeadersBoard({
             );
           })}
         </div>
+        </>
       ) : null}
       <p className={styles.footnote}>
         Leaders nominate in their own house, coaches across their houses, pastors anywhere. Co-leaders show as In training until

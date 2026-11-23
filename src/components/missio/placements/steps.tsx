@@ -17,7 +17,10 @@ export const STEP_LABEL = {
   joined: "Joined",
 } as const;
 
-/** Placed → Leader said hi → First visit → Joined. The same four steps for pastors, leaders and the person. */
+/**
+ * Placed → Leader said hi → First visit → Joined. The same four steps for pastors, leaders and the person.
+ * Drawn as four bars (board M12a/b): green when done, terracotta dashes for the step that's waiting.
+ */
 export function PlacementSteps({ view, compact = false }: { view: PlacementView; compact?: boolean }) {
   const steps: Array<{ key: keyof typeof STEP_LABEL; at: string | null }> = [
     { key: "placed", at: view.placedAt },
@@ -32,10 +35,10 @@ export function PlacementSteps({ view, compact = false }: { view: PlacementView;
         const current = !done && view.next === step.key;
         return (
           <li key={step.key} className={done ? styles.stepDone : current ? styles.stepNow : styles.stepTodo}>
-            <span className={styles.dot} aria-hidden="true" />
+            <span className={styles.bar} aria-hidden="true" />
             <span className={styles.stepLabel}>{STEP_LABEL[step.key]}</span>
-            {done ? <span className={styles.stepDate}>{shortDate(step.at)}</span> : null}
-            <span className={shell.visuallyHidden}>{done ? " done" : current ? " next" : ""}</span>
+            {done && compact ? <span className={styles.stepDate}>{shortDate(step.at)}</span> : null}
+            <span className={shell.visuallyHidden}>{done ? ` done ${shortDate(step.at)}` : current ? " next" : ""}</span>
           </li>
         );
       })}

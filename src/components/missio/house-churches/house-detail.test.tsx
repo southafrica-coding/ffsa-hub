@@ -103,18 +103,19 @@ describe("house detail", () => {
     expect(host.querySelector("[data-testid=house-leading]")?.textContent).toContain("Leader · since 12 Mar 2024");
     expect(host.textContent).toContain("Wednesday");
     expect(host.textContent).toContain("9 Kestrel Lane");
-    expect(host.textContent).toContain("Leaders");
+    // Each lead shows their role under their name (board M3c), not a group heading.
+    expect(host.querySelector("[data-testid=house-leading]")?.textContent).toContain("Theo Martins");
     expect(host.textContent).toContain("Theo Martins");
     expect(host.textContent).not.toContain("Leaders:");
-    expect(host.textContent).toContain("Co-leaders");
+    expect(host.querySelector("[data-testid=house-leading]")?.textContent).toContain("Co-leader");
     expect(host.textContent).toContain("Lindiwe Nkosi");
     expect(host.textContent).toContain("Soup is on Theo this month.");
     const names = [...host.querySelectorAll("[data-testid=house-members] li")].map((row) => row.textContent);
     expect(names[0]).toContain("Theo Martins");
     expect(names[1]).toContain("Lindiwe Nkosi");
     expect(names[2]).toContain("Amina Kruger");
-    expect(names[0]).toContain("Since 12 Mar 2024");
-    expect(names[1]).not.toContain("Since");
+    expect(names[0]).toContain("since 12 Mar 2024");
+    expect(names[1]).not.toContain("since");
     const theo = host.querySelector("a[href='/missio/people/person-theo']");
     const lindi = [...host.querySelectorAll("[data-testid=house-members] li")].find((row) => row.textContent?.includes("Lindiwe"));
     expect(theo).toBeTruthy();

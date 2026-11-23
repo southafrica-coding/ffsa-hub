@@ -10,7 +10,7 @@ import { cleanup, render, setValue, settle } from "../house-churches/test-render
 
 const css = readFileSync(path.join(process.cwd(), "src/components/missio/connect/connect.module.css"), "utf8");
 
-/** Screen one, Next, then screen two. */
+/** Name and phone, a Send that stops on the missing visit type, then the visit type. */
 async function fill(form: HTMLFormElement) {
   act(() => {
     setValue(form.querySelector("input[name=name]") as HTMLInputElement, "Lerato Mokoena");
@@ -104,7 +104,10 @@ describe("connect card form", () => {
     expect(called).toBe(false);
     expect(host.textContent).toContain("Enter your name.");
     expect(host.textContent).toContain("Enter a phone number.");
-    expect(form.getAttribute("data-step")).toBe("1");
+    // One page: the whole card is there from the start, with no stepper.
+    expect(form.querySelector("input[name=visitType]")).toBeTruthy();
+    expect(host.textContent).not.toContain("Next");
+    expect(host.querySelector("[data-testid=connect-banner]")?.textContent).toContain("to fix before sending");
 
     act(() => {
       setValue(form.querySelector("input[name=name]") as HTMLInputElement, "Naledi Mokoena");
@@ -119,11 +122,8 @@ describe("connect card form", () => {
     await act(async () => {
       form.requestSubmit();
     });
-    expect(form.getAttribute("data-step")).toBe("2");
-    await act(async () => {
-      form.requestSubmit();
-    });
     expect(called).toBe(false);
+    expect(host.textContent).not.toContain("That’s 8 digits.");
     expect(host.textContent).toContain("Choose one.");
   });
 

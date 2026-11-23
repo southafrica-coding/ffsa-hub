@@ -1,0 +1,51 @@
+/* Empty state in the board's style (M4e): centred, serif heading, plain words. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 28px 12px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.slots {
+  display: flex;
+  gap: 10px;
+}
+
+.slots span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 56px;
+  border: 1.5px dashed var(--rule-strong, #cfc8b6);
+  border-radius: 14px;
+  color: var(--ink-3, #6e685b);
+}
+
+.slots svg {
+  width: 22px;
+  height: 22px;
+}
+
+.empty .title {
+  margin: 12px 0 0;
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 560;
+  line-height: 30px;
+  letter-spacing: -0.01em;
+}
+
+.text {
+  margin: 0;
+  color: var(--ink-2, #5b574d);
+  font-size: 15px;
+  line-height: 1.5;
+}

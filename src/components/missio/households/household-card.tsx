@@ -12,6 +12,13 @@ import profile from "../person-profile.module.css";
 import { householdsClient, type HouseholdsClient } from "./client";
 import styles from "./households.module.css";
 
+/** One of the five avatar tints (board M1b), fixed per id. */
+export function tintClass(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return [styles.a1, styles.a2, styles.a3, styles.a4, styles.a5][hash % 5] ?? "";
+}
+
 export function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const letters = parts.length > 1 ? `${parts[0]![0]}${parts[parts.length - 1]![0]}` : (parts[0] ?? "?").slice(0, 2);
@@ -80,7 +87,7 @@ export function HouseholdCard({
   return (
     <section className={profile.card} data-testid="profile-household">
       <div className={styles.head}>
-        <h2>{household ? `Household · ${household.title}` : "Household"}</h2>
+        <h2 className={styles.sect}>{household ? `Household · ${household.title}` : "Household"}</h2>
         {household ? (
           <button type="button" className={styles.link} onClick={() => setEditing((on) => !on)} aria-pressed={editing}>
             {editing ? "Done" : "Edit"}
@@ -99,7 +106,7 @@ export function HouseholdCard({
         <ul className={styles.members}>
           {household.adults.map((adult) => (
             <li key={adult.memberId} className={styles.member}>
-              <span className={styles.avatar} aria-hidden="true">
+              <span className={`${styles.avatar} ${tintClass(adult.memberId)}`} aria-hidden="true">
                 {initialsOf(adult.name)}
               </span>
               <span className={styles.who}>
@@ -132,15 +139,15 @@ export function HouseholdCard({
                   </button>
                 </span>
               ) : adult.main ? (
-                <span className={shell.tag}>Main contact</span>
+                <span className={styles.mainChip}>Main contact</span>
               ) : adult.houses[0] ? (
-                <span className={shell.tag}>{houseTitle(adult.houses[0])}</span>
+                <span className={styles.where}>{houseTitle(adult.houses[0])}</span>
               ) : null}
             </li>
           ))}
           {household.children.map((child) => (
             <li key={child.memberId} className={styles.member}>
-              <span className={`${styles.avatar} ${styles.avatarChild}`} aria-hidden="true">
+              <span className={`${styles.avatar} ${styles.avatarChild} ${tintClass(child.memberId)}`} aria-hidden="true">
                 {initialsOf(`${child.firstName} ${child.lastName ?? ""}`)}
               </span>
               <span className={styles.who}>
@@ -165,7 +172,7 @@ export function HouseholdCard({
         </ul>
       ) : null}
       {household && main && household.adults.length > 1 ? (
-        <p className={profile.quiet}>
+        <p className={styles.familyNote}>
           Family messages go once, to {main.firstName}: “{household.greeting}”.
         </p>
       ) : null}

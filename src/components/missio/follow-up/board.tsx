@@ -18,7 +18,8 @@ import {
   STAGE_LABEL,
   STAGES,
   VISIT_LABEL,
-  formatWhen,
+  VISIT_SHORT,
+  formatDay,
   leaderMatches,
   readStage,
 } from "./format";
@@ -81,6 +82,22 @@ function useWide(): boolean {
   return wide;
 }
 
+const STAGE_CHIP: Record<FollowUpStage, string> = {
+  new: styles.chipTerra,
+  contacted: styles.chipLink,
+  visited_house: styles.chipGold,
+  joined: styles.chipOlive,
+};
+
+const TINTS = [styles.a1, styles.a2, styles.a3, styles.a4, styles.a5];
+
+/** One of the five avatar tints (board M1b), fixed per person. */
+function avatarTint(key: string): string {
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
+  return TINTS[hash % TINTS.length] ?? "";
+}
+
 const NEXT_STAGE: Partial<Record<FollowUpStage, FollowUpStage>> = { new: "contacted", contacted: "visited_house" };
 
 function initials(name: string): string {
@@ -121,6 +138,8 @@ export function FollowUpBoard({
   const [placingKey, setPlacingKey] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
   const [declineHidden, setDeclineHidden] = useState(declineHiddenForSession);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewAt, setReviewAt] = useState(0);
   const wide = useWide();
   const requestId = useRef(0);
   const focusN = useRef(0);
@@ -324,6 +343,10 @@ export function FollowUpBoard({
         board.lists[item].filter((person) => person.matchStatus === "pending_confirm")
       )
     : [];
+  const noReviewsLeft = showPeople && reviews.length === 0;
+  useEffect(() => {
+    if (noReviewsLeft) setReviewOpen(false);
+  }, [noReviewsLeft]);
   const indexIn = (person: FollowUpItem) => listOf(person).findIndex((item) => item.key === person.key);
   const card = (person: FollowUpItem) => (
     <PersonCard
@@ -331,7 +354,10 @@ export function FollowUpBoard({
       person={person}
       canWrite={board?.canWrite ?? false}
       onOpen={() => setOpenKey(person.key)}
-      onAdd={() => setAddingKey(person.key)}
+      onAdd={() => {
+        setOpenKey(null);
+        setAddingKey(person.key);
+      }}
       onPlace={() => setPlacingKey(person.key)}
       onNext={(next) => void changeStage(person, next, indexIn(person))}
     />
@@ -359,37 +385,48 @@ export function FollowUpBoard({
     );
   }
 
+  const reviewIndex = Math.min(reviewAt, Math.max(0, reviews.length - 1));
+  const reviewing = !wide && reviewOpen && showPeople && reviews.length > 0;
+  const reviewProps = (person: FollowUpItem) => ({
+    person,
+    canWrite: board?.canWrite ?? false,
+    declineHidden,
+    onConfirm: () => void confirmMatch(person),
+    onDecline: () => void declineMatch(person),
+  });
+
   return (
     <div className={`${content.page} ${styles.root}`}>
-      <div className={styles.head}>
-        <div>
-          <h1 className={content.title}>Follow-up</h1>
-          <Link href="/missio/follow-up/placements" className={styles.placementsLink}>
-            Placements →
-          </Link>
-          <p className={`${shell.lede} ${content.lede}`} data-testid="follow-up-lede">
+      <div className={`${styles.head} ${reviewing ? styles.hidden : ""}`}>
+        <div className={styles.headText}>
+          <h1 className={`${content.title} ${styles.title}`}>Follow-up</h1>
+          <p className={`${shell.lede} ${content.lede} ${styles.lede}`} data-testid="follow-up-lede">
             {countsReady ? `${waiting} ${waiting === 1 ? "person" : "people"} not in a house yet.` : "Not in a house yet."}
           </p>
         </div>
-        <label className={styles.leaderFilter} id="follow-up-filters">
-          Leader
+        <div className={styles.toolbar} id="follow-up-filters">
           <select
             aria-label="Leader"
+            className={`${styles.fchip} ${leader ? styles.fchipOn : ""}`}
             value={leader}
             onChange={(event) => {
               setLeader(event.target.value);
               setNotice(null);
             }}
           >
-            <option value="">Anyone</option>
-            <option value="unassigned">Unassigned</option>
+            <option value="">Any leader</option>
+            <option value="unassigned">No leader yet</option>
             {(board?.leaders ?? []).map((item) => (
               <option key={item.contactId} value={item.contactId}>
                 {item.displayName}
               </option>
             ))}
           </select>
-        </label>
+          <Link href="/missio/follow-up/placements" className={styles.placementsLink}>
+            Placements
+            <ChevronIcon />
+          </Link>
+        </div>
       </div>
 
       {notice ? (
@@ -398,46 +435,97 @@ export function FollowUpBoard({
         </p>
       ) : null}
 
-      {showPeople && reviews.length > 0 ? (
-        <section className={styles.review} data-testid="needs-review-panel" aria-labelledby="follow-up-review-heading">
-          <h2 id="follow-up-review-heading">Needs review · {reviews.length}</h2>
-          <p className={styles.reviewLede}>These connect cards share a phone number with someone already in People.</p>
-          <ul className={styles.reviewList}>
-            {reviews.map((person) => (
-              <ReviewCard
-                key={person.key}
-                person={person}
-                canWrite={board?.canWrite ?? false}
-                declineHidden={declineHidden}
-                onConfirm={() => void confirmMatch(person)}
-                onDecline={() => void declineMatch(person)}
-              />
-            ))}
-          </ul>
+      {reviewing ? (
+        <section className={styles.reviewScreen} data-testid="needs-review-panel" aria-labelledby="follow-up-review-heading">
+          <button type="button" className={styles.back} onClick={() => setReviewOpen(false)}>
+            <ChevronIcon back />
+            Follow-up
+          </button>
+          <h2 id="follow-up-review-heading" className={styles.visuallyHidden}>
+            Needs review · {reviews.length}
+          </h2>
+          <p className={styles.reviewCount}>
+            {reviewIndex + 1} of {reviews.length} · this card shares a phone number with someone in People.
+          </p>
+          {reviews[reviewIndex] ? <ReviewCard key={reviews[reviewIndex].key} {...reviewProps(reviews[reviewIndex])} phone /> : null}
+          {reviews.length > 1 ? (
+            <div className={styles.reviewPager}>
+              <button type="button" className={styles.secondary} disabled={reviewIndex === 0} onClick={() => setReviewAt(reviewIndex - 1)}>
+                Previous
+              </button>
+              <button
+                type="button"
+                className={styles.secondary}
+                disabled={reviewIndex >= reviews.length - 1}
+                onClick={() => setReviewAt(reviewIndex + 1)}
+              >
+                Next card
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
-      {!wide ? (
-        <div className={styles.tabs} role="group" aria-label="Stage">
-          {STAGES.map((item) => {
-            const selected = item === stage;
-            return (
-              <button
-                key={item}
-                type="button"
-                className={`${styles.tab} ${selected ? styles.tabOn : ""}`}
-                aria-pressed={selected}
-                onClick={() => {
-                  setStage(item);
-                  setNotice(null);
-                }}
-              >
-                <span className={styles.tabCount}>{countsReady ? counts(item) : "–"}</span>
-                <span>{item === "visited_house" ? "Visited" : STAGE_LABEL[item]}</span>
-              </button>
-            );
-          })}
+      {!wide && !reviewing ? (
+        <div className={styles.strip}>
+          {showPeople && reviews.length > 0 ? (
+            <button
+              type="button"
+              className={styles.reviewBanner}
+              data-testid="needs-review-banner"
+              onClick={() => {
+                setReviewAt(0);
+                setReviewOpen(true);
+              }}
+            >
+              <HelpIcon />
+              <span className={styles.reviewBannerText}>
+                <b>
+                  {reviews.length} {reviews.length === 1 ? "needs" : "need"} review
+                </b>{" "}
+                <span>· same phone as someone</span>
+              </span>
+              <ChevronIcon />
+            </button>
+          ) : null}
+          <div className={styles.tabs} role="group" aria-label="Stage">
+            {STAGES.map((item) => {
+              const selected = item === stage;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  className={`${styles.tab} ${selected ? styles.tabOn : ""}`}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setStage(item);
+                    setNotice(null);
+                  }}
+                >
+                  <b className={styles.tabCount}>{countsReady ? counts(item) : "–"}</b>
+                  <span>{item === "visited_house" ? "Visited" : STAGE_LABEL[item]}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+      ) : null}
+
+      {wide && showPeople && reviews.length > 0 ? (
+        <section className={styles.review} data-testid="needs-review-panel" aria-labelledby="follow-up-review-heading">
+          <div className={styles.reviewHead}>
+            <h2 id="follow-up-review-heading" className={`${styles.chip} ${styles.chipGold}`}>
+              <HelpIcon />
+              Needs review · {reviews.length}
+            </h2>
+            <p className={styles.reviewLede}>These connect cards share a phone number with someone already in People.</p>
+          </div>
+          <ul className={styles.reviewList}>
+            {reviews.map((person) => (
+              <ReviewCard key={person.key} {...reviewProps(person)} />
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       {booting && !board ? (
@@ -447,7 +535,7 @@ export function FollowUpBoard({
       ) : null}
       {listPending && board ? <p role="status">Loading this list…</p> : null}
 
-      {showPeople && board && !wide ? (
+      {showPeople && board && !wide && !reviewing ? (
         board.lists[stage].length === 0 ? (
           <EmptyStage stage={stage} />
         ) : (
@@ -460,9 +548,16 @@ export function FollowUpBoard({
       {showPeople && board && wide ? (
         <div className={styles.columns} data-testid="follow-up-columns" aria-label="Stage">
           {STAGES.map((item) => (
-            <section key={item} className={styles.column} aria-labelledby={`follow-up-col-${item}`}>
+            <section
+              key={item}
+              className={`${styles.column} ${item === "joined" ? styles.columnJoined : ""}`}
+              aria-labelledby={`follow-up-col-${item}`}
+            >
               <h2 id={`follow-up-col-${item}`} className={styles.columnHead}>
-                <span>{STAGE_LABEL[item]}</span>
+                <span className={`${styles.chip} ${STAGE_CHIP[item]}`}>
+                  {item === "joined" ? <CheckIcon /> : null}
+                  {STAGE_LABEL[item]}
+                </span>
                 <span className={styles.columnCount}>{counts(item)}</span>
               </h2>
               {item === "joined" ? (
@@ -470,6 +565,19 @@ export function FollowUpBoard({
               ) : null}
               {board.lists[item].length === 0 ? (
                 <p className={styles.columnEmpty}>No one here.</p>
+              ) : item === "joined" ? (
+                <ul className={styles.joinedList} data-testid="follow-up-list-joined">
+                  {board.lists[item].map((person) => (
+                    <li key={person.key} className={styles.joinedRow}>
+                      <span className={`${styles.avatar} ${styles.avatarSm} ${avatarTint(person.key)}`} aria-hidden="true">
+                        {initials(person.displayName)}
+                      </span>
+                      <button type="button" className={styles.joinedName} id={`follow-up-open-${person.key}`} onClick={() => setOpenKey(person.key)}>
+                        {person.displayName}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               ) : (
                 <ul className={styles.list} data-testid={`follow-up-list-${item}`}>
                   {board.lists[item].map(card)}
@@ -492,6 +600,14 @@ export function FollowUpBoard({
           }}
           onStage={(next) => changeStage(openPerson, next, indexIn(openPerson))}
           onLeader={(next) => changeLeader(openPerson, next, indexIn(openPerson))}
+          onAdd={
+            board?.canWrite && openPerson.stage !== "joined"
+              ? () => {
+                  setOpenKey(null);
+                  setAddingKey(openPerson.key);
+                }
+              : undefined
+          }
         />
       ) : null}
       {placing && board ? (
@@ -541,7 +657,10 @@ function EmptyStage({ stage }: { stage: FollowUpStage }) {
   if (stage === "joined") return <p className={styles.empty}>No one has joined a house from follow-up yet.</p>;
   if (stage !== "new") return <p className={styles.empty}>No one in {STAGE_LABEL[stage].toLowerCase()} right now.</p>;
   return (
-    <div className={styles.empty} data-testid="follow-up-empty">
+    <div className={`${styles.empty} ${styles.emptyNew}`} data-testid="follow-up-empty">
+      <span className={styles.emptyMark} aria-hidden="true">
+        <CheckIcon size={28} />
+      </span>
       <p className={styles.emptyTitle}>No new connect cards.</p>
       <p>New connect cards from Sunday will show up here.</p>
     </div>
@@ -564,18 +683,21 @@ function PersonCard({
   onNext: (next: FollowUpStage) => void;
 }) {
   const hasPhone = Boolean(person.phone?.trim());
-  const phone = telHref(person.phone);
-  const whatsApp = whatsAppHref(person.phone);
-  const when = formatWhen(person.submittedAt);
-  const meta = [when, person.visitType ? VISIT_LABEL[person.visitType].toLowerCase() : null].filter(Boolean).join(" · ");
+  const phone = hasPhone ? telHref(person.phone) : null;
+  const whatsApp = hasPhone ? whatsAppHref(person.phone) : null;
+  const when = formatDay(person.submittedAt);
+  const meta = [when, person.visitType ? VISIT_SHORT[person.visitType] : null].filter(Boolean).join(" · ");
   const reviewing = person.matchStatus === "pending_confirm";
   const next = NEXT_STAGE[person.stage];
   const leaderName = person.assignedLeader?.displayName ?? null;
+  const canPlace = canWrite && (person.stage === "new" || person.stage === "contacted");
+  const canAdd = canWrite && person.stage === "visited_house";
+  const hasFoot = Boolean(phone || whatsApp || (canWrite && next) || canPlace || canAdd);
 
   return (
     <li className={styles.card} data-testid="follow-up-card" data-stage={person.stage}>
       <div className={styles.cardTop}>
-        <span className={styles.avatar} aria-hidden="true">
+        <span className={`${styles.avatar} ${avatarTint(person.key)}`} aria-hidden="true">
           {initials(person.displayName)}
         </span>
         <div className={styles.cardText}>
@@ -586,62 +708,68 @@ function PersonCard({
         </div>
       </div>
       <div className={styles.badges}>
-        {person.wantsHouseChurch ? <span className={`${styles.badge} ${styles.badgeHouse}`}>Wants a house church</span> : null}
-        {person.wantsHouseChurch === false ? <span className={`${styles.badge} ${styles.badgeQuiet}`}>Not yet</span> : null}
-        {person.wantsPrayer ? <span className={styles.badge}>Wants prayer</span> : null}
-        {reviewing ? <span className={`${styles.badge} ${styles.badgeReview}`}>Needs review</span> : null}
-      </div>
-      <div className={styles.cardFoot}>
-        {leaderName ? (
-          <span className={styles.leader} title={`Leader · ${leaderName}`}>
-            <span className={styles.leaderDot} aria-hidden="true">
-              {initials(leaderName)}
-            </span>
-            <span>
-              <span className={shell.visuallyHidden}>Leader · </span>
-              {firstName(leaderName)}
-            </span>
+        {person.wantsHouseChurch ? (
+          <span className={`${styles.badge} ${styles.badgeHouse}`}>
+            <HomeIcon />
+            Wants a house
           </span>
-        ) : canWrite && person.stage !== "joined" ? (
-          <button type="button" id={`follow-up-assign-${person.key}`} className={styles.secondary} onClick={onOpen}>
-            Assign
-          </button>
-        ) : (
-          <span className={styles.muted}>No leader yet</span>
-        )}
-        {canWrite && next ? (
-          <button
-            type="button"
-            id={`follow-up-next-${person.key}`}
-            className={styles.secondary}
-            onClick={() => onNext(next)}
-          >
-            Next stage
-          </button>
         ) : null}
-        {canWrite && (person.stage === "new" || person.stage === "contacted") ? (
-          <button type="button" id={`follow-up-place-${person.key}`} className={styles.primaryButton} onClick={onPlace}>
-            Place in a house
-          </button>
-        ) : null}
-        {canWrite && person.stage !== "joined" ? (
-          <button
-            type="button"
-            id={`follow-up-add-${person.key}`}
-            className={person.stage === "visited_house" ? styles.primaryButton : styles.secondary}
-            onClick={onAdd}
-          >
-            Add to a house
-          </button>
-        ) : null}
+        {person.wantsHouseChurch === false ? <span className={`${styles.badge} ${styles.badgeQuiet}`}>Not yet</span> : null}
+        {person.wantsPrayer ? <span className={`${styles.badge} ${styles.badgeLink}`}>Wants prayer</span> : null}
+        {reviewing ? <span className={`${styles.badge} ${styles.badgeReview}`}>Needs review</span> : null}
+        <span className={styles.who}>
+          {leaderName ? (
+            <span className={styles.leader} title={`Leader · ${leaderName}`}>
+              <span className={`${styles.leaderDot} ${avatarTint(person.assignedLeader?.contactId ?? leaderName)}`} aria-hidden="true">
+                {initials(leaderName)}
+              </span>
+              <span>
+                <span className={shell.visuallyHidden}>Leader · </span>
+                {firstName(leaderName)}
+              </span>
+            </span>
+          ) : canWrite && person.stage !== "joined" ? (
+            <button type="button" id={`follow-up-assign-${person.key}`} className={styles.assign} onClick={onOpen}>
+              Assign
+            </button>
+          ) : (
+            <span className={styles.muted}>No leader yet</span>
+          )}
+        </span>
       </div>
-      {hasPhone && (phone || whatsApp) ? (
-        <div className={styles.reach}>
-          {phone ? <a href={phone}>Call</a> : null}
-          {whatsApp ? (
-            <a href={whatsApp} target="_blank" rel="noreferrer">
-              WhatsApp
+      {hasFoot ? (
+        <div className={styles.cardFoot}>
+          {phone ? (
+            <a href={phone} className={styles.iconButton} aria-label={`Call ${person.displayName}`} title="Call">
+              <PhoneIcon />
             </a>
+          ) : null}
+          {whatsApp ? (
+            <a href={whatsApp} target="_blank" rel="noreferrer" className={styles.iconButton} aria-label={`WhatsApp ${person.displayName}`} title="WhatsApp">
+              <ChatIcon />
+            </a>
+          ) : null}
+          <span className={styles.footSpacer} />
+          {canWrite && next ? (
+            <button type="button" id={`follow-up-next-${person.key}`} className={styles.secondary} onClick={() => onNext(next)}>
+              Next stage
+            </button>
+          ) : null}
+          {canPlace ? (
+            <button
+              type="button"
+              id={`follow-up-place-${person.key}`}
+              className={styles.primaryButton}
+              aria-label={`Place ${person.displayName} in a house`}
+              onClick={onPlace}
+            >
+              Place
+            </button>
+          ) : null}
+          {canAdd ? (
+            <button type="button" id={`follow-up-add-${person.key}`} className={styles.primaryButton} onClick={onAdd}>
+              Add to house
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -655,52 +783,129 @@ function ReviewCard({
   declineHidden,
   onConfirm,
   onDecline,
+  phone = false,
 }: {
   person: FollowUpItem;
   canWrite: boolean;
   declineHidden: boolean;
   onConfirm: () => void;
   onDecline: () => void;
+  /** Phone: one card on its own screen, actions under the thumb (board M5c, 2). */
+  phone?: boolean;
 }) {
   const suggestion = person.suggestedContact;
-  const when = formatWhen(person.submittedAt);
+  const when = formatDay(person.submittedAt);
   const meta = [
     person.visitType ? VISIT_LABEL[person.visitType] : null,
-    person.wantsHouseChurch ? "wants a house church" : null,
+    person.wantsHouseChurch ? "wants a house" : null,
   ]
     .filter(Boolean)
     .join(" · ");
+  const Tag = phone ? "div" : "li";
+  const actions =
+    suggestion && canWrite ? (
+      <div className={phone ? styles.reviewActions : styles.compareActions}>
+        {declineHidden ? null : (
+          <button type="button" className={styles.secondary} onClick={onDecline}>
+            Not this person
+          </button>
+        )}
+        <button type="button" className={styles.primaryButton} onClick={onConfirm}>
+          {phone ? "Confirm" : `Confirm, it’s ${firstName(suggestion.displayName)}`}
+        </button>
+      </div>
+    ) : null;
   return (
-    <li className={styles.compare} data-testid="needs-review">
-      <div className={styles.compareSide}>
+    <Tag className={phone ? styles.compareStack : styles.compare} data-testid="needs-review">
+      <div className={`${styles.compareSide} ${styles.compareCard}`}>
         <p className={styles.compareLabel}>Connect card{when ? ` · ${when}` : ""}</p>
         <p className={styles.compareName}>{person.displayName}</p>
-        {person.phone ? <p className={styles.meta}>{person.phone}</p> : null}
+        {person.phone ? <p className={styles.comparePhone}>{person.phone}</p> : null}
         {meta ? <p className={styles.meta}>{meta}</p> : null}
       </div>
-      <span className={styles.compareMark} aria-hidden="true">
-        =?
+      <span className={styles.compareMark} aria-hidden={!phone}>
+        {phone ? "Is this the same person?" : "=?"}
       </span>
-      <div className={styles.compareSide}>
-        <p className={styles.compareLabel}>In People</p>
+      <div className={`${styles.compareSide} ${styles.compareCard} ${styles.compareWho}`}>
         {suggestion ? (
-          <p className={styles.compareName}>{suggestion.displayName}</p>
+          <>
+            <span className={`${styles.avatar} ${phone ? styles.avatarLg : ""} ${avatarTint(suggestion.contactId)}`} aria-hidden="true">
+              {initials(suggestion.displayName)}
+            </span>
+            <div className={styles.cardText}>
+              <p className={styles.compareName}>{suggestion.displayName}</p>
+              <p className={styles.meta}>Already in People</p>
+            </div>
+          </>
         ) : (
-          <p className={styles.muted}>No one suggested yet.</p>
+          <div className={styles.cardText}>
+            <p className={styles.compareLabel}>In People</p>
+            <p className={styles.muted}>No one suggested yet.</p>
+          </div>
         )}
       </div>
-      {suggestion && canWrite ? (
-        <div className={styles.compareActions}>
-          <button type="button" className={styles.primaryButton} onClick={onConfirm}>
-            Confirm, it’s {firstName(suggestion.displayName)}
-          </button>
-          {declineHidden ? null : (
-            <button type="button" className={styles.secondary} onClick={onDecline}>
-              Not this person
-            </button>
-          )}
-        </div>
+      {phone && suggestion ? (
+        <p className={styles.reviewHelp}>
+          Confirm links this card to {firstName(suggestion.displayName)} in People.
+          {declineHidden ? "" : " Not this person keeps the card as someone new."}
+        </p>
       ) : null}
-    </li>
+      {actions}
+    </Tag>
+  );
+}
+
+function Svg({ children, size = 18 }: { children: React.ReactNode; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {children}
+    </svg>
+  );
+}
+
+function ChevronIcon({ back = false }: { back?: boolean }) {
+  return <Svg size={18}>{back ? <path d="m15 18-6-6 6-6" /> : <path d="m9 18 6-6-6-6" />}</Svg>;
+}
+
+function HelpIcon() {
+  return (
+    <Svg size={18}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+      <path d="M12 17h.01" />
+    </Svg>
+  );
+}
+
+function CheckIcon({ size = 16 }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <path d="M20 6 9 17l-5-5" />
+    </Svg>
+  );
+}
+
+function HomeIcon() {
+  return (
+    <Svg size={14}>
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5 9.5V21h14V9.5" />
+    </Svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <Svg size={18}>
+      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z" />
+    </Svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <Svg size={18}>
+      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+    </Svg>
   );
 }

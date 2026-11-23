@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CAMPUS_LABEL } from "../access";
-import content from "../content.module.css";
-import shell from "../shell.module.css";
 import { houseChurchesClient, type HouseChurchesClient } from "./client";
 import {
   coachNames,
@@ -21,7 +19,9 @@ import { useMissioLoad } from "./load";
 import { HouseMap } from "./house-map";
 import { HouseStatus } from "./status";
 import type { HouseCampus, HouseSummary } from "./types";
-import styles from "./house-churches.module.css";
+import type { HouseSignal } from "./format";
+import g from "./grid.module.css";
+import ui from "./ui.module.css";
 
 type Sort = "size" | "number";
 type View = "map" | "grid";
@@ -79,34 +79,57 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
     return list.sort((a, b) => (sort === "size" ? b.memberCount - a.memberCount || a.number - b.number : a.number - b.number));
   }, [houses, campus, attention, sort, coach]);
 
+  const signalCounts = useMemo(() => {
+    const counts = new Map<HouseSignal, number>();
+    for (const house of houses) for (const signal of houseSignals(house)) counts.set(signal, (counts.get(signal) ?? 0) + 1);
+    return SIGNAL_ORDER.filter((signal) => (counts.get(signal) ?? 0) > 0).map((signal) => ({ signal, count: counts.get(signal) ?? 0 }));
+  }, [houses]);
+  const ready = state.phase === "ready" && houses.length > 0;
+  const totals = `${houses.length === 1 ? "1 house" : `${houses.length} houses`} · ${total === 1 ? "1 member" : `${total} members`}${
+    coaches.length > 0 ? ` · ${coaches.length === 1 ? "1 coach" : `${coaches.length} coaches`}` : ""
+  }`;
+
   return (
-    <div className={`${content.page} ${styles.root}`}>
-      <div className={styles.reviewHead}>
-        <div>
-          <h1 className={content.title}>House churches</h1>
-          {state.phase === "ready" && houses.length > 0 ? (
-            <p className={`${shell.lede} ${content.lede}`} data-testid="house-totals">
-              {houses.length === 1 ? "1 house" : `${houses.length} houses`} · {total === 1 ? "1 member" : `${total} members`}
-              {coaches.length > 0 ? ` · ${coaches.length === 1 ? "1 coach" : `${coaches.length} coaches`}` : ""}
+    <div className={`${ui.root} ${g.page}`}>
+      <div className={g.head}>
+        <div className={g.headText}>
+          <h1 className={`${ui.serif} ${g.title}`}>House churches</h1>
+          {ready ? (
+            <p className={g.totals} data-testid="house-totals">
+              {totals}
             </p>
           ) : null}
         </div>
-        <div className={styles.headLinks}>
-          {state.phase === "ready" && houses.length > 0 ? (
-            <Link href="/missio/house-churches/feedback" className={`${shell.ghost} ${styles.reviewButton}`} data-testid="feedback-link">
-              Weekly feedback
-            </Link>
-          ) : null}
-          {canWrite ? (
-            <Link href="/missio/house-churches/review" className={`${shell.ghost} ${styles.reviewButton}`} data-testid="review-names">
-              {reviewCount != null && reviewCount > 0 ? `Review names (${reviewCount})` : "Review names"}
-            </Link>
-          ) : null}
-        </div>
+        {ready ? (
+          <div className={g.seg} role="group" aria-label="View">
+            <button type="button" className={shownView === "map" ? g.segOn : undefined} aria-pressed={shownView === "map"} onClick={() => setView("map")}>
+              Map
+            </button>
+            <button type="button" className={shownView === "grid" ? g.segOn : undefined} aria-pressed={shownView === "grid"} onClick={() => setView("grid")}>
+              Grid
+            </button>
+          </div>
+        ) : null}
+        {canWrite ? (
+          <Link href="/missio/house-churches/review" className={`${ui.btn} ${ui.s} ${g.review}`} data-testid="review-names">
+            {reviewCount != null && reviewCount > 0 ? (
+              <>
+                Review names<span className={g.reviewCount}> ({reviewCount})</span>
+              </>
+            ) : (
+              "Review names"
+            )}
+          </Link>
+        ) : null}
       </div>
+      {ready ? (
+        <Link href="/missio/house-churches/feedback" className={g.feedbackLink} data-testid="feedback-link">
+          Weekly feedback
+        </Link>
+      ) : null}
 
       {state.phase === "loading" ? (
-        <div className={shell.state} data-state="loading" role="status">
+        <div className={`${ui.card} ${g.state}`} data-state="loading" role="status">
           Loading house churches…
         </div>
       ) : null}
@@ -114,30 +137,19 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
         <HouseStatus error={state.error} fallback="House churches didn’t load." onRetry={retry} />
       ) : null}
       {state.phase === "ready" && houses.length === 0 ? (
-        <div className={shell.state} data-state="empty">
+        <div className={`${ui.card} ${g.state}`} data-state="empty">
           No house churches yet.
         </div>
       ) : null}
 
-      {state.phase === "ready" && houses.length > 0 ? (
-        <div className={styles.viewSwitch} role="group" aria-label="View">
-          <FilterChip on={shownView === "map"} onClick={() => setView("map")}>
-            Map
-          </FilterChip>
-          <FilterChip on={shownView === "grid"} onClick={() => setView("grid")}>
-            Grid
-          </FilterChip>
-        </div>
+      {ready && shownView === "map" ? (
+        <HouseMap houses={houses} client={client} linkProfiles={canWrite} signals={signalCounts} />
       ) : null}
 
-      {state.phase === "ready" && houses.length > 0 && shownView === "map" ? (
-        <HouseMap houses={houses} client={client} linkProfiles={canWrite} />
-      ) : null}
-
-      {state.phase === "ready" && houses.length > 0 && shownView === "grid" ? (
+      {ready && shownView === "grid" ? (
         <>
-          <div className={styles.toolbar} data-testid="house-filters">
-            <div className={styles.toggles} role="group" aria-label="Campus">
+          <div className={g.filters} data-testid="house-filters">
+            <div className={g.chips} role="group" aria-label="Campus">
               <FilterChip on={campus === ""} onClick={() => setCampus("")}>
                 All campuses
               </FilterChip>
@@ -151,8 +163,8 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
               </FilterChip>
             </div>
             {coaches.length > 0 ? (
-              <label className={styles.sort}>
-                Coach
+              <label className={g.select}>
+                <span>Coach</span>
                 <select value={coach} onChange={(event) => setCoach(event.target.value)}>
                   <option value="">Any coach</option>
                   {coaches.map(([id, name]) => (
@@ -164,8 +176,8 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
                 </select>
               </label>
             ) : null}
-            <label className={styles.sort}>
-              Sort
+            <label className={`${g.select} ${g.sort}`}>
+              <span>Sort</span>
               <select value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
                 <option value="size">Size, biggest first</option>
                 <option value="number">House number</option>
@@ -174,11 +186,11 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
           </div>
 
           {shown.length === 0 ? (
-            <div className={shell.state} data-state="empty">
+            <div className={`${ui.card} ${g.state}`} data-state="empty">
               No houses match those filters.
             </div>
           ) : (
-            <ul className={styles.grid} data-testid="house-grid">
+            <ul className={g.grid} data-testid="house-grid">
               {shown.map((house) => (
                 <li key={house.id}>
                   <HouseCard house={house} />
@@ -192,26 +204,41 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
   );
 }
 
+/** The order signals read in, most actionable first (board M3a "Needs you"). */
+export const SIGNAL_ORDER: HouseSignal[] = ["ready", "no_leader", "no_co_leader", "no_coach"];
+
 function FilterChip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button type="button" className={`${styles.filterChip} ${on ? styles.filterChipOn : ""}`} aria-pressed={on} onClick={onClick}>
+    <button type="button" className={`${g.fchip} ${on ? g.fchipOn : ""}`} aria-pressed={on} onClick={onClick}>
       {children}
     </button>
   );
 }
 
-/** Dots out of HOUSE_SEATS. Anyone past that shows as "+n". */
-export function SizeDots({ count }: { count: number }) {
+/**
+ * The house as dots, out of HOUSE_SEATS (board M3a): leaders dark, everyone
+ * else sage, empty seats outlined. Anyone past the seats shows as "+n".
+ */
+export function SizeDots({ count, leaders = 0 }: { count: number; leaders?: number }) {
   const safe = Math.max(0, Math.trunc(count));
   const filled = Math.min(safe, HOUSE_SEATS);
+  const lead = Math.min(Math.max(0, leaders), filled);
   return (
-    <span className={styles.dots} aria-hidden="true">
+    <span className={g.dots} aria-hidden="true">
       {Array.from({ length: HOUSE_SEATS }, (_, index) => (
-        <span key={index} className={index < filled ? styles.dotOn : styles.dot} />
+        <span key={index} className={`${g.dot} ${index < lead ? g.dotLead : index < filled ? g.dotOn : g.dotEmpty}`} />
       ))}
-      {safe > HOUSE_SEATS ? <span className={styles.dotMore}>+{safe - HOUSE_SEATS}</span> : null}
+      {safe > HOUSE_SEATS ? <span className={g.dotMore}>+{safe - HOUSE_SEATS}</span> : null}
     </span>
   );
+}
+
+const TINTS = ["a1", "a2", "a3", "a4", "a5"] as const;
+
+export function tintOf(id: string): (typeof TINTS)[number] {
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return TINTS[hash % TINTS.length];
 }
 
 function HouseCard({ house }: { house: HouseSummary }) {
@@ -220,44 +247,46 @@ function HouseCard({ house }: { house: HouseSummary }) {
   const day = shortDay(house.meetingDay);
   const signals = houseSignals(house);
   const leading = [...house.leaders.slice(0, 1), ...house.coLeaders.slice(0, 1)];
+  const leaderCount = house.leaders.length + house.coLeaders.length;
   return (
-    <Link href={`/missio/house-churches/${encodeURIComponent(house.id)}`} className={styles.houseCard} data-testid="house-card">
-      <div className={styles.houseTop}>
-        <span className={styles.houseName}>{title}</span>
-        <span className={styles.houseMeta}>
-          {day ? <span>{day}</span> : null}
-          <span className={shell.tag}>{CAMPUS_LABEL[house.campus]}</span>
-        </span>
-      </div>
-      {named ? <p className={styles.number}>House {house.number}</p> : null}
-      <div className={styles.size}>
-        <span className={styles.sizeCount}>{house.memberCount}</span>
-        <span className={styles.sizeLabel}>{sizeWord(house)}</span>
-      </div>
-      <SizeDots count={house.memberCount} />
-      <div className={styles.leading}>
+    <Link href={`/missio/house-churches/${encodeURIComponent(house.id)}`} className={`${ui.card} ${g.card}`} data-testid="house-card">
+      <span className={g.cardTop}>
+        <span className={`${ui.serif} ${g.cardName}`}>{title}</span>
+        {day ? <span className={`${ui.mono} ${g.day}`}>{day}</span> : null}
+        <span className={`${ui.tag} ${g.cardTag}`}>{CAMPUS_LABEL[house.campus]}</span>
+      </span>
+      {named || house.location?.trim() ? (
+        <span className={g.cardSub}>{[named ? `House ${house.number}` : null, house.location?.trim() || null].filter(Boolean).join(" · ")}</span>
+      ) : null}
+      <SizeDots count={house.memberCount} leaders={leaderCount} />
+      <span className={g.size}>
+        <b className={`${ui.num} ${g.sizeCount}`}>{house.memberCount}</b>
+        <span className={g.sizeLabel}>{sizeWord(house)}</span>
+      </span>
+      <span className={g.lead}>
         {leading.length > 0 ? (
-          <span className={styles.faces} aria-hidden="true">
+          <span className={g.stack} aria-hidden="true">
             {leading.map((person) => (
-              <span key={person.contactId} className={styles.face}>
+              <span key={person.contactId} className={`${ui.av} ${ui.avSm} ${ui[tintOf(person.contactId)]}`}>
                 {initialsOf(person.displayName)}
               </span>
             ))}
           </span>
         ) : null}
-        <span className={styles.leadingName}>{leadingLine(house)}</span>
-      </div>
-      {house.location?.trim() ? <p className={styles.place}>{house.location.trim()}</p> : null}
-      {house.coaches.length > 0 ? <p className={styles.place}>Coached by {coachNames(house.coaches)}</p> : null}
-      {signals.length > 0 ? (
-        <div className={styles.signals}>
-          {signals.map((signal) => (
-            <span key={signal} className={`${styles.signal} ${signal === "ready" ? styles.signalReady : styles.signalWarn}`}>
-              {SIGNAL_LABEL[signal]}
-            </span>
-          ))}
-        </div>
-      ) : null}
+        <span className={g.leadName}>{leadingLine(house)}</span>
+      </span>
+      <span className={g.cardFoot}>
+        <span className={g.coach}>{house.coaches.length > 0 ? coachNames(house.coaches) : "No coach yet"}</span>
+        {signals.length > 0 ? (
+          <span className={g.signals}>
+            {signals.map((signal) => (
+              <span key={signal} className={`${ui.chip} ${g.sigChip} ${signal === "ready" ? ui.cOlive : ui.cGold}`}>
+                {SIGNAL_LABEL[signal]}
+              </span>
+            ))}
+          </span>
+        ) : null}
+      </span>
     </Link>
   );
 }

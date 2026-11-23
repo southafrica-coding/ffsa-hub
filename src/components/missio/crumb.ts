@@ -4,6 +4,9 @@ export const MISSIO_CRUMB_LABELS: ReadonlyArray<{ prefix: string; label: string 
   { prefix: "/missio/follow-up", label: "Follow-up" },
   { prefix: "/missio/volunteers", label: "Volunteers" },
   { prefix: "/missio/people", label: "People" },
+  { prefix: "/missio/next-leaders", label: "Next leaders" },
+  { prefix: "/missio/care", label: "Care" },
+  { prefix: "/missio/sundays", label: "Sundays" },
 ];
 
 /** The section after "Missio /" for a pathname. Home is the fallback. */

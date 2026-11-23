@@ -13,6 +13,28 @@ export const VISIT_LABEL: Record<VisitType, string> = {
   regular: "I'm a regular",
 };
 
+/** How a card reads the visit type, in lower case after the date (board M5c). */
+export const VISIT_SHORT: Record<VisitType, string> = {
+  first_time: "first time",
+  been_a_while: "been a while",
+  regular: "regular",
+};
+
+/** "Sun 15 Nov": the day a connect card came in, as the cards show it. */
+export function formatDay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Africa/Johannesburg",
+  })
+    .format(date)
+    .replace(",", "");
+}
+
 export const STAGES: FollowUpStage[] = ["new", "contacted", "visited_house", "joined"];
 
 export function readStage(value: string | null | undefined): FollowUpStage {

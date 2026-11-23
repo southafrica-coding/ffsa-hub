@@ -123,9 +123,16 @@ describe("Missio access state", () => {
     expect(followLink.getAttribute("href")).toBe("/missio/follow-up");
     expect(followLink.textContent).toContain("Follow-up");
     expect(followLink.textContent?.toLowerCase()).not.toContain("soon");
+    // Board M11a: modules that aren't built sit under "Later" as Soon, and open nothing.
     const soon = [...host.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
-    expect(soon).toHaveLength(1);
-    expect(soon[0]?.parentElement?.textContent).toContain("Teams");
+    expect(soon.map((el) => el.parentElement?.textContent?.replace("Soon", ""))).toEqual([
+      "Teams",
+      "Communications",
+      "Finance",
+      "Settings",
+    ]);
+    for (const el of soon) expect(el.closest("a")).toBeNull();
+    expect((host.querySelector("[data-testid=missio-nav-sundays]") as HTMLAnchorElement).getAttribute("href")).toBe("/missio/sundays");
   });
 
   it("marks House churches current and names it in the crumb", async () => {
@@ -144,7 +151,7 @@ describe("Missio access state", () => {
     expect(host.textContent).toContain("Missio Church / House churches");
     expect(host.textContent).not.toContain("Missio Church / Home");
     const teams = [...host.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
-    expect(teams).toHaveLength(1);
+    expect(teams).toHaveLength(4);
     expect(teams[0]?.parentElement?.textContent).toContain("Teams");
   });
 
@@ -200,9 +207,10 @@ describe("Missio access state", () => {
       "/missio",
       "/missio/people",
       "/missio/house-churches",
+      "/missio/sundays",
       "/missio/follow-up",
-      "/missio/volunteers",
     ]);
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Home", "People", "Houses", "Sundays", "Follow-up"]);
     const current = tabs.filter((tab) => tab.getAttribute("aria-current") === "page");
     expect(current).toHaveLength(1);
     expect(current[0]?.getAttribute("data-testid")).toBe("missio-tab-house-churches");
@@ -226,7 +234,7 @@ describe("Missio access state", () => {
     await settle();
     expect(host.querySelector("[data-testid=missio-nav-care]")).not.toBeNull();
     const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
-    expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care"]);
+    expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care", "/missio/sundays"]);
     expect(host.querySelector("[data-testid=missio-tab-care]")?.getAttribute("aria-current")).toBe("page");
   });
 
@@ -246,7 +254,7 @@ describe("Missio access state", () => {
     await settle();
     expect(host.querySelector("[data-testid=missio-nav-care]")?.getAttribute("href")).toBe("/missio/care");
     const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
-    expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care"]);
+    expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care", "/missio/sundays"]);
     expect(host.querySelector("[data-testid=missio-tab-care]")).not.toBeNull();
   });
 
@@ -287,10 +295,10 @@ describe("Missio access state", () => {
     expect(host.querySelector("[data-testid=missio-tab-care]")).toBeNull();
     expect(host.querySelector("a[href='/missio/care']")).toBeNull();
     const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
-    expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches"]);
+    expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/sundays"]);
   });
 
-  it("marks Volunteers, not Home, on the volunteers page", async () => {
+  it("marks Volunteers in the menu and no tab, not Home, on the volunteers page", async () => {
     nav.pathname = "/missio/volunteers";
     const { host, root } = render(
       <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
@@ -301,7 +309,24 @@ describe("Missio access state", () => {
     hosts.push(host);
     await settle();
     const on = [...host.querySelectorAll("[data-testid=missio-tab-bar] a[aria-current=page]")];
-    expect(on.map((tab) => tab.getAttribute("data-testid"))).toEqual(["missio-tab-volunteers"]);
+    expect(on).toEqual([]);
+    expect(host.querySelector("[data-testid=missio-nav-volunteers]")?.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("marks Sundays in the tab bar and the menu on the Sundays page", async () => {
+    nav.pathname = "/missio/sundays";
+    const { host, root } = render(
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
+        <p>Sundays</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+    const on = [...host.querySelectorAll("[data-testid=missio-tab-bar] a[aria-current=page]")];
+    expect(on.map((tab) => tab.getAttribute("data-testid"))).toEqual(["missio-tab-sundays"]);
+    expect(host.querySelector("[data-testid=missio-nav-sundays]")?.getAttribute("aria-current")).toBe("page");
+    expect(host.textContent).toContain("Missio Church / Sundays");
   });
 
   it("shows no access for an FFSA admin with no Missio role", async () => {
@@ -361,7 +386,7 @@ describe("Missio access state", () => {
     expect(drawerLink?.textContent).toContain("House churches");
     expect(drawerLink?.textContent?.toLowerCase()).not.toContain("soon");
     const drawerSoon = [...dialog.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
-    expect(drawerSoon).toHaveLength(1);
+    expect(drawerSoon).toHaveLength(4);
     expect(drawerSoon[0]?.parentElement?.textContent).toContain("Teams");
     expect(openMenu.getAttribute("aria-expanded")).toBe("true");
     expect(document.body.getAttribute("data-scroll-locked")).toBe("1");
@@ -409,9 +434,9 @@ describe("Missio access state", () => {
     expect(document.body.querySelector("[role='dialog']")).toBeNull();
   });
 
-  it("Escape closes the org switcher first, then the phone menu", async () => {
+  it("shows the org switch as two segments in the phone menu, and Escape closes the menu", async () => {
     const { host, root } = render(
-      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={async () => ["staff"]}>
         <p>People live here</p>
       </MissioFrame>
     );
@@ -424,20 +449,13 @@ describe("Missio access state", () => {
       openMenu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     const dialog = document.body.querySelector("[role='dialog']") as HTMLElement;
-    const trigger = dialog.querySelector("button[aria-haspopup='listbox']") as HTMLButtonElement;
-    act(() => {
-      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    expect(document.body.querySelector("[role='listbox']")).toBeTruthy();
-
-    await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
-    });
-    expect(document.body.querySelector("[role='dialog']")).toBe(dialog);
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    expect(document.body.querySelector("[role='listbox']")).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    // Boards M1c / M11a: FFSA | Missio side by side, Missio lifted, first in the menu.
+    const segments = dialog.querySelector("[data-org-switcher=segmented]") as HTMLElement;
+    expect(segments.getAttribute("role")).toBe("group");
+    expect(segments.textContent).toContain("FFSA");
+    expect(segments.querySelector("a")?.getAttribute("href")).toBe("/dashboard");
+    expect(segments.querySelector("[aria-current=true]")?.textContent).toContain("Missio");
+    expect(dialog.querySelector("button[aria-haspopup='listbox']")).toBeNull();
 
     await act(async () => {
       document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
@@ -448,6 +466,30 @@ describe("Missio access state", () => {
     expect(document.body.querySelector("[role='dialog']")).toBeNull();
     expect(document.activeElement).toBe(openMenu);
   });
+
+  it("Escape closes the sidebar org switcher and returns focus to it", async () => {
+    const { host, root } = render(
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={async () => ["staff"]}>
+        <p>People live here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+
+    const trigger = host.querySelector("aside button[aria-haspopup='listbox']") as HTMLButtonElement;
+    expect(trigger.textContent).toContain("Switch org");
+    act(() => {
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.body.querySelector("[role='listbox']")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
 });
 
 describe("Missio mobile layout rules", () => {
@@ -457,11 +499,10 @@ describe("Missio mobile layout rules", () => {
     expect(mobile).toMatch(/\.sideSlot\s*\{[^}]*display:\s*none/);
     expect(mobile).toMatch(/\.grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
     expect(mobile).toMatch(/\.toolbar\s*\{[^}]*flex-direction:\s*column/);
-    expect(mobile).toMatch(/\.peopleCards\s*\{[^}]*display:\s*flex/);
     expect(mobile).toMatch(/\.table\s*\{[^}]*display:\s*none/);
     expect(mobile).toMatch(/\.crumb\s*\{[^}]*text-overflow:\s*ellipsis/);
-    expect(css).toMatch(/\.menuButton,\s*\.topOrg\s*\{[^}]*display:\s*none/);
-    expect(css).toMatch(/\.sideDrawer\s*\{[^}]*padding:\s*10px 8px 8px/);
+    expect(css).toMatch(/\.menuButton\s*\{[^}]*display:\s*none/);
+    expect(css).toMatch(/\.sideDrawer\s*\{[^}]*padding:\s*12px 12px 28px/);
     expect(css).toMatch(/padding-bottom:\s*max\(8px,\s*env\(safe-area-inset-bottom\)\)/);
     expect(css).toMatch(/\.shell \.orgBack,\s*\.drawer \.orgBack\s*\{[^}]*min-height:\s*44px/);
     expect(css).toMatch(/\.shell \.orgBack,\s*\.drawer \.orgBack\s*\{[^}]*text-decoration:\s*underline/);
@@ -542,15 +583,9 @@ describe("org switcher for a real FFSA and Missio user", () => {
       openMenu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     const dialog = document.body.querySelector("[role=dialog]") as HTMLElement;
-    const drawerTrigger = dialog.querySelector("[data-org-switcher] button") as HTMLButtonElement;
-    expect(drawerTrigger.querySelector("svg")).toBeTruthy();
-    expect(drawerTrigger.textContent).toContain("Missio");
-    act(() => {
-      drawerTrigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    const drawerMenu = [...document.body.querySelectorAll("[role=listbox]")].at(-1);
-    expect(drawerMenu?.textContent).toContain("FFSA Hub");
-    expect(drawerMenu?.querySelector("a[href='/dashboard']")).toBeTruthy();
+    const segments = dialog.querySelector("[data-org-switcher=segmented]") as HTMLElement;
+    expect(segments.querySelector("a[href='/dashboard']")?.textContent).toBe("FFSA");
+    expect(segments.querySelector("[aria-current=true]")?.textContent).toContain("Missio");
   });
 
   it("keeps a Missio-only pastor on a static label", async () => {

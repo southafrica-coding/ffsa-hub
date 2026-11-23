@@ -9,7 +9,7 @@ import { PersonCardDialog } from "../person-card";
 import shell from "../shell.module.css";
 import profile from "../person-profile.module.css";
 import { householdsClient, type HouseholdsClient } from "./client";
-import { initialsOf } from "./household-card";
+import { initialsOf, tintClass } from "./household-card";
 import styles from "./households.module.css";
 
 /** "2 adults · 2 kids · House 5". */
@@ -64,14 +64,14 @@ export function HouseholdsView({ client = householdsClient, filter = "" }: { cli
               >
                 <span className={styles.stack} aria-hidden="true">
                   {faces.map((face) => (
-                    <span key={face.key} className={`${styles.avatar} ${face.child ? styles.avatarChild : ""}`}>
+                    <span key={face.key} className={`${styles.avatar} ${tintClass(face.key)}`}>
                       {initialsOf(face.name)}
                     </span>
                   ))}
                 </span>
                 <span className={styles.who}>
                   <b>{household.title}</b>
-                  <span className={profile.rowMeta}>{householdLine(household)}</span>
+                  <span className={styles.familyMeta}>{householdLine(household)}</span>
                 </span>
               </button>
             </li>

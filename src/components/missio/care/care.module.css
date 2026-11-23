@@ -1,48 +1,5 @@
 /* Board M14b: the care form and the Care board. */
 
-/* Form */
-
-.help {
-  margin: -6px 0 0;
-  font-size: 14px;
-  color: var(--sub, #6e685b);
-}
-
-.danger {
-  margin: 0;
-  padding: 12px;
-  border-radius: 8px;
-  background: var(--accent-soft, #f6e4d9);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.danger a {
-  font-weight: 700;
-  color: inherit;
-}
-
-.consentText {
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.45;
-}
-
-.page button.back,
-.back {
-  min-height: 44px;
-  border: 0 !important;
-  background: none !important;
-  color: var(--ink, #1c1b17) !important;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.thanks h1 {
-  margin-top: 24px;
-}
-
 /* Board */
 
 .head {
@@ -61,6 +18,7 @@
 
 .sources {
   display: flex;
+  min-height: 32px;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 8px;
@@ -84,21 +42,42 @@
 
 .column {
   min-width: 0;
-  padding: 14px;
-  border-radius: 14px;
-  background: var(--panel, #f3f0e8);
+  min-height: 200px;
+  padding: 10px;
+  border-radius: 20px;
+  background: var(--subtle, #eeeadf);
 }
 
 .column h2 {
-  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 4px 8px;
   font-size: 15px;
-  font-weight: 700;
   letter-spacing: 0;
 }
 
-.column h2 span {
-  color: var(--quiet, #6e685b);
-  font-weight: 500;
+.colChip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.colChip[data-status="new"] { background: #f6e4d9; color: #8e3d1f; }
+.colChip[data-status="on_it"] { background: #f4ead2; color: #7a5a17; }
+.colChip[data-status="done"] { background: #e3eadf; color: #3f5940; }
+
+.colCount {
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-weight: 560;
+  font-size: 18px;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .column ul {
@@ -117,11 +96,12 @@
 
 .card {
   display: grid;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid var(--rule, #e7e2d5);
-  border-radius: 12px;
-  background: #fff;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 14px;
+  background: var(--panel, #fbf9f4);
+  box-shadow: 0 1px 2px rgba(28, 27, 23, 0.05);
 }
 
 .cardUrgent {
@@ -141,20 +121,28 @@
 }
 
 .cardTop b {
+  font-size: 15px;
   font-weight: 600;
+  line-height: 20px;
 }
 
 .avatar {
   flex: none;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--olive-soft, #e3eadf);
   color: var(--olive-text, #3f5940);
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.cardTop .meta {
   font-size: 12px;
+  color: var(--ink-2, #5b574d);
 }
 
 .meta {
@@ -172,7 +160,8 @@
 .chip {
   display: inline-flex;
   align-items: center;
-  height: 24px;
+  gap: 4px;
+  height: 22px;
   padding: 0 10px;
   border-radius: 999px;
   background: var(--panel, #f3f0e8);
@@ -181,9 +170,13 @@
 }
 
 .chipUrgent {
-  background: #f6dcd8;
-  color: #8e2a1f;
+  background: #f5deda;
+  color: #a3261b;
 }
+
+.chip[data-need="prayer"] { background: #dde8e3; color: #2f5d50; }
+.chip[data-need="talk"] { background: #f4ead2; color: #7a5a17; }
+.chip[data-need="practical"] { background: #e3eadf; color: #3f5940; }
 
 .body {
   margin: 0;
@@ -199,11 +192,21 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #e7e2d5;
 }
 
 .privacy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
-  color: var(--quiet, #6e685b);
+  font-weight: 600;
+  color: var(--ink-2, #5b574d);
+}
+
+.privacy[data-privacy="pastors"] {
+  color: #7a1e15;
 }
 
 .actions {
@@ -214,14 +217,14 @@
 }
 
 .take {
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 36px;
+  padding: 0 14px;
   border: 0;
-  border-radius: 999px;
-  background: var(--accent-text, #8e3d1f);
+  border-radius: 9px;
+  background: var(--terra, #b4532e);
   color: #fff;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -295,4 +298,130 @@
   font-size: 14px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.take:hover:not(:disabled) {
+  background: #9e4626;
+}
+
+.sources .chip {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--rule-strong, #cfc8b6);
+  background: var(--panel, #fbf9f4);
+  color: var(--ink, #1c1b17);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.headButton {
+  min-height: 44px;
+}
+
+/* Phone (board M14b, “Phone”): New / On it / Done as one segmented track,
+   one stage at a time. Desktop keeps the three columns. */
+.stabs {
+  display: none;
+}
+
+.phoneActions {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .head > div:first-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .headActions,
+  .sources {
+    display: none;
+  }
+
+  .stabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    background: var(--subtle, #eeeadf);
+    border-radius: 12px;
+  }
+
+  .stab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 52px;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--ink-2, #5b574d);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    letter-spacing: 0;
+    text-transform: none;
+    cursor: pointer;
+  }
+
+  .stab b {
+    font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+    font-weight: 560;
+    font-size: 18px;
+    line-height: 22px;
+    color: var(--ink, #1c1b17);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  .stab[aria-pressed="true"] {
+    background: var(--panel, #fbf9f4);
+    color: var(--ink, #1c1b17);
+    box-shadow: 0 1px 2px rgba(28, 27, 23, 0.12);
+  }
+
+  .stab:focus-visible {
+    outline: 2px solid var(--link, #2f5d50);
+    outline-offset: 2px;
+  }
+
+  .columns {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e7e2d5;
+  }
+
+  .column {
+    min-height: 0;
+    padding: 0;
+    background: none;
+    border-radius: 0;
+  }
+
+  .column[data-active="false"] {
+    display: none;
+  }
+
+  .column h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .phoneActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 20px;
+  }
 }

@@ -19,6 +19,7 @@ export function TimelineSheet({
   onClose,
   onStage,
   onLeader,
+  onAdd,
 }: {
   person: FollowUpItem;
   canWrite: boolean;
@@ -27,6 +28,8 @@ export function TimelineSheet({
   onClose: () => void;
   onStage: (stage: FollowUpStage) => Promise<boolean>;
   onLeader: (leaderContactId: string | null) => Promise<boolean>;
+  /** Add straight to a house, skipping the placement steps. */
+  onAdd?: () => void;
 }) {
   const [entries, setEntries] = useState<TimelineEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -140,6 +143,11 @@ export function TimelineSheet({
                 ))}
               </select>
             </label>
+            {onAdd ? (
+              <button type="button" id={`follow-up-add-${person.key}`} className={styles.secondary} onClick={onAdd}>
+                Add to a house
+              </button>
+            ) : null}
           </div>
         ) : null}
         {entries == null && !error ? <p role="status">Loading the timeline…</p> : null}

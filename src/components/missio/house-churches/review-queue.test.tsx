@@ -123,7 +123,9 @@ describe("review queue", () => {
     const host = mount(<ReviewQueue client={client([family, partial])} />);
     await settle();
     expect(host.querySelector("[data-testid=review-progress]")?.textContent?.trim()).toBe("1 of 2");
-    expect(host.textContent).toContain("Line 12 · The Adler family");
+    // Board M4c: where the name came from, then the name as written on the sheet.
+    expect(host.textContent).toContain("From the House 4 list · line 12");
+    expect(host.querySelector("#review-item-heading")?.textContent).toBe("“The Adler family”");
     expect(host.textContent).toContain("see house 4");
     expect(host.textContent).not.toContain("Original line");
     expect(host.textContent).toContain("House 4 · Leader");
@@ -163,7 +165,8 @@ describe("review queue", () => {
     host.querySelector("#review-next")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await settle();
     expect(host.querySelector("[data-testid=review-progress]")?.textContent?.trim()).toBe("2 of 2");
-    expect(host.textContent).toContain("Line 3 · Jonah");
+    expect(host.textContent).toContain("line 3");
+    expect(host.querySelector("#review-item-heading")?.textContent).toBe("“Jonah”");
     expect(host.textContent).toContain("First name only");
     expect(host.textContent).toContain("River Room");
     expect(host.textContent).toContain("House 7 · Member");

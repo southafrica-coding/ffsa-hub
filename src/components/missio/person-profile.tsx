@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { JourneyEvent, PersonProfile, ProfileHouse } from "@/lib/missio/profile";
-import { CAMPUS_LABEL, STATUS_LABEL } from "./access";
-import { fetchHubAccess, fetchPersonProfile, MissioApiError, saveHubRole } from "./api";
+import { STATUS_LABEL } from "./access";
+import { fetchHubAccess, fetchPersonProfile, MissioApiError, missioClient, saveHubRole, type MissioClient } from "./api";
+import { EditPerson } from "./people-directory";
+import type { MissioPerson } from "./types-shim";
 import type { HubAccess } from "@/lib/missio/hub-access";
 import content from "./content.module.css";
 import { houseTitle, ROLE_LABEL } from "./house-churches/format";
@@ -106,20 +108,48 @@ export function PersonProfileView({
   load = fetchPersonProfile,
   access = defaultAccess,
   households = householdsClient,
+  people = missioClient,
 }: {
   personId: string;
   load?: (id: string) => Promise<PersonProfile>;
   access?: AccessClient;
   households?: HouseholdsClient;
+  /** Edit and mark inactive (the ··· menu). */
+  people?: MissioClient;
 }) {
   const { state, retry } = useMissioLoad(() => load(personId), [personId, load]);
   const [filter, setFilter] = useState<Filter>("all");
+  const [editing, setEditing] = useState(false);
+  const [reviving, setReviving] = useState(false);
+  const reload = retry;
+
+  async function makeActive(person: MissioPerson) {
+    setReviving(true);
+    try {
+      await people.updatePerson(person.id, { status: "active" });
+      reload();
+    } finally {
+      setReviving(false);
+    }
+  }
 
   return (
     <div className={`${content.page} ${styles.root}`}>
-      <Link href="/missio/people" className={styles.back}>
-        <span aria-hidden="true">←</span> People
-      </Link>
+      <div className={styles.topRow}>
+        <Link href="/missio/people" className={styles.back}>
+          <span aria-hidden="true">←</span> People
+        </Link>
+        {state.phase === "ready" ? (
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnS} ${styles.btnIc} ${styles.phoneMore}`}
+            aria-label="More: edit, mark inactive"
+            onClick={() => setEditing(true)}
+          >
+            ···
+          </button>
+        ) : null}
+      </div>
       {state.phase === "loading" ? (
         <div className={shell.state} data-state="loading" role="status">
           Loading person…
@@ -128,133 +158,243 @@ export function PersonProfileView({
       {state.phase === "error" ? (
         <HouseStatus error={state.error} fallback="This person didn’t load." onRetry={retry} />
       ) : null}
-      {state.phase === "ready" ? <Profile profile={state.data} filter={filter} onFilter={setFilter} /> : null}
-      {state.phase === "ready" ? <HouseholdCard personId={personId} name={state.data.person.name} client={households} /> : null}
-      {state.phase === "ready" ? <HubAccessCard personId={personId} name={state.data.person.name} client={access} /> : null}
+      {state.phase === "ready" && state.data.person.status === "inactive" ? (
+        <div className={styles.inactive} data-testid="profile-inactive">
+          <span>
+            <b>Inactive.</b>{" "}
+            <span className={styles.ink2}>
+              They stay on their houses’ history and in reports for the time they were here. They don’t appear in counts or nudges.
+            </span>
+          </span>
+          <button type="button" className={`${styles.btn} ${styles.btnS} ${styles.sm}`} disabled={reviving} onClick={() => void makeActive(state.data.person)}>
+            Make active
+          </button>
+        </div>
+      ) : null}
+      {state.phase === "ready" ? (
+        <Profile
+          profile={state.data}
+          filter={filter}
+          onFilter={setFilter}
+          onMore={() => setEditing(true)}
+          aside={
+            <>
+              <HouseholdCard personId={personId} name={state.data.person.name} client={households} />
+              <HubAccessCard personId={personId} name={state.data.person.name} client={access} />
+            </>
+          }
+        />
+      ) : null}
+      {editing && state.phase === "ready" ? (
+        <EditPerson
+          person={state.data.person}
+          client={people}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            reload();
+          }}
+          onNotFound={reload}
+        />
+      ) : null}
     </div>
   );
 }
+
+const STATUS_CHIP: Record<MissioPerson["status"], string> = {
+  active: styles.cOlive,
+  visitor: styles.cGold,
+  inactive: styles.cSub,
+};
+
+const CAMPUS_SHORT: Record<MissioPerson["campus"], string> = { potch: "Potch", jhb: "JHB" };
 
 function Profile({
   profile,
   filter,
   onFilter,
+  onMore,
+  aside,
 }: {
   profile: PersonProfile;
   filter: Filter;
   onFilter: (filter: Filter) => void;
+  onMore: () => void;
+  aside: React.ReactNode;
 }) {
   const { person, contact, houses, journey } = profile;
   const current = houses.filter((house) => !house.endedAt);
   const past = houses.filter((house) => house.endedAt);
   const shown = journey.filter((event) => inFilter(event, filter));
+  const summary = current.map((house) => `${ROLE_LABEL[house.role]} of ${houseTitle(house)}`).join(" · ");
 
   return (
     <>
       <header className={styles.head} data-testid="profile-head">
-        <span className={styles.avatar} aria-hidden="true">
-          {initials(person.name)}
-        </span>
+        <Avatar id={person.id} name={person.name} large />
         <div className={styles.headText}>
-          <h1 className={`${content.title} ${styles.name}`}>{person.name || "No name"}</h1>
+          <h1 className={styles.name}>{person.name || "No name"}</h1>
           <p className={styles.tags}>
-            <span className={shell.tag} data-status={person.status}>
+            <span className={`${styles.chip} ${STATUS_CHIP[person.status]}`} data-status={person.status}>
+              <span className={styles.dot} />
               {STATUS_LABEL[person.status]}
             </span>
-            <span className={shell.tag}>{CAMPUS_LABEL[person.campus]}</span>
+            {summary ? <span className={`${styles.headSummary} ${styles.ink2}`}>{summary}</span> : null}
+            <span className={styles.tag}>{CAMPUS_SHORT[person.campus]}</span>
           </p>
         </div>
-      </header>
-      <ContactActions phone={contact.phone} email={contact.email} />
-
-      <section className={styles.card} data-testid="profile-belongs">
-        <h2>Belongs to</h2>
-        {current.length === 0 ? (
-          <p className={styles.quiet}>Not in a house church yet.</p>
-        ) : (
-          <ul className={styles.rows}>
-            {current.map((house) => (
-              <HouseRow key={house.membershipId} house={house} />
-            ))}
-          </ul>
-        )}
-        {past.length > 0 ? (
-          <>
-            <h3>Before</h3>
-            <ul className={styles.rows}>
-              {past.map((house) => (
-                <HouseRow key={house.membershipId} house={house} />
-              ))}
-            </ul>
-          </>
-        ) : null}
-      </section>
-
-      <section className={styles.card} data-testid="profile-contact">
-        <h2>Details</h2>
-        <dl className={styles.facts}>
-          <div>
-            <dt>Phone</dt>
-            <dd>{contact.phone ? <a href={telHref(contact.phone) ?? undefined}>{contact.phone}</a> : "Not on file"}</dd>
-          </div>
-          <div>
-            <dt>Email</dt>
-            <dd>{contact.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : "Not on file"}</dd>
-          </div>
-          <div>
-            <dt>Campus</dt>
-            <dd>{CAMPUS_LABEL[person.campus]}</dd>
-          </div>
-          {person.joinedAt ? (
-            <div>
-              <dt>Joined</dt>
-              <dd>{journeyDate(person.joinedAt)}</dd>
-            </div>
-          ) : null}
-        </dl>
-      </section>
-
-      <section className={styles.journey} data-testid="profile-journey">
-        <div className={styles.journeyHead}>
-          <h2>Journey</h2>
-          <div className={styles.filters} role="group" aria-label="Show">
-            {FILTERS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={`${styles.filter} ${filter === option.id ? styles.filterOn : ""}`}
-                aria-pressed={filter === option.id}
-                onClick={() => onFilter(option.id)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+        <div className={styles.headActions}>
+          <ContactActions phone={contact.phone} email={contact.email} />
+          <button type="button" className={`${styles.btn} ${styles.btnS} ${styles.btnIc}`} aria-label="More: edit, mark inactive" onClick={onMore}>
+            ···
+          </button>
         </div>
-        {shown.length === 0 ? (
-          <p className={styles.quiet}>{journey.length === 0 ? "Nothing recorded yet." : "Nothing of that kind yet."}</p>
-        ) : (
-          <ol className={styles.timeline}>
-            {shown.map((event) => {
-              const copy = journeyCopy(event);
-              return (
-                <li key={event.id} className={styles.step} data-type={event.type}>
-                  <div className={styles.stepBody}>
-                    <p className={styles.stepTitle}>
-                      {copy.houseId ? <Link href={`/missio/house-churches/${copy.houseId}`}>{copy.title}</Link> : copy.title}
-                    </p>
-                    {copy.detail ? <p className={styles.stepDetail}>{copy.detail}</p> : null}
-                  </div>
-                  <time className={styles.stepDate} dateTime={event.at}>
-                    {journeyDate(event.at)}
-                  </time>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </section>
+      </header>
+
+      <div className={styles.cols}>
+        <div className={styles.side}>
+          <section className={`${styles.card} ${styles.flush}`} data-testid="profile-belongs">
+            <h2 className={styles.sect}>Belongs to</h2>
+            {current.length === 0 ? (
+              <div className={styles.lrow}>
+                <span className={`${styles.rowIcon} ${styles.iconTerra}`} aria-hidden="true">
+                  <HouseIcon />
+                </span>
+                <span className={styles.lrowText}>
+                  <span className={`${styles.nm} ${styles.terraInk}`}>Not in a house yet</span>
+                  <span className={styles.meta}>A pastor places people from Follow-up.</span>
+                </span>
+              </div>
+            ) : (
+              <ul className={styles.rows}>
+                {current.map((house) => (
+                  <HouseRow key={house.membershipId} house={house} />
+                ))}
+              </ul>
+            )}
+            {past.length > 0 ? (
+              <>
+                <h3 className={styles.sect}>Before</h3>
+                <ul className={styles.rows}>
+                  {past.map((house) => (
+                    <HouseRow key={house.membershipId} house={house} />
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </section>
+
+          <section className={styles.card} data-testid="profile-contact">
+            <h2 className={styles.visuallyHidden}>Details</h2>
+            <dl className={styles.facts}>
+              <dt>Phone</dt>
+              <dd className={contact.phone ? styles.mono : styles.ink3}>
+                {contact.phone ? <a href={telHref(contact.phone) ?? undefined}>{contact.phone}</a> : "Not on file"}
+              </dd>
+              <dt>Email</dt>
+              <dd className={contact.email ? undefined : styles.ink3}>
+                {contact.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : "Not on file"}
+              </dd>
+              {person.joinedAt ? (
+                <>
+                  <dt>Joined</dt>
+                  <dd>{longDate(person.joinedAt)}</dd>
+                </>
+              ) : null}
+              <dt>Campus</dt>
+              <dd>{CAMPUS_SHORT[person.campus]}</dd>
+            </dl>
+          </section>
+
+          {aside}
+        </div>
+
+        <section className={`${styles.card} ${styles.journey}`} data-testid="profile-journey">
+          <div className={styles.journeyHead}>
+            <h2>Journey</h2>
+            <div className={styles.filters} role="group" aria-label="Show">
+              {FILTERS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`${styles.filter} ${filter === option.id ? styles.filterOn : ""}`}
+                  aria-pressed={filter === option.id}
+                  onClick={() => onFilter(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {shown.length === 0 ? (
+            <p className={styles.quiet}>{journey.length === 0 ? "Nothing recorded yet." : "Nothing of that kind yet."}</p>
+          ) : (
+            <ol className={styles.timeline}>
+              {shown.map((event, index) => {
+                const copy = journeyCopy(event);
+                const dot = stepDot(event);
+                return (
+                  <li key={event.id} className={styles.step} data-type={event.type}>
+                    <span className={styles.tl} aria-hidden="true">
+                      <span className={`${styles.tdot} ${dot.tone}`}>{dot.icon}</span>
+                      {index < shown.length - 1 ? <span className={styles.tline} /> : null}
+                    </span>
+                    <div className={styles.tbody}>
+                      <p className={styles.tt}>
+                        {copy.houseId ? <Link href={`/missio/house-churches/${copy.houseId}`}>{copy.title}</Link> : copy.title}
+                      </p>
+                      {copy.detail ? <p className={styles.stepDetail}>{copy.detail}</p> : null}
+                      <time className={styles.td} dateTime={event.at}>
+                        {journeyDate(event.at)}
+                      </time>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </section>
+      </div>
     </>
+  );
+}
+
+const longFormat = new Intl.DateTimeFormat("en-ZA", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+function longDate(value: string): string {
+  const date = asDate(value);
+  return date ? longFormat.format(date) : "";
+}
+
+function stepDot(event: JourneyEvent): { tone: string; icon: React.ReactNode } {
+  switch (event.type) {
+    case "joined_house":
+      return { tone: styles.tOlive, icon: event.role === "member" ? <CheckIcon /> : <HouseIcon /> };
+    case "left_house":
+      return { tone: styles.tSub, icon: <HouseIcon /> };
+    case "followup_stage":
+      if (event.stage === "visited_house") return { tone: styles.tGold, icon: <PinIcon /> };
+      if (event.stage === "joined") return { tone: styles.tOlive, icon: <CheckIcon /> };
+      return { tone: styles.tLink, icon: <ChatIcon /> };
+    case "followup_note":
+      return { tone: styles.tSub, icon: "✎" };
+    case "next_leader":
+      return { tone: styles.tGold, icon: <SproutIcon /> };
+    case "connect_card":
+    case "added":
+      return { tone: styles.tTerra, icon: <PlusIcon /> };
+  }
+}
+
+/** Five tints by person id (board M1b), the same everywhere. */
+export function Avatar({ id, name, large = false }: { id: string; name: string; large?: boolean }) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  const tint = [styles.a1, styles.a2, styles.a3, styles.a4, styles.a5][hash % 5];
+  return (
+    <span className={`${styles.avatar} ${large ? styles.avatarLg : ""} ${tint}`} aria-hidden="true">
+      {initials(name)}
+    </span>
   );
 }
 
@@ -264,11 +404,19 @@ function HouseRow({ house }: { house: ProfileHouse }) {
     : `Since ${since(house.startedAt)}`;
   return (
     <li>
-      <Link href={`/missio/house-churches/${house.houseId}`} className={styles.row}>
-        <span className={styles.rowMain}>
-          {houseTitle(house)} · {ROLE_LABEL[house.role]}
+      <Link href={`/missio/house-churches/${house.houseId}`} className={`${styles.lrow} ${styles.row}`}>
+        <span className={`${styles.rowIcon} ${house.endedAt ? styles.iconSub : styles.iconOlive}`} aria-hidden="true">
+          <HouseIcon />
         </span>
-        <span className={styles.rowMeta}>{when}</span>
+        <span className={styles.lrowText}>
+          <span className={`${styles.nm} ${styles.rowMain}`}>
+            {houseTitle(house)} · {ROLE_LABEL[house.role]}
+          </span>
+          <span className={`${styles.meta} ${styles.rowMeta}`}>{when}</span>
+        </span>
+        <span className={styles.chev} aria-hidden="true">
+          <ChevronIcon />
+        </span>
       </Link>
     </li>
   );
@@ -278,24 +426,113 @@ export function ContactActions({ phone, email }: { phone: string | null; email: 
   const call = telHref(phone);
   const chat = whatsAppHref(phone);
   if (!call && !chat && !email) return null;
+  const count = [call, chat, email].filter(Boolean).length;
   return (
-    <div className={styles.actions} data-testid="profile-actions">
+    <div className={styles.actions} data-testid="profile-actions" style={{ "--n": count } as React.CSSProperties}>
       {call ? (
-        <a className={styles.action} href={call}>
+        <a className={`${styles.btn} ${styles.btnS} ${styles.action}`} href={call}>
+          <PhoneIcon />
           Call
         </a>
       ) : null}
       {chat ? (
-        <a className={styles.action} href={chat} target="_blank" rel="noopener noreferrer">
+        <a className={`${styles.btn} ${styles.btnP} ${styles.action} ${styles.actionMain}`} href={chat} target="_blank" rel="noopener noreferrer">
+          <ChatIcon />
           WhatsApp
         </a>
       ) : null}
       {email ? (
-        <a className={styles.action} href={`mailto:${email}`}>
+        <a className={`${styles.btn} ${styles.btnS} ${styles.action}`} href={`mailto:${email}`}>
+          <MailIcon />
           Email
         </a>
       ) : null}
     </div>
+  );
+}
+
+function Svg({ children, size = 16 }: { children: React.ReactNode; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {children}
+    </svg>
+  );
+}
+
+function HouseIcon() {
+  return (
+    <Svg>
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5 9.5V21h14V9.5" />
+    </Svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <Svg>
+      <path d="M20 6 9 17l-5-5" />
+    </Svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <Svg>
+      <path d="M12 5v14M5 12h14" />
+    </Svg>
+  );
+}
+
+function PinIcon() {
+  return (
+    <Svg>
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </Svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <Svg size={20}>
+      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+    </Svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <Svg size={20}>
+      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z" />
+    </Svg>
+  );
+}
+
+function MailIcon() {
+  return (
+    <Svg size={20}>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-10 6L2 7" />
+    </Svg>
+  );
+}
+
+function SproutIcon() {
+  return (
+    <Svg>
+      <path d="M12 21v-9" />
+      <path d="M12 12c0-4 3-7 7-7 0 4-3 7-7 7Z" />
+      <path d="M12 14c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5Z" />
+    </Svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <Svg size={20}>
+      <path d="m9 18 6-6-6-6" />
+    </Svg>
   );
 }
 

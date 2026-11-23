@@ -3,14 +3,15 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { MissioApiError } from "../api";
 import content from "../content.module.css";
-import shell from "../shell.module.css";
 import { houseChurchesClient, houseErrorCopy, houseErrorMatches, type HouseChurchesClient } from "./client";
-import { houseTitle, reviewHeading, reviewReasons, ROLE_LABEL } from "./format";
+import Link from "next/link";
+import { initialsOf, reviewReasons, ROLE_LABEL } from "./format";
 import { useMissioLoad } from "./load";
-import { AllHousesLink } from "./present";
 import { accessStatus, HouseStatus } from "./status";
 import type { PersonRef, ResolveBody, ReviewContactMatch, ReviewItem } from "./types";
 import styles from "./house-churches.module.css";
+import rv from "./review.module.css";
+import ui from "./ui.module.css";
 
 export function ReviewQueue({
   client = houseChurchesClient,
@@ -154,165 +155,224 @@ export function ReviewQueue({
     );
   }
 
+  const shown = finished ? total : Math.min(index, total);
+  const percent = total > 0 ? Math.round((shown / total) * 100) : 0;
+
   return (
-    <div className={`${content.page} ${styles.root}`}>
-      <AllHousesLink />
-      <div className={styles.reviewHead}>
-        <h1 className={content.title}>Review names</h1>
-        {item ? (
-          <p className={styles.progress} data-testid="review-progress">
-            {index + 1} of {total}
+    <div className={`${ui.root} ${rv.page}`}>
+      <div className={rv.top}>
+        <Link href="/missio/house-churches" className={`${ui.btn} ${ui.g} ${ui.ic} ${rv.close}`} aria-label="Close review">
+          <CloseIcon />
+        </Link>
+        <h1 className={rv.title}>{finished ? "All sorted" : "Review names"}</h1>
+      </div>
+      {total > 0 ? (
+        <div className={rv.progressRow}>
+          <div
+            className={rv.track}
+            role="progressbar"
+            aria-label="Names reviewed"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={shown}
+          >
+            <div className={rv.fill} style={{ width: `${percent}%` }} />
+          </div>
+          {item ? (
+            <span className={`${ui.mono} ${rv.count}`} data-testid="review-progress">
+              {index + 1} of {total}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className={rv.body}>
+        {!queue && state.phase === "loading" ? (
+          <div className={`${ui.card} ${rv.state}`} data-state="loading" role="status">
+            Loading names to review…
+          </div>
+        ) : null}
+        {state.phase === "error" ? (
+          <HouseStatus error={state.error} fallback="Names to review didn’t load." onRetry={retry} />
+        ) : null}
+        {state.phase === "ready" && total === 0 && !finished ? (
+          <div className={`${ui.card} ${rv.state}`} data-state="empty" data-testid="review-empty">
+            No imported names are waiting.
+          </div>
+        ) : null}
+        {notice ? (
+          <p ref={noticeRef} id="review-action-error" className={rv.alert} role="alert" tabIndex={-1}>
+            {notice}
           </p>
         ) : null}
-      </div>
-      {finished ? null : (
-        <p className={`${shell.lede} ${content.lede}`}>
-          Match each imported name to a person, create them, or skip. Linking or creating adds them to the house and
-          to Missio. If the name is a couple, add both before moving on.
-        </p>
-      )}
-
-      {!queue && state.phase === "loading" ? (
-        <div className={shell.state} data-state="loading" role="status">
-          Loading names to review…
-        </div>
-      ) : null}
-      {state.phase === "error" ? (
-        <HouseStatus error={state.error} fallback="Names to review didn’t load." onRetry={retry} />
-      ) : null}
-      {state.phase === "ready" && total === 0 && !finished ? (
-        <div className={shell.state} data-state="empty" data-testid="review-empty">
-          No imported names are waiting.
-        </div>
-      ) : null}
-      {notice ? (
-        <p ref={noticeRef} id="review-action-error" className={shell.alert} role="alert" tabIndex={-1}>
-          {notice}
-        </p>
-      ) : null}
-      {item && existing.length > 0 ? (
-        <section className={styles.existing} data-testid="review-existing">
-          <ul className={styles.choices}>
-            {existing.map((person) => (
-              <li key={person.contactId}>
-                <button
-                  type="button"
-                  className={`${shell.ghost} ${styles.choice}`}
-                  disabled={pending}
-                  onClick={() => void resolve({ action: "link", contactId: person.contactId }, total, person.displayName)}
-                >
-                  <span className={styles.choiceText}>
-                    <span className={styles.choiceName}>Link {person.displayName}</span>
-                    <span className={styles.choiceMeta}>{matchMeta(person, person.inMissio)}</span>
-                  </span>
-                </button>
-                {typedName && typedName.toLowerCase() !== person.displayName.trim().toLowerCase() ? (
+        {item && existing.length > 0 ? (
+          <section className={rv.existing} data-testid="review-existing">
+            <div className={`${ui.card} ${rv.list}`}>
+              {existing.map((person) => (
+                <div key={person.contactId}>
                   <button
                     type="button"
-                    className={`${shell.ghost} ${styles.choice} ${styles.renameChoice}`}
+                    className={`${rv.row}`}
                     disabled={pending}
-                    data-testid="review-link-rename"
-                    onClick={() =>
-                      void resolve(
-                        {
-                          action: "link",
-                          contactId: person.contactId,
-                          rename: { firstName: firstName.trim(), ...(lastName.trim() ? { lastName: lastName.trim() } : {}) },
-                        },
-                        total,
-                        typedName
-                      )
-                    }
+                    onClick={() => void resolve({ action: "link", contactId: person.contactId }, total, person.displayName)}
                   >
-                    <span className={styles.choiceText}>
-                      <span className={styles.choiceName}>Link and rename to {typedName}</span>
-                      <span className={styles.choiceMeta}>
-                        Same person, wrong name on file. Changes their name everywhere in the Hub.
-                      </span>
+                    <Avatar id={person.contactId} name={person.displayName} />
+                    <span className={rv.rowText}>
+                      <span className={ui.nm}>Link {person.displayName}</span>
+                      <span className={ui.meta}>{matchMeta(person, person.inMissio)}</span>
                     </span>
                   </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-          {sameName ? (
-            <button
-              type="button"
-              className={`${shell.ghost} ${styles.choice} ${styles.renameChoice}`}
-              disabled={pending}
-              data-testid="review-create-anyway"
-              onClick={() => void resolve({ ...sameName, allowDuplicate: true }, total, typedName)}
-            >
-              <span className={styles.choiceText}>
-                <span className={styles.choiceName}>No, create a new {typedName}</span>
-                <span className={styles.choiceMeta}>A different person who happens to share the name.</span>
-              </span>
-            </button>
-          ) : (
-          <p className={styles.quiet}>
-            Someone else entirely? Two people can’t share an email or phone in the Hub. Create the new person with
-            their own number or email instead.
-          </p>
-          )}
-        </section>
-      ) : null}
-      {state.phase === "ready" && finished ? (
-        <h2 id="review-done-heading" tabIndex={-1} className={styles.doneTitle} data-testid="review-done">
-          {doneHeading(total)}
-        </h2>
-      ) : null}
-      {item ? (
-        <ReviewCard
-          key={item.id}
-          item={item}
-          pending={pending}
-          client={client}
-          firstName={firstName}
-          lastName={lastName}
-          email={email}
-          phone={phone}
-          skipNote={skipNote}
-          added={added}
-          last={index + 1 >= total}
-          onNext={() => advance(total)}
-          onFirstName={setFirstName}
-          onLastName={setLastName}
-          onEmail={setEmail}
-          onPhone={setPhone}
-          onSkipNote={setSkipNote}
-          onLink={(contactId, name) => void resolve({ action: "link", contactId }, total, name)}
-          onCreate={() => {
-            const given = firstName.trim();
-            if (!given) {
-              setNotice("Enter a first name.");
-              return;
-            }
-            const family = lastName.trim();
-            const mail = email.trim();
-            const number = phone.trim();
-            if (!family && !mail && !number) {
-              setNotice("Add a last name, or an email or phone number.");
-              return;
-            }
-            void resolve(
-              {
-                action: "create",
-                firstName: given,
-                ...(family ? { lastName: family } : {}),
-                ...(mail ? { email: mail } : {}),
-                ...(number ? { phone: number } : {}),
-              },
-              total,
-              family ? `${given} ${family}` : given
-            );
-          }}
-          onSkip={() => {
-            const notes = skipNote.trim();
-            void resolve(notes ? { action: "skip", notes } : { action: "skip" }, total);
-          }}
-        />
-      ) : null}
+                  {typedName && typedName.toLowerCase() !== person.displayName.trim().toLowerCase() ? (
+                    <button
+                      type="button"
+                      className={`${rv.row}`}
+                      disabled={pending}
+                      data-testid="review-link-rename"
+                      onClick={() =>
+                        void resolve(
+                          {
+                            action: "link",
+                            contactId: person.contactId,
+                            rename: { firstName: firstName.trim(), ...(lastName.trim() ? { lastName: lastName.trim() } : {}) },
+                          },
+                          total,
+                          typedName
+                        )
+                      }
+                    >
+                      <span className={rv.rowText}>
+                        <span className={ui.nm}>Link and rename to {typedName}</span>
+                        <span className={ui.meta}>Same person, wrong name on file. Changes their name everywhere in the Hub.</span>
+                      </span>
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+              {sameName ? (
+                <button
+                  type="button"
+                  className={`${rv.row}`}
+                  disabled={pending}
+                  data-testid="review-create-anyway"
+                  onClick={() => void resolve({ ...sameName, allowDuplicate: true }, total, typedName)}
+                >
+                  <span className={rv.rowText}>
+                    <span className={ui.nm}>No, create a new {typedName}</span>
+                    <span className={ui.meta}>A different person who happens to share the name.</span>
+                  </span>
+                </button>
+              ) : null}
+            </div>
+            {sameName ? null : (
+              <p className={`${ui.help} ${rv.centre}`}>
+                Someone else entirely? Two people can’t share an email or phone in the Hub. Create the new person with
+                their own number or email instead.
+              </p>
+            )}
+          </section>
+        ) : null}
+        {state.phase === "ready" && finished ? (
+          <div className={rv.done}>
+            <h2 id="review-done-heading" tabIndex={-1} className={`${ui.serif} ${rv.doneTitle}`} data-testid="review-done">
+              {doneHeading(total)}
+            </h2>
+            <Link href="/missio/house-churches" className={`${ui.btn} ${ui.p}`}>
+              Back to the map
+            </Link>
+          </div>
+        ) : null}
+        {item ? (
+          <ReviewCard
+            key={item.id}
+            item={item}
+            pending={pending}
+            client={client}
+            firstName={firstName}
+            lastName={lastName}
+            email={email}
+            phone={phone}
+            skipNote={skipNote}
+            added={added}
+            last={index + 1 >= total}
+            onNext={() => advance(total)}
+            onFirstName={setFirstName}
+            onLastName={setLastName}
+            onEmail={setEmail}
+            onPhone={setPhone}
+            onSkipNote={setSkipNote}
+            onLink={(contactId, name) => void resolve({ action: "link", contactId }, total, name)}
+            onCreate={() => {
+              const given = firstName.trim();
+              if (!given) {
+                setNotice("Enter a first name.");
+                return;
+              }
+              const family = lastName.trim();
+              const mail = email.trim();
+              const number = phone.trim();
+              if (!family && !mail && !number) {
+                setNotice("Add a last name, or an email or phone number.");
+                return;
+              }
+              void resolve(
+                {
+                  action: "create",
+                  firstName: given,
+                  ...(family ? { lastName: family } : {}),
+                  ...(mail ? { email: mail } : {}),
+                  ...(number ? { phone: number } : {}),
+                },
+                total,
+                family ? `${given} ${family}` : given
+              );
+            }}
+            onSkip={() => {
+              const notes = skipNote.trim();
+              void resolve(notes ? { action: "skip", notes } : { action: "skip" }, total);
+            }}
+          />
+        ) : null}
+      </div>
     </div>
+  );
+}
+
+const TINTS = ["a1", "a2", "a3", "a4", "a5"] as const;
+
+/** Avatar tint by person id (M1b: five tints), so a person keeps their colour everywhere. */
+function Avatar({ id, name }: { id: string; name: string }) {
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  const tint = TINTS[hash % TINTS.length];
+  return (
+    <span className={`${ui.av} ${ui[tint]}`} aria-hidden="true">
+      {initialsOf(name)}
+    </span>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m20 20-4.2-4.2" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
   );
 }
 
@@ -364,150 +424,179 @@ function ReviewCard({
   onCreate: () => void;
   onSkip: () => void;
 }) {
-  const [creating, setCreating] = useState(false);
-  const houseLabel = item.house ? houseTitle(item.house) : `House ${item.houseNumber}`;
+  const [panel, setPanel] = useState<"search" | "create" | null>(null);
   const houseNumber = item.house?.number ?? item.houseNumber;
+  const houseName = item.house?.name?.trim() ?? "";
   const housePlace = item.role ? `House ${houseNumber} · ${ROLE_LABEL[item.role]}` : `House ${houseNumber}`;
   const reasons = reviewReasons(item);
   const note = item.notes?.trim() ?? "";
+  const source = item.sourceLine == null ? `From the House ${houseNumber} list` : `From the House ${houseNumber} list · line ${item.sourceLine}`;
+  const toggle = (next: "search" | "create") => setPanel((open) => (open === next ? null : next));
 
   return (
-    <article data-testid="review-item">
-      <section className={styles.summary} data-testid="review-summary">
-        <h2 id="review-item-heading" tabIndex={-1}>
-          {reviewHeading(item)}
+    <article className={rv.item} data-testid="review-item">
+      <section className={`${ui.card} ${rv.nameCard}`} data-testid="review-summary">
+        <p className={rv.source}>{source}</p>
+        <h2 id="review-item-heading" tabIndex={-1} className={`${ui.serif} ${rv.name}`}>
+          “{item.rawName}”
         </h2>
-        {note ? <p className={styles.quiet}>{note}</p> : null}
-        {item.house?.name?.trim() ? <p className={styles.line}>{houseLabel}</p> : null}
-        <p className={styles.line}>{housePlace}</p>
-        <ul className={styles.reasons}>
-          {reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
+        <p className={rv.facts}>
+          {[housePlace, houseName, ...reasons].filter(Boolean).join(" · ")}
+        </p>
+        {note ? <p className={rv.note}>{note}</p> : null}
       </section>
 
       {added.length > 0 ? (
-        <section className={styles.added} data-testid="review-added" aria-live="polite">
-          <h2>Added to House {houseNumber}</h2>
-          <ul className={styles.addedList}>
+        <section className={`${ui.card} ${rv.added}`} data-testid="review-added" aria-live="polite">
+          <h2 className={rv.addedTitle}>Added to House {houseNumber}</h2>
+          <ul className={rv.addedList}>
             {added.map((name, at) => (
               <li key={`${name}-${at}`}>{name}</li>
             ))}
           </ul>
-          <p className={styles.quiet}>Is this name a couple or a household? Add the next person below.</p>
-          <div className={styles.formActions}>
-            <button id="review-next" type="button" className={shell.primary} disabled={pending} onClick={onNext}>
-              {last ? "Done" : "Next name"}
-            </button>
-          </div>
+          <p className={ui.help}>Is this name a couple or a household? Add the next person below.</p>
+          <button id="review-next" type="button" className={`${ui.btn} ${ui.p}`} disabled={pending} onClick={onNext}>
+            {last ? "Done" : "Next name"}
+          </button>
         </section>
       ) : null}
 
       {item.candidates.length > 0 ? (
-        <section className={styles.section}>
-          <h2>{added.length > 0 ? "Add another: possible matches" : "Possible matches"}</h2>
-          <ul className={styles.choices} data-testid="review-candidates">
-            {item.candidates.map((candidate) => (
-              <li key={candidate.contactId}>
+        <section className={rv.section}>
+          <h3 className={`${ui.sect} ${rv.sectLabel}`}>{added.length > 0 ? "Add another? Is this…" : "Is this…"}</h3>
+          <div className={`${ui.card} ${rv.list}`} data-testid="review-candidates">
+            {item.candidates.map((candidate, at) => {
+              const best = at === 0;
+              return (
                 <button
+                  key={candidate.contactId}
                   type="button"
-                  className={`${shell.ghost} ${styles.choice}`}
+                  className={`${rv.row} ${best ? rv.best : ""}`}
                   disabled={pending}
                   onClick={() => onLink(candidate.contactId, candidate.displayName)}
                 >
-                  <span className={styles.choiceText}>
-                    <span className={styles.choiceName}>Use {candidate.displayName}</span>
-                    <span className={styles.choiceMeta}>{matchMeta(candidate, candidate.orgPersonId != null)}</span>
+                  <Avatar id={candidate.contactId} name={candidate.displayName} />
+                  <span className={rv.rowText}>
+                    <span className={ui.nm}>
+                      <span className={ui.visuallyHidden}>Use </span>
+                      {candidate.displayName}
+                    </span>
+                    <span className={ui.meta}>{matchMeta(candidate, candidate.orgPersonId != null)}</span>
+                  </span>
+                  <span className={`${ui.btn} ${ui.sm} ${best ? ui.p : ui.s}`} aria-hidden="true">
+                    Link
                   </span>
                 </button>
-              </li>
-            ))}
-          </ul>
+              );
+            })}
+          </div>
+          {item.candidates.length === 1 ? <p className={`${ui.help} ${rv.centre}`}>Only one likely match.</p> : null}
         </section>
-      ) : null}
+      ) : (
+        <p className={`${ui.help} ${rv.centre}`}>No likely match. Search everyone, or add them as someone new.</p>
+      )}
 
-      <section className={styles.section}>
-        <h2>{added.length > 0 ? "Add another: search everyone" : "Search everyone"}</h2>
-        <p className={`${shell.help} ${styles.searchHelp}`}>
-          Looks through every contact in the Hub, not only Missio. Linking someone adds them to Missio.
-        </p>
+      <section className={rv.section} hidden={panel !== "search"} data-testid="review-search-panel">
+        <h3 className={`${ui.serif} ${rv.panelTitle}`}>Find “{item.rawName}”</h3>
+        <p className={ui.help}>Looks through every contact in the Hub, not only Missio. Linking someone adds them to Missio.</p>
         <ContactSearch client={client} pending={pending} onPick={onLink} />
       </section>
 
-      <section className={styles.section}>
-        <button
-          type="button"
-          className={shell.ghost}
-          aria-expanded={creating}
-          data-testid="create-toggle"
-          onClick={() => setCreating((open) => !open)}
+      {panel === "create" ? (
+        <form
+          className={`${ui.card} ${rv.form}`}
+          data-testid="review-create"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onCreate();
+          }}
         >
-          Create new person
-        </button>
-        {creating ? (
-          <form
-            className={styles.form}
-            data-testid="review-create"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onCreate();
-            }}
-          >
-            <p className={shell.help}>Email and phone are optional. Add them if you have them.</p>
-            <label className={shell.field}>
-              First name
-              <input aria-label="First name" value={firstName} onChange={(event) => onFirstName(event.target.value)} />
-            </label>
-            <label className={shell.field}>
-              Last name
-              <input aria-label="Last name" value={lastName} onChange={(event) => onLastName(event.target.value)} />
-            </label>
-            <label className={shell.field}>
-              Email
-              <input aria-label="Email" inputMode="email" autoComplete="off" value={email} onChange={(event) => onEmail(event.target.value)} />
-            </label>
-            <label className={shell.field}>
-              Phone
-              <input aria-label="Phone" inputMode="tel" autoComplete="off" value={phone} onChange={(event) => onPhone(event.target.value)} />
-            </label>
-            <div className={styles.formActions}>
-              <button type="submit" className={shell.primary} disabled={pending}>
-                Create person
-              </button>
-            </div>
-          </form>
-        ) : null}
-      </section>
+          <h3 className={`${ui.serif} ${rv.panelTitle}`}>Someone new</h3>
+          <p className={ui.help}>Email and phone are optional. Add them if you have them.</p>
+          <label className={ui.field}>
+            First name
+            <input className={ui.input} aria-label="First name" value={firstName} onChange={(event) => onFirstName(event.target.value)} />
+          </label>
+          <label className={ui.field}>
+            Last name
+            <input className={ui.input} aria-label="Last name" value={lastName} onChange={(event) => onLastName(event.target.value)} />
+          </label>
+          <label className={ui.field}>
+            Email
+            <input
+              className={ui.input}
+              aria-label="Email"
+              inputMode="email"
+              autoComplete="off"
+              value={email}
+              onChange={(event) => onEmail(event.target.value)}
+            />
+          </label>
+          <label className={ui.field}>
+            Phone
+            <input
+              className={ui.input}
+              aria-label="Phone"
+              inputMode="tel"
+              autoComplete="off"
+              value={phone}
+              onChange={(event) => onPhone(event.target.value)}
+            />
+          </label>
+          <button type="submit" className={`${ui.btn} ${ui.p}`} disabled={pending}>
+            Create person
+          </button>
+        </form>
+      ) : null}
 
-      {added.length > 0 ? null : (
-        <section className={styles.section}>
-          <h2>Skip</h2>
-          <form
-            className={styles.form}
-            data-testid="review-skip"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSkip();
-            }}
+      {/* The actions sit at the bottom, under the thumb (M4c). */}
+      <form
+        className={rv.bar}
+        data-testid={added.length > 0 ? undefined : "review-skip"}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (added.length === 0) onSkip();
+        }}
+      >
+        {added.length > 0 ? null : (
+          <details className={rv.skipNote}>
+            <summary>Add a note before skipping</summary>
+            <textarea
+              className={ui.input}
+              aria-label="Skip note"
+              value={skipNote}
+              onChange={(event) => onSkipNote(event.target.value)}
+            />
+          </details>
+        )}
+        <div className={rv.barButtons}>
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.s} ${rv.barButton}`}
+            aria-expanded={panel === "search"}
+            data-testid="search-toggle"
+            onClick={() => toggle("search")}
           >
-            <label className={shell.field}>
-              Note
-              <textarea
-                className={styles.note}
-                aria-label="Skip note"
-                value={skipNote}
-                onChange={(event) => onSkipNote(event.target.value)}
-              />
-            </label>
-            <div className={styles.formActions}>
-              <button type="submit" className={shell.ghost} disabled={pending}>
-                Skip
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
+            <SearchIcon />
+            Search
+          </button>
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.s} ${rv.barButton}`}
+            aria-expanded={panel === "create"}
+            data-testid="create-toggle"
+            onClick={() => toggle("create")}
+          >
+            <PlusIcon />
+            New
+          </button>
+          {added.length > 0 ? null : (
+            <button type="submit" className={`${ui.btn} ${ui.g} ${rv.barButton} ${rv.skip}`} disabled={pending}>
+              Skip
+            </button>
+          )}
+        </div>
+      </form>
     </article>
   );
 }
@@ -556,52 +645,56 @@ function ContactSearch({
 
   return (
     <form
-      className={styles.form}
+      className={rv.searchForm}
       data-testid="people-picker"
       onSubmit={(event) => {
         event.preventDefault();
         void search(draft);
       }}
     >
-      <label className={shell.field} htmlFor={fieldId}>
-        Name
+      <div className={rv.searchRow}>
+        <label className={ui.visuallyHidden} htmlFor={fieldId}>
+          Name
+        </label>
         <input
           id={fieldId}
           name="q"
+          className={ui.input}
           placeholder="First or last name"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           autoComplete="off"
         />
-      </label>
-      <div className={styles.formActions}>
-        <button type="submit" className={`${shell.ghost} ${styles.searchButton}`} disabled={searching || pending}>
+        <button type="submit" className={`${ui.btn} ${ui.s}`} disabled={searching || pending}>
           Search
         </button>
       </div>
       {notice ? (
-        <p className={shell.help} role="status">
+        <p className={ui.help} role="status">
           {notice}
         </p>
       ) : null}
       {rows && rows.length > 0 ? (
-        <ul className={styles.choices} data-testid="people-results">
+        <div className={`${ui.card} ${rv.list}`} data-testid="people-results">
           {rows.map((person) => (
-            <li key={person.contactId}>
-              <button
-                type="button"
-                className={`${shell.ghost} ${styles.choice}`}
-                disabled={pending}
-                onClick={() => onPick(person.contactId, person.displayName)}
-              >
-                <span className={styles.choiceText}>
-                  <span className={styles.choiceName}>{person.displayName}</span>
-                  <span className={styles.choiceMeta}>{matchMeta(person, person.inMissio)}</span>
-                </span>
-              </button>
-            </li>
+            <button
+              key={person.contactId}
+              type="button"
+              className={`${rv.row}`}
+              disabled={pending}
+              onClick={() => onPick(person.contactId, person.displayName)}
+            >
+              <Avatar id={person.contactId} name={person.displayName} />
+              <span className={rv.rowText}>
+                <span className={ui.nm}>{person.displayName}</span>
+                <span className={ui.meta}>{matchMeta(person, person.inMissio)}</span>
+              </span>
+              <span className={`${ui.btn} ${ui.sm} ${ui.s}`} aria-hidden="true">
+                Link
+              </span>
+            </button>
           ))}
-        </ul>
+        </div>
       ) : null}
     </form>
   );

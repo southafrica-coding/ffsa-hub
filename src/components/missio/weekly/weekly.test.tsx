@@ -32,7 +32,7 @@ describe("weekly feedback fill and Sunday results", () => {
 
   it("shows the house and Sunday from the link, with no house or Sunday question", () => {
     const host = mount(<WeeklyFeedbackFill {...FIXTURE_FILL} initial={{}} endpoint="/x" />);
-    expect(host.textContent).toContain("Sunday · 22 Nov 2026");
+    expect(host.textContent).toContain("House 18 · Sunday 22 Nov 2026");
     expect(host.textContent).toContain("House 18");
     expect(host.textContent).toContain("Please do not write names of guests or personal details.");
     expect(host.querySelectorAll("select")).toHaveLength(2); // win type, challenge type only
