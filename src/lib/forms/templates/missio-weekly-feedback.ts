@@ -143,7 +143,7 @@ function shared(field: Omit<FormField, "parentFieldId" | "showWhenValue">): Form
 export function missioWeeklyFeedbackSchema(): FormSchema {
   return {
     version: 1,
-    branding: { logoUrl: null, accentColor: "#17372F" },
+    branding: { logoUrl: null, accentColor: "#B4532E" },
     steps: [
       {
         id: "wf_numbers",

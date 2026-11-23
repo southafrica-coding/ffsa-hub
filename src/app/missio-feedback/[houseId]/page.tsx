@@ -17,8 +17,8 @@ export const metadata: Metadata = {
 // house comes from the URL and is checked against the viewer's houses;
 // the same save path as the house link runs it (F4).
 //
-// Outside /missio on purpose: this is the Brand Guide look, full width on
-// a phone, not inside the older Missio frame.
+// Outside /missio on purpose: the form is full width on a phone with the
+// wordmark bar (board M4a), not inside the Missio frame.
 
 export default async function SignedInFeedbackPage({ params }: { params: Promise<{ houseId: string }> }) {
   const { houseId } = await params;

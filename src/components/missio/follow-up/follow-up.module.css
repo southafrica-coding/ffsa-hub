@@ -4,12 +4,12 @@
 
 .root label,
 .sheet label {
-  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif !important;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
   font-size: 15px !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  color: var(--sub, rgb(23 55 47 / 0.78)) !important;
+  color: var(--sub, #5b574d) !important;
 }
 
 .root button,
@@ -20,12 +20,12 @@
 .sheet button:hover,
 .sheet button:focus,
 .sheet button:focus-visible {
-  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif !important;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
   font-weight: 600 !important;
   font-size: 15px !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  border-radius: 0 !important;
+  border-radius: 6px !important;
 }
 
 .root input:not([type="checkbox"]):not([type="radio"]),
@@ -39,17 +39,13 @@
   max-width: 100%;
   min-width: 0 !important;
   min-height: 44px;
-  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif !important;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
   font-size: 15px !important;
   font-weight: 400 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
   line-height: 1.5 !important;
-  border-radius: 0 !important;
-  /* Field ground follows the skin, so the select isn't white on ink. */
-  background-color: var(--field, #FFFAF0) !important;
-  color: var(--ink, #17372F) !important;
-  border: 1px solid var(--rule-strong, rgb(23 55 47 / 0.4)) !important;
+  border-radius: 6px !important;
 }
 
 .filters {
@@ -89,21 +85,22 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: 0;
-  background: var(--panel, #FFFAF0);
-  color: var(--ink, #17372F);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 999px;
+  background: var(--panel, #fbf9f4);
+  color: var(--ink, #1c1b17);
   cursor: pointer;
 }
 
 .chipOn {
-  background: var(--accent, #17372F);
-  border-color: var(--accent, #17372F);
-  color: var(--accent-ink, #FFFAF0);
+  /* A filter that's on is frame-dark (board M1b), not a terracotta action. */
+  border-color: var(--frame, #1d2520);
+  background: var(--frame, #1d2520);
+  color: var(--frame-ink, #f3efe4);
 }
 
 .count {
-  font-variant-numeric: lining-nums tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .leaderFilter {
@@ -122,7 +119,7 @@
   box-sizing: border-box;
   min-height: 44px;
   font-weight: 600;
-  color: var(--ink, #17372F);
+  color: var(--ink, #1c1b17);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -138,9 +135,9 @@
 
 .card {
   min-width: 0;
-  background: var(--panel, #FFFAF0);
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: 0;
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 10px;
   padding: 12px 16px 16px;
 }
 
@@ -166,12 +163,12 @@
 .muted,
 .when {
   margin: 4px 0 0;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
   overflow-wrap: anywhere;
 }
 
 .muted {
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .badges {
@@ -187,15 +184,15 @@
   align-items: center;
   min-height: 24px;
   padding: 4px 8px;
-  border-radius: 0;
-  background: var(--accent-soft, #D9F45A);
-  color: var(--accent-text, #17372F);
+  border-radius: 999px;
+  background: var(--accent-soft, #f6e4d9);
+  color: #8e3d1f;
   overflow-wrap: anywhere;
 }
 
 .badgeQuiet {
-  background: var(--subtle, rgb(23 55 47 / 0.05));
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  background: var(--subtle, #eeeadf);
+  color: var(--sub, #5b574d);
 }
 
 .actions {
@@ -214,10 +211,10 @@
   justify-content: center;
   min-height: 44px;
   padding: 8px 12px;
-  background: var(--panel, #FFFAF0);
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: 0;
-  color: var(--ink, #17372F);
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 6px;
+  color: var(--ink, #1c1b17);
   text-decoration: none;
   cursor: pointer;
 }
@@ -233,9 +230,9 @@
 }
 
 .primary {
-  background: var(--accent, #17372F);
-  border: 1px solid var(--accent, #17372F);
-  color: var(--accent-ink, #FFFAF0);
+  background: var(--accent, #b4532e);
+  border: 1px solid var(--accent, #b4532e);
+  color: var(--accent-ink, #fff8ee);
   cursor: pointer;
 }
 
@@ -252,9 +249,9 @@
 .notice {
   margin: 16px 0 0;
   padding: 12px;
-  border-radius: 0;
-  background: var(--warn-soft, rgb(241 143 59 / 0.22));
-  color: var(--warn-text, #17372F);
+  border-radius: 6px;
+  background: var(--warn-soft, #f5e8cf);
+  color: var(--warn, #94631a);
   overflow-wrap: anywhere;
 }
 
@@ -270,7 +267,7 @@
 .entry {
   min-width: 0;
   padding: 16px 0;
-  border-top: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  border-top: 1px solid var(--rule, #ddd7c8);
   overflow-wrap: anywhere;
 }
 
@@ -285,7 +282,7 @@
 
 .entryMeta {
   margin: 8px 0 0;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .sheetControls {
@@ -301,10 +298,10 @@
   width: 44px !important;
   height: 44px !important;
   min-height: 44px !important;
-  background: var(--panel, #FFFAF0) !important;
-  color: var(--ink, #17372F) !important;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22)) !important;
-  border-radius: 0 !important;
+  background: var(--panel, #fbf9f4) !important;
+  color: var(--ink, #1c1b17) !important;
+  border: 1px solid var(--rule, #ddd7c8) !important;
+  border-radius: 6px !important;
   box-shadow: none !important;
 }
 
@@ -332,23 +329,23 @@
   text-align: left;
   white-space: normal;
   overflow-wrap: anywhere;
-  background: var(--panel, #FFFAF0);
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  color: var(--ink, #17372F);
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, #ddd7c8);
+  color: var(--ink, #1c1b17);
   cursor: pointer;
 }
 
 .choiceOn {
-  background: var(--accent-soft, #D9F45A);
-  border-color: var(--accent, #17372F);
+  background: var(--accent-soft, #f6e4d9);
+  border-color: var(--accent, #b4532e);
 }
 
 .sheet[data-slot="sheet-content"] {
   box-sizing: border-box;
   width: 100% !important;
   max-width: 100% !important;
-  background: var(--panel, #FFFAF0) !important;
-  color: var(--ink, #17372F) !important;
+  background: var(--panel, #fbf9f4) !important;
+  color: var(--ink, #1c1b17) !important;
   border-radius: 0 !important;
 }
 
@@ -398,9 +395,9 @@
 .review {
   margin: 20px 0 0;
   padding: 16px;
-  border: 1px solid var(--gold, #F18F3B);
-  border-radius: var(--radius-md, 0);
-  background: var(--gold-soft, rgb(241 143 59 / 0.22));
+  border: 1px solid var(--gold, #b98a2e);
+  border-radius: var(--radius-md, 14px);
+  background: var(--gold-soft, #f4ead2);
   min-width: 0;
 }
 
@@ -411,7 +408,7 @@
 
 .reviewLede {
   margin: 4px 0 12px;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
 }
 
 .reviewList {
@@ -427,8 +424,8 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding: 12px 16px;
-  border-radius: var(--radius-sm, 0);
-  background: var(--panel, #FFFAF0);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--panel, #fbf9f4);
   min-width: 0;
 }
 
@@ -457,7 +454,7 @@
 .compareLabel {
   font-size: 13px;
   font-weight: 600;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .compareName {
@@ -467,10 +464,9 @@
 
 .compareMark {
   justify-self: start;
-  font-family: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
-  font-variant-numeric: lining-nums;
-  font-size: 24px;
-  color: var(--gold-text, #17372F);
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-size: 20px;
+  color: var(--gold-text, #7a5a17);
 }
 
 .compareActions {
@@ -495,30 +491,29 @@
   gap: 0;
   min-height: 56px;
   padding: 6px 4px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  background: var(--panel, #FFFAF0);
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  border: 1px solid var(--rule, #ddd7c8);
+  background: var(--panel, #fbf9f4);
+  color: var(--sub, #5b574d);
   font-size: 13px !important;
   line-height: 1.2;
   cursor: pointer;
 }
 
 .tabCount {
-  font-family: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
-  font-variant-numeric: lining-nums;
-  font-size: 24px;
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-size: 20px;
   font-weight: 600;
-  color: var(--ink, #17372F);
+  color: var(--ink, #1c1b17);
 }
 
 .root .tabOn {
-  border-color: var(--accent-text, #17372F);
-  background: var(--accent-soft, #D9F45A);
-  color: var(--accent-text, #17372F);
+  border-color: var(--accent-text, #8e3d1f);
+  background: var(--accent-soft, #f6e4d9);
+  color: var(--accent-text, #8e3d1f);
 }
 
 .root .tabOn .tabCount {
-  color: var(--accent-text, #17372F);
+  color: var(--accent-text, #8e3d1f);
 }
 
 /* Desktop: the funnel reads left to right, so a stuck column stands out. */
@@ -534,8 +529,8 @@
 .column {
   min-width: 0;
   padding: 12px;
-  border-radius: var(--radius-md, 0);
-  background: var(--subtle, rgb(23 55 47 / 0.05));
+  border-radius: var(--radius-md, 14px);
+  background: var(--subtle, #eeeadf);
 }
 
 .columnHead {
@@ -548,17 +543,17 @@
 }
 
 .columnCount {
-  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
   font-size: 14px;
   font-weight: 600;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
 }
 
 .columnNote,
 .columnEmpty {
   margin: 8px 4px 0;
   font-size: 14px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .column .list {
@@ -569,9 +564,9 @@
 .empty {
   margin: 20px 0 0;
   padding: 24px 16px;
-  border: 1px dashed var(--rule-strong, rgb(23 55 47 / 0.4));
-  border-radius: var(--radius-md, 0);
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  border: 1px dashed var(--rule-strong, #cfc8b6);
+  border-radius: var(--radius-md, 14px);
+  color: var(--sub, #5b574d);
   text-align: center;
 }
 
@@ -581,16 +576,15 @@
 
 .emptyTitle {
   margin-bottom: 4px !important;
-  font-family: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
-  font-variant-numeric: lining-nums;
-  font-size: 24px;
-  color: var(--ink, #17372F);
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-size: 20px;
+  color: var(--ink, #1c1b17);
 }
 
 /* Card */
 .root .card {
-  border-radius: var(--radius-sm, 0);
-  box-shadow: var(--shadow-1, none);
+  border-radius: var(--radius-sm, 10px);
+  box-shadow: var(--shadow-1, 0 1px 2px rgba(28, 27, 23, 0.05));
 }
 
 .cardTop {
@@ -608,8 +602,8 @@
   height: 36px;
   margin-top: 4px;
   border-radius: 50%;
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
   font-size: 13px;
   font-weight: 700;
 }
@@ -631,13 +625,13 @@
 }
 
 .badgeHouse {
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
 }
 
 .badgeReview {
-  background: var(--gold-soft, rgb(241 143 59 / 0.22));
-  color: var(--gold-text, #17372F);
+  background: var(--gold-soft, #f4ead2);
+  color: var(--gold-text, #7a5a17);
 }
 
 .cardFoot {
@@ -657,7 +651,7 @@
   margin-right: auto;
   font-weight: 600;
   font-size: 14px;
-  color: var(--ink, #17372F);
+  color: var(--ink, #1c1b17);
 }
 
 .leaderDot {
@@ -666,8 +660,8 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: var(--subtle, rgb(23 55 47 / 0.05));
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  background: var(--subtle, #eeeadf);
+  color: var(--sub, #5b574d);
   font-size: 11px;
   font-weight: 700;
 }
@@ -684,9 +678,9 @@
   justify-content: center;
   min-height: 44px;
   padding: 8px 14px;
-  border: 1px solid var(--accent, #17372F);
-  background: var(--accent, #17372F);
-  color: var(--accent-ink, #FFFAF0);
+  border: 1px solid var(--accent, #b4532e);
+  background: var(--accent, #b4532e);
+  color: var(--accent-ink, #fff8ee);
   cursor: pointer;
 }
 
@@ -702,7 +696,7 @@
   align-items: center;
   min-height: 32px;
   font-weight: 600;
-  color: var(--link, #17372F);
+  color: var(--link, #2f5d50);
   text-underline-offset: 3px;
 }
 

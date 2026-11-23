@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { guideBody, guideDisplay } from "./fonts";
+import type { CSSProperties } from "react";
+import { missioSkinVars } from "../access";
+import { missioBody, missioDisplay, missioMono } from "../fonts";
+import { MissioOrgRoot } from "../org-root";
 import styles from "./guide.module.css";
-
-export type GuideTheme = "light" | "dark";
 
 /** "Sunday · 22 Nov 2026" (the day it really is, so a Wednesday house reads Wednesday). */
 export function meetingLabel(iso: string): { day: string; date: string } {
@@ -14,35 +15,34 @@ export function meetingLabel(iso: string): { day: string; date: string } {
   };
 }
 
-export const pad2 = (n: number) => String(n).padStart(2, "0");
+const skin = missioSkinVars() as CSSProperties;
 
 /**
- * The page ground and the MISSIŌ SA top bar. Light (paper) unless the Hub
- * is in dark mode or `theme` forces one.
+ * The page ground and the MISSIŌ wordmark bar (board M4a): paper page, the
+ * wordmark centred, an optional link on the right. Always light; Missio has no
+ * dark page theme.
  */
 export function GuideSurface({
   children,
   nav,
-  theme,
   state,
 }: {
   children: ReactNode;
   /** The right-hand label in the top bar. */
   nav?: { label: string; href?: string } | null;
-  theme?: GuideTheme;
   state?: string;
 }) {
   return (
     <div
-      className={`${styles.surface} ${guideBody.variable} ${guideDisplay.variable}`}
-      data-theme={theme}
-      data-skin="missio-guide"
+      className={`${styles.surface} ${missioBody.variable} ${missioDisplay.variable} ${missioMono.variable}`}
+      style={skin}
+      data-skin="missio"
       data-state={state}
     >
+      <MissioOrgRoot />
       <header className={styles.top}>
-        <div className={styles.mark} aria-label="MissioSA">
-          MISSIŌ<span className={styles.sa}>SA</span>
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element -- a 2 KB wordmark, no layout shift */}
+        <img className={styles.mark} src="/brands/missio/missio-wordmark.png" alt="Missio" width={79} height={22} />
         {nav ? (
           nav.href ? (
             <a className={styles.navlabel} href={nav.href}>
@@ -64,7 +64,6 @@ export function GuideStatus({
   title,
   body,
   nav,
-  theme,
   state,
   action,
 }: {
@@ -72,12 +71,11 @@ export function GuideStatus({
   title: ReactNode;
   body: string;
   nav?: { label: string; href?: string } | null;
-  theme?: GuideTheme;
   state: string;
   action?: { label: string; href: string };
 }) {
   return (
-    <GuideSurface nav={nav} theme={theme} state={state}>
+    <GuideSurface nav={nav} state={state}>
       <main className={styles.intro}>
         <p className={styles.eyebrow}>{eyebrow}</p>
         <h1 className={styles.h1}>{title}</h1>

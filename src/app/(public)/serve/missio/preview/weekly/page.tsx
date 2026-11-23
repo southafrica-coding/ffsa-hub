@@ -13,18 +13,16 @@ export const dynamic = "force-dynamic";
 export default async function WeeklyPreviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ screen?: string; theme?: string }>;
+  searchParams: Promise<{ screen?: string }>;
 }) {
   if (!availabilityPreviewEnabled()) notFound();
-  const { screen, theme: rawTheme } = await searchParams;
-  const theme = rawTheme === "dark" ? "dark" : "light";
+  const { screen } = await searchParams;
   if (screen === "results") {
     return (
       <SundayResultsView
         results={buildSundayResults(FIXTURE_HOUSES, FIXTURE_ROWS, FIXTURE_SUNDAY)}
         nudge={{ enabled: false, endpoint: "/api/missio/feedback/nudge" }}
         navHref="/missio/house-churches/feedback"
-        theme={theme}
       />
     );
   }
@@ -33,7 +31,6 @@ export default async function WeeklyPreviewPage({
       {...FIXTURE_FILL}
       endpoint="/api/serve/missio/feedback/preview"
       houseHref="/serve/missio/preview/weekly?screen=results"
-      theme={theme}
       submit={undefined}
     />
   );

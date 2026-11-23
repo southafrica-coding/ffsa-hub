@@ -4,7 +4,7 @@
 .page {
   font-size: 15px;
   line-height: 1.6;
-  color: var(--ink, #17372F);
+  color: var(--ink, #1c1b17);
 }
 
 /* Resting state is fully opaque. The animation is the only thing that
@@ -49,6 +49,45 @@
   letter-spacing: -0.01em;
   margin: 8px 0 0;
   max-width: 100%;
+}
+
+/* Home greeting (board M11a): the one warm moment, a frame-dark panel that
+   fades out to the right. A real Sunday photo can go behind it later. */
+.page .hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 180px;
+  padding: 24px 18px 20px;
+  border-radius: var(--radius-lg, 20px);
+  background: linear-gradient(100deg, #2a332d 0%, #3d4740 55%, #747a73 100%);
+  color: var(--frame-ink, #f3efe4);
+}
+
+.page .hero .eyebrow {
+  color: rgba(243, 239, 228, 0.82);
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.page .hero .title {
+  color: var(--frame-ink, #f3efe4);
+  font-weight: 560;
+  font-size: 34px;
+  line-height: 38px;
+  margin-top: 4px;
+}
+
+@media (min-width: 768px) {
+  .page .hero {
+    min-height: 200px;
+    padding: 32px 40px;
+  }
+
+  .page .hero .title {
+    font-size: 44px;
+    line-height: 48px;
+  }
 }
 
 .page .lede {
@@ -134,7 +173,7 @@
 }
 
 .page .card:hover {
-  border-color: var(--ink, #17372F);
+  border-color: var(--ink, #1c1b17);
 }
 
 .page .toolbar {
@@ -187,8 +226,8 @@
 }
 
 .page .card {
-  border-radius: var(--radius-md, 0);
-  box-shadow: var(--shadow-1, none);
+  border-radius: var(--radius-md, 14px);
+  box-shadow: var(--shadow-1, 0 1px 2px rgba(28, 27, 23, 0.05));
 }
 
 .homeGrid .card {
@@ -219,7 +258,7 @@
 }
 
 .page .cardLink {
-  color: var(--link, #17372F);
+  color: var(--link, #2f5d50);
   font-size: 14px;
   font-weight: 600;
   min-height: 44px;
@@ -232,11 +271,11 @@
 .page .cardLink:focus-visible {
   text-decoration: underline;
   text-underline-offset: 3px;
-  color: var(--link, #17372F);
+  color: var(--link, #2f5d50);
 }
 
 .go {
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
   font-size: 18px;
   flex: none;
 }
@@ -250,7 +289,7 @@
 .stats dd {
   margin: 0;
   font-family: var(--display);
-  font-weight: 500;
+  font-weight: 560;
   font-size: 40px;
   line-height: 44px;
   letter-spacing: -0.02em;
@@ -258,7 +297,7 @@
 }
 
 .stats dt {
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
   font-size: 14px;
   line-height: 20px;
 }
@@ -274,7 +313,7 @@
 
 .big {
   font-family: var(--display);
-  font-weight: 500;
+  font-weight: 560;
   font-size: 56px;
   line-height: 56px;
   letter-spacing: -0.02em;
@@ -291,17 +330,16 @@
 .bars span {
   flex: 1 1 0;
   min-width: 0;
-  border-radius: 0;
-  /* Sage, the Guide's quiet third colour; ink-at-40% read as grey. */
-  background: var(--olive-soft, #A8BAA6);
+  border-radius: 3px;
+  background: var(--rule-strong, #cfc8b6);
 }
 
 .bars .barReady {
-  background: var(--olive, #17372F);
+  background: var(--olive, #4e6b4f);
 }
 
 .caption {
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
   font-size: 13px;
   line-height: 18px;
   margin: -6px 0 0;
@@ -322,19 +360,19 @@
   align-items: center;
   min-height: 26px;
   padding: 0 10px;
-  border-radius: 0;
+  border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
 }
 
 .chipOlive {
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
 }
 
 .chipGold {
-  background: var(--gold-soft, rgb(241 143 59 / 0.22));
-  color: var(--gold-text, #17372F);
+  background: var(--gold-soft, #f4ead2);
+  color: var(--gold-text, #7a5a17);
 }
 
 .page .notice {
@@ -344,9 +382,9 @@
   gap: 12px;
   min-height: 44px;
   padding: 10px 14px;
-  border-radius: var(--radius-sm, 0);
-  background: var(--gold-soft, rgb(241 143 59 / 0.22));
-  color: var(--ink, #17372F);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--gold-soft, #f4ead2);
+  color: var(--ink, #1c1b17);
   font-size: 14px;
   line-height: 20px;
 }
@@ -358,9 +396,9 @@
   align-self: flex-start;
   min-height: 44px;
   padding: 0 18px;
-  border-radius: var(--radius-sm, 0);
-  background: var(--accent, #17372F);
-  color: var(--accent-ink, #FFFAF0);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--accent, #b4532e);
+  color: #ffffff;
   font-size: 15px;
   font-weight: 600;
   margin-top: auto;
@@ -368,14 +406,14 @@
 
 .page .action:hover,
 .page .action:focus-visible {
-  background: var(--accent-soft, #D9F45A);
-  color: var(--ink, #17372F);
+  background: var(--accent-text, #8e3d1f);
+  color: #ffffff;
 }
 
 .page .action:focus-visible,
 .page .notice:focus-visible,
 .page .cardLink:focus-visible {
-  outline: 2px solid var(--link, #17372F);
+  outline: 2px solid var(--link, #2f5d50);
   outline-offset: 2px;
 }
 
@@ -385,7 +423,7 @@
   justify-content: space-between;
   gap: 12px;
   font-size: 14px;
-  color: var(--bad-text, #17372F);
+  color: var(--bad, #a3261b);
 }
 
 .skeleton {
@@ -396,8 +434,8 @@
 
 .skeleton span {
   height: 14px;
-  border-radius: 0;
-  background: var(--subtle, rgb(23 55 47 / 0.05));
+  border-radius: 6px;
+  background: var(--subtle, #eeeadf);
 }
 
 .skeleton span:nth-child(1) {

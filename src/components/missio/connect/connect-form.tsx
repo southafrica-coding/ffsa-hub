@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MissioWordmark } from "../wordmark";
+import Image from "next/image";
 import Link from "next/link";
 import { missioSkinVars } from "../access";
 import { MissioApiError } from "../api";
@@ -103,7 +103,7 @@ export function ConnectForm({ client = connectClient }: { client?: ConnectClient
     return (
       <main className={styles.page} data-skin="missio" data-connect="thanks" style={missioSkinVars()}>
         <div className={styles.column}>
-          <MissioWordmark size="lg" className={styles.mark} />
+          <Image src="/brands/missio/missio-wordmark.png" alt="Missio" width={677} height={188} className={styles.mark} priority />
           <h1>Thank you.</h1>
           <p className={styles.thanksBody}>We’re glad you’re here.</p>
           <p className={styles.thanksBody}>
@@ -137,7 +137,7 @@ export function ConnectForm({ client = connectClient }: { client?: ConnectClient
     <main className={styles.page} data-skin="missio" data-connect="form" style={missioSkinVars()}>
       <div className={styles.column}>
         <header>
-          <MissioWordmark size="lg" className={styles.mark} />
+          <Image src="/brands/missio/missio-wordmark.png" alt="Missio" width={677} height={188} className={styles.mark} priority />
           {step === 1 ? (
             <>
               <h1>

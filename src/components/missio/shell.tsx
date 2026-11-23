@@ -11,8 +11,6 @@ import { loadFfsaRoleNames } from "./ffsa-roles";
 import { missioCrumbLabel } from "./crumb";
 import { BACK_TO_FFSA_HUB, missioOrgHeader, needsPlatformRoleLookup, type OrgHeaderState } from "./org-header";
 import { OrgSwitcher, OrgTile } from "./org-switcher";
-import { MissioThemeToggle } from "./theme";
-import { MissioWordmark } from "./wordmark";
 import type { MissioMe } from "./types-shim";
 import styles from "./shell.module.css";
 
@@ -160,7 +158,7 @@ function MissioReady({
           <MissioTabBar me={me} />
         </div>
       </div>
-      <SheetContent side="left" id="missio-nav" className={`theme-light ${styles.drawer}`} style={skinStyle} data-skin="missio">
+      <SheetContent side="left" id="missio-nav" className={`theme-light ${styles.drawer}`} style={skinStyle}>
         <SheetTitle className={styles.visuallyHidden}>Missio navigation</SheetTitle>
         <SheetDescription className={styles.visuallyHidden}>Sections in this church</SheetDescription>
         <MissioSidebar me={me} ffsaRoleNames={ffsaRoleNames} inDrawer onNavigate={() => setNavOpen(false)} />
@@ -199,9 +197,6 @@ function MissioSidebar({
 
   return (
     <aside className={`${styles.side} ${inDrawer ? styles.sideDrawer : ""}`}>
-      <Link href="/missio" className={styles.brand} onClick={onNavigate} aria-label="Missio home">
-        <MissioWordmark size="md" />
-      </Link>
       {inDrawer ? <div className={styles.drawerOrg}>{orgNode}</div> : orgNode}
       {pastor ? (
         <form className={styles.search} action="/missio/people" onSubmit={() => onNavigate?.()}>
@@ -402,10 +397,10 @@ function MissioTop({
         </div>
       ) : null}
       <span className={styles.crumb}>
-        {orgName} / <b>{section}</b>
+        <span className={styles.crumbOrg}>{orgName} / </span>
+        <b>{section}</b>
       </span>
       <span className={styles.spacer} />
-      <MissioThemeToggle className={styles.themeToggle} />
       <span className={styles.ent}>
         <span className={styles.dot} />
         <span className={styles.entName}>{orgName}</span>

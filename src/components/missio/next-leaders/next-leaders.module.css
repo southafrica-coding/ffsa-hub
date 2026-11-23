@@ -11,9 +11,9 @@
 .banner {
   margin: 16px 0 0;
   padding: 14px 16px;
-  border-radius: 0;
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  border-radius: 12px;
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
   font-size: 15px;
   line-height: 1.5;
 }
@@ -34,8 +34,8 @@
 .column {
   min-width: 0;
   padding: 14px;
-  border-radius: 0;
-  background: var(--panel, #FFFAF0);
+  border-radius: 14px;
+  background: var(--panel, #f3f0e8);
 }
 
 .column h2 {
@@ -46,7 +46,7 @@
 }
 
 .column h2 span {
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
   font-weight: 500;
 }
 
@@ -61,16 +61,16 @@
 .empty {
   margin: 0;
   font-size: 14px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .card {
   display: grid;
   gap: 6px;
   padding: 12px 14px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: 0;
-  background: var(--field, #FFFAF0);
+  border: 1px solid var(--rule, #e7e2d5);
+  border-radius: 12px;
+  background: #fff;
 }
 
 .cardTop {
@@ -95,8 +95,8 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
   font-weight: 700;
   font-size: 12px;
 }
@@ -104,7 +104,7 @@
 .meta {
   margin: 0;
   font-size: 13px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .note {
@@ -124,10 +124,10 @@
 .move {
   min-height: 34px;
   padding: 0 12px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: 0;
-  background: var(--field, #FFFAF0);
-  color: var(--ink, #17372F);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink, #1c1b17);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -141,7 +141,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--link, #17372F);
+  color: var(--link, #2f5d50);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -162,7 +162,7 @@
   min-height: 72px;
   padding: 8px 10px;
   border: 1px solid var(--rule);
-  border-radius: 0;
+  border-radius: 6px;
   font: inherit;
   font-weight: 400;
   resize: vertical;
@@ -171,5 +171,5 @@
 .footnote {
   margin: 18px 0 0;
   font-size: 13px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }

@@ -11,11 +11,11 @@ import {
   type FormSchema,
 } from "@/lib/forms/schema";
 import { NO_HELP_NEEDED } from "@/lib/forms/templates/missio-weekly-feedback";
-import { GuideSurface, meetingLabel, pad2, type GuideTheme } from "./surface";
+import { GuideSurface, meetingLabel } from "./surface";
 import styles from "./guide.module.css";
 
 // ============================================================
-// Weekly feedback — the leader's fill (F4, Brand Guide look)
+// Weekly feedback — the leader's fill (F4, Missio design, board M4a)
 // ============================================================
 // Renders the form's own schema (the seeded row, or the template
 // before it is seeded), so a question the builder adds still shows.
@@ -37,7 +37,6 @@ export type WeeklyFillProps = {
   endpoint: string;
   /** Top-bar link back to the house page (signed-in leaders only). */
   houseHref?: string | null;
-  theme?: GuideTheme;
   /** Tests and screenshots: stands in for the POST. */
   submit?: (answers: Record<string, unknown>) => Promise<SubmitOutcome>;
 };
@@ -165,7 +164,7 @@ function Stepper({
 // ────────────────────────────────────────────────────────────
 
 export function WeeklyFeedbackFill(props: WeeklyFillProps) {
-  const { schema, houseNumber, leaders, meetingDate, lastAttendance, sentBefore, endpoint, houseHref, theme } = props;
+  const { schema, houseNumber, leaders, meetingDate, lastAttendance, sentBefore, endpoint, houseHref } = props;
   const [values, setValues] = useState<Record<string, unknown>>(() => startingAnswers(schema, props.initial, lastAttendance));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
@@ -233,7 +232,7 @@ export function WeeklyFeedbackFill(props: WeeklyFillProps) {
 
   if (sent) {
     return (
-      <GuideSurface nav={nav} theme={theme} state="sent">
+      <GuideSurface nav={nav} state="sent">
         <main className={styles.intro}>
           <p className={styles.eyebrow}>
             House {houseNumber} · {when.day} {when.date}
@@ -432,11 +431,11 @@ export function WeeklyFeedbackFill(props: WeeklyFillProps) {
   const shown = (f: FormField) => isFieldVisible(f, fieldsById, values);
 
   return (
-    <GuideSurface nav={nav} theme={theme} state="form">
+    <GuideSurface nav={nav} state="form">
       <form ref={formRef} onSubmit={(e) => void onSubmit(e)} noValidate data-testid="weekly-feedback-form">
         <main>
           <div className={styles.intro}>
-            <p className={styles.eyebrow}>01 / Weekly feedback</p>
+            <p className={styles.eyebrow}>Weekly feedback</p>
             <h1 className={styles.h1}>
               How was it <em>this {when.day || "week"}?</em>
             </h1>
@@ -453,11 +452,11 @@ export function WeeklyFeedbackFill(props: WeeklyFillProps) {
             {sentBefore ? <p className={styles.meta}>You already sent this week. Change anything and send again.</p> : null}
           </div>
 
-          {schema.steps.map((step, si) => (
+          {schema.steps.map((step) => (
             <section key={step.id} aria-labelledby={`wf-step-${step.id}`}>
               <h2 className={styles.sect} id={`wf-step-${step.id}`}>
                 <span className={styles.sectN}>
-                  {pad2(si + 2)} / {step.title}
+                  {step.title}
                 </span>
               </h2>
               <div className={styles.pad}>

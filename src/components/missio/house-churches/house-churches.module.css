@@ -6,24 +6,24 @@
 }
 
 .root label {
-  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif !important;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
   font-size: 13px !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  color: var(--sub, rgb(23 55 47 / 0.78)) !important;
+  color: var(--sub, #5b574d) !important;
 }
 
 .root button,
 .root button:hover,
 .root button:focus,
 .root button:focus-visible {
-  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif !important;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
   font-weight: 600 !important;
   font-size: 15px !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  border-radius: 0 !important;
+  border-radius: 6px !important;
 }
 
 .root input:not([type="checkbox"]):not([type="radio"]),
@@ -33,13 +33,13 @@
   width: 100%;
   max-width: 100%;
   min-width: 0 !important;
-  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif !important;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
   font-size: 15px !important;
   font-weight: 400 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
   line-height: 1.5 !important;
-  border-radius: 0 !important;
+  border-radius: 6px !important;
   padding: 8px 12px !important;
 }
 
@@ -65,7 +65,7 @@
 }
 
 .card:focus-visible {
-  outline: 2px solid var(--ink, #17372F);
+  outline: 2px solid var(--ink, #1c1b17);
   outline-offset: 2px;
 }
 
@@ -83,7 +83,7 @@
 
 .count {
   flex: none;
-  font-variant-numeric: lining-nums tabular-nums;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 
@@ -95,7 +95,7 @@
 
 .number {
   margin: 8px 0 0;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
 }
 
 .block {
@@ -135,7 +135,7 @@
 
 .progress {
   flex: none;
-  font-variant-numeric: lining-nums tabular-nums;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 
@@ -240,11 +240,11 @@
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .quiet {
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .metaLine {
@@ -252,7 +252,7 @@
   flex-wrap: wrap;
   gap: 8px 12px;
   margin: 12px 0 0;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
   min-width: 0;
 }
 
@@ -270,7 +270,7 @@
 .root .doneTitle {
   margin: 40px 0 0;
   font-size: 22px;
-  font-weight: 500;
+  font-weight: 560;
   line-height: 1.25;
   letter-spacing: -0.4px;
 }
@@ -278,9 +278,9 @@
 .summary {
   margin-top: 24px;
   min-width: 0;
-  background: var(--panel, #FFFAF0);
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: 0;
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 10px;
   padding: 16px;
 }
 
@@ -291,9 +291,9 @@
 .quoteBox {
   margin: 8px 0 0;
   padding: 12px;
-  background: var(--subtle, rgb(23 55 47 / 0.05));
-  border-radius: 0;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  background: var(--subtle, #eeeadf);
+  border-radius: 6px;
+  color: var(--sub, #5b574d);
   overflow-wrap: anywhere;
 }
 
@@ -332,7 +332,7 @@
   font-weight: 400;
   font-size: 13px;
   line-height: 1.4;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .memberList {
@@ -350,7 +350,7 @@
   align-items: center;
   min-width: 0;
   padding: 12px 0;
-  border-top: 1px solid var(--rule, rgb(23 55 47 / 0.22));
+  border-top: 1px solid var(--rule, #ddd7c8);
 }
 
 .memberName {
@@ -380,18 +380,18 @@
   width: min(280px, calc(100vw - 32px)) !important;
   max-width: calc(100vw - 32px);
   box-sizing: border-box;
-  background: var(--panel, #FFFAF0) !important;
-  color: var(--ink, #17372F);
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22)) !important;
-  border-radius: 0 !important;
+  background: var(--panel, #fbf9f4) !important;
+  color: var(--ink, #1c1b17);
+  border: 1px solid var(--rule, #ddd7c8) !important;
+  border-radius: 10px !important;
   box-shadow: none !important;
   padding: 16px !important;
-  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
 }
 
 .menu,
 .menu * {
-  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif !important;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
 }
 
 .menuTitle {
@@ -405,7 +405,7 @@
 .menu button:hover,
 .menu button:focus,
 .menu button:focus-visible {
-  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif !important;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
 }
@@ -413,7 +413,7 @@
 .menu label {
   font-size: 13px !important;
   font-weight: 600 !important;
-  color: var(--sub, rgb(23 55 47 / 0.78)) !important;
+  color: var(--sub, #5b574d) !important;
 }
 
 .menu button,
@@ -422,19 +422,19 @@
 .menu button:focus-visible {
   font-size: 15px !important;
   font-weight: 600 !important;
-  border-radius: 0 !important;
+  border-radius: 6px !important;
 }
 
 .menu select {
   box-sizing: border-box;
   width: 100%;
   margin-top: 8px;
-  font-family: var(--font-missio-body), "DM Sans", system-ui, sans-serif !important;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
   font-size: 15px !important;
   font-weight: 400 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  border-radius: 0 !important;
+  border-radius: 6px !important;
 }
 
 .menuActions {
@@ -466,9 +466,9 @@
 .added {
   margin: 16px 0 0;
   padding: 14px 16px;
-  border: 1px solid var(--olive, #17372F);
-  border-radius: var(--radius-sm, 0);
-  background: var(--olive-soft, #A8BAA6);
+  border: 1px solid var(--olive, #4e6b4f);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--olive-soft, #e3eadf);
 }
 
 .added h2 {
@@ -524,23 +524,24 @@
 .root .filterChip {
   min-height: 40px;
   padding: 6px 14px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: 0 !important;
-  background: var(--panel, #FFFAF0);
-  color: var(--ink, #17372F);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 999px !important;
+  background: var(--panel, #fbf9f4);
+  color: var(--ink, #1c1b17);
   font-size: 14px !important;
   cursor: pointer;
 }
 
 .root .filterChipOn {
-  border-color: var(--accent-text, #17372F);
-  background: var(--accent-text, #17372F);
-  color: var(--accent-ink, #FFFAF0);
+  /* A filter that's on is frame-dark (board M1b), not a terracotta action. */
+  border-color: var(--frame, #1d2520);
+  background: var(--frame, #1d2520);
+  color: var(--frame-ink, #f3efe4);
 }
 
 .root .filterChip:focus-visible,
 .houseCard:focus-visible {
-  outline: 2px solid var(--link, #17372F);
+  outline: 2px solid var(--link, #2f5d50);
   outline-offset: 2px;
 }
 
@@ -556,18 +557,18 @@
   height: 100%;
   box-sizing: border-box;
   padding: 16px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: var(--radius-md, 0);
-  background: var(--panel, #FFFAF0);
-  box-shadow: var(--shadow-1, none);
-  color: var(--ink, #17372F);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-md, 14px);
+  background: var(--panel, #fbf9f4);
+  box-shadow: var(--shadow-1, 0 1px 2px rgba(28, 27, 23, 0.05));
+  color: var(--ink, #1c1b17);
   text-decoration: none;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .houseCard:hover {
-  border-color: var(--accent-text, #17372F);
+  border-color: var(--accent-text, #8e3d1f);
 }
 
 .houseTop {
@@ -579,9 +580,8 @@
 }
 
 .houseName {
-  font-family: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
-  font-variant-numeric: lining-nums;
-  font-size: 26px;
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-size: 22px;
   font-weight: 600;
   line-height: 1.2;
   min-width: 0;
@@ -593,7 +593,7 @@
   gap: 8px;
   flex: none;
   font-size: 14px;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
 }
 
 .houseCard .number {
@@ -608,16 +608,16 @@
 }
 
 .sizeCount {
-  font-family: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
-  font-size: 38px;
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-size: 32px;
   font-weight: 600;
   line-height: 1;
-  font-variant-numeric: lining-nums tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .sizeLabel {
   font-size: 14px;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
 }
 
 .dots {
@@ -632,18 +632,18 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--rule, rgb(23 55 47 / 0.22));
+  background: var(--rule, #ddd7c8);
 }
 
 .dotOn {
-  background: var(--olive, #17372F);
+  background: var(--olive, #4e6b4f);
 }
 
 .dotMore {
   margin-left: 2px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--olive-text, #17372F);
+  color: var(--olive-text, #3f5940);
 }
 
 .leading {
@@ -664,10 +664,10 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border: 2px solid var(--panel, #FFFAF0);
+  border: 2px solid var(--panel, #fbf9f4);
   border-radius: 50%;
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
   font-size: 11px;
   font-weight: 700;
 }
@@ -685,7 +685,7 @@
 .place {
   margin: 0;
   font-size: 14px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .signals {
@@ -700,19 +700,19 @@
   align-items: center;
   min-height: 24px;
   padding: 2px 10px;
-  border-radius: 0;
+  border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
 }
 
 .signalReady {
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
 }
 
 .signalWarn {
-  background: var(--gold-soft, rgb(241 143 59 / 0.22));
-  color: var(--gold-text, #17372F);
+  background: var(--gold-soft, #f4ead2);
+  color: var(--gold-text, #7a5a17);
 }
 
 @media (min-width: 1200px) {
@@ -741,13 +741,13 @@
   align-items: center;
   gap: 4px 12px;
   margin: 8px 0 0;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
 }
 
 .houseWhere > span:not(:last-child)::after {
   content: "·";
   margin-left: 12px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .root .headAction {
@@ -775,9 +775,9 @@
   align-content: start;
   gap: 8px;
   padding: 16px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: var(--radius-md, 0);
-  background: var(--panel, #FFFAF0);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-md, 14px);
+  background: var(--panel, #fbf9f4);
   min-width: 0;
 }
 
@@ -790,7 +790,7 @@
   margin: 4px 0 6px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .leadingList {
@@ -815,12 +815,12 @@
 
 .leadingRole {
   font-size: 13px;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
 }
 
 .healthNote {
   margin: 4px 0 0;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
 }
 
 .memberName {

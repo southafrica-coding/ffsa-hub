@@ -1,0 +1,13 @@
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  margin-bottom: 8px;
+}
+
+.mark {
+  display: block;
+  width: 100px;
+  height: auto;
+}

@@ -1,18 +1,29 @@
-import { Cormorant_Garamond, DM_Sans } from "next/font/google";
+import { Archivo, Fraunces, Roboto_Mono } from "next/font/google";
 
-/** Body face for Missio (MissioSA Brand Guide): DM Sans. Shared by the layout and the portaled dialog. */
-export const missioBody = DM_Sans({
+/** Body / UI face for Missio (build guide §2): Archivo. Shared by the layout and the portaled dialog. */
+export const missioBody = Archivo({
   subsets: ["latin"],
-  weight: "variable",
+  weight: ["400", "500", "600", "700"],
   variable: "--font-missio-body",
   display: "swap",
 });
 
-/** Display face for Missio headings: Cormorant Garamond. The dialog portals to document.body, so it has to carry this itself. */
-export const missioDisplay = Cormorant_Garamond({
+/**
+ * Titles and big numbers: Fraunces, variable on weight and optical size so
+ * titles sit at the guide's ~560. The dialog portals to document.body, so it
+ * has to carry this itself.
+ */
+export const missioDisplay = Fraunces({
   subsets: ["latin"],
-  weight: ["500", "600"],
-  style: ["normal", "italic"],
+  axes: ["opsz"],
   variable: "--font-missio-display",
+  display: "swap",
+});
+
+/** Times and IDs only. */
+export const missioMono = Roboto_Mono({
+  subsets: ["latin"],
+  weight: ["500"],
+  variable: "--font-missio-mono",
   display: "swap",
 });

@@ -1,23 +1,39 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { MISSIO_BRAND, missioSkinVars } from "./access";
-import { themeFromUrl } from "./theme";
+import { MISSIO_TOKENS, missioSkinVars } from "./access";
 
 const here = path.dirname(new URL(import.meta.url).pathname);
-const themeCss = readFileSync(path.join(here, "missio-theme.css"), "utf8");
+const app = path.join(here, "../../app");
+const tokensCss = readFileSync(path.join(here, "missio-tokens.css"), "utf8");
 
-/** Custom properties declared inside the first rule whose selector contains `selector`. */
+/** The token block from the build guide (§2, board M1a), verbatim. */
+const GUIDE = `
+  --frame:#1D2520; --frame-ink:#F3EFE4; --frame-ink-2:#A8B0A6; --terra-on-frame:#D7774F;
+  --page:#F3F0E8; --panel:#FBF9F4; --subtle:#EEEADF; --rule:#DDD7C8; --rule-strong:#CFC8B6;
+  --ink:#1C1B17; --ink-2:#5B574D; --ink-3:#6E685B; --link:#2F5D50;
+  --terra:#B4532E; --terra-soft:#F6E4D9; --terra-ink:#8E3D1F;
+  --olive:#4E6B4F; --olive-soft:#E3EADF; --olive-ink:#3F5940;
+  --gold:#B98A2E;  --gold-soft:#F4EAD2;  --gold-ink:#7A5A17;
+  --ok:#3F6E45; --warn:#94631A; --bad:#A3261B;
+  --radius-xs:6px; --radius-sm:10px; --radius-md:14px; --radius-lg:20px;
+  --shadow-1:0 1px 2px rgba(28,27,23,.05);
+  --shadow-2:0 6px 18px rgba(28,27,23,.10);
+  --shadow-3:0 -10px 40px rgba(28,27,23,.20);
+`;
+
+function props(block: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const match of block.matchAll(/(--[a-z0-9-]+):\s*([^;]+?)\s*;/g)) out[match[1]] = match[2];
+  return out;
+}
+
+/** Custom properties declared in the first rule whose selector contains `selector`. */
 function declared(css: string, selector: string): Record<string, string> {
   const start = css.indexOf(selector);
   expect(start).toBeGreaterThan(-1);
   const open = css.indexOf("{", start);
-  const close = css.indexOf("}", open);
-  const out: Record<string, string> = {};
-  for (const match of css.slice(open + 1, close).matchAll(/(--[a-z0-9-]+):\s*([^;]+?)\s*!important;/g)) {
-    out[match[1]] = match[2];
-  }
-  return out;
+  return props(css.slice(open + 1, css.indexOf("}", open)));
 }
 
 function files(dir: string, test: (name: string) => boolean): string[] {
@@ -28,72 +44,67 @@ function files(dir: string, test: (name: string) => boolean): string[] {
   });
 }
 
-describe("MissioSA Brand Guide tokens", () => {
-  it("maps the skin onto the Guide's named colours", () => {
-    const light = missioSkinVars();
-    expect(light["--page"]).toBe(MISSIO_BRAND.paper);
-    expect(light["--panel"]).toBe(MISSIO_BRAND.cream);
-    expect(light["--ink"]).toBe(MISSIO_BRAND.ink);
-    expect(light["--sa"]).toBe(MISSIO_BRAND.sun);
-    const dark = missioSkinVars("dark");
-    expect(dark["--page"]).toBe(MISSIO_BRAND.ink);
-    expect(dark["--ink"]).toBe(MISSIO_BRAND.cream);
-    expect(dark["--sa"]).toBe(MISSIO_BRAND.lime);
+describe("Missio tokens (build guide §2)", () => {
+  it("are the guide's names and values, exactly", () => {
+    expect({ ...MISSIO_TOKENS }).toEqual(props(GUIDE));
   });
 
-  it("has no rounded corners and no shadows on either ground", () => {
-    for (const theme of ["light", "dark"] as const) {
-      const vars = missioSkinVars(theme);
-      for (const key of ["--radius-xs", "--radius-sm", "--radius-md", "--radius-lg"]) expect(vars[key]).toBe("0");
-      for (const key of ["--shadow-1", "--shadow-2", "--shadow-3"]) expect(vars[key]).toBe("none");
-    }
+  it("are declared under [data-org=missio] in missio-tokens.css with the same values", () => {
+    expect(declared(tokensCss, '[data-org="missio"]')).toEqual(props(GUIDE));
   });
 
-  it("never sets lime SA on the paper ground", () => {
-    expect(missioSkinVars("light")["--sa"]).not.toBe(MISSIO_BRAND.lime);
-  });
-
-  it("lays the same ink values over Missio surfaces in missio-theme.css, for the device setting and #dark", () => {
-    const dark = missioSkinVars("dark");
-    expect(declared(themeCss, 'html:not([data-missio-theme="light"]) [data-skin="missio"]')).toEqual(dark);
-    expect(declared(themeCss, 'html[data-missio-theme="dark"] [data-skin="missio"]')).toEqual(dark);
-    expect(themeCss).toContain("@media (prefers-color-scheme: dark)");
-    // Missio's dark is its own ink ground, never the Hub's dark mode.
-    expect(themeCss.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/html\.dark|\.theme-dark/);
+  it("are applied inline on Missio surfaces, with the older names as aliases of them", () => {
+    const vars = missioSkinVars();
+    for (const [name, value] of Object.entries(MISSIO_TOKENS)) expect(vars[name]).toBe(value);
+    expect(vars["--side"]).toBe(MISSIO_TOKENS["--frame"]);
+    expect(vars["--accent"]).toBe(MISSIO_TOKENS["--terra"]);
+    // Terracotta as text is always the darker ink; gold text is gold-ink.
+    expect(vars["--accent-text"]).toBe(MISSIO_TOKENS["--terra-ink"]);
+    expect(vars["--gold-text"]).toBe(MISSIO_TOKENS["--gold-ink"]);
+    expect(vars["--quiet"]).toBe(MISSIO_TOKENS["--ink-3"]);
   });
 });
 
-describe("Missio skin leaves nothing of the old look", () => {
-  const roots = [here, path.join(here, "../../app/missio"), path.join(here, "../../app/connect/missio")];
+describe("Missio sources", () => {
+  const roots = [
+    here,
+    path.join(app, "missio"),
+    path.join(app, "missio-feedback"),
+    path.join(app, "connect/missio"),
+    path.join(app, "(public)/serve/missio"),
+  ];
   const sources = roots.flatMap((root) => files(root, (name) => /\.(css|tsx?)$/.test(name) && !/\.test\./.test(name)));
+  const css = sources.filter((name) => name.endsWith(".css"));
 
-  it("uses no Fraunces, Archivo or terracotta", () => {
+  it("carry nothing of the Brand Guide skin (Cormorant, DM Sans, ink green, lime, sun)", () => {
     for (const file of sources) {
       const text = readFileSync(file, "utf8");
-      expect(text, file).not.toMatch(/Fraunces|Archivo|#B4532E|#F3F0E8|#8E3D1F/i);
+      expect(text, file).not.toMatch(/Cormorant|DM_Sans|DM Sans|#17372F|#D9F45A|#F18F3B|#FFFAF0|#F2EFE6|#0D2923/i);
     }
   });
 
-  it("rounds nothing but circles and casts no drop shadows", () => {
-    for (const file of sources.filter((name) => name.endsWith(".css"))) {
+  it("have no dark page theme", () => {
+    for (const file of css) {
+      expect(readFileSync(file, "utf8"), file).not.toMatch(/prefers-color-scheme:\s*dark|data-missio-theme|data-theme="dark"/);
+    }
+  });
+
+  it("never set terracotta or gold as a text colour", () => {
+    for (const file of css) {
+      const text = readFileSync(file, "utf8");
+      for (const [, value] of text.matchAll(/(?:^|[;{\s])color:\s*([^;]+);/g)) {
+        expect(value, file).not.toMatch(/var\(--(accent|terra|gold)[,)]|#b4532e|#b98a2e/i);
+      }
+    }
+  });
+
+  it("round corners only on the guide's radii", () => {
+    const allowed = /^(0|50%|999px|99px|var\(--radius-(xs|sm|md|lg)(, ?\d+px)?\)|[2-9]px|1[0-4]px|20px)$/;
+    for (const file of css) {
       const text = readFileSync(file, "utf8");
       for (const [, value] of text.matchAll(/border-radius:\s*([^;]+);/g)) {
-        expect(value.replace(/\s*!important/, ""), file).toMatch(/^(0|50%|var\(--radius-[a-z]+(, 0)?\))$/);
-      }
-      for (const [, value] of text.matchAll(/box-shadow:\s*([^;]+);/g)) {
-        // FFSA's own switcher menu keeps the Hub's look; Missio's variant resets it to none.
-        if (file.endsWith("org-switcher.module.css") && /rgba\(0, 0, 0/.test(value)) continue;
-        expect(value.replace(/\s*!important/, ""), file).toMatch(/^(none|inset .+|var\(--shadow-1, none\))$/);
+        for (const part of value.replace(/\s*!important/, "").split(/\s+(?![^(]*\))/)) expect(part, file).toMatch(allowed);
       }
     }
-  });
-});
-
-describe("themeFromUrl", () => {
-  it("reads #dark / #light and ?theme=", () => {
-    expect(themeFromUrl("#dark", "")).toBe("dark");
-    expect(themeFromUrl("#light", "")).toBe("light");
-    expect(themeFromUrl("", "?theme=dark")).toBe("dark");
-    expect(themeFromUrl("#step-2", "?x=1")).toBeNull();
   });
 });

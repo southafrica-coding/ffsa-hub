@@ -5,15 +5,14 @@
 .help {
   margin: -6px 0 0;
   font-size: 14px;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #6e685b);
 }
 
 .danger {
   margin: 0;
   padding: 12px;
-  border-radius: 0;
-  border-left: 3px solid var(--bad, #F18F3B);
-  background: var(--bad-soft, rgb(241 143 59 / 0.22));
+  border-radius: 8px;
+  background: var(--accent-soft, #f6e4d9);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -34,7 +33,7 @@
   min-height: 44px;
   border: 0 !important;
   background: none !important;
-  color: var(--ink, #17372F) !important;
+  color: var(--ink, #1c1b17) !important;
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -67,7 +66,7 @@
   gap: 6px 8px;
   margin: 14px 0 0;
   font-size: 13px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .columns {
@@ -85,24 +84,20 @@
 
 .column {
   min-width: 0;
-  padding: 14px 0 0;
-  border-radius: 0;
-  border-top: 1px solid var(--ink, #17372F);
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--panel, #f3f0e8);
 }
 
-/* Column heads are Guide labels, not display type. */
 .column h2 {
-  margin: 0 0 12px;
-  font-family: var(--body);
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.4;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .column h2 span {
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
   font-weight: 500;
 }
 
@@ -117,22 +112,21 @@
 .empty {
   margin: 0;
   font-size: 14px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .card {
   display: grid;
   gap: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: 0;
-  background: var(--panel, #FFFAF0);
+  border: 1px solid var(--rule, #e7e2d5);
+  border-radius: 12px;
+  background: #fff;
 }
 
-/* Sun is the Guide's flag colour: a heavier sun rule marks the urgent card. */
 .cardUrgent {
-  border-color: var(--bad, #F18F3B);
-  border-left-width: 4px;
+  border-color: #e4c3be;
+  box-shadow: 0 0 0 1px #e4c3be;
 }
 
 .cardTop {
@@ -157,8 +151,8 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
   font-weight: 700;
   font-size: 12px;
 }
@@ -166,7 +160,7 @@
 .meta {
   margin: 0;
   font-size: 13px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .chips {
@@ -180,17 +174,15 @@
   align-items: center;
   height: 24px;
   padding: 0 10px;
-  border-radius: 0;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  background: transparent;
+  border-radius: 999px;
+  background: var(--panel, #f3f0e8);
   font-size: 12px;
   font-weight: 600;
 }
 
 .chipUrgent {
-  border-color: var(--bad, #F18F3B);
-  background: var(--bad-soft, rgb(241 143 59 / 0.22));
-  color: var(--bad-text, #17372F);
+  background: #f6dcd8;
+  color: #8e2a1f;
 }
 
 .body {
@@ -211,7 +203,7 @@
 
 .privacy {
   font-size: 12px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .actions {
@@ -225,9 +217,9 @@
   min-height: 34px;
   padding: 0 12px;
   border: 0;
-  border-radius: 0;
-  background: var(--accent-text, #17372F);
-  color: var(--accent-ink, #FFFAF0);
+  border-radius: 999px;
+  background: var(--accent-text, #8e3d1f);
+  color: #fff;
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -241,7 +233,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--link, #17372F);
+  color: var(--link, #2f5d50);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -261,23 +253,21 @@
 .checkIn {
   font-size: 12px;
   font-weight: 600;
-  color: var(--gold-text, #17372F);
+  color: var(--gold-text, #7a5a12);
 }
 
 .footnote {
   margin: 18px 0 0;
   font-size: 13px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .message {
   width: 100%;
   min-height: 120px;
   padding: 10px;
-  border: 1px solid var(--ink);
-  border-radius: 0;
-  background: var(--field);
-  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
   font: inherit;
   font-size: 14px;
   line-height: 1.45;
@@ -300,8 +290,8 @@
 .nothing {
   margin: 16px 0 0;
   padding: 14px;
-  border-radius: 0;
-  background: var(--panel, #FFFAF0);
+  border-radius: 14px;
+  background: var(--panel, #f3f0e8);
   font-size: 14px;
   line-height: 1.5;
   overflow-wrap: anywhere;

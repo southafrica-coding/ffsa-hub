@@ -4,10 +4,10 @@ import { useState } from "react";
 import type { CSSProperties } from "react";
 import { missioSkinVars } from "@/components/missio/access";
 import { missioBody, missioDisplay } from "@/components/missio/fonts";
+import { MissioPublicMark } from "@/components/missio/public-mark";
 import type { AvailabilityChoice } from "@/lib/missio/availability/grid";
 import type { PublicSaveInput } from "@/lib/missio/availability/schema";
 import type { PublicAvailabilityView, PublicDateView } from "@/lib/missio/availability/public-view";
-import { MissioWordmark } from "../wordmark";
 import styles from "./public-form.module.css";
 
 const CHOICES: { status: AvailabilityChoice; label: string }[] = [
@@ -43,9 +43,9 @@ export function AvailabilityStatus({
   }[state];
 
   return (
-    <main className={`${missioBody.variable} ${missioDisplay.variable} ${missioBody.className} ${styles.page}`} style={skin} data-skin="missio" data-missio-content="" data-state={state}>
+    <main className={`${missioBody.variable} ${missioDisplay.variable} ${missioBody.className} ${styles.page}`} style={skin} data-missio-content="" data-state={state}>
       <div className={styles.wrap}>
-        <MissioWordmark className={styles.mark} />
+        <MissioPublicMark />
         <h1>{copy.title}</h1>
         <p className={styles.lede}>{copy.body}</p>
       </div>
@@ -98,14 +98,12 @@ export function PublicAvailabilityForm({
     <main
       className={`${missioBody.variable} ${missioDisplay.variable} ${missioBody.className} ${styles.page}`}
       style={skin}
-      data-skin="missio"
       data-missio-content=""
       data-state={dates.some((date) => date.status) ? "filled" : "empty"}
       data-testid="public-availability"
     >
       <div className={styles.wrap}>
-        <MissioWordmark className={styles.mark} />
-        <p className={styles.eyebrow}>Serving</p>
+        <MissioPublicMark />
         <h1>Hi {view.firstName}</h1>
         <p className={styles.lede}>
           Mark the Sundays you can serve. Each tap saves. You can change an answer until the end of that Sunday.

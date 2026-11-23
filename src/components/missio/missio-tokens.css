@@ -1,0 +1,41 @@
+/*
+ * Missio design tokens (build guide §2, board M1a). Scoped to the org on
+ * <html data-org="missio">, which MissioOrgRoot sets inside Missio layouts.
+ * [data-skin="missio"] carries the same values for portaled surfaces and the
+ * first paint before that attribute lands. FFSA keeps its own tokens.
+ * Must match MISSIO_TOKENS in access.ts (missio-theme.test.ts checks).
+ */
+[data-org="missio"],
+[data-skin="missio"] {
+  --frame:#1D2520; --frame-ink:#F3EFE4; --frame-ink-2:#A8B0A6; --terra-on-frame:#D7774F;
+  --page:#F3F0E8; --panel:#FBF9F4; --subtle:#EEEADF; --rule:#DDD7C8; --rule-strong:#CFC8B6;
+  --ink:#1C1B17; --ink-2:#5B574D; --ink-3:#6E685B; --link:#2F5D50;
+  --terra:#B4532E; --terra-soft:#F6E4D9; --terra-ink:#8E3D1F;
+  --olive:#4E6B4F; --olive-soft:#E3EADF; --olive-ink:#3F5940;
+  --gold:#B98A2E;  --gold-soft:#F4EAD2;  --gold-ink:#7A5A17;
+  --ok:#3F6E45; --warn:#94631A; --bad:#A3261B;
+  --radius-xs:6px; --radius-sm:10px; --radius-md:14px; --radius-lg:20px;
+  --shadow-1:0 1px 2px rgba(28,27,23,.05);
+  --shadow-2:0 6px 18px rgba(28,27,23,.10);
+  --shadow-3:0 -10px 40px rgba(28,27,23,.20);
+}
+
+/* Missio is a light paper page in a dark frame. It has no dark page theme. */
+[data-skin="missio"] {
+  color-scheme: light;
+}
+
+/* Numerals line up (stat 56/40/28 tabular). */
+[data-skin="missio"] .tabular,
+[data-skin="missio"] [data-num] {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-skin="missio"] *,
+  [data-skin="missio"] *::before,
+  [data-skin="missio"] *::after {
+    animation-duration: 120ms !important;
+    transition-duration: 120ms !important;
+  }
+}

@@ -10,7 +10,7 @@
   min-height: 44px;
   font-weight: 600;
   font-size: 15px;
-  color: var(--ink, #17372F);
+  color: var(--ink, #1c1b17);
   text-decoration: none;
 }
 
@@ -33,8 +33,8 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
   font-weight: 700;
   font-size: 18px;
 }
@@ -59,9 +59,9 @@
 .journey {
   margin: 0 0 16px;
   padding: 16px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: var(--radius-md, 0);
-  background: var(--panel, #FFFAF0);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-md, 14px);
+  background: var(--panel, #fbf9f4);
   min-width: 0;
 }
 
@@ -75,13 +75,13 @@
   margin: 16px 0 8px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .quiet {
   margin: 8px 0 0;
   font-size: 14px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .rows {
@@ -101,15 +101,15 @@
   min-height: 44px;
   box-sizing: border-box;
   padding: 10px 12px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: var(--radius-sm, 0);
-  background: var(--field, #FFFAF0);
-  color: var(--ink, #17372F);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-sm, 10px);
+  background: #fff;
+  color: var(--ink, #1c1b17);
   text-decoration: none;
 }
 
 .row:hover {
-  border-color: var(--accent-text, #17372F);
+  border-color: var(--accent-text, #8e3d1f);
 }
 
 .rowMain {
@@ -119,7 +119,7 @@
 
 .rowMeta {
   font-size: 14px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .facts {
@@ -132,7 +132,7 @@
 .facts dt {
   font-size: 13px;
   font-weight: 600;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .facts dd {
@@ -162,10 +162,10 @@
 .root .filter {
   min-height: 36px;
   padding: 6px 14px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: 0;
-  background: var(--field, #FFFAF0);
-  color: var(--ink, #17372F);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink, #1c1b17);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -175,13 +175,14 @@
 }
 
 .root .filterOn {
-  border-color: var(--accent-text, #17372F);
-  background: var(--accent-text, #17372F);
-  color: var(--accent-ink, #FFFAF0);
+  /* A filter that's on is frame-dark (board M1b), not a terracotta action. */
+  border-color: var(--frame, #1d2520);
+  background: var(--frame, #1d2520);
+  color: var(--frame-ink, #f3efe4);
 }
 
 .root .filter:focus-visible {
-  outline: 2px solid var(--link, #17372F);
+  outline: 2px solid var(--link, #2f5d50);
   outline-offset: 2px;
 }
 
@@ -189,7 +190,7 @@
   margin: 8px 0 0;
   padding: 0 0 0 18px;
   list-style: none;
-  border-left: 2px solid var(--rule, rgb(23 55 47 / 0.22));
+  border-left: 2px solid var(--rule, #ddd7c8);
 }
 
 .step {
@@ -210,13 +211,13 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--accent-text, #17372F);
-  border: 2px solid var(--panel, #FFFAF0);
+  background: var(--accent-text, #8e3d1f);
+  border: 2px solid var(--panel, #fbf9f4);
 }
 
 .step[data-type="added"]::before,
 .step[data-type="connect_card"]::before {
-  background: var(--olive, #17372F);
+  background: var(--olive, #4e6b4f);
 }
 
 .stepBody {
@@ -239,14 +240,14 @@
 .stepDetail {
   margin: 2px 0 0;
   font-size: 14px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
   overflow-wrap: anywhere;
 }
 
 .stepDate {
   flex: none;
   font-size: 14px;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 /* Call · WhatsApp · Email under the name (board M2c). */
@@ -263,26 +264,26 @@
   min-height: 44px;
   box-sizing: border-box;
   padding: 8px 18px;
-  border: 1px solid var(--rule-strong, rgb(23 55 47 / 0.4));
-  border-radius: var(--radius-xs, 0);
-  background: var(--field, #FFFAF0);
-  color: var(--ink, #17372F);
+  border: 1px solid var(--rule-strong, #cfc8b6);
+  border-radius: var(--radius-xs, 6px);
+  background: #fff;
+  color: var(--ink, #1c1b17);
   font-weight: 600;
   font-size: 15px;
   text-decoration: none;
 }
 
 .action:hover {
-  border-color: var(--accent-text, #17372F);
+  border-color: var(--accent-text, #8e3d1f);
 }
 
 .action:focus-visible {
-  outline: 2px solid var(--link, #17372F);
+  outline: 2px solid var(--link, #2f5d50);
   outline-offset: 2px;
 }
 
 .facts dd a {
-  color: var(--link, #17372F);
+  color: var(--link, #2f5d50);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -290,9 +291,9 @@
 /* Hub access (board M10c). */
 .accessRow {
   padding: 10px 12px;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22));
-  border-radius: var(--radius-sm, 0);
-  background: var(--field, #FFFAF0);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-sm, 10px);
+  background: #fff;
 }
 
 .accessLabel {
@@ -344,7 +345,7 @@
   margin: 0 0 6px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .quickJourney {
@@ -375,6 +376,6 @@
   align-items: center;
   min-height: 44px;
   font-weight: 600;
-  color: var(--link, #17372F);
+  color: var(--link, #2f5d50);
   text-underline-offset: 3px;
 }

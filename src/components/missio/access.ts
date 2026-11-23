@@ -146,140 +146,78 @@ export function formatJoined(value: string | null | undefined): string {
 }
 
 /**
- * MissioSA Brand Guide v1.0 (2026) named colours. Everything else in the skin
- * is one of these, or an alpha tint of ink or cream (the Guide's rule for
- * hairlines and secondary text). Never a grey, pure white or pure black.
+ * The Missio design tokens (build guide §2, board M1a), name for name and value
+ * for value. missio-tokens.css declares the same block under [data-org="missio"];
+ * missio-theme.test.ts keeps the two identical. FFSA screens never apply these.
+ *
+ * Terracotta as text is always --terra-ink (plain --terra is 4.4:1 on paper).
+ * Gold is never text. --ink-3 replaced the old #7A7466, which failed AA.
  */
-export const MISSIO_BRAND = {
-  ink: "#17372F",
-  deepInk: "#0D2923",
-  paper: "#F2EFE6",
-  cream: "#FFFAF0",
-  lime: "#D9F45A",
-  sun: "#F18F3B",
-  sage: "#A8BAA6",
-  muted: "#60746E",
-  /** Derived, not a named Guide colour: lifted ink for fields and panels on the dark ground. */
-  liftedInk: "#1C3E36",
+export const MISSIO_TOKENS = {
+  "--frame": "#1D2520",
+  "--frame-ink": "#F3EFE4",
+  "--frame-ink-2": "#A8B0A6",
+  "--terra-on-frame": "#D7774F",
+  "--page": "#F3F0E8",
+  "--panel": "#FBF9F4",
+  "--subtle": "#EEEADF",
+  "--rule": "#DDD7C8",
+  "--rule-strong": "#CFC8B6",
+  "--ink": "#1C1B17",
+  "--ink-2": "#5B574D",
+  "--ink-3": "#6E685B",
+  "--link": "#2F5D50",
+  "--terra": "#B4532E",
+  "--terra-soft": "#F6E4D9",
+  "--terra-ink": "#8E3D1F",
+  "--olive": "#4E6B4F",
+  "--olive-soft": "#E3EADF",
+  "--olive-ink": "#3F5940",
+  "--gold": "#B98A2E",
+  "--gold-soft": "#F4EAD2",
+  "--gold-ink": "#7A5A17",
+  "--ok": "#3F6E45",
+  "--warn": "#94631A",
+  "--bad": "#A3261B",
+  "--radius-xs": "6px",
+  "--radius-sm": "10px",
+  "--radius-md": "14px",
+  "--radius-lg": "20px",
+  "--shadow-1": "0 1px 2px rgba(28,27,23,.05)",
+  "--shadow-2": "0 6px 18px rgba(28,27,23,.10)",
+  "--shadow-3": "0 -10px 40px rgba(28,27,23,.20)",
 } as const;
 
-const B = MISSIO_BRAND;
-const inkA = (alpha: number) => `rgb(23 55 47 / ${alpha})`;
-const creamA = (alpha: number) => `rgb(255 250 240 / ${alpha})`;
-const sunA = (alpha: number) => `rgb(241 143 59 / ${alpha})`;
-const sageA = (alpha: number) => `rgb(168 186 166 / ${alpha})`;
-const limeA = (alpha: number) => `rgb(217 244 90 / ${alpha})`;
-
-/** Shared by both grounds: the Guide has no rounded corners and no shadows. */
-const SHAPE = {
-  "--radius-xs": "0",
-  "--radius-sm": "0",
-  "--radius-md": "0",
-  "--radius-lg": "0",
-  "--shadow-1": "none",
-  "--shadow-2": "none",
-  "--shadow-3": "none",
-} as const;
-
-/** Paper ground: ink type, sun SA. The default. */
-const LIGHT: Record<string, string> = {
-  // The rail is ink on both grounds, so its SA is lime and its active item is a lime strip.
-  "--side": B.ink,
-  "--side-ink": B.cream,
-  "--side-sub": creamA(0.72),
-  "--side-hover": B.liftedInk,
-  "--side-rule": creamA(0.18),
-  "--side-on": B.lime,
-  "--side-on-ink": B.ink,
-  "--page": B.paper,
-  "--panel": B.cream,
-  "--subtle": inkA(0.05),
-  "--rule": inkA(0.22),
-  "--ink": B.ink,
-  "--sub": inkA(0.78),
-  // Ink at 72%, not Muted #60746E: Muted is 4.3:1 on paper and fails AA for small text.
-  "--quiet": inkA(0.72),
-  "--muted": B.muted,
-  "--rule-strong": inkA(0.4),
-  "--link": B.ink,
-  // Primary action on paper is an ink block with cream type.
-  "--accent": B.ink,
-  "--accent-text": B.ink,
-  "--accent-ink": B.cream,
-  "--accent-soft": B.lime,
-  "--sa": B.sun,
-  "--em": B.sun,
-  "--olive": B.ink,
-  "--olive-soft": B.sage,
-  "--olive-text": B.ink,
-  // Sun is for fills, edges and marks. Sun text fails on paper, so text on sun tints is ink.
-  "--gold": B.sun,
-  "--gold-soft": sunA(0.22),
-  "--gold-text": B.ink,
-  "--ok": B.ink,
-  "--ok-soft": B.sage,
-  "--warn": B.sun,
-  "--warn-soft": sunA(0.22),
-  "--warn-text": B.ink,
-  "--bad": B.sun,
-  "--bad-soft": sunA(0.22),
-  "--bad-text": B.ink,
-  "--field": B.cream,
-  ...SHAPE,
-};
-
-/** Ink ground: cream type, lime SA. */
-const DARK: Record<string, string> = {
-  "--side": B.ink,
-  "--side-ink": B.cream,
-  "--side-sub": creamA(0.72),
-  "--side-hover": B.liftedInk,
-  "--side-rule": creamA(0.18),
-  "--side-on": B.lime,
-  "--side-on-ink": B.ink,
-  "--page": B.ink,
-  "--panel": B.liftedInk,
-  "--subtle": creamA(0.05),
-  "--rule": creamA(0.22),
-  "--ink": B.cream,
-  "--sub": creamA(0.78),
-  "--quiet": B.sage,
-  "--muted": B.sage,
-  "--rule-strong": creamA(0.4),
-  "--link": B.cream,
-  // Primary action on ink is a lime block with ink type.
-  "--accent": B.lime,
-  "--accent-text": B.lime,
-  "--accent-ink": B.ink,
-  "--accent-soft": limeA(0.14),
-  "--sa": B.lime,
-  "--em": B.sun,
-  "--olive": B.sage,
-  "--olive-soft": sageA(0.2),
-  "--olive-text": B.cream,
-  "--gold": B.sun,
-  "--gold-soft": sunA(0.2),
-  "--gold-text": B.cream,
-  "--ok": B.lime,
-  "--ok-soft": sageA(0.2),
-  "--warn": B.sun,
-  "--warn-soft": sunA(0.2),
-  "--warn-text": B.cream,
-  "--bad": B.sun,
-  "--bad-soft": sunA(0.2),
-  "--bad-text": B.cream,
-  "--field": B.liftedInk,
-  ...SHAPE,
-};
-
-export type MissioTheme = "light" | "dark";
+const T = MISSIO_TOKENS;
 
 /**
- * Tokens for the Missio skin, from the MissioSA Brand Guide. FFSA screens do
- * not apply these. Surfaces set the paper (light) values inline; the ink (dark)
- * values are applied over them by missio-theme.css, from `prefers-color-scheme`
- * or an explicit `data-missio-theme` on <html>. Never the Hub's dark tokens.
+ * Names the Missio CSS modules already use, each pointing at a guide token's
+ * value. New CSS should use the guide names above.
  */
-export function missioSkinVars(theme: MissioTheme = "light"): Record<string, string> {
-  return { ...(theme === "dark" ? DARK : LIGHT) };
+const ALIASES: Record<string, string> = {
+  "--side": T["--frame"],
+  "--side-ink": T["--frame-ink"],
+  "--side-sub": T["--frame-ink-2"],
+  "--side-on": T["--terra-on-frame"],
+  // Frame tints for hover and hairlines: the frame lifted, not a new colour.
+  "--side-hover": "#28322C",
+  "--side-rule": "#313B34",
+  "--sub": T["--ink-2"],
+  "--quiet": T["--ink-3"],
+  "--muted": T["--ink-3"],
+  "--accent": T["--terra"],
+  "--accent-text": T["--terra-ink"],
+  "--accent-soft": T["--terra-soft"],
+  // Type on a terracotta button.
+  "--accent-ink": "#FFF8EE",
+  "--olive-text": T["--olive-ink"],
+  "--gold-text": T["--gold-ink"],
+  "--ok-soft": T["--olive-soft"],
+  "--warn-soft": T["--gold-soft"],
+  "--bad-soft": "#F6DEDA",
+};
+
+/** Inline tokens for a Missio surface: the guide tokens plus the older aliases. */
+export function missioSkinVars(): Record<string, string> {
+  return { ...MISSIO_TOKENS, ...ALIASES };
 }

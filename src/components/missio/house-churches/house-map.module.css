@@ -12,14 +12,14 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  border: 2px solid var(--rule-strong, rgb(23 55 47 / 0.4));
-  border-radius: 0;
-  background: var(--panel, #FFFAF0);
+  border: 2px solid var(--rule-strong, #cfc8b6);
+  border-radius: 999px;
+  background: var(--panel, #fbf9f4);
   font-weight: 700;
 }
 
 .lit {
-  border-color: var(--accent, #17372F);
+  border-color: var(--accent, #b4532e);
 }
 
 .rootMark {
@@ -27,23 +27,22 @@
   place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: 0;
-  background: var(--accent, #17372F);
-  color: var(--accent-ink, #FFFAF0);
-  font-family: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
-  font-variant-numeric: lining-nums;
-  font-size: 16px;
+  border-radius: 6px;
+  background: var(--accent, #b4532e);
+  color: var(--accent-ink, #fff8ee);
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-size: 14px;
 }
 
 .stem {
   display: block;
   width: 2px;
   height: 24px;
-  background: var(--rule-strong, rgb(23 55 47 / 0.4));
+  background: var(--rule-strong, #cfc8b6);
 }
 
 .stemLit {
-  background: var(--accent, #17372F);
+  background: var(--accent, #b4532e);
 }
 
 .coaches,
@@ -82,10 +81,10 @@
   width: 100%;
   height: 100%;
   padding: 12px 8px !important;
-  border: 1px solid var(--rule, rgb(23 55 47 / 0.22)) !important;
-  border-radius: var(--radius-md, 0) !important;
-  background: var(--panel, #FFFAF0) !important;
-  color: var(--ink, #17372F) !important;
+  border: 1px solid var(--rule, #ddd7c8) !important;
+  border-radius: var(--radius-md, 14px) !important;
+  background: var(--panel, #fbf9f4) !important;
+  color: var(--ink, #1c1b17) !important;
   text-align: center;
   cursor: pointer;
   font: inherit;
@@ -95,29 +94,29 @@
 
 .coach:hover,
 .house:hover {
-  border-color: var(--accent-text, #17372F) !important;
+  border-color: var(--accent-text, #8e3d1f) !important;
 }
 
 .coach:focus-visible,
 .house:focus-visible,
 .open:focus-visible {
-  outline: 2px solid var(--link, #17372F);
+  outline: 2px solid var(--link, #2f5d50);
   outline-offset: 2px;
 }
 
 .coachOn {
-  border-color: var(--side, #17372F) !important;
-  background: var(--side, #17372F) !important;
-  color: var(--side-ink, #FFFAF0) !important;
+  border-color: var(--side, #1d2520) !important;
+  background: var(--side, #1d2520) !important;
+  color: var(--side-ink, #f3efe4) !important;
 }
 
 .coachOn .coachMeta {
-  color: var(--side-sub, rgb(255 250 240 / 0.72));
+  color: var(--side-sub, #afb5a6);
 }
 
 .coachNone .coachFace {
-  background: var(--subtle, rgb(23 55 47 / 0.05));
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  background: var(--subtle, #eeeadf);
+  color: var(--sub, #5b574d);
 }
 
 .coachFace {
@@ -127,8 +126,8 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
   font-weight: 700;
 }
 
@@ -141,9 +140,9 @@
   min-width: 18px;
   height: 18px;
   padding: 0 4px;
-  border-radius: 50%;
-  background: var(--gold, #F18F3B);
-  color: #17372F;
+  border-radius: 999px;
+  background: var(--gold, #b98a2e);
+  color: #1c1b17;
   font-size: 11px;
   font-weight: 700;
 }
@@ -156,7 +155,7 @@
 
 .coachMeta {
   font-size: 13px;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
 }
 
 .house {
@@ -166,11 +165,11 @@
 }
 
 .houseOn {
-  border: 2px solid var(--accent, #17372F) !important;
+  border: 2px solid var(--accent, #b4532e) !important;
 }
 
 .houseFlag {
-  border-color: var(--gold, #F18F3B) !important;
+  border-color: var(--gold, #b98a2e) !important;
 }
 
 .houseTop {
@@ -180,21 +179,19 @@
 }
 
 .houseName {
-  font-family: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
-  font-variant-numeric: lining-nums;
-  font-size: 22px;
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-size: 18px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
 .houseDay {
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
 }
 
 .houseSize b {
-  font-family: var(--font-missio-display), "Cormorant Garamond", Georgia, serif;
-  font-variant-numeric: lining-nums;
-  font-size: 26px;
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-size: 22px;
 }
 
 .houseLead {
@@ -205,24 +202,24 @@
 .badge {
   justify-self: start;
   padding: 2px 8px;
-  border-radius: 0;
+  border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
 }
 
 .badgeReady {
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
 }
 
 .badgeWarn {
-  background: var(--gold-soft, rgb(241 143 59 / 0.22));
-  color: var(--gold-text, #17372F);
+  background: var(--gold-soft, #f4ead2);
+  color: var(--gold-text, #7a5a17);
 }
 
 .hint {
   margin: 16px 0 0;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
   font-size: 14px;
   text-align: center;
 }
@@ -232,9 +229,9 @@
   width: 100%;
   max-width: 820px;
   padding: 16px;
-  border: 2px solid var(--accent, #17372F);
-  border-radius: var(--radius-md, 0);
-  background: var(--panel, #FFFAF0);
+  border: 2px solid var(--accent, #b4532e);
+  border-radius: var(--radius-md, 14px);
+  background: var(--panel, #fbf9f4);
 }
 
 .trayHead {
@@ -252,7 +249,7 @@
 
 .trayLine {
   margin: 2px 0 0;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
   font-size: 14px;
 }
 
@@ -261,9 +258,9 @@
   align-items: center;
   min-height: 40px;
   padding: 6px 14px;
-  border-radius: 0;
-  background: var(--accent, #17372F);
-  color: var(--accent-ink, #FFFAF0);
+  border-radius: 6px;
+  background: var(--accent, #b4532e);
+  color: var(--accent-ink, #fff8ee);
   font-weight: 600;
   text-decoration: none;
 }
@@ -285,7 +282,7 @@
   margin: 0 0 6px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--quiet, rgb(23 55 47 / 0.72));
+  color: var(--quiet, #6e685b);
 }
 
 .people {
@@ -304,7 +301,7 @@
 }
 
 .people a {
-  color: var(--ink, #17372F);
+  color: var(--ink, #1c1b17);
   font-weight: 600;
   text-underline-offset: 3px;
 }
@@ -316,15 +313,15 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: var(--olive-soft, #A8BAA6);
-  color: var(--olive-text, #17372F);
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-text, #3f5940);
   font-size: 11px;
   font-weight: 700;
 }
 
 .tag {
   font-size: 12px;
-  color: var(--sub, rgb(23 55 47 / 0.78));
+  color: var(--sub, #5b574d);
 }
 
 .visuallyHidden {

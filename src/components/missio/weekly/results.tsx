@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { andList, type SundayResults } from "@/lib/missio/sunday-results";
-import { GuideSurface, meetingLabel, pad2, type GuideTheme } from "./surface";
+import { GuideSurface, meetingLabel } from "./surface";
 import styles from "./guide.module.css";
 
 // ============================================================
-// Sunday results (F4, Brand Guide look) — pastors and coaches
+// Sunday results (F4, Missio design) — pastors and coaches
 // ============================================================
 // Matches the approved mockup (results.html): the missing houses on
 // a lime strip with the nudge, eight totals, what needs a coach,
@@ -25,14 +25,12 @@ export function SundayResultsView({
   results,
   nudge,
   navHref,
-  theme,
   sendNudge,
 }: {
   results: SundayResults;
   nudge: NudgeState;
   /** Top-bar link to the weekly feedback history (M4b). */
   navHref?: string | null;
-  theme?: GuideTheme;
   /** Tests: stands in for the POST. */
   sendNudge?: () => Promise<NudgeReply>;
 }) {
@@ -64,11 +62,11 @@ export function SundayResultsView({
   }
 
   return (
-    <GuideSurface nav={navHref ? { label: "Weekly feedback", href: navHref } : null} theme={theme} state="results">
+    <GuideSurface nav={navHref ? { label: "Weekly feedback", href: navHref } : null} state="results">
       <main>
         <div className={styles.intro}>
           <p className={`${styles.eyebrow} ${styles.nums}`}>
-            01 / {when.day} · {when.date}
+            {when.day} · {when.date}
           </p>
           <h1 className={styles.h1}>
             This <em>{when.day === "Sunday" ? "Sunday." : "week."}</em>
@@ -82,7 +80,7 @@ export function SundayResultsView({
 
         {results.missing.length > 0 ? (
           <section className={styles.strip} aria-label="Still to send">
-            <span className={`${styles.tag} ${styles.nums}`}>{pad2(results.missing.length)} / Missing</span>
+            <span className={`${styles.tag} ${styles.nums}`}>{results.missing.length} missing</span>
             <h2>
               {results.missing.length === 1 ? "House" : "Houses"} {andList(results.missing)}.
             </h2>
@@ -111,7 +109,7 @@ export function SundayResultsView({
 
         <section aria-labelledby="sr-coach">
           <h2 className={styles.sect} id="sr-coach">
-            <span className={styles.sectN}>02 / Needs a coach</span>
+            <span className={styles.sectN}>Needs a coach</span>
           </h2>
           {results.flags.length === 0 ? (
             <p className={styles.empty}>Nothing needs a coach from the houses that have sent.</p>
@@ -130,7 +128,7 @@ export function SundayResultsView({
 
         <section aria-labelledby="sr-highlights">
           <h2 className={styles.sect} id="sr-highlights">
-            <span className={styles.sectN}>03 / Highlights</span>
+            <span className={styles.sectN}>Highlights</span>
           </h2>
           {results.highlights.length === 0 ? (
             <p className={styles.empty}>Wins and testimonies show here as houses send.</p>
@@ -147,7 +145,7 @@ export function SundayResultsView({
 
         <section aria-labelledby="sr-houses">
           <h2 className={styles.sect} id="sr-houses">
-            <span className={styles.sectN}>04 / Houses</span>
+            <span className={styles.sectN}>Houses</span>
             <span className={`${styles.sectN} ${styles.nums}`}>
               {results.sentCount} sent · {toGo} to go
             </span>
@@ -155,7 +153,7 @@ export function SundayResultsView({
           <ul className={styles.list}>
             {results.houses.map((h) => (
               <li className={styles.house} key={h.id} data-state={h.state}>
-                <div className={styles.houseNum}>{pad2(h.number)}</div>
+                <div className={styles.houseNum}>{h.number}</div>
                 <div className={styles.grow}>
                   <div className={styles.houseK}>
                     House {h.number}
@@ -170,7 +168,7 @@ export function SundayResultsView({
             ))}
           </ul>
         </section>
-        <p className={styles.foot}>MissioSA · House churches · Presence · Formation · Mission · Multiplication</p>
+        <p className={styles.foot}>Missio · House churches · Presence · Formation · Mission · Multiplication</p>
       </main>
     </GuideSurface>
   );

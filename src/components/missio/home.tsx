@@ -157,8 +157,10 @@ export function MissioHome({
     const mine = mineLoad.state === "ready" ? [...mineLoad.data].sort((a, b) => a.number - b.number) : [];
     return (
       <div className={`${content.page} ${content.reveal}`}>
-        <p className={`${styles.eyebrow} ${content.eyebrow}`}>{date}</p>
-        <h1 className={content.title}>{greeting}</h1>
+        <div className={content.hero}>
+          <p className={`${styles.eyebrow} ${content.eyebrow}`}>{date}</p>
+          <h1 className={content.title}>{greeting}</h1>
+        </div>
         {!inMissio ? <div className={content.solo}>{people}</div> : null}
         {inMissio && mineLoad.state === "loading" ? (
           <p className={styles.state} role="status">
@@ -212,8 +214,10 @@ export function MissioHome({
 
   return (
     <div className={`${content.page} ${content.reveal}`}>
-      <p className={`${styles.eyebrow} ${content.eyebrow}`}>{date}</p>
-      <h1 className={content.title}>{greeting}</h1>
+      <div className={content.hero}>
+        <p className={`${styles.eyebrow} ${content.eyebrow}`}>{date}</p>
+        <h1 className={content.title}>{greeting}</h1>
+      </div>
 
       <div className={content.homeGrid}>
         <section className={`${styles.card} ${content.card} ${content.wide}`} data-testid="home-houses-card">

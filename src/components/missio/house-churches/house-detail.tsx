@@ -532,7 +532,7 @@ function MemberRow({
               Edit
             </button>
           </PopoverTrigger>
-          <PopoverContent className={portaledMissioClass()} style={missioSkinVars()} data-skin="missio" align="end">
+          <PopoverContent className={portaledMissioClass()} style={missioSkinVars()} align="end">
             <p className={styles.menuTitle}>{member.displayName}</p>
             <label className={shell.field}>
               Role
