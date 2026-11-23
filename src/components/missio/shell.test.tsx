@@ -136,6 +136,12 @@ describe("Missio access state", () => {
     expect(finance.getAttribute("href")).toBe("/missio/finance");
     expect(finance.textContent?.toLowerCase()).not.toContain("soon");
     expect(host.querySelector("[data-testid=missio-tab-finance]")).toBeNull();
+    // WhatsApp: pastors only, right after Finance, in the menu and never as a sixth phone tab.
+    const whatsapp = host.querySelector("[data-testid=missio-nav-whatsapp]") as HTMLAnchorElement;
+    expect(whatsapp.getAttribute("href")).toBe("/missio/whatsapp");
+    expect(finance.nextElementSibling).toBe(whatsapp);
+    expect(host.querySelector("[data-testid=missio-tab-whatsapp]")).toBeNull();
+    expect(host.querySelectorAll("[data-testid=missio-tab-bar] a")).toHaveLength(5);
     expect((host.querySelector("[data-testid=missio-nav-sundays]") as HTMLAnchorElement).getAttribute("href")).toBe("/missio/sundays");
   });
 
@@ -240,6 +246,8 @@ describe("Missio access state", () => {
     expect(host.querySelector("[data-testid=missio-nav-care]")).not.toBeNull();
     expect(host.querySelector("[data-testid=missio-nav-finance]")).toBeNull();
     expect(host.querySelector("a[href='/missio/finance']")).toBeNull();
+    expect(host.querySelector("[data-testid=missio-nav-whatsapp]")).toBeNull();
+    expect(host.querySelector("a[href='/missio/whatsapp']")).toBeNull();
     const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
     expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care", "/missio/sundays"]);
     expect(host.querySelector("[data-testid=missio-tab-care]")?.getAttribute("aria-current")).toBe("page");

@@ -360,6 +360,21 @@ describe("middleware: bearer tokens (phone app)", () => {
     expect(prefix.status).toBe(401);
   });
 
+  it("the Missio WhatsApp webhook is public, and nothing else under /api/missio or /api/webhooks is", async () => {
+    const hook = await middleware(
+      new NextRequest(new URL("/api/webhooks/missio/whatsapp", "https://hub.test"), { method: "POST" })
+    );
+    expect(hook.status).toBe(200);
+    expect(location(hook)).toBeNull();
+    expect(current.getUserCalls).toHaveLength(0);
+
+    expect((await middleware(req("/api/missio/whatsapp"))).status).toBe(401);
+    expect((await middleware(req("/api/missio/whatsapp/send"))).status).toBe(401);
+    expect((await middleware(req("/api/webhooks/missio"))).status).toBe(401);
+    expect((await middleware(req("/api/webhooks/missio/whatsapp-extra"))).status).toBe(401);
+    expect(location(await middleware(req("/missio/whatsapp")))?.pathname).toBe("/login");
+  });
+
   it("/.well-known is public", async () => {
     const res = await middleware(req("/.well-known/apple-app-site-association"));
     expect(location(res)).toBeNull();

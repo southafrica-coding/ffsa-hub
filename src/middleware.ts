@@ -74,6 +74,7 @@ export async function middleware(request: NextRequest) {
     "/api/tickets", // public QR image endpoint (the code in the URL is the auth) — referenced from confirmation emails
     "/api/cron", // Vercel Cron endpoints — authenticated by CRON_SECRET bearer token in the route handler, not session cookies
     "/api/slack", // inbound Slack events (Q&A bot) — authenticated by Slack signing-secret HMAC in the route handler, not session cookies
+    "/api/webhooks/missio/whatsapp", // Meta's WhatsApp webhook for the Missio number — verify token (GET) and X-Hub-Signature-256 HMAC (POST) in the route handler. Only this path: every other /api/missio route keeps its session check
   ];
   // Match on whole path SEGMENTS, not raw prefixes. A bare startsWith()
   // let "/e" (public ticket storefront) swallow "/events" and "/f"

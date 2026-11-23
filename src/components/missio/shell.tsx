@@ -4,7 +4,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Calendar, Heart, House, Mail, Settings, Sprout, Sunrise, UserCheck, Users, UsersRound, Wallet } from "lucide-react";
+import { Calendar, Heart, House, Mail, MessageCircle, Settings, Sprout, Sunrise, UserCheck, Users, UsersRound, Wallet } from "lucide-react";
 import { canAccessMissio, canSeeMissioCare, isMissioPastor, missioSkinVars, orgHref, sortOrgs } from "./access";
 import { MissioViewerProvider } from "./viewer";
 import { MissioApiError, missioClient, type MissioClient } from "./api";
@@ -225,6 +225,8 @@ function MissioSidebar({
     // Pastors only. Not a phone tab: the M11a bar keeps its five, so Finance
     // lives in this menu on phones.
     { key: "finance", href: "/missio/finance", label: "Finance", on: pathname.startsWith("/missio/finance"), icon: <Wallet />, show: pastor },
+    // Pastors only, menu only (no sixth phone tab): messages from Missio's WhatsApp number.
+    { key: "whatsapp", href: "/missio/whatsapp", label: "WhatsApp", on: pathname.startsWith("/missio/whatsapp"), icon: <MessageCircle />, show: pastor },
   ];
 
   return (
