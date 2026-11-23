@@ -152,8 +152,12 @@ CREATE TRIGGER missio_finance_entries_audit
 ALTER TABLE public.missio_finance_entries      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.missio_finance_entry_events ENABLE ROW LEVEL SECURITY;
 
-REVOKE ALL ON public.missio_finance_entries      FROM anon;
-REVOKE ALL ON public.missio_finance_entry_events FROM anon;
+-- No TRUNCATE / REFERENCES / TRIGGER for anyone; the audit table is read-only.
+REVOKE ALL ON TABLE public.missio_finance_entries      FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.missio_finance_entry_events FROM PUBLIC, anon, authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.missio_finance_entries TO authenticated;
+GRANT SELECT ON TABLE public.missio_finance_entry_events TO authenticated;
 
 DROP POLICY IF EXISTS "Missio pastors read finance entries" ON public.missio_finance_entries;
 CREATE POLICY "Missio pastors read finance entries"
@@ -203,6 +207,9 @@ COMMENT ON TABLE public.missio_finance_entry_events IS
 --   SELECT tablename, policyname, cmd FROM pg_policies
 --    WHERE tablename LIKE 'missio_finance_%' ORDER BY 1, 3;
 --                     -- entries: SELECT/INSERT/UPDATE/DELETE; events: SELECT only
+--   SELECT table_name, grantee, privilege_type FROM information_schema.role_table_grants
+--    WHERE table_name LIKE 'missio_finance_%' AND grantee IN ('PUBLIC','anon','authenticated') ORDER BY 1, 2, 3;
+--                     -- authenticated only: entries SELECT/INSERT/UPDATE/DELETE; events SELECT
 --   SELECT count(*) FROM public.missio_finance_entries;     -- 0 (no seed)
 -- ============================================================
 
