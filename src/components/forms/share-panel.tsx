@@ -7,7 +7,8 @@ import type { FormAccessMode } from "@/lib/forms/schema";
 const ACCESS_NOTE: Record<FormAccessMode, string> = {
   public: "Anyone with this link can fill it in.",
   logged_in: "People sign in to the Hub first, then fill it in.",
-  token: "Opens only from a personal link. Those links are not made yet, so this form is closed for now.",
+  token:
+    "Opens only from a personal link, not from this address. For a house church's link, open the house page and tap Copy the leader’s link.",
 };
 
 /**

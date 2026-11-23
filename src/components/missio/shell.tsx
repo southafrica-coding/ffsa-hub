@@ -4,7 +4,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Calendar, CalendarDays, Heart, House, Mail, MessageCircle, Settings, Sprout, Sunrise, UserCheck, Users, UsersRound, Wallet } from "lucide-react";
+import { Calendar, CalendarDays, ClipboardList, Heart, House, Mail, MessageCircle, Settings, Sprout, Sunrise, UserCheck, Users, UsersRound, Wallet } from "lucide-react";
 import { canAccessMissio, canSeeMissioCare, isMissioPastor, missioSkinVars, orgHref, sortOrgs } from "./access";
 import { MissioViewerProvider } from "./viewer";
 import { MissioApiError, missioClient, type MissioClient } from "./api";
@@ -236,6 +236,16 @@ function MissioSidebar({
     { key: "finance", href: "/missio/finance", label: "Finance", on: pathname.startsWith("/missio/finance"), icon: <Wallet />, show: pastor },
     // Pastors only, menu only (no sixth phone tab): messages from Missio's WhatsApp number.
     { key: "whatsapp", href: "/missio/whatsapp", label: "WhatsApp", on: pathname.startsWith("/missio/whatsapp"), icon: <MessageCircle />, show: pastor },
+    // Pastors only, menu only: the weekly feedback form's questions (the
+    // editor, not the Weekly feedback history under House churches).
+    {
+      key: "feedback-form",
+      href: "/missio/feedback/form",
+      label: "Feedback form",
+      on: pathname.startsWith("/missio/feedback/form"),
+      icon: <ClipboardList />,
+      show: pastor,
+    },
   ];
 
   return (

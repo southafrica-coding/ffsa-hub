@@ -1,0 +1,86 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 16px 32px;
+  max-width: 720px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--link, #2f5d50);
+  text-decoration: none;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 28px 16px;
+  border: 1.5px dashed var(--rule-strong, #cfc8b6);
+  border-radius: var(--radius-lg, 20px);
+  text-align: center;
+  align-items: center;
+}
+
+.empty p {
+  max-width: 440px;
+  margin: 0;
+  color: var(--ink-2, #5b574d);
+}
+
+.emptyTitle {
+  margin: 6px 0 0;
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 560;
+  line-height: 28px;
+}
+
+.editor {
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.note {
+  margin: 0;
+  padding: 12px 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-2, #5b574d);
+  background: var(--panel, #fbf9f4);
+  border-bottom: 1px solid var(--rule, #ddd7c8);
+}
+
+.note a {
+  color: var(--link, #2f5d50);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (min-width: 768px) {
+  .page {
+    padding: 32px;
+  }
+
+  .note {
+    padding: 14px 32px;
+  }
+}
+
+/* The shell sets Missio buttons in the body face, sentence case; the
+   builder's link-buttons (Hub mono caps) follow suit here so a row of
+   Responses / Save doesn't mix two styles. */
+.editor :global(a.font-mono),
+.editor :global(button.font-mono) {
+  font-family: var(--body) !important;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}

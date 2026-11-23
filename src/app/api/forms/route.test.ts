@@ -14,7 +14,17 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({}) }));
 vi.mock("@/lib/api-auth", () => ({ getAuthedUser: async () => h.user }));
-vi.mock("@/lib/auth/hub-forms-access", () => ({ canManageHubForms: async () => h.canManage }));
+vi.mock("@/lib/auth/hub-forms-access", () => ({
+  canManageHubForms: async () => h.canManage,
+  hubFormAccess: async () => (h.canManage ? "manage" : null),
+  MISSIO_PASTOR_FORM_FIELDS: ["name", "schema"],
+  MISSIO_WEEKLY_FEEDBACK_KIND: "missio_weekly_feedback",
+}));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => {
+    throw new Error("the service role is only for the Missio pastor path");
+  },
+}));
 vi.mock("@/lib/auth/event-route", () => ({ gateEvent: async () => null }));
 vi.mock("@/lib/auth/event-access", () => ({
   FORMS_GATE: {},

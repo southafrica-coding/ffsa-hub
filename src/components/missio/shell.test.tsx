@@ -148,6 +148,12 @@ describe("Missio access state", () => {
     expect(host.querySelector("[data-testid=missio-nav-sundays]")?.nextElementSibling).toBe(calendar);
     expect(host.querySelector("[data-testid=missio-tab-calendar]")).toBeNull();
     expect(host.querySelectorAll("[data-testid=missio-tab-bar] a")).toHaveLength(5);
+    // Feedback form (#702): pastors, menu only, after WhatsApp, not the history page.
+    const formLink = host.querySelector("[data-testid=missio-nav-feedback-form]") as HTMLAnchorElement;
+    expect(formLink.getAttribute("href")).toBe("/missio/feedback/form");
+    expect(formLink.textContent).toBe("Feedback form");
+    expect(whatsapp.nextElementSibling).toBe(formLink);
+    expect(host.querySelector("[data-testid=missio-tab-feedback-form]")).toBeNull();
     expect((host.querySelector("[data-testid=missio-nav-sundays]") as HTMLAnchorElement).getAttribute("href")).toBe("/missio/sundays");
   });
 
@@ -256,6 +262,8 @@ describe("Missio access state", () => {
     expect(host.querySelector("a[href='/missio/whatsapp']")).toBeNull();
     expect(host.querySelector("[data-testid=missio-nav-calendar]")).toBeNull();
     expect(host.querySelector("a[href='/missio/calendar']")).toBeNull();
+    expect(host.querySelector("[data-testid=missio-nav-feedback-form]")).toBeNull();
+    expect(host.querySelector("a[href='/missio/feedback/form']")).toBeNull();
     const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
     expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care", "/missio/sundays"]);
     expect(host.querySelector("[data-testid=missio-tab-care]")?.getAttribute("aria-current")).toBe("page");
@@ -277,6 +285,12 @@ describe("Missio access state", () => {
     await settle();
     expect(host.querySelector("[data-testid=missio-nav-care]")?.getAttribute("href")).toBe("/missio/care");
     expect(host.querySelector("a[href='/missio/finance']")).toBeNull();
+    expect(host.querySelector("[data-testid=missio-nav-whatsapp]")).toBeNull();
+    expect(host.querySelector("a[href='/missio/whatsapp']")).toBeNull();
+    expect(host.querySelector("[data-testid=missio-nav-calendar]")).toBeNull();
+    expect(host.querySelector("a[href='/missio/calendar']")).toBeNull();
+    expect(host.querySelector("[data-testid=missio-nav-feedback-form]")).toBeNull();
+    expect(host.querySelector("a[href='/missio/feedback/form']")).toBeNull();
     const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
     expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care", "/missio/sundays"]);
     expect(host.querySelector("[data-testid=missio-tab-care]")).not.toBeNull();
@@ -335,6 +349,24 @@ describe("Missio access state", () => {
     const on = [...host.querySelectorAll("[data-testid=missio-tab-bar] a[aria-current=page]")];
     expect(on).toEqual([]);
     expect(host.querySelector("[data-testid=missio-nav-volunteers]")?.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("marks Feedback form in the menu and no tab on the form editor, with the five pastor tabs unchanged", async () => {
+    nav.pathname = "/missio/feedback/form";
+    const { host, root } = render(
+      <MissioFrame client={client(async () => pastor)} loadFfsaRoles={noRoles}>
+        <p>Questions live here</p>
+      </MissioFrame>
+    );
+    roots.push(root);
+    hosts.push(host);
+    await settle();
+    const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Home", "People", "Houses", "Sundays", "Follow-up"]);
+    expect(tabs.filter((tab) => tab.getAttribute("aria-current") === "page")).toEqual([]);
+    expect(host.querySelector("[data-testid=missio-nav-feedback-form]")?.getAttribute("aria-current")).toBe("page");
+    expect(host.querySelector("[data-testid=missio-nav-house-churches]")?.getAttribute("aria-current")).toBeNull();
+    expect(host.textContent).toContain("Missio Church / Feedback form");
   });
 
   it("marks Sundays in the tab bar and the menu on the Sundays page", async () => {
@@ -411,8 +443,11 @@ describe("Missio access state", () => {
     expect(drawerLink?.textContent?.toLowerCase()).not.toContain("soon");
     const drawerSoon = [...dialog.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
     expect(drawerSoon).toHaveLength(3);
-    // The phone menu carries Finance for pastors; the tab bar keeps its five.
+    // The phone menu carries Finance, WhatsApp, Calendar and Feedback form for pastors; the tab bar keeps its five.
     expect(dialog.querySelector("a[href='/missio/finance']")?.textContent).toContain("Finance");
+    expect(dialog.querySelector("a[href='/missio/whatsapp']")?.textContent).toContain("WhatsApp");
+    expect(dialog.querySelector("a[href='/missio/calendar']")?.textContent).toContain("Calendar");
+    expect(dialog.querySelector("a[href='/missio/feedback/form']")?.textContent).toBe("Feedback form");
     expect(drawerSoon[0]?.parentElement?.textContent).toContain("Teams");
     expect(openMenu.getAttribute("aria-expanded")).toBe("true");
     expect(document.body.getAttribute("data-scroll-locked")).toBe("1");

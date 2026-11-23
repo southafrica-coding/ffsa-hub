@@ -12,6 +12,7 @@ export const MISSIO_CRUMB_LABELS: ReadonlyArray<{ prefix: string; label: string 
   { prefix: "/missio/calendar", label: "Calendar" },
   { prefix: "/missio/finance", label: "Finance" },
   { prefix: "/missio/whatsapp", label: "WhatsApp" },
+  { prefix: "/missio/feedback/form", label: "Feedback form" },
 ];
 
 /** The section after "Missio /" for a pathname. Home is the fallback. */
