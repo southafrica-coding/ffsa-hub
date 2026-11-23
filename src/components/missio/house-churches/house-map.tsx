@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { missioPublicFeedbackPath } from "@/lib/missio/public-feedback-link";
 import { CAMPUS_LABEL } from "../access";
 import type { HouseChurchesClient } from "./client";
 import {
@@ -275,6 +276,9 @@ function HouseTray({
         <div className={styles.trayTitle}>
           <h2>{houseTitle(house)}</h2>
           <p className={styles.trayLine}>{line}</p>
+          <a href={missioPublicFeedbackPath(house.id)} className={styles.trayFeedback} data-testid="house-weekly-feedback">
+            Weekly feedback<span className={styles.srOnly}> for {houseTitle(house)}</span>
+          </a>
         </div>
         <Link href={`/missio/house-churches/${encodeURIComponent(house.id)}`} className={styles.open}>
           Open house

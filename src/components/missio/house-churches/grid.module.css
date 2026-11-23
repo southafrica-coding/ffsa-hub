@@ -213,25 +213,52 @@
   min-width: 0;
 }
 
+/* The card is an <article> holding two sibling links: the body (opens the
+   house) and the Weekly feedback button under it. No link inside a link. */
 .card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   height: 100%;
   box-sizing: border-box;
   padding: 16px;
   color: var(--ink, #1c1b17);
-  text-decoration: none;
   transition: box-shadow 0.16s ease;
 }
 
-.card:hover {
+.card:has(.cardMain:hover) {
   box-shadow: var(--shadow-2, 0 6px 18px rgba(28, 27, 23, 0.1));
 }
 
-.card:focus-visible {
+.cardMain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.cardMain:focus-visible {
   outline: 2px solid var(--link, #2f5d50);
-  outline-offset: 2px;
+  outline-offset: 4px;
+}
+
+/* A quiet secondary button, full width on a phone: one clear target. */
+.card .cardFeedback {
+  width: 100%;
+  font-size: 14px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .cardTop {

@@ -689,3 +689,200 @@ a.card:focus-visible,
     color: var(--ink-3, #6e685b);
   }
 }
+
+/* ── Weekly feedback (Jack, 23 Nov 2026) ─────────────────
+   Full width, straight under the greeting. One primary action (the big
+   terra link), the copy and WhatsApp buttons quieter under it, then for
+   pastors and coaches the houses that haven't sent this week. */
+
+.weekly {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.weeklyMain {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.weeklyText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.weekly .weeklySub {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2, #5b574d);
+}
+
+.weeklyActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* .shell a sets colour: inherit, so the extra class wins it back. */
+.weeklyActions .weeklyCta,
+.weeklyActions .weeklyCta:hover {
+  color: #ffffff;
+}
+
+.weeklyCta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 20px;
+  box-sizing: border-box;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--terra, #b4532e);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color 0.16s ease;
+}
+
+.weeklyCta:hover {
+  background: #9e4626;
+}
+
+.weeklyCta:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+/* The shared copier's two buttons split the row evenly on a phone. */
+.weeklyActions [data-testid="public-feedback-link"] > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0;
+}
+
+.weeklyMissing {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule, #ddd7c8);
+  min-width: 0;
+}
+
+.weekly .weeklyMissingTitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--body);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.weeklyCount {
+  flex: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2, #5b574d);
+  font-variant-numeric: tabular-nums;
+}
+
+.weekly .weeklyWeek,
+.weekly .weeklyDone {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-3, #6e685b);
+}
+
+.weekly .weeklyDone {
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--olive-ink, #3f5940);
+}
+
+.weeklyList {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weeklyList li + li {
+  border-top: 1px solid var(--rule, #ddd7c8);
+}
+
+.weeklyHouse {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  min-width: 0;
+  text-decoration: none;
+}
+
+.weeklyHouse:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.weeklyHouseName {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weeklyHouse:hover .weeklyHouseName {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (min-width: 768px) {
+  .weekly {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
+    column-gap: 24px;
+    padding: 24px;
+  }
+
+  .weeklyMain {
+    align-self: center;
+  }
+
+  .weeklyMissing {
+    grid-column: 1 / -1;
+  }
+
+  /* Two columns of missing houses on a wide screen. */
+  .weeklyList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 24px;
+  }
+
+  .weeklyList li + li {
+    border-top: none;
+  }
+
+  .weeklyList li {
+    border-bottom: 1px solid var(--rule, #ddd7c8);
+  }
+}

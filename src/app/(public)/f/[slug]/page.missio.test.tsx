@@ -34,7 +34,10 @@ const missioForm = {
   schema: { version: 1, steps: [] },
 };
 
-const open = async (slug: string) => (await PublicFormPage({ params: Promise.resolve({ slug }) })) as ReactElement<Record<string, unknown>>;
+const open = async (slug: string, query: Record<string, string | string[] | undefined> = {}) =>
+  (await PublicFormPage({ params: Promise.resolve({ slug }), searchParams: Promise.resolve(query) })) as ReactElement<
+    Record<string, unknown>
+  >;
 const typeName = (el: ReactElement) => (el.type as { name?: string }).name;
 
 beforeEach(() => {
@@ -47,6 +50,14 @@ describe("/f/missio-weekly-feedback", () => {
     const el = await open("missio-weekly-feedback");
     expect(typeName(el)).toBe("MissioPublicWeeklyFeedback");
     expect(el.props.schema).toEqual(missioForm.schema);
+    expect(h.sessionAsked).toBe(0);
+    expect(el.props.house).toBeNull();
+  });
+
+  it("hands ?house= on raw, for the Missio page to check against its list", async () => {
+    const el = await open("missio-weekly-feedback", { house: "77777777-7777-4777-8777-777777777777" });
+    expect(typeName(el)).toBe("MissioPublicWeeklyFeedback");
+    expect(el.props.house).toBe("77777777-7777-4777-8777-777777777777");
     expect(h.sessionAsked).toBe(0);
   });
 

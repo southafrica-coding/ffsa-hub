@@ -526,6 +526,41 @@
   color: var(--ink-2, #5b574d);
 }
 
+/* This house's public weekly form, chosen already. Quiet, under the line. */
+.trayFeedback {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--link, #2f5d50);
+  text-decoration: none;
+}
+
+.trayFeedback::after {
+  content: " →";
+  white-space: pre;
+}
+
+.trayFeedback:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.trayFeedback:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .open {
   flex: none;
   display: inline-flex;

@@ -18,6 +18,7 @@ import { MissioPublicWeeklyFeedback } from "./missio-weekly";
 
 const ORG = "org-missio";
 const H7 = "77777777-7777-4777-8777-777777777777";
+const H4 = "44444444-4444-4444-8444-444444444444";
 
 function fakeDb() {
   return {
@@ -26,7 +27,16 @@ function fakeDb() {
       for (const op of ["select", "eq", "order"]) b[op] = () => b;
       b.maybeSingle = async () => ({ data: table === "organisations" ? { id: ORG } : null, error: null });
       b.then = (resolve: (v: unknown) => unknown) =>
-        Promise.resolve({ data: table === "house_churches" ? [{ id: H7, number: 7, name: null, meeting_day: "saturday" }] : [], error: null }).then(resolve);
+        Promise.resolve({
+          data:
+            table === "house_churches"
+              ? [
+                  { id: H4, number: 4, name: "Sipho & Naledi", meeting_day: null },
+                  { id: H7, number: 7, name: null, meeting_day: "saturday" },
+                ]
+              : [],
+          error: null,
+        }).then(resolve);
       return b;
     },
   };
@@ -49,10 +59,33 @@ describe("MissioPublicWeeklyFeedback payload", () => {
     expect(JSON.stringify(stored)).toContain("write_column");
 
     const houses = (el.props.picker as { houses: Array<Record<string, unknown>> }).houses;
-    expect(houses).toHaveLength(1);
-    expect(houses[0]).toMatchObject({ id: H7, number: 7, name: null });
-    expect(Object.keys(houses[0]).sort()).toEqual(["id", "meetingDate", "name", "number"]);
+    expect(houses).toHaveLength(2);
+    expect(houses[1]).toMatchObject({ id: H7, number: 7, name: null });
+    expect(Object.keys(houses[1]).sort()).toEqual(["id", "meetingDate", "name", "number"]);
     // A Saturday house gets a Saturday, never a hard-coded Sunday.
-    expect(new Date(`${houses[0].meetingDate}T12:00:00Z`).getUTCDay()).toBe(6);
+    expect(new Date(`${houses[1].meetingDate}T12:00:00Z`).getUTCDay()).toBe(6);
+    // No ?house=: nothing chosen.
+    expect(el.props.initialHouseId).toBeNull();
+  });
+
+  const open = async (house: unknown) =>
+    (await MissioPublicWeeklyFeedback({ db: fakeDb(), schema: missioWeeklyFeedbackSchema(), house: house as string })) as ReactElement<
+      Record<string, unknown>
+    >;
+
+  it("preselects a ?house= that is one of the picker's houses", async () => {
+    const el = await open(H7);
+    expect(el.props.initialHouseId).toBe(H7);
+    // The picker still lists every house, so the person can change it.
+    expect((el.props.picker as { houses: Array<{ id: string }> }).houses.map((h) => h.id)).toEqual([H4, H7]);
+  });
+
+  it("drops an unknown, malformed or empty ?house= and opens with nothing chosen", async () => {
+    for (const raw of ["", "   ", "not-a-uuid", "88888888-8888-4888-8888-888888888888", `${H7}x`, "<script>", ["x"], null, undefined]) {
+      const el = await open(raw);
+      expect((el.type as { name?: string }).name).toBe("WeeklyFeedbackFill");
+      expect(el.props.initialHouseId).toBeNull();
+      expect((el.props.picker as { houses: unknown[] }).houses).toHaveLength(2);
+    }
   });
 });

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CAMPUS_LABEL } from "../access";
+import { missioPublicFeedbackPath } from "@/lib/missio/public-feedback-link";
 import { houseChurchesClient, type HouseChurchesClient } from "./client";
 import {
   coachNames,
@@ -249,44 +250,51 @@ function HouseCard({ house }: { house: HouseSummary }) {
   const leading = [...house.leaders.slice(0, 1), ...house.coLeaders.slice(0, 1)];
   const leaderCount = house.leaders.length + house.coLeaders.length;
   return (
-    <Link href={`/missio/house-churches/${encodeURIComponent(house.id)}`} className={`${ui.card} ${g.card}`} data-testid="house-card">
-      <span className={g.cardTop}>
-        <span className={`${ui.serif} ${g.cardName}`}>{title}</span>
-        {day ? <span className={`${ui.mono} ${g.day}`}>{day}</span> : null}
-        <span className={`${ui.tag} ${g.cardTag}`}>{CAMPUS_LABEL[house.campus]}</span>
-      </span>
-      {named || house.location?.trim() ? (
-        <span className={g.cardSub}>{[named ? `House ${house.number}` : null, house.location?.trim() || null].filter(Boolean).join(" · ")}</span>
-      ) : null}
-      <SizeDots count={house.memberCount} leaders={leaderCount} />
-      <span className={g.size}>
-        <b className={`${ui.num} ${g.sizeCount}`}>{house.memberCount}</b>
-        <span className={g.sizeLabel}>{sizeWord(house)}</span>
-      </span>
-      <span className={g.lead}>
-        {leading.length > 0 ? (
-          <span className={g.stack} aria-hidden="true">
-            {leading.map((person) => (
-              <span key={person.contactId} className={`${ui.av} ${ui.avSm} ${ui[tintOf(person.contactId)]}`}>
-                {initialsOf(person.displayName)}
-              </span>
-            ))}
-          </span>
+    // Two links side by side, never one inside the other: the card body
+    // opens the house, the foot opens this week's form for it.
+    <article className={`${ui.card} ${g.card}`} data-testid="house-card-item" aria-label={title}>
+      <Link href={`/missio/house-churches/${encodeURIComponent(house.id)}`} className={g.cardMain} data-testid="house-card">
+        <span className={g.cardTop}>
+          <span className={`${ui.serif} ${g.cardName}`}>{title}</span>
+          {day ? <span className={`${ui.mono} ${g.day}`}>{day}</span> : null}
+          <span className={`${ui.tag} ${g.cardTag}`}>{CAMPUS_LABEL[house.campus]}</span>
+        </span>
+        {named || house.location?.trim() ? (
+          <span className={g.cardSub}>{[named ? `House ${house.number}` : null, house.location?.trim() || null].filter(Boolean).join(" · ")}</span>
         ) : null}
-        <span className={g.leadName}>{leadingLine(house)}</span>
-      </span>
-      <span className={g.cardFoot}>
-        <span className={g.coach}>{house.coaches.length > 0 ? coachNames(house.coaches) : "No coach yet"}</span>
-        {signals.length > 0 ? (
-          <span className={g.signals}>
-            {signals.map((signal) => (
-              <span key={signal} className={`${ui.chip} ${g.sigChip} ${signal === "ready" ? ui.cOlive : ui.cGold}`}>
-                {SIGNAL_LABEL[signal]}
-              </span>
-            ))}
-          </span>
-        ) : null}
-      </span>
-    </Link>
+        <SizeDots count={house.memberCount} leaders={leaderCount} />
+        <span className={g.size}>
+          <b className={`${ui.num} ${g.sizeCount}`}>{house.memberCount}</b>
+          <span className={g.sizeLabel}>{sizeWord(house)}</span>
+        </span>
+        <span className={g.lead}>
+          {leading.length > 0 ? (
+            <span className={g.stack} aria-hidden="true">
+              {leading.map((person) => (
+                <span key={person.contactId} className={`${ui.av} ${ui.avSm} ${ui[tintOf(person.contactId)]}`}>
+                  {initialsOf(person.displayName)}
+                </span>
+              ))}
+            </span>
+          ) : null}
+          <span className={g.leadName}>{leadingLine(house)}</span>
+        </span>
+        <span className={g.cardFoot}>
+          <span className={g.coach}>{house.coaches.length > 0 ? coachNames(house.coaches) : "No coach yet"}</span>
+          {signals.length > 0 ? (
+            <span className={g.signals}>
+              {signals.map((signal) => (
+                <span key={signal} className={`${ui.chip} ${g.sigChip} ${signal === "ready" ? ui.cOlive : ui.cGold}`}>
+                  {SIGNAL_LABEL[signal]}
+                </span>
+              ))}
+            </span>
+          ) : null}
+        </span>
+      </Link>
+      <a href={missioPublicFeedbackPath(house.id)} className={`${ui.btn} ${ui.s} ${g.cardFeedback}`} data-testid="house-weekly-feedback">
+        Weekly feedback<span className={g.srOnly}> for {title}</span>
+      </a>
+    </article>
   );
 }

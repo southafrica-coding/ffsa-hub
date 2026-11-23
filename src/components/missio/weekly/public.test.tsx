@@ -60,6 +60,32 @@ describe("public weekly feedback (house picker)", () => {
     expect(trap.getAttribute("aria-hidden")).toBe("true");
   });
 
+  it("starts on the house the server passed in, and the picker can still change it", async () => {
+    const sent: Array<SubmitMeta | undefined> = [];
+    const submit = async (_a: Record<string, unknown>, meta?: SubmitMeta): Promise<SubmitOutcome> => {
+      sent.push(meta);
+      return { ok: true };
+    };
+    const host = mount(<WeeklyFeedbackFill {...FIXTURE_FILL} endpoint="/x" submit={submit} picker={{ houses: HOUSES }} initialHouseId={H7} />);
+    const select = host.querySelector("[data-testid=public-house-picker]") as HTMLSelectElement;
+    expect(select.value).toBe(H7);
+    // House 7 meets on Saturdays: the heading says so.
+    expect(host.querySelector("h1")?.textContent).toContain("this Saturday?");
+    await pick(host, H4);
+    expect(host.querySelector("h1")?.textContent).toContain("this Sunday?");
+    await sendForm(host);
+    await settle();
+    expect(sent[0]).toEqual({ houseId: H4, website: "" });
+  });
+
+  it("ignores an initial house that isn't in the list", () => {
+    const host = mount(
+      <WeeklyFeedbackFill {...FIXTURE_FILL} endpoint="/x" picker={{ houses: HOUSES }} initialHouseId="88888888-8888-4888-8888-888888888888" />
+    );
+    expect((host.querySelector("[data-testid=public-house-picker]") as HTMLSelectElement).value).toBe("");
+    expect(host.querySelector("h1")?.textContent).toContain("this week?");
+  });
+
   it("won't send without a house; with one, sends its id beside the answers", async () => {
     const sent: Array<[Record<string, unknown>, SubmitMeta | undefined]> = [];
     const submit = async (answers: Record<string, unknown>, meta?: SubmitMeta): Promise<SubmitOutcome> => {

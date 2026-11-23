@@ -65,8 +65,10 @@ function normalizeBrand(raw: unknown): PublicShellBrand {
 
 export default async function PublicFormPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
   // The service-role client, like the ticketing storefront and the
@@ -95,7 +97,10 @@ export default async function PublicFormPage({
   // picker (Jack, 23 Nov 2026). Open to anyone even though the row's
   // access_mode is still "token", so no prod row has to change.
   if (isMissioPublicFeedbackForm(form)) {
-    return <MissioPublicWeeklyFeedback db={supabase} schema={form.schema} />;
+    // ?house=<id> preselects a house; MissioPublicWeeklyFeedback checks it
+    // against the picker's list and drops anything else.
+    const query = (await searchParams) ?? {};
+    return <MissioPublicWeeklyFeedback db={supabase} schema={form.schema} house={query.house ?? null} />;
   }
 
   // Who may fill it (migration 390). Public forms never touch the session.

@@ -52,6 +52,11 @@ export type WeeklyFillProps = {
    * Houses carry id, number, name and this week's meeting date, nothing else.
    */
   picker?: { houses: PublicHouse[] } | null;
+  /**
+   * With `picker`: the house to start on (`?house=<id>`). The server only
+   * passes an id it found in picker.houses; anything else starts empty.
+   */
+  initialHouseId?: string | null;
   /** Tests and screenshots: stands in for the POST. */
   submit?: (answers: Record<string, unknown>, meta?: SubmitMeta) => Promise<SubmitOutcome>;
 };
@@ -186,7 +191,9 @@ function Stepper({
 
 export function WeeklyFeedbackFill(props: WeeklyFillProps) {
   const { schema, houseNumber, leaders, meetingDate, lastAttendance, sentBefore, endpoint, houseHref, picker } = props;
-  const [houseId, setHouseId] = useState("");
+  const [houseId, setHouseId] = useState(() =>
+    picker && props.initialHouseId && picker.houses.some((h) => h.id === props.initialHouseId) ? props.initialHouseId : ""
+  );
   const [trap, setTrap] = useState("");
   const [values, setValues] = useState<Record<string, unknown>>(() => startingAnswers(schema, props.initial, lastAttendance));
   const [errors, setErrors] = useState<Record<string, string>>({});

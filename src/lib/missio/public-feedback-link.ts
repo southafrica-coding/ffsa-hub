@@ -39,9 +39,32 @@ export function publicHouseLabel(house: { number: number; name: string | null })
   return name ? `House ${house.number} · ${name}` : `House ${house.number}`;
 }
 
+/**
+ * The public form's path, optionally with one house chosen already
+ * (`?house=<id>`). The page only honours the id if it is in the picker's
+ * own list (listPublicHouses); anything else opens with nothing chosen.
+ */
+export function missioPublicFeedbackPath(houseId?: string | null): string {
+  const id = typeof houseId === "string" ? houseId.trim() : "";
+  return id ? `${MISSIO_PUBLIC_FEEDBACK_PATH}?house=${encodeURIComponent(id)}` : MISSIO_PUBLIC_FEEDBACK_PATH;
+}
+
 /** The absolute public URL, given the page's origin ("" before it is known). */
-export function missioPublicFeedbackUrl(origin: string): string {
-  return `${origin.replace(/\/$/, "")}${MISSIO_PUBLIC_FEEDBACK_PATH}`;
+export function missioPublicFeedbackUrl(origin: string, houseId?: string | null): string {
+  return `${origin.replace(/\/$/, "")}${missioPublicFeedbackPath(houseId)}`;
+}
+
+/**
+ * The `?house=` value to preselect, or null. Only an id that is in the
+ * picker's list counts, so an unknown, malformed or non-Missio id opens
+ * the form with nothing chosen and says nothing about whether it exists.
+ */
+export function preselectedHouseId(raw: unknown, houses: ReadonlyArray<{ id: string }>): string | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value !== "string") return null;
+  const id = value.trim();
+  if (!id) return null;
+  return houses.some((h) => h.id === id) ? id : null;
 }
 
 /** The WhatsApp message for the shared form (not one house's link). */

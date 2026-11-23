@@ -235,6 +235,8 @@ describe("house church grid", () => {
     expect(tray.textContent).toContain("coached by Thandi Zulu");
     expect(tray.textContent).toContain("Mia Grobler");
     expect(tray.querySelector("a[href='/missio/house-churches/house-2']")?.textContent).toBe("Open house");
+    // The tray also opens this house's weekly form, chosen already.
+    expect(tray.querySelector("[data-testid=house-weekly-feedback]")?.getAttribute("href")).toBe("/f/missio-weekly-feedback?house=house-2");
     // Opening the other coach closes this branch.
     act(() => (coaches[1] as HTMLButtonElement).click());
     await settle();
@@ -258,5 +260,31 @@ describe("house church grid", () => {
     await settle();
     expect(signedOut.querySelector("[data-testid=missio-no-access]")?.getAttribute("data-status")).toBe("401");
     expect(signedOut.textContent).toMatch(/Sign in required/);
+  });
+
+  it("gives every card its own Weekly feedback link, beside the card's link and never inside it", async () => {
+    const host = mount(<HouseChurchGrid client={client()} />);
+    await settle();
+    await toGrid(host);
+    const items = [...host.querySelectorAll("[data-testid=house-card-item]")];
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.tagName)).toEqual(["ARTICLE", "ARTICLE"]);
+    for (const item of items) {
+      const main = item.querySelector("[data-testid=house-card]") as HTMLAnchorElement;
+      const feedback = item.querySelector("[data-testid=house-weekly-feedback]") as HTMLAnchorElement;
+      const id = main.getAttribute("href")?.split("/").pop();
+      // The card still opens the house; the button opens the public form for it.
+      expect(main.getAttribute("href")).toBe(`/missio/house-churches/${id}`);
+      expect(feedback.getAttribute("href")).toBe(`/f/missio-weekly-feedback?house=${id}`);
+      expect(feedback.textContent).toMatch(/^Weekly feedback for /);
+      // Siblings: no link or button inside another.
+      expect(main.contains(feedback)).toBe(false);
+      expect(feedback.contains(main)).toBe(false);
+    }
+    for (const a of host.querySelectorAll("a, button")) {
+      expect(a.parentElement?.closest("a, button")).toBeNull();
+    }
+    // The page-level link to the signed-in history is still there.
+    expect(host.querySelector("[data-testid=feedback-link]")?.getAttribute("href")).toBe("/missio/house-churches/feedback");
   });
 });

@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MissioHome, houseOverview } from "./home";
 import type { FollowUpClient } from "./follow-up/client";
+import type { FeedbackThisWeek, FeedbackThisWeekClient } from "./feedback/this-week";
 import type { HouseChurchesClient } from "./house-churches/client";
 import type { HouseSummary } from "./house-churches/types";
 import type { MissioMe } from "./types-shim";
@@ -24,6 +25,35 @@ const pastor: MissioMe = {
   rolesByOrg: { missio: ["pastor"] },
   currentOrg: "missio",
 };
+
+const coach: MissioMe = {
+  orgs: [{ id: "org-missio", slug: "missio", name: "Missio" }],
+  rolesByOrg: { missio: ["coach"] },
+  currentOrg: "missio",
+};
+
+const H4 = "44444444-4444-4444-8444-444444444444";
+const H9 = "99999999-9999-4999-8999-999999999999";
+const WEEK: FeedbackThisWeek = {
+  sunday: "2026-11-22",
+  total: 20,
+  sentCount: 18,
+  missing: [
+    { id: H4, number: 4, name: "Sipho & Naledi" },
+    { id: H9, number: 9, name: null },
+  ],
+};
+
+function weekClient(result: () => Promise<FeedbackThisWeek | null>) {
+  let calls = 0;
+  const client: FeedbackThisWeekClient = {
+    thisWeek: () => {
+      calls += 1;
+      return result();
+    },
+  };
+  return { client, calls: () => calls };
+}
 
 const houseLeader: MissioMe = {
   orgs: [{ id: "org-missio", slug: "missio", name: "Missio" }],
@@ -81,7 +111,8 @@ function clients(options: { failHouses?: boolean; review?: number } = {}) {
   } as unknown as FollowUpClient;
   const people = { listPeople: async () => ({ rows: [], total: 251 }) };
   const loadName = async () => "Gabriël";
-  return { houses, followUp, people, loadName };
+  const feedback: FeedbackThisWeekClient = { thisWeek: async () => WEEK };
+  return { houses, followUp, people, loadName, feedback };
 }
 
 async function settle() {
@@ -214,5 +245,104 @@ describe("Missio home", () => {
     expect(host.querySelector("[data-testid=home-houses-card]")).toBeNull();
     expect(host.querySelector("[data-testid=home-follow-card]")).toBeNull();
     expect(called).toBe(1);
+  });
+
+  function mount(me: MissioMe, node: ReactNode) {
+    const view = render(<MissioViewerProvider me={me}>{node}</MissioViewerProvider>);
+    roots.push(view.root);
+    hosts.push(view.host);
+    return view.host;
+  }
+
+  it("puts Weekly feedback under the greeting for a pastor: the form, the copy link and who hasn't sent", async () => {
+    const host = mount(pastor, <MissioHome {...clients()} />);
+    await settle();
+    const card = host.querySelector("[data-testid=home-weekly-card]") as HTMLElement;
+    expect(card).toBeTruthy();
+    // Straight after the greeting, before the house churches grid.
+    expect(host.querySelector("[data-testid=home-hero]")?.nextElementSibling).toBe(card);
+    expect(card.compareDocumentPosition(host.querySelector("[data-testid=home-houses-card]") as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const cta = card.querySelector("[data-testid=home-weekly-cta]") as HTMLAnchorElement;
+    expect(cta.getAttribute("href")).toBe("/f/missio-weekly-feedback");
+    expect(cta.textContent).toBe("Fill in this week’s feedback");
+    expect(card.querySelector("[data-testid=public-feedback-copy]")).toBeTruthy();
+    const missing = card.querySelector("[data-testid=home-weekly-missing]") as HTMLElement;
+    expect(missing.textContent).toContain("Not sent yet");
+    expect(card.querySelector("[data-testid=home-weekly-count]")?.textContent).toBe("18 of 20 sent");
+    expect(missing.textContent).toContain("Week ending Sunday 22 November");
+    const rows = [...card.querySelectorAll("[data-testid=home-weekly-missing-house]")] as HTMLAnchorElement[];
+    expect(rows.map((a) => a.textContent)).toEqual(["House 4 · Sipho & Naledi", "House 9"]);
+    expect(rows.map((a) => a.getAttribute("href"))).toEqual([`/f/missio-weekly-feedback?house=${H4}`, `/f/missio-weekly-feedback?house=${H9}`]);
+  });
+
+  it("says so when every house has sent", async () => {
+    const { client } = weekClient(async () => ({ ...WEEK, sentCount: 20, missing: [] }));
+    const host = mount(pastor, <MissioHome {...clients()} feedback={client} />);
+    await settle();
+    const card = host.querySelector("[data-testid=home-weekly-card]") as HTMLElement;
+    expect(card.querySelector("[data-testid=home-weekly-all-sent]")?.textContent).toContain("Every house has sent this week’s feedback");
+    expect(card.querySelector("[data-testid=home-weekly-count]")?.textContent).toBe("20 of 20 sent");
+    expect(card.querySelectorAll("[data-testid=home-weekly-missing-house]")).toHaveLength(0);
+  });
+
+  it("shows loading, then an error with a retry that works", async () => {
+    let fail = true;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { client, calls } = weekClient(async () => {
+      await gate;
+      if (fail) throw new Error("down");
+      return WEEK;
+    });
+    const host = mount(pastor, <MissioHome {...clients()} feedback={client} />);
+    await settle();
+    const card = host.querySelector("[data-testid=home-weekly-card]") as HTMLElement;
+    expect(card.querySelector("[data-testid=home-weekly-missing] [aria-hidden=true]")).toBeTruthy();
+    // The CTA and copy are there while the list loads.
+    expect(card.querySelector("[data-testid=home-weekly-cta]")).toBeTruthy();
+    release();
+    await settle();
+    expect(card.querySelector("[role=alert]")?.textContent).toContain("Couldn’t load this week’s feedback");
+    fail = false;
+    await act(async () => {
+      (card.querySelector("[role=alert] button") as HTMLButtonElement).click();
+    });
+    await settle();
+    expect(calls()).toBe(2);
+    expect(card.querySelector("[role=alert]")).toBeNull();
+    expect(card.querySelectorAll("[data-testid=home-weekly-missing-house]")).toHaveLength(2);
+  });
+
+  it("gives a leader the form and the copy link, but never the missing list", async () => {
+    const spy = clients();
+    const { client, calls } = weekClient(async () => WEEK);
+    const houses = { ...spy.houses, listHouses: async () => ({ houses: [house(5, 12)], canWrite: false }) } as HouseChurchesClient;
+    const host = mount(houseLeader, <MissioHome houses={houses} followUp={spy.followUp} loadName={spy.loadName} feedback={client} />);
+    await settle();
+    const card = host.querySelector("[data-testid=home-weekly-card]") as HTMLElement;
+    expect(card).toBeTruthy();
+    expect(host.querySelector("[data-testid=home-hero]")?.nextElementSibling).toBe(card);
+    expect((card.querySelector("[data-testid=home-weekly-cta]") as HTMLAnchorElement).getAttribute("href")).toBe("/f/missio-weekly-feedback");
+    expect(card.querySelector("[data-testid=public-feedback-copy]")).toBeTruthy();
+    expect(card.querySelector("[data-testid=home-weekly-missing]")).toBeNull();
+    expect(card.textContent).not.toContain("Not sent yet");
+    expect(calls()).toBe(0);
+  });
+
+  it("gives a coach the missing list for their houses, and nothing when the API says no", async () => {
+    const spy = clients();
+    const houses = { ...spy.houses, listHouses: async () => ({ houses: [house(4, 8)], canWrite: false }) } as HouseChurchesClient;
+    const ok = weekClient(async () => ({ sunday: "2026-11-22", total: 1, sentCount: 0, missing: [WEEK.missing[0]] }));
+    let host = mount(coach, <MissioHome houses={houses} followUp={spy.followUp} loadName={spy.loadName} feedback={ok.client} />);
+    await settle();
+    expect(host.querySelectorAll("[data-testid=home-weekly-missing-house]")).toHaveLength(1);
+
+    const no = weekClient(async () => null);
+    host = mount(coach, <MissioHome houses={houses} followUp={spy.followUp} loadName={spy.loadName} feedback={no.client} />);
+    await settle();
+    const card = host.querySelector("[data-testid=home-weekly-card]") as HTMLElement;
+    expect(card.querySelector("[data-testid=home-weekly-cta]")).toBeTruthy();
+    expect(card.querySelector("[data-testid=home-weekly-missing]")).toBeNull();
+    expect(card.querySelector("[role=alert]")).toBeNull();
   });
 });

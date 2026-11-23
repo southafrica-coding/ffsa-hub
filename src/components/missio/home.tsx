@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight, CircleHelp, Search, UsersRound } from "lucide-react";
+import { ChevronRight, CircleHelp, ClipboardList, Search, UsersRound } from "lucide-react";
+import { missioPublicFeedbackPath, MISSIO_PUBLIC_FEEDBACK_PATH, publicHouseLabel } from "@/lib/missio/public-feedback-link";
 import { canAccessMissio, isMissioPastor } from "./access";
 import { missioClient, type MissioClient } from "./api";
 import content from "./content.module.css";
 import home from "./home.module.css";
 import { followUpClient, type FollowUpClient } from "./follow-up/client";
+import { PublicFeedbackLink } from "./feedback/public-link";
+import { feedbackThisWeekClient, type FeedbackThisWeek, type FeedbackThisWeekClient } from "./feedback/this-week";
 import type { FollowUpStage } from "./follow-up/types";
 import { houseChurchesClient, type HouseChurchesClient } from "./house-churches/client";
 import type { HouseSummary } from "./house-churches/types";
@@ -177,12 +180,85 @@ function RowCard({
   );
 }
 
+/** "Sunday 22 November", from the week's YYYY-MM-DD Sunday. */
+function weekEnding(sunday: string): string {
+  const d = new Date(`${sunday}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" }).format(d);
+}
+
+/**
+ * Weekly feedback, near the top of Home (Jack, 23 Nov 2026): one big link to
+ * the public form, the copy control, and, for pastors and coaches, the
+ * houses that haven't sent this week. Leaders never get the list.
+ */
+function WeeklyFeedbackCard({ status, retry }: { status: Load<FeedbackThisWeek | null> | null; retry: () => void }) {
+  const week = status?.state === "ready" ? status.data : null;
+  return (
+    <section className={`${home.card} ${home.weekly}`} aria-labelledby="home-weekly-title" data-testid="home-weekly-card">
+      <div className={home.weeklyMain}>
+        <span className={`${home.rowIcon} ${home.rowIconLink}`} aria-hidden="true">
+          <ClipboardList />
+        </span>
+        <div className={home.weeklyText}>
+          <h2 className={home.cardTitle} id="home-weekly-title">
+            Weekly feedback
+          </h2>
+          <p className={home.weeklySub}>How was house church this week? Pick the house, about five minutes.</p>
+        </div>
+      </div>
+      <div className={home.weeklyActions}>
+        <a href={MISSIO_PUBLIC_FEEDBACK_PATH} className={home.weeklyCta} data-testid="home-weekly-cta">
+          Fill in this week’s feedback
+        </a>
+        <PublicFeedbackLink compact />
+      </div>
+
+      {status ? (
+        <div className={home.weeklyMissing} data-testid="home-weekly-missing">
+          {status.state === "loading" ? <CardSkeleton /> : null}
+          {status.state === "error" ? <CardError what="this week’s feedback" retry={retry} /> : null}
+          {week ? (
+            <>
+              <h3 className={home.weeklyMissingTitle}>
+                {week.missing.length === 0 ? "Every house has sent" : "Not sent yet"}
+                <span className={home.weeklyCount} data-testid="home-weekly-count">
+                  {week.sentCount} of {week.total} sent
+                </span>
+              </h3>
+              {week.sunday ? <p className={home.weeklyWeek}>Week ending {weekEnding(week.sunday)}</p> : null}
+              {week.missing.length === 0 ? (
+                <p className={home.weeklyDone} data-testid="home-weekly-all-sent">
+                  Every house has sent this week’s feedback. Thank you, leaders.
+                </p>
+              ) : (
+                <ul className={home.weeklyList}>
+                  {week.missing.map((house) => (
+                    <li key={house.id}>
+                      <a href={missioPublicFeedbackPath(house.id)} className={home.weeklyHouse} data-testid="home-weekly-missing-house">
+                        <span className={home.weeklyHouseName}>{publicHouseLabel(house)}</span>
+                        <ChevronRight className={home.chev} aria-hidden="true" />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function MissioHome({
   houses = houseChurchesClient,
   followUp = followUpClient,
   people: peopleClient = missioClient,
   loadName = readGreetingName,
+  feedback = feedbackThisWeekClient,
 }: {
+  feedback?: FeedbackThisWeekClient;
   houses?: HouseChurchesClient;
   followUp?: FollowUpClient;
   people?: Pick<MissioClient, "listPeople">;
@@ -192,6 +268,9 @@ export function MissioHome({
   const viewer = useMissioViewer();
   const pastor = viewer != null && isMissioPastor(viewer);
   const inMissio = viewer != null && canAccessMissio(viewer);
+  // Pastors: every house. Coaches: the houses they coach (the API scopes it
+  // and says 403 to anyone else). Leaders never ask.
+  const seesMissing = pastor || (viewer != null && (viewer.rolesByOrg.missio ?? []).includes("coach"));
   const [name, setName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -225,6 +304,11 @@ export function MissioHome({
   const [mineLoad, retryMine] = useLoad(loadMine, inMissio && !pastor);
   const [followLoad, retryFollow] = useLoad(loadFollowUp, pastor);
   const [peopleLoad] = useLoad(loadPeopleCount, pastor);
+  const loadWeek = useCallback(() => feedback.thisWeek(), [feedback]);
+  const [weekLoad, retryWeek] = useLoad(loadWeek, seesMissing);
+  // A coach who coaches no house gets null (403): no list, no error.
+  const weekStatus = !seesMissing || (weekLoad.state === "ready" && weekLoad.data === null) ? null : weekLoad;
+  const weekly = inMissio ? <WeeklyFeedbackCard status={weekStatus} retry={retryWeek} /> : null;
 
   const hero = <Greeting date={date} greeting={greeting} name={name} />;
 
@@ -234,6 +318,7 @@ export function MissioHome({
     return (
       <div className={`${content.page} ${content.reveal} ${home.page}`}>
         {hero}
+        {weekly}
         {!inMissio ? (
           <RowCard
             href="/missio/people"
@@ -291,6 +376,7 @@ export function MissioHome({
   return (
     <div className={`${content.page} ${content.reveal} ${home.page}`}>
       {hero}
+      {weekly}
 
       <div className={home.grid}>
         <section className={`${home.card} ${home.houses}`} data-testid="home-houses-card">
