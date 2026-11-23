@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FakeState } from "./testing";
+import type { HubState } from "./testing-hub";
 
 const h = vi.hoisted(() => ({
   state: {} as FakeState,
+  hub: {} as HubState,
   slackToHub: {} as Record<string, string>,
   posts: [] as { channel: string; text: string; blocks?: unknown[]; bot?: string }[],
   replies: [] as unknown[],
@@ -12,6 +14,7 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("./data", async () => (await import("./testing")).makeFakeData(h.state));
+vi.mock("./hub-data", async () => (await import("./testing-hub")).makeFakeHub(h.hub));
 vi.mock("@/services/slack-bot", () => ({
   resolveHubUserBySlackId: async (_a: unknown, slackId: string) => h.slackToHub[slackId] ?? null,
   logSlackBotQuery: async (_a: unknown, row: unknown) => {
@@ -47,9 +50,11 @@ const toolUse = (name: string, input: Record<string, unknown>) => ({ content: [{
 const say = (text: string) => ({ content: [{ type: "text", text }] });
 const saved = { ...process.env };
 
-beforeEach(() => {
+beforeEach(async () => {
   for (const k of Object.keys(h.state)) delete (h.state as Record<string, unknown>)[k];
   Object.assign(h.state, baseState());
+  for (const k of Object.keys(h.hub)) delete (h.hub as Record<string, unknown>)[k];
+  Object.assign(h.hub, (await import("./testing-hub")).baseHubState());
   h.slackToHub = { U_LEAD: "u-lead", U_AMY: "u-amy" };
   h.posts.length = 0;
   h.replies.length = 0;
@@ -85,12 +90,30 @@ describe("handleLeaderMessage — the gate", () => {
 });
 
 describe("handleLeaderMessage — the tool loop", () => {
-  it("answers with the five tools only, on the Hub bot, and logs the question", async () => {
+  it("answers with the allowlisted tools only, on the Hub bot, and logs the question", async () => {
     h.replies.push(toolUse("list_team_access", {}), say("You lead *Worship*: Amy, Ben and you."));
     await handleLeaderMessage({}, msg("who's on my team?"));
     expect(h.calls[0].model).toBe(HAIKU_MODEL);
     expect(h.calls[0].tools.map((t) => t.name).sort()).toEqual(
-      ["grant_permission", "list_team_access", "lookup_person_access", "report_problem", "resend_invite", "revoke_permission"]
+      [
+        "check_hire_stock",
+        "check_vehicle_availability",
+        "decide_request",
+        "find_contact",
+        "grant_permission",
+        "list_forms",
+        "list_pending_approvals",
+        "list_space_bookings",
+        "list_team_access",
+        "list_vehicle_bookings",
+        "lookup_person_access",
+        "report_problem",
+        "request_vehicle_booking",
+        "resend_invite",
+        "revoke_permission",
+        "search_hub_help",
+        "update_contact",
+      ]
     );
     expect(h.calls[0].system).toContain("Worship");
     expect(h.posts).toEqual([expect.objectContaining({ channel: "D_1", bot: "assistant", text: "You lead *Worship*: Amy, Ben and you." })]);

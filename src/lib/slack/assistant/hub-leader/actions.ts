@@ -6,13 +6,21 @@
  * do they still lead the ministry, is the person still on their team, do
  * they still hold the permission — before the change is made, audited and
  * the row closed. Expired, cancelled or already-used rows write nothing.
+ *
+ * The second slice's actions (a vehicle request, a contact edit, a
+ * decision on a vehicle or space booking) work the same way: the check*
+ * function the tool ran is run again here, with the clicker's Hub
+ * permissions read fresh, and the write goes through the Hub's own
+ * service and notifications (hub-data.ts).
  */
 
 import { inviteEmailHtml } from "@/lib/email/templates/invite";
 import { sendSetupLink } from "@/lib/auth/send-setup-link";
 import { resolveHubUserBySlackId } from "@/services/slack-bot";
 import * as data from "./data";
-import { checkPermissionChange, checkResendInvite, type Leader } from "./rules";
+import * as hub from "./hub-data";
+import { checkPermissionChange, checkResendInvite, loadLeadership, NO_TEAM, type Leader } from "./rules";
+import { checkContactUpdate, checkDecision, checkVehicleRequest, type VehicleRequestPayload } from "./tools-hub";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -23,20 +31,27 @@ export const ACTION_CANCEL = "hub_assistant_cancel";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isPendingId = (v: unknown): v is string => typeof v === "string" && UUID.test(v);
 
-/** Block Kit for a proposed change: the summary, then Confirm and Cancel. */
-export function confirmationBlocks(summary: string, pendingId: string) {
+/**
+ * Block Kit for a proposed change: the summary, then the confirm button
+ * ("Confirm" unless the change has its own word — Approve, Decline,
+ * Save, Request vehicle) and Cancel. Both carry only the pending id.
+ */
+export function confirmationBlocks(summary: string, pendingId: string, opts?: { confirmLabel?: string; danger?: boolean }) {
+  const label = opts?.confirmLabel ?? "Confirm";
   return [
-    { type: "section", text: { type: "mrkdwn", text: summary } },
+    { type: "section", text: { type: "mrkdwn", text: summary.slice(0, 2900) } },
     {
       type: "actions",
       elements: [
-        { type: "button", action_id: ACTION_CONFIRM, style: "primary", text: { type: "plain_text", text: "Confirm" }, value: pendingId },
+        { type: "button", action_id: ACTION_CONFIRM, style: opts?.danger ? "danger" : "primary", text: { type: "plain_text", text: label }, value: pendingId },
         { type: "button", action_id: ACTION_CANCEL, text: { type: "plain_text", text: "Cancel" }, value: pendingId },
       ],
     },
-    { type: "context", elements: [{ type: "mrkdwn", text: "Nothing changes until you press Confirm. This expires in 10 minutes." }] },
+    { type: "context", elements: [{ type: "mrkdwn", text: `Nothing happens until you press ${label}. This expires in 10 minutes.` }] },
   ];
 }
+
+const TEAM_ACTIONS = new Set(["grant_permission", "revoke_permission", "resend_invite"]);
 
 export type ConfirmResult = { text: string };
 
@@ -97,9 +112,13 @@ export async function confirmPending(admin: Client, pendingId: string, slackUser
   // The clicker must still be the same Hub user, and still a leader.
   const hubUserId = await resolveHubUserBySlackId(admin, slackUserId);
   if (!hubUserId || hubUserId !== row.leader_hub_user_id) return refuse("your Slack is no longer linked to the Hub account that asked.");
-  const ministries = await data.getLedMinistries(admin, hubUserId);
-  if (ministries.length === 0) return refuse("this assistant is only available to ministry leaders.");
-  const leader: Leader = { hubUserId, slackUserId, ministries };
+  const standing = await loadLeadership(admin, hubUserId);
+  if (!standing) return refuse("this assistant is only available to ministry leaders.");
+  const leader: Leader = { hubUserId, slackUserId, ...standing };
+
+  if (!TEAM_ACTIONS.has(row.action_type)) return confirmHubAction(admin, row, hubUserId, { refuse, audit });
+
+  if (leader.ministries.length === 0) return refuse(NO_TEAM);
   if (!targetUserId) return refuse("the request is incomplete.");
 
   if (row.action_type === "grant_permission" || row.action_type === "revoke_permission") {
@@ -184,4 +203,94 @@ export async function confirmPending(admin: Client, pendingId: string, slackUser
   }
 
   return refuse("I don't recognise that request.");
+}
+
+// ────────────────────────────────────────────────────────────
+// The second slice: vehicle request, contact edit, decisions
+// ────────────────────────────────────────────────────────────
+
+type Helpers = {
+  refuse: (reason: string) => Promise<ConfirmResult>;
+  audit: (result: data.AuditResult, detail?: string) => Promise<void>;
+};
+
+async function confirmHubAction(admin: Client, row: data.PendingRow, hubUserId: string, h: Helpers): Promise<ConfirmResult> {
+  const pendingId = row.id;
+  const payload = row.payload;
+  const failed = async (detail: string, text: string) => {
+    await data.setPendingResult(admin, pendingId, "failed");
+    await h.audit("failed", detail);
+    return { text };
+  };
+  const done = async (hubAudit: { action: string; resource_type: string; resource_id: string; changes: Record<string, unknown> }, text: string) => {
+    await data.setPendingResult(admin, pendingId, "executed");
+    await data.writeHubAudit(admin, {
+      user_id: hubUserId,
+      ...hubAudit,
+      changes: { ...hubAudit.changes, source: "slack_hub_assistant", pending_action_id: pendingId },
+    });
+    await h.audit("executed");
+    return { text };
+  };
+
+  if (row.action_type === "create_vehicle_booking") {
+    const checked = await checkVehicleRequest(admin, hubUserId, payload as unknown as VehicleRequestPayload);
+    if (!checked.ok) return h.refuse(checked.reason);
+    if (!(await data.claimPending(admin, pendingId, "consumed", "executing"))) return { text: GONE };
+    const created = await hub.createVehicleRequest(admin, {
+      userId: hubUserId,
+      body: checked.body,
+      fields: checked.fields,
+      requesterName: checked.requesterName,
+      requestedIds: checked.requestedIds,
+      drivers: checked.drivers,
+      pendingTestUserIds: checked.pendingTestUserIds,
+    });
+    if (!created.ok) return failed(created.error, "Something went wrong sending that request, so it may not have gone in. Check My requests in the Hub.");
+    return done(
+      { action: "create_vehicle_booking", resource_type: "vehicle_bookings", resource_id: created.bookingId, changes: { booking_name: checked.fields.bookingName } },
+      `Done. Your vehicle request "${checked.fields.bookingName}" went to the vehicle co-ordinators. You'll get a confirmation, and their decision, on Slack and by email.`
+    );
+  }
+
+  if (row.action_type === "update_contact") {
+    const checked = await checkContactUpdate(admin, hubUserId, payload.contact_id, payload.changes);
+    if (!checked.ok) return h.refuse(checked.reason);
+    if (!(await data.claimPending(admin, pendingId, "consumed", "executing"))) return { text: GONE };
+    const { error } = await hub.applyContactUpdate(admin, checked.contact.id, checked.patch);
+    if (error) return failed(error.message, "Something went wrong saving that, so it may not have changed. Check the contact in the Hub.");
+    return done(
+      { action: "update_contact", resource_type: "contacts", resource_id: checked.contact.id, changes: { fields: Object.keys(checked.patch) } },
+      `Done. ${checked.contact.name}'s details are updated.`
+    );
+  }
+
+  if (row.action_type === "decide_vehicle_booking" || row.action_type === "decide_space_booking") {
+    const decision = payload.decision === "approved" ? "approved" : payload.decision === "denied" ? "denied" : null;
+    if (!decision) return h.refuse("the request is incomplete.");
+    const note = typeof payload.note === "string" && payload.note.trim() ? payload.note.trim() : null;
+    const kind = row.action_type === "decide_vehicle_booking" ? "vehicle" : "space";
+    const checked = await checkDecision(admin, hubUserId, kind, payload.booking_id, decision, note);
+    if (!checked.ok) return h.refuse(checked.reason);
+    if (!(await data.claimPending(admin, pendingId, "consumed", "executing"))) return { text: GONE };
+
+    const result =
+      checked.kind === "vehicle"
+        ? await hub.decideVehicle(admin, hubUserId, checked.booking.id, decision, note)
+        : await hub.decideSpace(admin, hubUserId, checked.booking, decision, note);
+    // A rule the Hub enforces at decision time (e.g. a driver's licence) is a refusal, not a crash.
+    if (!result.ok) return failed(result.error, `I couldn't ${decision === "approved" ? "approve" : "decline"} that: ${result.error}`);
+    const title = checked.kind === "vehicle" ? checked.booking.booking_name : checked.booking.title;
+    return done(
+      {
+        action: checked.kind === "vehicle" ? "decide_vehicle_booking" : "decide_space_booking",
+        resource_type: checked.kind === "vehicle" ? "vehicle_bookings" : "venue_bookings",
+        resource_id: checked.booking.id,
+        changes: { decision, note },
+      },
+      `Done. "${title}" is ${decision === "approved" ? "approved" : "declined"}, and the person who asked has been told.`
+    );
+  }
+
+  return h.refuse("I don't recognise that request.");
 }

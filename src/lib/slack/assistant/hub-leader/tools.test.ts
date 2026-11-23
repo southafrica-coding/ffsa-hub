@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FakeState } from "./testing";
+import type { HubState } from "./testing-hub";
 
-const h = vi.hoisted(() => ({ state: {} as FakeState, posts: [] as unknown[] }));
+const h = vi.hoisted(() => ({ state: {} as FakeState, hub: {} as HubState, posts: [] as unknown[] }));
 
 vi.mock("./data", async () => (await import("./testing")).makeFakeData(h.state));
+vi.mock("./hub-data", async () => (await import("./testing-hub")).makeFakeHub(h.hub));
 vi.mock("@/lib/slack/client", () => ({
   postMessage: async (args: unknown) => {
     h.posts.push(args);
@@ -15,14 +17,16 @@ const { baseState, MINISTRY_WORSHIP } = await import("./testing");
 const { executeHubLeaderTool } = await import("./tools");
 const { checkPermissionChange, matchPerson, mergeMembers, NOT_IN_TEAM, resolveLeader } = await import("./rules");
 
-const leader = { hubUserId: "u-lead", slackUserId: "U_LEAD", ministries: [{ id: MINISTRY_WORSHIP, name: "Worship" }] };
+const leader = { hubUserId: "u-lead", slackUserId: "U_LEAD", ministries: [{ id: MINISTRY_WORSHIP, name: "Worship" }], pointLeaderOf: [] };
 const ctx = () => ({ admin: {}, leader, channelId: "D_LEAD" });
 const run = (name: string, input: Record<string, unknown> = {}) => executeHubLeaderTool(ctx(), name, input);
 const saved = { ...process.env };
 
-beforeEach(() => {
+beforeEach(async () => {
   for (const k of Object.keys(h.state)) delete (h.state as Record<string, unknown>)[k];
   Object.assign(h.state, baseState());
+  for (const k of Object.keys(h.hub)) delete (h.hub as Record<string, unknown>)[k];
+  Object.assign(h.hub, (await import("./testing-hub")).baseHubState());
   h.posts.length = 0;
   delete process.env.SLACK_ASSISTANT_TICKET_CHANNEL_ID;
 });
@@ -52,7 +56,7 @@ describe("who may use it", () => {
   it("stops working mid-conversation once they no longer lead", async () => {
     h.state.memberships = h.state.memberships.filter((m) => m.member_role !== "leader");
     const out = await run("list_team_access");
-    expect(out.output).toEqual({ error: "This assistant is only available to ministry leaders." });
+    expect(out.output).toEqual({ error: "Sorry, this assistant is only available to ministry leaders." });
   });
 });
 
@@ -257,7 +261,8 @@ describe("report_problem", () => {
       reporter_hub_user_id: "u-lead",
       slack_user_id: "U_LEAD",
       ministry_names: ["Worship"],
-      message: "The bookings page won't load",
+      message: expect.stringContaining("The bookings page won't load"),
+      evidence: expect.objectContaining({ findings: [], could_not_check: [expect.stringMatching(/error logs/)] }),
     });
     expect(h.state.hubAudit[0]).toMatchObject({ user_id: "u-lead", resource_type: "slack_assistant_tickets" });
     expect(h.posts).toHaveLength(0);

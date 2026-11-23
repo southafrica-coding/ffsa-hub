@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FakeState } from "./testing";
+import type { HubState } from "./testing-hub";
 
 const h = vi.hoisted(() => ({
   state: {} as FakeState,
+  hub: {} as HubState,
   slackToHub: {} as Record<string, string>,
   sent: [] as Record<string, unknown>[],
   sendResult: { ok: true } as { ok: boolean; error?: string; suppressed?: boolean },
 }));
 
 vi.mock("./data", async () => (await import("./testing")).makeFakeData(h.state));
+vi.mock("./hub-data", async () => (await import("./testing-hub")).makeFakeHub(h.hub));
 vi.mock("@/services/slack-bot", () => ({
   resolveHubUserBySlackId: async (_a: unknown, slackId: string) => h.slackToHub[slackId] ?? null,
 }));
@@ -25,7 +28,7 @@ const { baseState, MINISTRY_WORSHIP } = await import("./testing");
 const { executeHubLeaderTool } = await import("./tools");
 const { cancelPending, confirmationBlocks, confirmPending, isPendingId, ACTION_CONFIRM, ACTION_CANCEL } = await import("./actions");
 
-const leader = { hubUserId: "u-lead", slackUserId: "U_LEAD", ministries: [{ id: MINISTRY_WORSHIP, name: "Worship" }] };
+const leader = { hubUserId: "u-lead", slackUserId: "U_LEAD", ministries: [{ id: MINISTRY_WORSHIP, name: "Worship" }], pointLeaderOf: [] };
 
 async function propose(name: string, input: Record<string, unknown>) {
   const out = await executeHubLeaderTool({ admin: {}, leader, channelId: "D_LEAD" }, name, input);
@@ -33,9 +36,11 @@ async function propose(name: string, input: Record<string, unknown>) {
   return out.proposal.pendingId;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   for (const k of Object.keys(h.state)) delete (h.state as Record<string, unknown>)[k];
   Object.assign(h.state, baseState());
+  for (const k of Object.keys(h.hub)) delete (h.hub as Record<string, unknown>)[k];
+  Object.assign(h.hub, (await import("./testing-hub")).baseHubState());
   h.slackToHub = { U_LEAD: "u-lead", U_AMY: "u-amy" };
   h.sent.length = 0;
   h.sendResult = { ok: true };

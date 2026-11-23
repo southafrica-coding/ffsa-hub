@@ -3,9 +3,15 @@
  * assistant. Every tool call runs these checks, and so does every Confirm
  * click — nothing the model says or a button carries is trusted.
  *
- *   - A leader is someone with an active `leader` membership in a staff
- *     ministry (staff_ministry_members). users.department is a label and
- *     point-leader subcategories don't count.
+ *   - The assistant answers leaders: an active `leader` membership in a
+ *     staff ministry (staff_ministry_members), or an active membership
+ *     flagged as a point leader — the ministry's (`is_point_leader`) or a
+ *     category's (`is_category_point_leader`). users.department is only a
+ *     label and never counts.
+ *   - Team tools (access lists, grant / revoke, invite resends) are for
+ *     ministry leaders only: a category point leader who doesn't lead the
+ *     ministry gets no team, so nothing to grant to. Everything else they
+ *     can do is whatever their own Hub permissions allow (tools-*.ts).
  *   - Their team is the active members of the ministries they lead.
  *     Anyone else is "not found" — the assistant never confirms that a
  *     person outside the team exists in the Hub.
@@ -50,7 +56,16 @@ const ASSIGNABLE_CONTACT_KEY = "schools.assignable_as_contact";
 export const NOT_IN_TEAM =
   "I can only look up people in the ministries you lead, and I couldn't match that name there.";
 
-export type Leader = { hubUserId: string; slackUserId: string; ministries: Ministry[] };
+/**
+ * The person asking. `ministries` are the ones they lead (team tools);
+ * `pointLeaderOf` are the ones where they're a point leader.
+ */
+export type Leader = { hubUserId: string; slackUserId: string; ministries: Ministry[]; pointLeaderOf: Ministry[] };
+
+export const NOT_LEADER =
+  "Sorry, this assistant is only available to ministry leaders.";
+export const NO_TEAM =
+  "Team access is only for ministry leaders, and you don't lead a ministry in the Hub, so I can't show or change anyone's access.";
 
 export type Refusal = { ok: false; reason: string };
 
@@ -70,9 +85,26 @@ export async function resolveLeader(
 ): Promise<LeaderResolution> {
   const hubUserId = await resolveHubUser(admin, slackUserId);
   if (!hubUserId) return { kind: "unlinked" };
-  const ministries = await data.getLedMinistries(admin, hubUserId);
-  if (ministries.length === 0) return { kind: "not_leader", hubUserId };
-  return { kind: "leader", leader: { hubUserId, slackUserId, ministries } };
+  const standing = await loadLeadership(admin, hubUserId);
+  if (!standing) return { kind: "not_leader", hubUserId };
+  return { kind: "leader", leader: { hubUserId, slackUserId, ...standing } };
+}
+
+/**
+ * Read fresh on every tool call and every button click: someone can stop
+ * leading mid-conversation. Null when they lead nothing and point-lead
+ * nothing.
+ */
+export async function loadLeadership(
+  admin: Client,
+  hubUserId: string
+): Promise<{ ministries: Ministry[]; pointLeaderOf: Ministry[] } | null> {
+  const [ministries, pointLeaderOf] = await Promise.all([
+    data.getLedMinistries(admin, hubUserId),
+    data.getPointLeaderMinistries(admin, hubUserId),
+  ]);
+  if (ministries.length === 0 && pointLeaderOf.length === 0) return null;
+  return { ministries, pointLeaderOf };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -187,7 +219,7 @@ export async function checkPermissionChange(
     return { ok: false, reason: "That scope isn't one I understand. A scope needs both a type (program, team or event) and an id." };
   }
 
-  if (leader.ministries.length === 0) return { ok: false, reason: "This assistant is only available to ministry leaders." };
+  if (leader.ministries.length === 0) return { ok: false, reason: NO_TEAM };
 
   const team = await getTeam(admin, leader);
   const target = team.find((p) => p.user_id === change.targetUserId);
@@ -262,7 +294,7 @@ export async function checkResendInvite(
   leader: Leader,
   targetUserId: string
 ): Promise<CheckedResend | Refusal> {
-  if (leader.ministries.length === 0) return { ok: false, reason: "This assistant is only available to ministry leaders." };
+  if (leader.ministries.length === 0) return { ok: false, reason: NO_TEAM };
   const team = await getTeam(admin, leader);
   const target = team.find((p) => p.user_id === targetUserId);
   if (!target) return { ok: false, reason: NOT_IN_TEAM };

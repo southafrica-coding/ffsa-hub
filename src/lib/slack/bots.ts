@@ -10,8 +10,9 @@
  *             SLACK_OUTREACH_SIGNING_SECRET. Setup:
  *             docs/slack/outreach-finance-manifest.json.
  *   assistant "Hub" — a private, DM-only assistant for ministry leaders:
- *             their team's Hub access, permission changes behind a
- *             Confirm button, invite resends, problem reports.
+ *             their team's Hub access, bookings, approvals, contacts,
+ *             Hub help and problem reports; every change behind a
+ *             button, within the asker's own Hub permissions.
  *             /api/slack/assistant/*; SLACK_ASSISTANT_BOT_TOKEN /
  *             SLACK_ASSISTANT_SIGNING_SECRET. Off unless
  *             HUB_SLACK_ASSISTANT_ENABLED (lib/slack/assistant/hub-leader/

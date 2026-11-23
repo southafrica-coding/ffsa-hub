@@ -1,16 +1,23 @@
 /**
- * The five tools the "Hub" assistant's model may call. Nothing else: no
- * SQL, no general data access. Reads are scoped to the leader's team;
- * grant / revoke / resend only *propose* a change — the runner posts it
- * with Confirm and Cancel buttons and nothing is written until the leader
- * clicks Confirm (actions.ts), which checks everything again.
+ * The tools the "Hub" assistant's model may call — this allowlist and
+ * nothing else: no SQL, no general data access, no URL fetching.
+ *
+ * Team tools (here): reads scoped to the leader's team; grant / revoke /
+ * resend only *propose* a change — the runner posts it with Confirm and
+ * Cancel buttons and nothing is written until the leader clicks Confirm
+ * (actions.ts), which checks everything again. Ministry leaders only.
+ *
+ * Everything else (tools-hub.ts): bookings, approvals, contacts, forms,
+ * hire stock, Hub help and problem reports, each gated by the asker's own
+ * Hub permissions on every call.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { HIDDEN_PERMISSION_KEYS } from "@/services/permissions";
 import * as data from "./data";
-import { checkPermissionChange, checkResendInvite, getTeam, matchPerson, NOT_IN_TEAM, type Leader, type Person } from "./rules";
-import { reportProblem } from "./tickets";
+import { checkPermissionChange, checkResendInvite, getTeam, loadLeadership, matchPerson, NO_TEAM, NOT_IN_TEAM, NOT_LEADER, type Leader, type Person } from "./rules";
+import { HUB_TOOLS, executeHubTool, HUB_TOOL_NAMES } from "./tools-hub";
+import { propose, type Proposal, type ToolContext, type ToolOutcome } from "./propose";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -68,26 +75,21 @@ export const HUB_LEADER_TOOLS: Anthropic.Tool[] = [
       "Propose resending the Hub setup invite to a team member who hasn't finished setting up their account. Does NOT send: the leader gets Confirm / Cancel buttons.",
     input_schema: { type: "object", properties: { ...personProps } },
   },
-  {
-    name: "report_problem",
-    description:
-      "File a problem report for the Hub team, in the leader's words. Use when something in the Hub is broken or the leader asks for something you can't do.",
-    input_schema: {
-      type: "object",
-      properties: { message: { type: "string", description: "What's wrong, with any detail the leader gave." } },
-      required: ["message"],
-    },
-  },
+  ...HUB_TOOLS,
 ];
 
 export const HUB_LEADER_TOOL_NAMES = new Set(HUB_LEADER_TOOLS.map((t) => t.name));
 
-/** A change waiting on the leader's Confirm click. */
-export type Proposal = { pendingId: string; summary: string };
+/** The tools that need a team (the ministries the asker leads). */
+export const TEAM_TOOL_NAMES = new Set([
+  "list_team_access",
+  "lookup_person_access",
+  "grant_permission",
+  "revoke_permission",
+  "resend_invite",
+]);
 
-export type ToolOutcome = { output: unknown; proposal?: Proposal };
-
-export type ToolContext = { admin: Client; leader: Leader; channelId: string };
+export type { Proposal, ToolContext, ToolOutcome };
 
 function scopeLabel(labels: Map<string, string>, t: string | null, id: string | null) {
   if (!t || !id) return "everywhere";
@@ -149,11 +151,16 @@ export async function executeHubLeaderTool(
   input: Record<string, unknown>
 ): Promise<ToolOutcome> {
   const { admin, leader } = ctx;
+  if (!HUB_LEADER_TOOL_NAMES.has(name)) return { output: { error: "That isn't something I can do." } };
   // Re-check on every call: someone can stop leading mid-conversation.
-  const ministries = await data.getLedMinistries(admin, leader.hubUserId);
-  if (ministries.length === 0) return { output: { error: "This assistant is only available to ministry leaders." } };
-  const live: Leader = { ...leader, ministries };
+  const standing = await loadLeadership(admin, leader.hubUserId);
+  if (!standing) return { output: { error: NOT_LEADER } };
+  const live: Leader = { ...leader, ...standing };
   const c: ToolContext = { ...ctx, leader: live };
+  const ministries = live.ministries;
+
+  if (!TEAM_TOOL_NAMES.has(name)) return HUB_TOOL_NAMES.has(name) ? executeHubTool(c, name, input) : { output: { error: "That isn't something I can do." } };
+  if (ministries.length === 0) return { output: { refused: true, reason: NO_TEAM } };
 
   switch (name) {
     case "list_team_access": {
@@ -205,47 +212,7 @@ export async function executeHubLeaderTool(
       return propose(c, name, { target_user_id: checked.target.user_id }, checked.target.user_id, `Resend the Hub setup invite to *${checked.target.name}* (${checked.email})?`);
     }
 
-    case "report_problem": {
-      const message = typeof input.message === "string" ? input.message.trim() : "";
-      if (!message) return { output: { error: "What's the problem? I need a short description." } };
-      const res = await reportProblem(admin, live, message);
-      return { output: res.ok ? { filed: true, message: "Filed for the Hub team." } : { error: "I couldn't file that just now." } };
-    }
-
     default:
       return { output: { error: "That isn't something I can do." } };
   }
-}
-
-async function propose(
-  ctx: ToolContext,
-  actionType: data.PendingActionType,
-  payload: Record<string, unknown>,
-  targetUserId: string,
-  summary: string
-): Promise<ToolOutcome> {
-  const pendingId = await data.insertPending(ctx.admin, {
-    leader_hub_user_id: ctx.leader.hubUserId,
-    slack_user_id: ctx.leader.slackUserId,
-    slack_channel_id: ctx.channelId,
-    action_type: actionType,
-    payload,
-  });
-  if (!pendingId) return { output: { error: "I couldn't set that up just now. Try again in a minute." } };
-  await data.writeAssistantAudit(ctx.admin, {
-    leader_hub_user_id: ctx.leader.hubUserId,
-    slack_user_id: ctx.leader.slackUserId,
-    action: actionType,
-    target_user_id: targetUserId,
-    pending_action_id: pendingId,
-    payload,
-    result: "proposed",
-  });
-  return {
-    output: {
-      awaiting_confirmation: true,
-      message: "Nothing has changed yet. A message with Confirm and Cancel buttons will be posted; the change happens only if the leader presses Confirm within 10 minutes.",
-    },
-    proposal: { pendingId, summary },
-  };
 }

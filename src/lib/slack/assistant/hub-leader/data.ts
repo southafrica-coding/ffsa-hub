@@ -40,6 +40,27 @@ export async function getLedMinistries(admin: Client, userId: string): Promise<M
   return ids.map((id) => ({ id, name: named.get(id) ?? "Ministry" }));
 }
 
+/**
+ * Ministries where the user is an active point leader: the ministry's own
+ * point leader (`is_point_leader`) or a category point leader
+ * (`is_category_point_leader`, kept in step with
+ * staff_ministry_member_subcategories by the 205 trigger). The same flags
+ * lib/users/derive-title reads for "{Dept} Point Leader".
+ */
+export async function getPointLeaderMinistries(admin: Client, userId: string): Promise<Ministry[]> {
+  const { data } = await admin
+    .from("staff_ministry_members")
+    .select("staff_ministry_id, staff_ministries!inner(name)")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .or("is_point_leader.eq.true,is_category_point_leader.eq.true");
+  type Row = { staff_ministry_id: string; staff_ministries: { name: string } | { name: string }[] | null };
+  return ((data ?? []) as Row[]).map((r) => {
+    const m = Array.isArray(r.staff_ministries) ? r.staff_ministries[0] : r.staff_ministries;
+    return { id: r.staff_ministry_id, name: m?.name ?? "Ministry" };
+  });
+}
+
 /** Active members (leaders included) of these ministries. One row per membership. */
 export async function getTeamMembers(admin: Client, ministryIds: string[]): Promise<TeamMember[]> {
   if (ministryIds.length === 0) return [];
@@ -184,7 +205,15 @@ export function hasPassword(admin: Client, userId: string): Promise<boolean> {
 // Pending actions (migration 392)
 // ────────────────────────────────────────────────────────────
 
-export type PendingActionType = "grant_permission" | "revoke_permission" | "resend_invite";
+export type PendingActionType =
+  | "grant_permission"
+  | "revoke_permission"
+  | "resend_invite"
+  // migration 393
+  | "create_vehicle_booking"
+  | "update_contact"
+  | "decide_vehicle_booking"
+  | "decide_space_booking";
 
 export type PendingRow = {
   id: string;
@@ -253,11 +282,29 @@ export async function setPendingResult(admin: Client, id: string, result: string
 // Tickets and audit (migration 392 + audit_logs)
 // ────────────────────────────────────────────────────────────
 
+/**
+ * `evidence` needs migration 393. If that column isn't there yet the
+ * report is still filed, without it (the caller has put the gist in the
+ * message as well).
+ */
 export async function insertTicket(
   admin: Client,
-  row: { reporter_hub_user_id: string; slack_user_id: string; ministry_ids: string[]; ministry_names: string[]; message: string }
+  row: {
+    reporter_hub_user_id: string;
+    slack_user_id: string;
+    ministry_ids: string[];
+    ministry_names: string[];
+    message: string;
+    evidence?: Record<string, unknown> | null;
+  }
 ): Promise<string | null> {
-  const { data, error } = await admin.from("slack_assistant_tickets").insert({ ...row, status: "open" }).select("id").single();
+  const insert = (r: Record<string, unknown>) =>
+    admin.from("slack_assistant_tickets").insert({ ...r, status: "open" }).select("id").single();
+  let { data, error } = await insert(row);
+  if (error && row.evidence !== undefined) {
+    const { evidence: _e, ...rest } = row; // eslint-disable-line @typescript-eslint/no-unused-vars
+    ({ data, error } = await insert(rest));
+  }
   if (error || !data) return null;
   return (data as { id: string }).id;
 }

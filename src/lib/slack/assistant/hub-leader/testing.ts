@@ -8,7 +8,14 @@ import type { DirectGrant, PendingActionType, PendingRow, PermissionRow } from "
 
 export type FakeState = {
   ministries: { id: string; name: string }[];
-  memberships: { user_id: string; ministry_id: string; member_role: "member" | "leader"; status: "active" | "pending" }[];
+  memberships: {
+    user_id: string;
+    ministry_id: string;
+    member_role: "member" | "leader";
+    status: "active" | "pending";
+    is_point_leader?: boolean;
+    is_category_point_leader?: boolean;
+  }[];
   users: {
     id: string;
     first_name: string;
@@ -106,6 +113,10 @@ export function makeFakeData(s: FakeState) {
     getLedMinistries: async (_a: unknown, userId: string) =>
       s.memberships
         .filter((m) => m.user_id === userId && m.member_role === "leader" && m.status === "active")
+        .map((m) => s.ministries.find((x) => x.id === m.ministry_id)!),
+    getPointLeaderMinistries: async (_a: unknown, userId: string) =>
+      s.memberships
+        .filter((m) => m.user_id === userId && m.status === "active" && (m.is_point_leader || m.is_category_point_leader))
         .map((m) => s.ministries.find((x) => x.id === m.ministry_id)!),
     getTeamMembers: async (_a: unknown, ids: string[]) =>
       s.memberships
