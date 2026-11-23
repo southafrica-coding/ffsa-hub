@@ -161,3 +161,25 @@ describe("filterRegister", () => {
     expect(r[0].viaUnits).toBe(false);
   });
 });
+
+describe("filterRegister with counted items", () => {
+  const products = [
+    { name: "Glasses", make: "", category: "catering", units: [], counted: { locationId: "store", location: "Store room" } },
+    { name: "Tealights", make: "", category: "decor", units: [], counted: { locationId: null, location: null } },
+  ];
+
+  it("shows counted items with no units", () => {
+    expect(filterRegister(products, { category: "all", location: "all", query: "" })).toHaveLength(2);
+  });
+
+  it("filters them by their own location", () => {
+    expect(filterRegister(products, { category: "all", location: "store", query: "" }).map((r) => r.product.name)).toEqual(["Glasses"]);
+    expect(filterRegister(products, { category: "all", location: NO_LOCATION, query: "" }).map((r) => r.product.name)).toEqual([
+      "Tealights",
+    ]);
+  });
+
+  it("finds them by location name", () => {
+    expect(filterRegister(products, { category: "all", location: "all", query: "store room" })).toHaveLength(1);
+  });
+});

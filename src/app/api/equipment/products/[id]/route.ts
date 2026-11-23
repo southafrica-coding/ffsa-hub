@@ -22,8 +22,8 @@ function isCents(v: unknown, nullable: boolean) {
   return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 100_000_000;
 }
 
-// PATCH /api/equipment/products/[id] — the listing editor (frame 47e-4).
-// Rental manager only. Going live is refused, in plain words, unless the
+// PATCH /api/equipment/products/[id] — the listing editor (frame 47e-4) and
+// the item details form (stage O). Inventory manager only. Going live is refused, in plain words, unless the
 // listed_needs_price CHECK would pass (spec rule 1).
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -111,6 +111,48 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Max per order must be a whole number" }, { status: 400 });
     }
     patch.max_per_order = m as number | null;
+  }
+
+  // Inventory details (381). How an item is tracked never changes here: a
+  // counted item's history is a count, a tagged one's is its units.
+  for (const [field, max, required] of [
+    ["name", 120, true],
+    ["brand", 80, false],
+    ["model", 80, false],
+    ["register_category", 40, true],
+  ] as const) {
+    if (field in body) {
+      const v = body[field];
+      if (v !== null && typeof v !== "string") return NextResponse.json({ error: `Bad ${field}` }, { status: 400 });
+      const t = typeof v === "string" ? v.trim() : "";
+      if (t.length > max) return NextResponse.json({ error: `${field.replace("register_", "")} is too long` }, { status: 400 });
+      if (required && !t) return NextResponse.json({ error: field === "name" ? "Give it a name." : "Pick a category." }, { status: 400 });
+      (patch as Record<string, unknown>)[field] = field === "register_category" ? t.toLowerCase() : t || null;
+    }
+  }
+  if ("location_id" in body) {
+    const l = body.location_id;
+    if (l !== null && typeof l !== "string") return NextResponse.json({ error: "Bad location" }, { status: 400 });
+    patch.location_id = (l as string | null) || null;
+  }
+  if ("is_requestable" in body) {
+    if (typeof body.is_requestable !== "boolean") {
+      return NextResponse.json({ error: "is_requestable must be true or false" }, { status: 400 });
+    }
+    if (body.is_requestable && current.tracking === "consumable") {
+      return NextResponse.json({ error: "Consumables are handed out, not lent." }, { status: 400 });
+    }
+    patch.is_requestable = body.is_requestable;
+  }
+  if ("reorder_at" in body) {
+    const r = body.reorder_at;
+    if (r !== null && !(typeof r === "number" && Number.isInteger(r) && r >= 0 && r <= 100_000)) {
+      return NextResponse.json({ error: "“Reorder at” has to be a whole number." }, { status: 400 });
+    }
+    patch.reorder_at = r as number | null;
+  }
+  if (body.is_listed === true && current.tracking === "consumable") {
+    return NextResponse.json({ error: "Consumables can't go on the store." }, { status: 422 });
   }
 
   // Going live: check the merged result against the same rule as the CHECK.

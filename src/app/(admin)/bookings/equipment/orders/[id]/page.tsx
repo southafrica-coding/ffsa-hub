@@ -23,6 +23,7 @@ import { rands } from "@/lib/equipment/money";
 import { quote } from "@/lib/equipment/pricing";
 import { sastDate } from "@/lib/equipment/register";
 import { OrderActions } from "./order-actions";
+import { CountPanel } from "./count-panel";
 
 const RUN = ["requested", "confirmed", "prepping", "out", "returned", "inspected", "closed"];
 
@@ -189,6 +190,26 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               </p>
             )}
           </div>
+
+          {access?.canOperate &&
+            order.lines.some((l) => l.product?.tracking === "counted") &&
+            ["requested", "confirmed", "prepping", "out", "returned", "inspected", "closed"].includes(order.status) && (
+              <CountPanel
+                orderId={order.id}
+                status={order.status}
+                lines={order.lines
+                  .filter((l) => l.product?.tracking === "counted")
+                  .map((l) => ({
+                    id: l.id,
+                    title: l.product ? [l.product.brand, l.product.model].filter(Boolean).join(" ") || l.product.name : "Item",
+                    quantity: l.quantity,
+                    qtyOut: l.qty_out ?? null,
+                    qtyBack: l.qty_back ?? null,
+                    qtyDamaged: l.qty_damaged ?? null,
+                    qtyMissing: l.qty_missing ?? null,
+                  }))}
+              />
+            )}
 
           {events.length > 0 && (
             <section className="mt-2">

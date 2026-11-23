@@ -82,6 +82,16 @@ export type EquipmentProduct = {
   replacement_value_cents?: number | null;
   /** Sortly item id. INTERNAL. */
   sortly_sid?: string | null;
+  /** How it's tracked (381): tagged units, a count, or a consumable count. */
+  tracking: "tagged" | "counted" | "consumable";
+  /** counted / consumable: how many we have. Written only through stock moves. */
+  stock_quantity: number;
+  /** counted / consumable: where they're kept. */
+  location_id: string | null;
+  /** On the internal borrow form for any signed-in user (381). */
+  is_requestable: boolean;
+  /** Consumables: flag when stock falls to this. */
+  reorder_at: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -200,6 +210,13 @@ export type EquipmentOrderLine = {
   unit_price_cents: number;
   deposit_cents: number;
   line_total_cents: number;
+  /** Counted items (381): what went out and what came back. */
+  qty_out?: number | null;
+  qty_back?: number | null;
+  qty_damaged?: number | null;
+  qty_missing?: number | null;
+  counted_out_at?: string | null;
+  counted_back_at?: string | null;
   created_at: string;
 };
 
@@ -763,17 +780,19 @@ export async function getTagProduct(
 
 export type EquipmentOrderFull = EquipmentOrder & {
   lines: (EquipmentOrderLine & {
-    product: Pick<EquipmentProduct, "id" | "name" | "brand" | "model" | "slug" | "price_day_cents"> | null;
+    product: Pick<EquipmentProduct, "id" | "name" | "brand" | "model" | "slug" | "price_day_cents" | "tracking"> | null;
   })[];
   payments: EquipmentPayment[];
   units: (EquipmentOrderUnit & { unit: Pick<EquipmentUnit, "id" | "tag" | "product_id"> | null })[];
   ministry: { id: string; name: string } | null;
+  /** A request for a school (381). */
+  school: { id: string; name: string } | null;
 };
 
 const ORDER_EMBED =
-  "*,lines:equipment_order_lines(*,product:equipment_products(id,name,brand,model,slug,price_day_cents))," +
+  "*,lines:equipment_order_lines(*,product:equipment_products(id,name,brand,model,slug,price_day_cents,tracking))," +
   "payments:equipment_payments(*),units:equipment_order_units(*,unit:equipment_units(id,tag,product_id))," +
-  "ministry:ministries(id,name)";
+  "ministry:ministries(id,name),school:programs(id,name)";
 
 export async function getOrderById(supabase: Client, id: string) {
   return supabase.from("equipment_orders").select(ORDER_EMBED).eq("id", id).maybeSingle();
@@ -928,4 +947,105 @@ export async function listMyOrders(supabase: Client, userId: string) {
     .neq("status", "quote")
     .order("starts_on", { ascending: false })
     .limit(50);
+}
+
+// ── Inventory (stage O, migrations 381–383) ────────────────
+
+export type EquipmentStockMove = {
+  id: string;
+  product_id: string;
+  delta: number;
+  reason: "opening" | "bought" | "found" | "handed_out" | "lost" | "damaged" | "correction";
+  order_id: string | null;
+  note: string | null;
+  supplier: string | null;
+  unit_cost_cents: number | null;
+  happened_on: string;
+  actor_id: string | null;
+  created_at: string;
+  actor?: { display_name: string | null } | null;
+  order?: { number: string } | null;
+};
+
+export async function createProduct(supabase: Client, data: Partial<EquipmentProduct>) {
+  return supabase.from("equipment_products").insert(data).select("*").single();
+}
+
+export async function listProductSlugs(supabase: Client) {
+  return supabase.from("equipment_products").select("slug");
+}
+
+export async function listTagsWithPrefix(supabase: Client, prefix: string) {
+  return supabase.from("equipment_units").select("tag").like("tag", `${prefix}-%`);
+}
+
+export async function insertUnits(supabase: Client, rows: Partial<EquipmentUnit>[]) {
+  return supabase.from("equipment_units").insert(rows).select("id,tag");
+}
+
+export async function insertStockMove(
+  supabase: Client,
+  move: Partial<EquipmentStockMove> & { product_id: string; delta: number; reason: EquipmentStockMove["reason"] }
+) {
+  return supabase.from("equipment_stock_moves").insert(move).select("*").single();
+}
+
+export async function listStockMoves(supabase: Client, productId: string, limit = 50) {
+  return supabase
+    .from("equipment_stock_moves")
+    .select("*,actor:users!equipment_stock_moves_actor_id_fkey(display_name),order:equipment_orders(number)")
+    .eq("product_id", productId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+}
+
+/** Counted/consumable products: stock and how many are free on `day`. */
+export async function countedToday(
+  supabase: Client,
+  day: string
+): Promise<{ data: Map<string, { stock: number; free: number }>; error: { message: string } | null }> {
+  const { data, error } = await supabase.rpc("equipment_counted_today", { p_day: day });
+  const map = new Map<string, { stock: number; free: number }>();
+  for (const r of (data ?? []) as { product_id: string; stock: number; free: number }[]) {
+    map.set(r.product_id, { stock: r.stock, free: r.free });
+  }
+  return { data: map, error };
+}
+
+export async function countLine(
+  supabase: Client,
+  args: { lineId: string; stage: "out" | "back"; count: number; damaged?: number; missing?: number; note?: string | null }
+) {
+  return supabase.rpc("equipment_count_line", {
+    p_line: args.lineId,
+    p_stage: args.stage,
+    p_count: args.count,
+    p_damaged: args.damaged ?? 0,
+    p_missing: args.missing ?? 0,
+    p_note: args.note ?? null,
+  });
+}
+
+/** What the borrow form offers: requestable or listed, never kits or consumables. */
+export async function listBorrowableProducts(supabase: Client) {
+  return supabase
+    .from("equipment_products")
+    .select(
+      "id,name,brand,model,slug,description,register_category,tracking,internal_day_cents,deposit_cents," +
+        "price_day_cents,price_weekend_cents,price_week_cents,location_id,is_listed,is_requestable,max_per_order"
+    )
+    .or("is_requestable.eq.true,is_listed.eq.true")
+    .eq("is_kit", false)
+    .neq("tracking", "consumable")
+    .order("register_category")
+    .order("name");
+}
+
+export async function listActivePrograms(supabase: Client) {
+  return supabase.from("programs").select("id,name").eq("status", "active").order("name");
+}
+
+/** equipment_place_order (380) has no school column; set it after placing. */
+export async function setOrderSchool(admin: Client, orderId: string, programId: string) {
+  return admin.from("equipment_orders").update({ school_program_id: programId }).eq("id", orderId);
 }

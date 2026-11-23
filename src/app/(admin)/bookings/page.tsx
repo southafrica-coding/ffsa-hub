@@ -12,10 +12,18 @@ import {
   requireAnyModuleAccess,
   hasModuleAccess,
 } from "@/lib/require-permission";
-import { Building2, Car, Speaker, ArrowUpRight } from "lucide-react";
+import { Building2, Car, Package, Speaker, ArrowUpRight } from "lucide-react";
 import { Masthead } from "@/components/ffsa";
 
-const BOOKING_TYPES = [
+// module null = open to everyone signed in (the borrow form checks the rest).
+const BOOKING_TYPES: {
+  title: string;
+  description: string;
+  href: string;
+  icon: typeof Building2;
+  module: string | null;
+  shape: string;
+}[] = [
   {
     title: "Space Bookings",
     description:
@@ -37,11 +45,20 @@ const BOOKING_TYPES = [
   {
     title: "Equipment",
     description:
-      "The sound, visual and stage gear we own: every unit by its tag, what can be booked and what's in for repair.",
+      "Everything we own: sound and stage gear by tag, counted items like glasses and tablecloths, and consumables. Add items, approve requests.",
     href: "/bookings/equipment",
     icon: Speaker,
     module: "equipment",
     shape: "Asset register",
+  },
+  {
+    title: "Borrow equipment",
+    description:
+      "Ask to borrow glasses, tablecloths, lights, décor and gear for a school or ministry. The inventory manager approves it.",
+    href: "/bookings/borrow",
+    icon: Package,
+    module: null,
+    shape: "Request",
   },
 ];
 
@@ -56,7 +73,7 @@ export default async function BookingsHubPage() {
   // Each type is asked for independently, on the same module access that gates
   // the screens behind it.
   const access = await Promise.all(
-    BOOKING_TYPES.map((b) => hasModuleAccess(supabase, user.id, b.module))
+    BOOKING_TYPES.map((b) => (b.module ? hasModuleAccess(supabase, user.id, b.module) : true))
   );
   const bookingTypes = BOOKING_TYPES.filter((_, i) => access[i]);
 
