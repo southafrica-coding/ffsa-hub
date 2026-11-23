@@ -128,10 +128,14 @@ describe("Missio access state", () => {
     expect(soon.map((el) => el.parentElement?.textContent?.replace("Soon", ""))).toEqual([
       "Teams",
       "Communications",
-      "Finance",
       "Settings",
     ]);
     for (const el of soon) expect(el.closest("a")).toBeNull();
+    // Finance is built for pastors: a real link in the menu, not a phone tab.
+    const finance = host.querySelector("[data-testid=missio-nav-finance]") as HTMLAnchorElement;
+    expect(finance.getAttribute("href")).toBe("/missio/finance");
+    expect(finance.textContent?.toLowerCase()).not.toContain("soon");
+    expect(host.querySelector("[data-testid=missio-tab-finance]")).toBeNull();
     expect((host.querySelector("[data-testid=missio-nav-sundays]") as HTMLAnchorElement).getAttribute("href")).toBe("/missio/sundays");
   });
 
@@ -151,7 +155,8 @@ describe("Missio access state", () => {
     expect(host.textContent).toContain("Missio Church / House churches");
     expect(host.textContent).not.toContain("Missio Church / Home");
     const teams = [...host.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
-    expect(teams).toHaveLength(4);
+    // Teams, Communications, Settings. Finance is built (pastors).
+    expect(teams).toHaveLength(3);
     expect(teams[0]?.parentElement?.textContent).toContain("Teams");
   });
 
@@ -233,6 +238,8 @@ describe("Missio access state", () => {
     hosts.push(host);
     await settle();
     expect(host.querySelector("[data-testid=missio-nav-care]")).not.toBeNull();
+    expect(host.querySelector("[data-testid=missio-nav-finance]")).toBeNull();
+    expect(host.querySelector("a[href='/missio/finance']")).toBeNull();
     const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
     expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care", "/missio/sundays"]);
     expect(host.querySelector("[data-testid=missio-tab-care]")?.getAttribute("aria-current")).toBe("page");
@@ -253,6 +260,7 @@ describe("Missio access state", () => {
     hosts.push(host);
     await settle();
     expect(host.querySelector("[data-testid=missio-nav-care]")?.getAttribute("href")).toBe("/missio/care");
+    expect(host.querySelector("a[href='/missio/finance']")).toBeNull();
     const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
     expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care", "/missio/sundays"]);
     expect(host.querySelector("[data-testid=missio-tab-care]")).not.toBeNull();
@@ -386,7 +394,9 @@ describe("Missio access state", () => {
     expect(drawerLink?.textContent).toContain("House churches");
     expect(drawerLink?.textContent?.toLowerCase()).not.toContain("soon");
     const drawerSoon = [...dialog.querySelectorAll("span")].filter((el) => el.textContent === "Soon");
-    expect(drawerSoon).toHaveLength(4);
+    expect(drawerSoon).toHaveLength(3);
+    // The phone menu carries Finance for pastors; the tab bar keeps its five.
+    expect(dialog.querySelector("a[href='/missio/finance']")?.textContent).toContain("Finance");
     expect(drawerSoon[0]?.parentElement?.textContent).toContain("Teams");
     expect(openMenu.getAttribute("aria-expanded")).toBe("true");
     expect(document.body.getAttribute("data-scroll-locked")).toBe("1");
