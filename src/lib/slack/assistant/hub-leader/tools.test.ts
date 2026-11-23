@@ -86,6 +86,54 @@ describe("list_team_access", () => {
   });
 });
 
+describe("team access — scoped grants outside the leader's reach", () => {
+  // The leader (u-lead) holds schools.view for program prog-1 only.
+  const amyIn = async (name: string, input: Record<string, unknown>) => {
+    const out = (await run(name, input)).output as Record<string, unknown>;
+    if (name === "lookup_person_access") return out as { permissions: Record<string, unknown>[] };
+    const people = (out as { ministries: { people: { name: string; permissions: Record<string, unknown>[] }[] }[] }).ministries[0].people;
+    return people.find((p) => p.name === "Amy Adams")!;
+  };
+
+  beforeEach(() => {
+    h.state.direct.push(
+      { user_id: "u-amy", key: "schools.view", scope_type: "program", scope_id: "prog-1" }, // the leader's own scope
+      { user_id: "u-amy", key: "schools.view", scope_type: "program", scope_id: "prog-2" }, // a school the leader isn't in
+      { user_id: "u-amy", key: "events.view", scope_type: "team", scope_id: "team-9" }, // an outreach team the leader isn't in
+      { user_id: "u-amy", key: "finance.view", scope_type: null, scope_id: null } // everywhere
+    );
+  });
+
+  for (const tool of ["list_team_access", "lookup_person_access"]) {
+    it(`${tool}: shows everywhere grants and the leader's own scopes, and nothing of the others`, async () => {
+      const amy = await amyIn(tool, { person: "Amy" });
+      expect(amy.permissions).toEqual([
+        expect.objectContaining({ key: "schools.view", scope: "program: DTS Spring", scope_id: "prog-1" }),
+        expect.objectContaining({ key: "finance.view", scope: "everywhere", scope_id: null }),
+      ]);
+      const shown = JSON.stringify(amy);
+      for (const leak of ["prog-2", "SBS Winter", "team-9", "Nepal team"]) expect(shown).not.toContain(leak);
+      // The out-of-scope ids are never even looked up.
+      expect(h.state.labelRequests).not.toContain("program:prog-2");
+      expect(h.state.labelRequests).not.toContain("team:team-9");
+    });
+  }
+
+  it("shows a scope once the leader holds a grant there too", async () => {
+    h.state.direct.push({ user_id: "u-lead", key: "events.view", scope_type: "team", scope_id: "team-9" });
+    const amy = await amyIn("lookup_person_access", { person: "Amy" });
+    expect(amy.permissions).toContainEqual(expect.objectContaining({ key: "events.view", scope: "team: Nepal team" }));
+    expect(JSON.stringify(amy)).not.toContain("prog-2");
+  });
+
+  it("still hides legacy keys, scoped or not", async () => {
+    h.state.permissions.push({ id: "p-cv", key: "contacts.view", display_name: "View contacts (old)", module: "contacts" });
+    h.state.direct.push({ user_id: "u-amy", key: "contacts.view", scope_type: "program", scope_id: "prog-1" });
+    const amy = await amyIn("lookup_person_access", { person: "Amy" });
+    expect(amy.permissions.map((p) => p.key)).not.toContain("contacts.view");
+  });
+});
+
 describe("lookup_person_access", () => {
   it("finds a team member by part of their name", async () => {
     const out = (await run("lookup_person_access", { person: "ben" })).output as { name: string };
@@ -253,30 +301,31 @@ describe("resend_invite", () => {
 });
 
 describe("report_problem", () => {
-  it("files a ticket and posts nothing when no channel is set", async () => {
+  it("only proposes: no ticket, no audit_logs row, no Slack post until the button", async () => {
+    process.env.SLACK_ASSISTANT_TICKET_CHANNEL_ID = "C_TICKETS";
     const out = await run("report_problem", { message: "The bookings page won't load" });
-    expect(out.output).toMatchObject({ filed: true });
-    expect(h.state.tickets).toHaveLength(1);
-    expect(h.state.tickets[0]).toMatchObject({
-      reporter_hub_user_id: "u-lead",
+    expect(out.output).toMatchObject({ awaiting_confirmation: true, findings: [], could_not_check: [expect.stringMatching(/error logs/)] });
+    expect(out.proposal).toMatchObject({ confirmLabel: "File report", summary: expect.stringContaining("The bookings page won't load") });
+    expect(h.state.pending).toHaveLength(1);
+    expect(h.state.pending[0]).toMatchObject({
+      action_type: "report_problem",
       slack_user_id: "U_LEAD",
-      ministry_names: ["Worship"],
-      message: expect.stringContaining("The bookings page won't load"),
-      evidence: expect.objectContaining({ findings: [], could_not_check: [expect.stringMatching(/error logs/)] }),
+      payload: { message: "The bookings page won't load", evidence: expect.objectContaining({ findings: [] }) },
     });
-    expect(h.state.hubAudit[0]).toMatchObject({ user_id: "u-lead", resource_type: "slack_assistant_tickets" });
+    expect(h.state.tickets).toHaveLength(0);
+    expect(h.state.hubAudit).toHaveLength(0);
     expect(h.posts).toHaveLength(0);
   });
 
-  it("posts a short note with the Hub bot when a channel is set", async () => {
-    process.env.SLACK_ASSISTANT_TICKET_CHANNEL_ID = "C_TICKETS";
-    await run("report_problem", { message: "Broken" });
-    expect(h.posts).toEqual([expect.objectContaining({ channel: "C_TICKETS", bot: "assistant" })]);
+  it("escapes the leader's text in the button message", async () => {
+    const out = await run("report_problem", { message: "<!channel> look at <https://x.test|this>" });
+    expect(out.proposal!.summary).not.toMatch(/<!channel>|<https/);
   });
 
   it("needs a message", async () => {
     expect((await run("report_problem", { message: "  " })).output).toMatchObject({ error: expect.any(String) });
     expect(h.state.tickets).toHaveLength(0);
+    expect(h.state.pending).toHaveLength(0);
   });
 });
 

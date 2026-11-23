@@ -213,7 +213,8 @@ export type PendingActionType =
   | "create_vehicle_booking"
   | "update_contact"
   | "decide_vehicle_booking"
-  | "decide_space_booking";
+  | "decide_space_booking"
+  | "report_problem";
 
 export type PendingRow = {
   id: string;

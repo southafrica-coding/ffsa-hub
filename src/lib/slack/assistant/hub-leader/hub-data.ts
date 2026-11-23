@@ -36,7 +36,6 @@ import {
   getMyVehicleRequests,
   getPendingVehicleBookings,
   getVehicleAccess,
-  getVehicleAvailability,
   getVehicleBookingById,
   getVehicleBookings,
   getVehiclePeople,
@@ -119,8 +118,80 @@ export async function listActiveVehicles(admin: Client): Promise<VehicleLite[]> 
   }));
 }
 
+/**
+ * Free vans and cars per day, as the Vehicles calendar shows them.
+ *
+ * The calendar gets these from the vehicle_availability() SQL function
+ * (migration 222), which is gated on has_vehicles_access() — auth.uid(),
+ * so with the bot's service-role client it returns nothing. The caller
+ * has already passed the same check in JS (vehicleAccess(...).canView,
+ * in tools-hub.ts), so this counts the same rows directly instead, the
+ * way that function does: the active fleet per type, less distinct active
+ * vehicles on approved bookings covering the day (never below 0); pending
+ * bookings are counted separately and not subtracted. Counts only — no
+ * booking ids, names or people leave this function.
+ */
 export async function vehicleDayCounts(admin: Client, from: string, to: string): Promise<DayAvailability[]> {
-  return [...(await getVehicleAvailability(admin, from, to)).values()].sort((a, b) => a.day.localeCompare(b.day));
+  const [{ data: fleet }, { data: bookings }] = await Promise.all([
+    admin.from("vehicles").select("id, vehicle_type").eq("status", "active"),
+    admin
+      .from("vehicle_bookings")
+      .select("id, status, checkout_date, return_date")
+      .in("status", ["pending", "approved"])
+      .lte("checkout_date", to)
+      .gte("return_date", from),
+  ]);
+  const live = (bookings ?? []) as DayCountBooking[];
+  const { data: assignments } =
+    live.length > 0
+      ? await admin.from("vehicle_booking_assignments").select("vehicle_id, vehicle_booking_id").in("vehicle_booking_id", live.map((b) => b.id))
+      : { data: [] };
+  return countVehicleDays(from, to, (fleet ?? []) as DayCountVehicle[], live, (assignments ?? []) as DayCountAssignment[]);
+}
+
+type DayCountVehicle = { id: string; vehicle_type: string };
+type DayCountBooking = { id: string; status: string; checkout_date: string; return_date: string };
+type DayCountAssignment = { vehicle_id: string; vehicle_booking_id: string };
+
+/** vehicle_availability()'s arithmetic, over rows already read. Days are inclusive ISO dates. */
+export function countVehicleDays(
+  from: string,
+  to: string,
+  fleet: DayCountVehicle[],
+  bookings: DayCountBooking[],
+  assignments: DayCountAssignment[]
+): DayAvailability[] {
+  const typeOf = new Map(fleet.map((v) => [v.id, v.vehicle_type]));
+  const total = (t: string) => fleet.filter((v) => v.vehicle_type === t).length;
+  const byBooking = new Map<string, string[]>();
+  for (const a of assignments) byBooking.set(a.vehicle_booking_id, [...(byBooking.get(a.vehicle_booking_id) ?? []), a.vehicle_id]);
+
+  const out: DayAvailability[] = [];
+  const end = new Date(`${to}T00:00:00Z`).getTime();
+  for (let t = new Date(`${from}T00:00:00Z`).getTime(); t <= end; t += 86_400_000) {
+    const day = new Date(t).toISOString().slice(0, 10);
+    const used = { approved: { van: new Set<string>(), car: new Set<string>() }, pending: { van: new Set<string>(), car: new Set<string>() } };
+    for (const b of bookings) {
+      if (b.checkout_date > day || b.return_date < day) continue;
+      if (b.status !== "approved" && b.status !== "pending") continue;
+      for (const vid of byBooking.get(b.id) ?? []) {
+        const type = typeOf.get(vid); // inactive vehicles aren't in the fleet, so don't count
+        if (type === "van" || type === "car") used[b.status][type].add(vid);
+      }
+    }
+    const vanTotal = total("van");
+    const carTotal = total("car");
+    out.push({
+      day,
+      vans: Math.max(0, vanTotal - used.approved.van.size),
+      cars: Math.max(0, carTotal - used.approved.car.size),
+      vanTotal,
+      carTotal,
+      vansRequested: used.pending.van.size,
+      carsRequested: used.pending.car.size,
+    });
+  }
+  return out;
 }
 
 /** Vehicle ids held over the window (ids only — nothing about who holds them). */

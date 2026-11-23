@@ -19,11 +19,11 @@ import { countries } from "@/lib/countries";
 import { CLASH_ERROR, validateVehicleRequestFields, VEHICLE_PURPOSES } from "@/lib/vehicles/booking-request";
 import { purposeLabel } from "@/services/vehicles";
 import * as hub from "./hub-data";
-import { investigate } from "./investigate";
+import { investigate, type Evidence } from "./investigate";
 import { searchHelp } from "./knowledge";
 import { propose, type ToolContext, type ToolOutcome } from "./propose";
 import { matchPerson, type Person } from "./rules";
-import { reportProblem } from "./tickets";
+import { evidenceText, MAX_MESSAGE } from "./tickets";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -165,7 +165,7 @@ export const HUB_TOOLS: Anthropic.Tool[] = [
   {
     name: "report_problem",
     description:
-      "File a problem report for the Hub team. Before filing it runs read-only checks on whatever the report is about (a team member, a vehicle or space booking id, a contact id) and returns what it found and couldn't check — tell the leader. It never fixes anything.",
+      "Propose a problem report for the Hub team. It first runs read-only checks on whatever the report is about (a team member, a vehicle or space booking id, a contact id) and returns what it found and couldn't check — tell the leader. Does NOT file it: the leader gets File report / Cancel buttons. It never fixes anything.",
     input_schema: {
       type: "object",
       properties: {
@@ -212,6 +212,12 @@ const text = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(
 export const slackSafe = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const refuse = (reason: string): ToolOutcome => ({ output: { refused: true, reason } });
+
+/** The button message for a problem report: the message, then what was checked. */
+function reportSummary(message: string, evidence: Evidence): string {
+  const quoted = slackSafe(message.slice(0, 1200)).replace(/\n/g, "\n>");
+  return `File this problem report for the Hub team?\n>${quoted}${slackSafe(evidenceText(evidence))}`;
+}
 
 // ────────────────────────────────────────────────────────────
 // Vehicles
@@ -693,8 +699,9 @@ export async function executeHubTool(ctx: ToolContext, name: string, input: Reco
     }
 
     case "report_problem": {
-      const message = text(input.message, 4000);
+      const message = text(input.message, MAX_MESSAGE);
       if (!message) return { output: { error: "What's the problem? I need a short description." } };
+      // Read-only, before the button, so the leader sees what was found.
       const evidence = await investigate(admin, leader, {
         person: input.person,
         user_id: input.user_id,
@@ -702,15 +709,13 @@ export async function executeHubTool(ctx: ToolContext, name: string, input: Reco
         space_booking_id: input.space_booking_id,
         contact_id: input.contact_id,
       });
-      const res = await reportProblem(admin, leader, message, evidence);
-      if (!res.ok) return { output: { error: "I couldn't file that just now.", findings: evidence.findings, could_not_check: evidence.could_not_check } };
+      // Nothing is filed or posted until the leader presses the button (actions.ts).
+      const proposed = await propose(ctx, "report_problem", { message, evidence }, null, reportSummary(message, evidence), {
+        confirmLabel: "File report",
+      });
       return {
-        output: {
-          filed: true,
-          message: "Filed for the Hub team. Nothing was changed.",
-          findings: evidence.findings,
-          could_not_check: evidence.could_not_check,
-        },
+        ...proposed,
+        output: { ...(proposed.output as Record<string, unknown>), findings: evidence.findings, could_not_check: evidence.could_not_check },
       };
     }
 

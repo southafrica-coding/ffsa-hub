@@ -96,7 +96,18 @@ function scopeLabel(labels: Map<string, string>, t: string | null, id: string | 
   return `${t}: ${labels.get(`${t}:${id}`) ?? id}`;
 }
 
-async function accessFor(admin: Client, people: Person[]) {
+/**
+ * Team members' access, as far as the leader may see it. Grants with no
+ * scope ("everywhere") are shown. A scoped grant (program, team or event —
+ * the only scope types user_permissions has) is shown only where the
+ * leader holds a grant at that same scope themselves, which also covers
+ * every scope checkPermissionChange would let them grant or revoke at.
+ * Anything scoped elsewhere is left out entirely: no row, no id, no label.
+ */
+async function accessFor(admin: Client, leader: Leader, people: Person[]) {
+  const own = await data.getDirectGrants(admin, leader.hubUserId);
+  const visibleScopes = new Set(own.filter((g) => g.scope_type && g.scope_id).map((g) => `${g.scope_type}:${g.scope_id}`));
+  const mayShow = (g: data.DirectGrant) => (!g.scope_type && !g.scope_id) || visibleScopes.has(`${g.scope_type}:${g.scope_id}`);
   const rows = await Promise.all(
     people.map(async (p) => {
       const [direct, roleKeys, roles] = await Promise.all([
@@ -104,7 +115,7 @@ async function accessFor(admin: Client, people: Person[]) {
         data.getRoleKeys(admin, p.user_id),
         data.getRoleNames(admin, p.user_id),
       ]);
-      return { p, direct: direct.filter((g) => !HIDDEN_PERMISSION_KEYS.has(g.key)), roleKeys, roles };
+      return { p, direct: direct.filter((g) => !HIDDEN_PERMISSION_KEYS.has(g.key) && mayShow(g)), roleKeys, roles };
     })
   );
   const scopes = rows.flatMap((r) =>
@@ -165,7 +176,7 @@ export async function executeHubLeaderTool(
   switch (name) {
     case "list_team_access": {
       const team = await getTeam(admin, live);
-      const access = await accessFor(admin, team);
+      const access = await accessFor(admin, live, team);
       return {
         output: {
           ministries: ministries.map((m) => ({
@@ -179,7 +190,7 @@ export async function executeHubLeaderTool(
     case "lookup_person_access": {
       const found = await findTarget(c, input);
       if (!found.person) return { output: found.output };
-      const [access] = await accessFor(admin, [found.person]);
+      const [access] = await accessFor(admin, live, [found.person]);
       return { output: access };
     }
 

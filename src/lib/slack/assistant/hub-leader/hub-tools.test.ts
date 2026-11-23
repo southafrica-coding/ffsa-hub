@@ -26,7 +26,7 @@ vi.mock("@/lib/email/templates/invite", () => ({ inviteEmailHtml: () => "<p>invi
 const { baseState, MINISTRY_OTHER, MINISTRY_WORSHIP } = await import("./testing");
 const { baseHubState, CONTACT_CAROL, SB_1, VB_1, spaceBookingRow, vehicleBookingRow } = await import("./testing-hub");
 const { executeHubLeaderTool, HUB_LEADER_TOOLS } = await import("./tools");
-const { confirmationBlocks, confirmPending } = await import("./actions");
+const { cancelPending, confirmationBlocks, confirmPending } = await import("./actions");
 const { resolveLeader, NO_TEAM } = await import("./rules");
 const { slackSafe } = await import("./tools-hub");
 const { searchHelp, HELP_TOPICS } = await import("./knowledge");
@@ -355,19 +355,34 @@ describe("forms, space bookings and hire stock", () => {
 // ────────────────────────────────────────────────────────────
 
 describe("report_problem — investigates, never fixes", () => {
-  it("checks a team member read-only and files the evidence", async () => {
+  it("checks a team member read-only, shows it, and files the same evidence only on the button", async () => {
     h.hub.accounts["u-amy"] = { active: true, has_password: false, slack_linked: false };
     h.hub.emailLog.add("u-lead");
     h.hub.emails["amy@example.test"] = [{ category: "account_setup_link", status: "bounced", at: "2026-11-20T10:00:00Z", failed: true }];
-    const o = await out("report_problem", { message: "Amy never got her invite", person: "Amy" });
-    expect(o.filed).toBe(true);
-    expect(o.findings).toEqual([
+    const o = await proposeId("report_problem", { message: "Amy never got her invite", person: "Amy" });
+    const shown = o.output as Record<string, unknown>;
+    expect(shown).toMatchObject({ awaiting_confirmation: true });
+    expect(shown.filed).toBeUndefined();
+    expect(shown.findings).toEqual([
       expect.stringMatching(/NOT set up yet/),
       expect.stringMatching(/account_setup_link.*bounced — did not arrive/),
     ]);
-    expect(h.state.tickets[0]).toMatchObject({ evidence: expect.objectContaining({ subjects: { person: "u-amy" } }) });
+    expect(o.proposal!.summary).toMatch(/NOT set up yet/);
+    expect(h.state.tickets).toHaveLength(0);
+
+    expect((await confirmPending({}, o.proposal!.pendingId, "U_LEAD")).text).toMatch(/Filed/);
+    expect(h.state.tickets).toHaveLength(1);
+    expect(h.state.tickets[0]).toMatchObject({
+      reporter_hub_user_id: "u-lead",
+      ministry_names: ["Worship"],
+      message: expect.stringContaining("Amy never got her invite"),
+      evidence: expect.objectContaining({ subjects: { person: "u-amy" }, findings: shown.findings }),
+    });
+    expect(h.state.hubAudit).toEqual([
+      expect.objectContaining({ user_id: "u-lead", resource_type: "slack_assistant_tickets", changes: expect.objectContaining({ source: "slack_hub_assistant" }) }),
+    ]);
+    expect(h.state.audit.map((a) => a.result)).toEqual(["proposed", "executed"]);
     nothingWritten();
-    expect(h.state.pending).toHaveLength(0);
   });
 
   it("doesn't look at people, bookings or contacts the asker can't see", async () => {
@@ -397,6 +412,73 @@ describe("report_problem — investigates, never fixes", () => {
     const o = await out("report_problem", { message: "The van isn't showing", vehicle_booking_id: VB_1 });
     expect(o.findings).toEqual(expect.arrayContaining([expect.stringMatching(/approved but has no vehicle/), expect.stringMatching(/no drivers/)]));
     nothingWritten();
+  });
+});
+
+describe("report_problem — nothing filed or posted without Confirm", () => {
+  beforeEach(() => {
+    process.env.SLACK_ASSISTANT_TICKET_CHANNEL_ID = "C_TICKETS";
+  });
+  const nothingFiled = () => {
+    expect(h.state.tickets).toHaveLength(0);
+    expect(h.posts).toHaveLength(0);
+    expect(h.state.hubAudit).toHaveLength(0);
+  };
+  const proposeReport = () => proposeId("report_problem", { message: "Bookings page is blank" });
+
+  it("proposing inserts no ticket and posts nothing, even with the channel set", async () => {
+    const o = await proposeReport();
+    expect(o.proposal!.confirmLabel).toBe("File report");
+    expect(h.state.pending[0].action_type).toBe("report_problem");
+    nothingFiled();
+  });
+
+  it("Confirm files the ticket and posts the channel note once", async () => {
+    const o = await proposeReport();
+    expect((await confirmPending({}, o.proposal!.pendingId, "U_LEAD")).text).toMatch(/Filed/);
+    expect(h.state.tickets).toHaveLength(1);
+    expect(h.posts).toEqual([expect.objectContaining({ channel: "C_TICKETS", bot: "assistant", text: expect.stringContaining("Bookings page is blank") })]);
+    // A replayed or double-clicked button does nothing more.
+    expect((await confirmPending({}, o.proposal!.pendingId, "U_LEAD")).text).toMatch(/expired or was already handled/);
+    expect(h.state.tickets).toHaveLength(1);
+    expect(h.posts).toHaveLength(1);
+  });
+
+  it("files without a channel note when no channel is set", async () => {
+    delete process.env.SLACK_ASSISTANT_TICKET_CHANNEL_ID;
+    const o = await proposeReport();
+    await confirmPending({}, o.proposal!.pendingId, "U_LEAD");
+    expect(h.state.tickets).toHaveLength(1);
+    expect(h.posts).toHaveLength(0);
+  });
+
+  it("Cancel files nothing, and Confirm after it does nothing", async () => {
+    const o = await proposeReport();
+    expect((await cancelPending({}, o.proposal!.pendingId, "U_LEAD")).text).toMatch(/Cancelled/);
+    expect((await confirmPending({}, o.proposal!.pendingId, "U_LEAD")).text).toMatch(/expired or was already handled/);
+    nothingFiled();
+  });
+
+  it("an expired request files nothing", async () => {
+    const o = await proposeReport();
+    h.state.pending[0].expires_at = new Date(Date.now() - 1000).toISOString();
+    expect((await confirmPending({}, o.proposal!.pendingId, "U_LEAD")).text).toMatch(/expired or was already handled/);
+    nothingFiled();
+  });
+
+  it("someone else's click files nothing", async () => {
+    const o = await proposeReport();
+    expect((await confirmPending({}, o.proposal!.pendingId, "U_AMY")).text).toMatch(/Only the person who asked/);
+    expect((await cancelPending({}, o.proposal!.pendingId, "U_AMY")).text).toMatch(/Only the person who asked/);
+    nothingFiled();
+    expect(h.state.pending[0].consumed_at).toBeNull();
+  });
+
+  it("files nothing if the asker no longer leads by the time they click", async () => {
+    const o = await proposeReport();
+    h.state.memberships = h.state.memberships.filter((m) => m.user_id !== "u-lead");
+    expect((await confirmPending({}, o.proposal!.pendingId, "U_LEAD")).text).toMatch(/I didn't make that change/);
+    nothingFiled();
   });
 });
 

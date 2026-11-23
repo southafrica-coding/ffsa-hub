@@ -35,6 +35,9 @@ export type FakeState = {
   tickets: Record<string, unknown>[];
   audit: Record<string, unknown>[];
   hubAudit: Record<string, unknown>[];
+  /** "type:id" → name, for getScopeLabels; and every "type:id" it was asked for. */
+  scopeNames: Record<string, string>;
+  labelRequests: string[];
 };
 
 export const MINISTRY_WORSHIP = "m-worship";
@@ -89,6 +92,8 @@ export function baseState(): FakeState {
     tickets: [],
     audit: [],
     hubAudit: [],
+    scopeNames: { "program:prog-1": "DTS Spring", "program:prog-2": "SBS Winter", "team:team-9": "Nepal team" },
+    labelRequests: [],
   };
 }
 
@@ -143,7 +148,11 @@ export function makeFakeData(s: FakeState) {
       new Set([...grantsOf(userId).map((g) => g.key), ...(s.roleKeys[userId] ?? [])]),
     getRoleNames: async (_a: unknown, userId: string) => s.roleNames[userId] ?? [],
     isAdminTier: async (_a: unknown, userId: string) => Boolean(s.users.find((u) => u.id === userId)?.admin),
-    getScopeLabels: async () => new Map([["program:prog-1", "DTS Spring"]]),
+    getScopeLabels: async (_a: unknown, scopes: { scope_type: string; scope_id: string }[]) => {
+      const keys = scopes.map((x) => `${x.scope_type}:${x.scope_id}`);
+      s.labelRequests.push(...keys);
+      return new Map(keys.filter((k) => s.scopeNames[k]).map((k) => [k, s.scopeNames[k]]));
+    },
     applyGrant: async (_a: unknown, args: { userId: string; permissionId: string; scopeType: string | null; scopeId: string | null }) => {
       s.grants.push(args);
       const key = s.permissions.find((p) => p.id === args.permissionId)!.key;

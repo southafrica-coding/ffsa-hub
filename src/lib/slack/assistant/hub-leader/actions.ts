@@ -11,7 +11,9 @@
  * decision on a vehicle or space booking) work the same way: the check*
  * function the tool ran is run again here, with the clicker's Hub
  * permissions read fresh, and the write goes through the Hub's own
- * service and notifications (hub-data.ts).
+ * service and notifications (hub-data.ts). A problem report is the same:
+ * the tool only investigates (read-only); the ticket is inserted and the
+ * channel note posted here, after the claim.
  */
 
 import { inviteEmailHtml } from "@/lib/email/templates/invite";
@@ -19,7 +21,9 @@ import { sendSetupLink } from "@/lib/auth/send-setup-link";
 import { resolveHubUserBySlackId } from "@/services/slack-bot";
 import * as data from "./data";
 import * as hub from "./hub-data";
+import type { Evidence } from "./investigate";
 import { checkPermissionChange, checkResendInvite, loadLeadership, NO_TEAM, type Leader } from "./rules";
+import { fileTicket, MAX_MESSAGE, reportMinistries } from "./tickets";
 import { checkContactUpdate, checkDecision, checkVehicleRequest, type VehicleRequestPayload } from "./tools-hub";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -116,7 +120,7 @@ export async function confirmPending(admin: Client, pendingId: string, slackUser
   if (!standing) return refuse("this assistant is only available to ministry leaders.");
   const leader: Leader = { hubUserId, slackUserId, ...standing };
 
-  if (!TEAM_ACTIONS.has(row.action_type)) return confirmHubAction(admin, row, hubUserId, { refuse, audit });
+  if (!TEAM_ACTIONS.has(row.action_type)) return confirmHubAction(admin, row, leader, { refuse, audit });
 
   if (leader.ministries.length === 0) return refuse(NO_TEAM);
   if (!targetUserId) return refuse("the request is incomplete.");
@@ -214,7 +218,8 @@ type Helpers = {
   audit: (result: data.AuditResult, detail?: string) => Promise<void>;
 };
 
-async function confirmHubAction(admin: Client, row: data.PendingRow, hubUserId: string, h: Helpers): Promise<ConfirmResult> {
+async function confirmHubAction(admin: Client, row: data.PendingRow, leader: Leader, h: Helpers): Promise<ConfirmResult> {
+  const hubUserId = leader.hubUserId;
   const pendingId = row.id;
   const payload = row.payload;
   const failed = async (detail: string, text: string) => {
@@ -292,5 +297,43 @@ async function confirmHubAction(admin: Client, row: data.PendingRow, hubUserId: 
     );
   }
 
+  if (row.action_type === "report_problem") {
+    // The tool only investigated (read-only) and stored what it found; the
+    // ticket and the channel note happen here, once, after the claim.
+    const message = typeof payload.message === "string" ? payload.message.trim().slice(0, MAX_MESSAGE) : "";
+    if (!message) return h.refuse("the request is incomplete.");
+    const evidence = storedEvidence(payload.evidence);
+    if (!(await data.claimPending(admin, pendingId, "consumed", "executing"))) return { text: GONE };
+    const filed = await fileTicket(admin, leader, message, evidence);
+    if (!filed.ok) return failed("ticket insert failed", "Something went wrong filing that, so it may not have gone in. Try again in a minute.");
+    return done(
+      {
+        action: "slack_assistant_report_problem",
+        resource_type: "slack_assistant_tickets",
+        resource_id: filed.ticketId,
+        changes: { ministries: reportMinistries(leader).map((m) => m.name) },
+      },
+      "Filed for the Hub team. Nothing else was changed."
+    );
+  }
+
   return h.refuse("I don't recognise that request.");
+}
+
+const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+/** The evidence the tool stored on the pending row, re-shaped so only the expected fields are filed. */
+function storedEvidence(v: unknown): Evidence | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const e = v as Record<string, unknown>;
+  const subjects: Record<string, string> = {};
+  if (e.subjects && typeof e.subjects === "object") {
+    for (const [k, val] of Object.entries(e.subjects as Record<string, unknown>)) if (typeof val === "string") subjects[k] = val;
+  }
+  return {
+    checked_at: typeof e.checked_at === "string" ? e.checked_at : new Date().toISOString(),
+    subjects,
+    findings: strings(e.findings),
+    could_not_check: strings(e.could_not_check),
+  };
 }

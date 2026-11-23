@@ -79,18 +79,18 @@ leader could do the same thing in the Hub themselves.
 
 **Problem reports**
 
-16. **Report a problem** (`report_problem`). Before filing, the bot looks into whatever the report is about. It only reads, and only what the leader could see in the Hub:
+16. **Report a problem** (`report_problem`). Before proposing the report, the bot looks into whatever it is about. It only reads, and only what the leader could see in the Hub:
     - **A team member** (ministry leaders, among their team): whether the account is active, has a password and has Slack linked. Also the last five emails to them from `email_messages` (category and status only), if the leader may read the email log under its SELECT policy.
     - **A vehicle booking** (their own, or any if they approve vehicles): status, dates and vehicles, plus contradictions such as approved with no vehicle, pending past its date, or return before collection. It also flags anything that would block approval: no drivers, an outside driver missing photos, or a driving test pending or failed.
     - **A space booking** (if they can see space bookings): status, venue and times, plus contradictions such as an end before its start, or pending past its date.
     - **A contact** (if they can see contacts): whether it exists, its status, and whether it has an email or phone.
 
-    The bot tells the leader what it found and what it couldn't check, and files a ticket in `slack_assistant_tickets` with the checks as `evidence` (393), plus a short copy under the message. It **never changes anything** to fix a problem. Server error logs are not readable from inside the app, so every report says the Hub team will check those.
+    The bot tells the leader what it found and what it couldn't check, and posts the report behind a **File report** button. Only when the leader presses it (same Slack user, within 10 minutes, after the same re-checks and claim as every other write) does it insert a ticket in `slack_assistant_tickets` with those same checks as `evidence` (393), plus a short copy under the message, and post the optional channel note. Cancelled, expired or replayed: nothing is filed or posted. It **never changes anything** to fix a problem. Server error logs are not readable from inside the app, so every report says the Hub team will check those.
 
-Every write (grant, revoke, resend, vehicle request, contact edit, approve, decline) is only
-*proposed*: the bot posts it with a button (Confirm / Request vehicle / Save / Approve /
-Decline) and Cancel, and nothing is written until the leader presses it within 10 minutes.
-Problem reports are filed straight away; filing changes nothing else.
+Every write (grant, revoke, resend, vehicle request, contact edit, approve, decline, problem
+report) is only *proposed*: the bot posts it with a button (Confirm / Request vehicle / Save /
+Approve / Decline / File report) and Cancel, and nothing is written or posted until the leader
+presses it within 10 minutes. The read-only checks behind a problem report run before the button.
 
 ## What it can't do
 
@@ -170,9 +170,8 @@ works); authorization never depends on that context.
 
 ### Before migration 393 is applied
 
-The 392 tools keep working. The new write actions can't be set up: the pending row fails 392's
-CHECK, and the leader is told to try again later. Problem reports are filed without the
-`evidence` column, with the checks still copied under the message.
+The 392 tools keep working. The new write actions, problem reports included, can't be set up:
+the pending row fails 392's CHECK, and the leader is told to try again later.
 
 ## Switch-on steps (Jack)
 
