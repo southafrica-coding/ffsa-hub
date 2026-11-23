@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { EquipmentLiveStatus } from "@/services/equipment";
 import { LIVE_STATUS_LABEL, filterRegister } from "@/lib/equipment/register";
@@ -45,6 +45,11 @@ export type RegisterProduct = {
   checked: string;
   checkedIncomplete: boolean;
   listed: boolean;
+  /** How it's tracked (381). Counted and consumable items have no units. */
+  tracking: "tagged" | "counted" | "consumable";
+  counted: { locationId: string | null; location: string | null } | null;
+  /** On the borrow form. */
+  requestable: boolean;
   units: RegisterUnit[];
 };
 
@@ -96,6 +101,7 @@ export function RegisterView({
   maintenanceTotal,
   locations,
   initialOpenId,
+  canAdd,
 }: {
   context: string;
   products: RegisterProduct[];
@@ -105,6 +111,8 @@ export function RegisterView({
   locations: RegisterLocation[];
   /** ?open=<product id>, so the unit page's back link lands on its product. */
   initialOpenId: string | null;
+  /** The inventory manager sees Add item. */
+  canAdd: boolean;
 }) {
   const [category, setCategory] = useState("all");
   const [phoneFilter, setPhoneFilter] = useState<PhoneFilter>("all");
@@ -153,8 +161,9 @@ export function RegisterView({
               <span className="md:hidden">Gear</span>
               <span className="hidden md:inline">Register</span>
             </h1>
-            <span className="pb-1.5 text-[13px] md:hidden">
-              {unitTotal} units · {productCount} products
+            <span className="flex items-center gap-3 pb-1.5 text-[13px] md:hidden">
+              {productCount} items
+              {canAdd && <AddItemLink />}
             </span>
           </div>
         </div>
@@ -165,7 +174,7 @@ export function RegisterView({
           </div>
           <div>
             <div className="hire-display text-[44px]">{productCount}</div>
-            <div className="hire-label mt-1">Products</div>
+            <div className="hire-label mt-1">Items</div>
           </div>
           <div>
             <div className={cn("hire-display text-[44px]", maintenanceTotal > 0 && "!text-[color:var(--hire-accent)]")}>
@@ -173,6 +182,11 @@ export function RegisterView({
             </div>
             <div className="hire-label mt-1">In maintenance</div>
           </div>
+          {canAdd && (
+            <div className="pb-1.5">
+              <AddItemLink />
+            </div>
+          )}
         </div>
 
         {/* Phone: search + chips live in the header (47e-1). */}
@@ -245,8 +259,8 @@ export function RegisterView({
         <span />
         <span className="min-w-0 overflow-hidden">Product</span>
         <span className="min-w-0 overflow-hidden">Category</span>
-        <span className="text-right">Units</span>
-        <span className="text-right">Bookable</span>
+        <span className="text-right">Qty</span>
+        <span className="text-right">Free</span>
         <span className="min-w-0 overflow-hidden">Needs attention</span>
         <span className="min-w-0 overflow-hidden">Last checked</span>
       </div>
@@ -309,7 +323,7 @@ export function RegisterView({
                 {/* Phone: bookable/total and what needs attention, on the right. */}
                 <span className="shrink-0 whitespace-nowrap text-right tabular-nums md:hidden">
                   <span className="hire-display block text-[24px] leading-none">
-                    {p.bookable}/{p.total}
+                    {p.tracking === "consumable" ? p.total : `${p.bookable}/${p.total}`}
                   </span>
                   <span
                     className={cn(
@@ -328,10 +342,10 @@ export function RegisterView({
                 <span
                   className={cn(
                     "hire-display hidden text-right text-[22px] tabular-nums md:block",
-                    p.bookable < p.total && "!text-[color:var(--hire-accent)]"
+                    p.bookable < p.total && p.tracking !== "consumable" && "!text-[color:var(--hire-accent)]"
                   )}
                 >
-                  {p.bookable}
+                  {p.tracking === "consumable" ? "—" : p.bookable}
                 </span>
                 <span
                   className={cn(
@@ -352,13 +366,54 @@ export function RegisterView({
                 </span>
               </button>
 
-              {open && <UnitList product={p} units={units} />}
+              {open && (p.counted ? <CountedSummary product={p} /> : <UnitList product={p} units={units} />)}
             </li>
           );
         })}
       </ul>
       </div>
       </div>
+    </div>
+  );
+}
+
+function AddItemLink() {
+  return (
+    <Link
+      href="/bookings/equipment/gear/new"
+      className="flex h-11 items-center gap-1.5 rounded-[8px] bg-[color:var(--hire-accent)] px-4 text-[14px] font-bold !text-[color:var(--hire-on-accent)] md:h-10"
+    >
+      <Plus className="h-4 w-4" /> Add item
+    </Link>
+  );
+}
+
+/** A counted or consumable item, opened: what it is and where, and a link to its page. */
+function CountedSummary({ product }: { product: RegisterProduct }) {
+  const consumable = product.tracking === "consumable";
+  return (
+    <div className="bg-[color:var(--hire-surface)] md:px-9 md:pb-4 md:pl-[52px]">
+      <Link
+        href={`/bookings/equipment/gear/products/${product.id}`}
+        className="flex min-h-[52px] flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-[color:var(--hire-line)] py-2 pl-8 pr-[18px] text-[13px] hover:!text-[color:var(--hire-ink)] md:border md:border-[color:var(--hire-line2)] md:bg-[color:var(--hire-bg)] md:px-3.5"
+      >
+        <span className="min-w-0">
+          <span className="text-[color:var(--hire-ink)]">{consumable ? "Consumable" : "Counted"}</span>
+          {" · "}
+          {product.counted?.location ?? "No location"}
+          {!consumable && (
+            <>
+              {" · "}
+              {product.out > 0 ? `${product.out} booked or out today` : "all in"}
+              {" · "}
+              <span className={product.requestable ? "text-[color:var(--hire-ok)]" : "text-[color:var(--hire-muted)]"}>
+                {product.requestable ? "can be borrowed" : "not on the borrow form"}
+              </span>
+            </>
+          )}
+        </span>
+        <span className="text-[color:var(--hire-accent)]">{consumable ? "Stock ›" : "Stock & listing ›"}</span>
+      </Link>
     </div>
   );
 }

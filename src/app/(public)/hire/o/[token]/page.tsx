@@ -114,7 +114,7 @@ export default async function RentalPage({
       <div className="flex items-baseline justify-between text-[13px] text-[color:var(--hire-muted)]">
         <span>
           Rentals · {order.number}
-          {internal && order.ministry ? ` · for ${order.ministry.name}` : ""}
+          {internal && (order.ministry ?? order.school) ? ` · for ${(order.ministry ?? order.school)!.name}` : ""}
         </span>
         {internal && <span className="text-[12px] uppercase tracking-[0.14em] text-[color:var(--hire-accent)]">Internal</span>}
       </div>

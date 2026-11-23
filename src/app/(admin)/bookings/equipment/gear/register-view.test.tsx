@@ -35,6 +35,9 @@ const products: RegisterProduct[] = [
     checked: "12 Mar 2026",
     checkedIncomplete: false,
     listed: true,
+    tracking: "tagged",
+    counted: null,
+    requestable: false,
     units: [unit("PRT-0001")],
   },
   {
@@ -50,6 +53,9 @@ const products: RegisterProduct[] = [
     checked: "Never",
     checkedIncomplete: true,
     listed: true,
+    tracking: "tagged",
+    counted: null,
+    requestable: false,
     units: [unit("ELG-0001")],
   },
 ];
@@ -63,6 +69,7 @@ function markup() {
       maintenanceTotal: 0,
       locations: [{ key: "aud", label: "Auditorium", n: 2 }],
       initialOpenId: null,
+      canAdd: false,
     })
   );
 }

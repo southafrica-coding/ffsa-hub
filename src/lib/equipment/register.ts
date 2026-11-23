@@ -63,7 +63,14 @@ type FilterUnit = {
   location: string | null;
   unverified: boolean;
 };
-type FilterProduct<U extends FilterUnit> = { name: string; make: string; category: string; units: U[] };
+type FilterProduct<U extends FilterUnit> = {
+  name: string;
+  make: string;
+  category: string;
+  units: U[];
+  /** Counted and consumable items (381): no units, one location for the lot. */
+  counted?: { locationId: string | null; location: string | null } | null;
+};
 
 function matches(q: string, ...fields: (string | null | undefined)[]) {
   return fields.some((f) => f && f.toLowerCase().includes(q));
@@ -84,6 +91,14 @@ export function filterRegister<P extends FilterProduct<FilterUnit>>(
   const out: { product: P; units: P["units"]; viaUnits: boolean }[] = [];
   for (const p of products) {
     if (f.category !== "all" && p.category !== f.category) continue;
+    if (p.counted) {
+      const at = p.counted.locationId;
+      if (f.location !== "all" && (f.location === NO_LOCATION ? !!at : at !== f.location)) continue;
+      if (!q || matches(q, p.name, p.make, p.category, p.counted.location)) {
+        out.push({ product: p, units: p.units, viaUnits: false });
+      }
+      continue;
+    }
     const here =
       f.location === "all"
         ? p.units

@@ -61,7 +61,7 @@ export default async function OrdersPage() {
         >
           <span>
             <b>
-              {waiting.length} ministry {waiting.length === 1 ? "request is" : "requests are"} waiting on your approval.
+              {waiting.length} {waiting.length === 1 ? "request is" : "requests are"} waiting on your approval.
             </b>{" "}
             {waiting[0].purpose ?? waiting[0].customer_name} is the soonest, on {rangeLabel(waiting[0].starts_on, waiting[0].ends_on)}.
           </span>
@@ -93,7 +93,7 @@ export default async function OrdersPage() {
                       </span>
                       <span className="block truncate text-[12px] text-[color:var(--hire-muted)]">
                         <span className="md:hidden">{o.number} · </span>
-                        {o.kind === "internal" ? `${o.ministry?.name ?? "Ministry"} · ${o.customer_name}` : o.customer_name}
+                        {o.kind === "internal" ? `${o.ministry?.name ?? o.customer_org ?? "Ministry"} · ${o.customer_name}` : o.customer_name}
                         <span className="md:hidden"> · {rangeLabel(o.starts_on, o.ends_on)}</span>
                       </span>
                     </span>

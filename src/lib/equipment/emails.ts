@@ -17,6 +17,11 @@ const SITE = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_UR
 export const rentalUrl = (token: string) => `${SITE}/hire/o/${token}`;
 export const staffOrderUrl = (id: string) => `${SITE}/bookings/equipment/orders/${id}`;
 
+/** The school or ministry a request is for (381 added schools). */
+function forName(order: EquipmentOrderFull): string | null {
+  return order.ministry?.name ?? order.school?.name ?? null;
+}
+
 function firstName(name: string | null | undefined) {
   return (name ?? "").trim().split(/\s+/)[0] || "there";
 }
@@ -103,11 +108,11 @@ export async function sendRequestReceived(order: EquipmentOrderFull) {
 
   const alert = renderEmailShell({
     title: `New equipment request ${order.number}`,
-    preheader: `${order.customer_name}${order.ministry ? `, ${order.ministry.name}` : ""}`,
+    preheader: `${order.customer_name}${forName(order) ? `, ${forName(order)}` : ""}`,
     eyebrow: "Needs your approval",
     heading: order.purpose ?? "A ministry equipment request",
     bodyHtml: `
-      ${bodyParagraph(`${emphasis(escapeHtml(order.customer_name))}${order.ministry ? ` for ${escapeHtml(order.ministry.name)}` : ""} asked for gear on ${escapeHtml(when(order))}.`)}
+      ${bodyParagraph(`${emphasis(escapeHtml(order.customer_name))}${forName(order) ? ` for ${escapeHtml(forName(order)!)}` : ""} asked for gear on ${escapeHtml(when(order))}.`)}
       ${linesHtml(order, true)}
       ${bodyParagraph("It's held until you approve or decline it.")}
     `,

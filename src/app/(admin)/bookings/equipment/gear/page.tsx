@@ -1,9 +1,12 @@
 // The asset register (frames 45b, 47e-1): one row per product, opened to show
-// every unit under it. Read-only for now — editing comes with the listing
-// editor and the warehouse flow.
+// every unit under it. Counted and consumable items (stage O, 381) are one
+// row each with their count and where they're kept. The inventory manager
+// adds items from here.
 
 import { createClient } from "@/lib/supabase/server";
 import {
+  countedToday,
+  getEquipmentAccess,
   listProducts,
   listUnits,
   listLocations,
@@ -23,6 +26,8 @@ import {
   shortDate,
   summariseUnits,
 } from "@/lib/equipment/register";
+import { sastToday } from "@/lib/equipment/dates";
+import { stockAttention } from "@/lib/equipment/inventory";
 import { RegisterView, type RegisterProduct } from "./register-view";
 
 export default async function RegisterPage({
@@ -32,12 +37,17 @@ export default async function RegisterPage({
 }) {
   const { open } = await searchParams;
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const [productsRes, unitsRes, locationsRes, ownerLabelsRes] = await Promise.all([
+  const [productsRes, unitsRes, locationsRes, ownerLabelsRes, countsRes, access] = await Promise.all([
     listProducts(supabase),
     listUnits(supabase),
     listLocations(supabase),
     listUnitOwnerLabels(supabase),
+    countedToday(supabase, sastToday()),
+    user ? getEquipmentAccess(supabase, user.id) : null,
   ]);
 
   const loadError = productsRes.error || unitsRes.error;
@@ -79,7 +89,41 @@ export default async function RegisterPage({
     byProduct.set(u.product_id, list);
   }
 
-  const rows: RegisterProduct[] = products
+  // Counted and consumable items: one row, no units. Before 381 every
+  // product is tagged (tracking undefined), so this is empty.
+  const countedRows: RegisterProduct[] = products
+    .filter((p) => p.tracking === "counted" || p.tracking === "consumable")
+    .map((p) => {
+      const stock = p.stock_quantity ?? 0;
+      const free = countsRes.data.get(p.id)?.free ?? stock;
+      const location = p.location_id ? (locations.get(p.location_id) ?? null) : null;
+      const attention = stockAttention({
+        tracking: p.tracking,
+        stock,
+        reorderAt: p.reorder_at ?? null,
+        description: p.description,
+      });
+      return {
+        id: p.id,
+        name: p.name,
+        make: [p.brand, p.model].filter(Boolean).join(" · "),
+        category: p.register_category,
+        total: stock,
+        bookable: free,
+        out: stock - free,
+        attention,
+        needsAttention: !!attention,
+        checked: "—",
+        checkedIncomplete: false,
+        listed: p.is_listed,
+        tracking: p.tracking,
+        counted: { locationId: p.location_id ?? null, location },
+        requestable: p.is_requestable ?? false,
+        units: [],
+      };
+    });
+
+  const taggedRows: RegisterProduct[] = products
     .filter((p) => (byProduct.get(p.id)?.length ?? 0) > 0)
     .map((p) => {
       const us = byProduct.get(p.id) ?? [];
@@ -97,6 +141,9 @@ export default async function RegisterPage({
         checked: checkedText(s),
         checkedIncomplete: s.never > 0,
         listed: p.is_listed,
+        tracking: "tagged" as const,
+        counted: null,
+        requestable: p.is_requestable ?? false,
         units: us.map((u) => ({
           tag: u.tag,
           label: u.label,
@@ -114,15 +161,22 @@ export default async function RegisterPage({
         })),
       };
     });
+  // Keep listProducts' order (category, sort order, name) across both kinds.
+  const rowById = new Map([...taggedRows, ...countedRows].map((r) => [r.id, r]));
+  const rows = products.map((p) => rowById.get(p.id)).filter((r): r is RegisterProduct => !!r);
 
   const where = [...new Set(units.map((u) => (u.location_id ? locations.get(u.location_id) : null)).filter(Boolean))];
   const context = ["Equipment", ...where, ...(ministries ?? []).map((m: { name: string }) => m.name)].join(" · ");
 
   // Location filter: every location that has gear, plus "No location" for the unverified imports.
   const locationOptions = locationRows
-    .map((l) => ({ key: l.id, label: l.name, n: units.filter((u) => u.location_id === l.id).length }))
+    .map((l) => ({
+      key: l.id,
+      label: l.name,
+      n: units.filter((u) => u.location_id === l.id).length + countedRows.filter((r) => r.counted?.locationId === l.id).length,
+    }))
     .filter((l) => l.n > 0);
-  const unplaced = units.filter((u) => !u.location_id).length;
+  const unplaced = units.filter((u) => !u.location_id).length + countedRows.filter((r) => !r.counted?.locationId).length;
   if (unplaced > 0) locationOptions.push({ key: NO_LOCATION, label: "No location", n: unplaced });
 
   return (
@@ -133,6 +187,7 @@ export default async function RegisterPage({
       maintenanceTotal={units.filter((u) => u.status === "maintenance").length}
       locations={locationOptions}
       initialOpenId={open ?? null}
+      canAdd={!!access?.canManage}
     />
   );
 }
