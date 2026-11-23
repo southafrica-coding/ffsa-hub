@@ -9,6 +9,8 @@ const h = vi.hoisted(() => ({
   runs: [] as unknown[],
 }));
 
+// The Missio public weekly feedback handler (imported by the route) is server-only.
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }) }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({

@@ -27,6 +27,7 @@ import {
 } from "./describe";
 import { RoutesEditor } from "./route-editor";
 import { SharePanel } from "./share-panel";
+import { isMissioPublicFeedbackForm } from "@/lib/missio/public-feedback-link";
 
 // ============================================================
 // Form builder — shared by /forms and /events/[id]/forms
@@ -52,7 +53,14 @@ export type FormBuilderMeta = {
   label_id: string | null;
   /** Hub forms only. Null/undefined (before migration 390) reads as public. */
   access_mode?: FormAccessMode | null;
+  /** forms.kind. The Missio weekly feedback form opens from one public link. */
+  kind?: string | null;
 };
+
+/** The Missio weekly feedback form's share story: one public link with a house church picker. */
+export const MISSIO_PUBLIC_ACCESS_LABEL = "Anyone with the link · picks a house church";
+export const MISSIO_PUBLIC_SHARE_NOTE =
+  "Anyone with this link can fill it in, no login. The first question asks which house church they are in; the answers land on that house.";
 
 const INPUT =
   "min-h-11 w-full border border-[color:var(--rule-strong)] bg-[color:var(--surface-1,#fff)] px-3 py-2 text-[15px] font-normal normal-case tracking-normal";
@@ -104,8 +112,8 @@ export function FormBuilder({
   backLabel?: string;
   /**
    * The Missio pastor editor for the weekly feedback form: questions and
-   * name only. No publish / unpublish, no "who can fill it in", no /f link
-   * (the form opens from per-house links), and a save sends just name and
+   * name only. No publish / unpublish, no "who can fill it in", no /f line
+   * here (the Missio page shows the public link itself), and a save sends just name and
    * schema, which is all /api/forms/[id] lets a pastor change.
    */
   questionsOnly?: boolean;
@@ -113,6 +121,8 @@ export function FormBuilder({
   contextLabel?: string;
 }) {
   const isEvent = Boolean(eventId);
+  // Opens publicly at /f/<slug> with a house picker, whatever access_mode says.
+  const missioPublic = isMissioPublicFeedbackForm({ kind: form.kind, slug: form.slug, event_id: eventId ?? null });
   const router = useRouter();
   const [name, setName] = useState(form.name);
   const [schema, setSchema] = useState<FormSchema>(initialSchema);
@@ -410,7 +420,9 @@ export function FormBuilder({
         )}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <StatusPill tone={isActive ? "good" : "quiet"}>{isActive ? "Published" : "Draft"}</StatusPill>
-          {!isEvent && <StatusPill>{ACCESS_MODE_LABELS[accessMode]}</StatusPill>}
+          {!isEvent && (
+            <StatusPill>{missioPublic ? MISSIO_PUBLIC_ACCESS_LABEL : ACCESS_MODE_LABELS[accessMode]}</StatusPill>
+          )}
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <Link href={responsesHref} className={BTN}>
@@ -443,7 +455,8 @@ export function FormBuilder({
           <SharePanel
             url={scannableUrl}
             formName={name}
-            accessMode={isEvent ? "public" : accessMode}
+            accessMode={isEvent || missioPublic ? "public" : accessMode}
+            note={missioPublic ? MISSIO_PUBLIC_SHARE_NOTE : undefined}
             isActive={isActive}
           />
         )}
@@ -492,6 +505,11 @@ export function FormBuilder({
               />
             </label>
           </>
+        ) : missioPublic ? (
+          <div className="block text-sm" data-testid="missio-public-access">
+            <span className="mono-label">Who can fill it in</span>
+            <p className="mt-1 text-[14px] leading-snug">{MISSIO_PUBLIC_SHARE_NOTE}</p>
+          </div>
         ) : (
           <label className="block text-sm">
             <span className="mono-label">Who can fill it in</span>
@@ -503,10 +521,11 @@ export function FormBuilder({
             >
               <option value="public">{ACCESS_MODE_LABELS.public}</option>
               <option value="logged_in">{ACCESS_MODE_LABELS.logged_in}</option>
-              {/* Per-house links are made in a later step (F4). Until then a
-                  token form could never be filled, so it can't be chosen. */}
+              {/* Personal links exist only for the Missio weekly feedback form,
+                  which now opens from its one public link; no other form can
+                  use them, so this can't be chosen. */}
               <option value="token" disabled>
-                {ACCESS_MODE_LABELS.token} (comes later)
+                {ACCESS_MODE_LABELS.token}
               </option>
             </select>
           </label>

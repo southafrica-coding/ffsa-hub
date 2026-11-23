@@ -44,6 +44,7 @@ export default async function HubFormBuilderPage({
           records_attendance: form.records_attendance,
           label_id: form.label_id,
           access_mode: accessModeOf((form as { access_mode?: unknown }).access_mode),
+          kind: (form as { kind?: string | null }).kind ?? null,
         }}
         initialSchema={schema}
       />

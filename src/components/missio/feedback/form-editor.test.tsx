@@ -28,6 +28,7 @@ const form: MissioWeeklyFormView = {
   records_attendance: false,
   label_id: null,
   access_mode: "token",
+  kind: "missio_weekly_feedback",
   schema: {
     version: 1,
     branding: { logoUrl: null, accentColor: null },
@@ -102,5 +103,21 @@ describe("Missio feedback form editor", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe("/api/forms/weekly-1");
     expect(Object.keys(calls[0]?.body as object).sort()).toEqual(["name", "schema"]);
+  });
+
+  it("shows the one public link with Copy public link and Send on WhatsApp, and no personal-link wording", () => {
+    const host = mount(
+      <MissioViewerProvider me={me(["pastor"])}>
+        <MissioFeedbackFormEditor pastor form={form} />
+      </MissioViewerProvider>
+    );
+    const block = host.querySelector("[data-testid=public-feedback-link]") as HTMLElement;
+    expect(block).toBeTruthy();
+    expect(block.querySelector("[data-testid=public-feedback-url]")?.textContent).toMatch(/\/f\/missio-weekly-feedback$/);
+    expect(block.querySelector("[data-testid=public-feedback-copy]")?.textContent).toBe("Copy public link");
+    expect(block.querySelector("[data-testid=public-feedback-whatsapp]")?.textContent).toBe("Send on WhatsApp");
+    expect(host.textContent).toContain("choose their");
+    expect(host.textContent).not.toMatch(/Personal link only|comes later|aren’t made yet|Copy the leader|house’s own link/);
+    expect(host.textContent).toContain("Anyone with the link · picks a house church");
   });
 });

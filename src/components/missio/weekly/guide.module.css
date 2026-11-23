@@ -849,3 +849,17 @@
   color: var(--link, #2f5d50);
   padding: 0 8px !important;
 }
+
+/* The public link's honeypot: off screen, out of the tab order. */
+.surface input.honeypot {
+  position: absolute;
+  width: 1px !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0 !important;
+}

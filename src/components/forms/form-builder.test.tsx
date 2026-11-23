@@ -171,7 +171,7 @@ describe("form builder: Route to", () => {
     expect(body.schema.steps[0].fields[1].routes).toEqual([]);
   });
 
-  it("sends a changed access mode, and never offers personal links yet", async () => {
+  it("sends a changed access mode, and never offers personal links", async () => {
     const fetchMock = stubFetch();
     const host = mount();
     const select = byLabel<HTMLSelectElement>(host, "Who can fill it in");
@@ -184,6 +184,34 @@ describe("form builder: Route to", () => {
     expect(JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)).access_mode).toBe(
       "public"
     );
+  });
+
+  it("the Missio weekly feedback form reads as one public link with a house picker, not a personal link", async () => {
+    const fetchMock = stubFetch();
+    const host = mount({
+      form: { ...meta, slug: "missio-weekly-feedback", kind: "missio_weekly_feedback", access_mode: "token", is_active: true },
+    });
+    expect(host.textContent).toContain("Anyone with the link · picks a house church");
+    expect(host.textContent).not.toContain("Personal link only");
+    expect(host.textContent).not.toMatch(/comes later|Copy the leader/);
+    // The share block shows the /f link and says who can fill it in.
+    expect(host.textContent).toContain("/f/missio-weekly-feedback");
+    expect(host.textContent).toContain("The first question asks which house church they are in");
+    // No access-mode select to flip, and a save never sends access_mode.
+    expect(host.querySelector("[aria-label='Who can fill it in']")).toBeNull();
+    expect(host.querySelector("[data-testid=missio-public-access]")).toBeTruthy();
+    await act(async () => {
+      byText(host, "button", "Save").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))).not.toHaveProperty("access_mode");
+  });
+
+  it("another form's token option no longer promises personal links later", () => {
+    const host = mount();
+    const select = byLabel<HTMLSelectElement>(host, "Who can fill it in");
+    const token = [...select.options].find((o) => o.value === "token")!;
+    expect(token.textContent).toBe("Personal link only");
+    expect(host.textContent).not.toContain("comes later");
   });
 
   it("as the event builder, keeps sending the event settings and no access mode", async () => {

@@ -5,6 +5,7 @@ import { FormBuilder, type FormBuilderMeta } from "@/components/forms/form-build
 import type { FormSchema } from "@/lib/forms/schema";
 import { isMissioPastor } from "../access";
 import { useMissioViewer } from "../viewer";
+import { PublicFeedbackLink } from "./public-link";
 import content from "../content.module.css";
 import styles from "./form-editor.module.css";
 
@@ -51,11 +52,14 @@ export function MissioFeedbackFormEditor({ pastor, form }: { pastor: boolean; fo
   return (
     <div className={styles.editor} data-testid="missio-feedback-form">
       <p className={styles.note}>
-        These are the questions house church leaders answer each week. Leaders fill it in from their house page or
-        their house’s own link; copy a house’s link on{" "}
+        These are the questions house church leaders answer each week. Leaders open the public link below, choose their
+        house church, and fill it in; signed-in leaders can also fill it in from their house page. See what came in on{" "}
         <Link href="/missio/house-churches/feedback">Weekly feedback</Link>. Changes reach every house the next time
         the form is opened.
       </p>
+      <div className={styles.publicLink}>
+        <PublicFeedbackLink />
+      </div>
       <FormBuilder
         form={meta}
         initialSchema={schema}

@@ -14,6 +14,8 @@ import {
 } from "@/services/workflows";
 import { runEnrollment } from "@/lib/workflows/runner";
 import { previewWriteRefusal } from "@/lib/preview-writes";
+import { isMissioPublicFeedbackForm } from "@/lib/missio/public-feedback-link";
+import { handlePublicWeeklyFeedback } from "@/lib/missio/public-feedback";
 import { runFormRoutes, submissionSubject } from "@/lib/forms/route-runner";
 import { evaluateTrigger, type WorkflowTrigger } from "@/lib/workflows/types";
 import {
@@ -40,6 +42,14 @@ export async function POST(
   }
   if (!form.is_active) {
     return NextResponse.json({ error: "This form is not currently open" }, { status: 403 });
+  }
+
+  // The Missio weekly feedback form's one public link: the person picks a
+  // house church and the answers save against that house through the
+  // weekly feedback path (honeypot, rate limit, house checked there). No
+  // contact upsert, labels or workflows: it is about a house, not a person.
+  if (isMissioPublicFeedbackForm(form)) {
+    return handlePublicWeeklyFeedback(request, supabase);
   }
 
   // Same rule as the page (migration 390): logged_in needs a Hub session,

@@ -7,8 +7,7 @@ import type { FormAccessMode } from "@/lib/forms/schema";
 const ACCESS_NOTE: Record<FormAccessMode, string> = {
   public: "Anyone with this link can fill it in.",
   logged_in: "People sign in to the Hub first, then fill it in.",
-  token:
-    "Opens only from a personal link, not from this address. For a house church's link, open the house page and tap Copy the leader’s link.",
+  token: "Opens only from a personal link, not from this address.",
 };
 
 /**
@@ -21,12 +20,15 @@ export function SharePanel({
   formName,
   accessMode,
   isActive,
+  note,
 }: {
   /** Absolute once the page knows its origin; "" until then. */
   url: string;
   formName: string;
   accessMode: FormAccessMode;
   isActive: boolean;
+  /** Replaces the access line, for a form with its own share story (Missio weekly feedback). */
+  note?: string;
 }) {
   const scannable = isAbsoluteHttpUrl(url) ? url : "";
   return (
@@ -42,7 +44,7 @@ export function SharePanel({
             </p>
           )}
           <p className="mt-2 text-[13px] leading-snug text-[color:var(--text-secondary)]">
-            {ACCESS_NOTE[accessMode]}
+            {note ?? ACCESS_NOTE[accessMode]}
             {!isActive && " Publish the form first so the link is live."}
           </p>
         </div>

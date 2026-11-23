@@ -125,80 +125,67 @@ describe("weekly feedback", () => {
     return host.querySelector("[data-testid=feedback-detail]") as HTMLElement;
   }
 
-  it("the picked house has Fill in this week and Copy the leader’s link; WhatsApp only once a link exists", async () => {
+  it("Weekly feedback has one Copy public link and Send on WhatsApp, and no per-house link", async () => {
     const calls: Array<[string, boolean]> = [];
-    const host = mount(<FeedbackHistory client={historyClient(calls)} canRotate={false} />);
+    const host = mount(<FeedbackHistory client={historyClient(calls)} />);
     await settle();
+    const block = host.querySelector("[data-testid=public-feedback-link]") as HTMLElement;
+    expect(block).not.toBeNull();
+    expect(host.querySelectorAll("[data-testid=public-feedback-copy]")).toHaveLength(1);
+    const copy = block.querySelector("[data-testid=public-feedback-copy]") as HTMLButtonElement;
+    expect(copy.textContent).toBe("Copy public link");
+    expect(block.querySelector("[data-testid=public-feedback-url]")?.textContent).toMatch(/\/f\/missio-weekly-feedback$/);
+    const wa = block.querySelector("[data-testid=public-feedback-whatsapp]") as HTMLAnchorElement;
+    expect(wa.textContent).toBe("Send on WhatsApp");
+    const text = decodeURIComponent(wa.getAttribute("href") ?? "");
+    expect(text).toContain("https://wa.me/?text=");
+    expect(text).toContain("/f/missio-weekly-feedback");
+    expect(text).toContain("Pick your house church");
+    expect(text).not.toContain("/serve/missio/feedback/");
+
+    // The picked house: Fill in this week stays (signed in, knows the house); no token link, no rotate.
     const detail = detailOf(host);
     const fill = detail.querySelector("[data-testid=feedback-fill]") as HTMLAnchorElement;
     expect(fill.textContent).toBe("Fill in this week");
     expect(fill.getAttribute("href")).toBe("/missio-feedback/h5");
-    const copy = detail.querySelector("[data-testid=feedback-copy]") as HTMLButtonElement;
-    expect(copy.textContent).toBe("Copy the leader’s link");
-    expect(detail.querySelector("[data-testid=feedback-whatsapp]")).toBeNull();
-    expect(detail.querySelector("[data-testid=feedback-link]")).toBeNull();
-
-    await act(async () => {
-      copy.click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(calls).toEqual([["h5", false]]);
-    const shown = detail.querySelector("[data-testid=feedback-link]")?.textContent ?? "";
-    expect(shown.endsWith("/serve/missio/feedback/tok-1")).toBe(true);
-    const wa = detail.querySelector("[data-testid=feedback-whatsapp]") as HTMLAnchorElement;
-    expect(wa.textContent).toBe("Send on WhatsApp");
-    expect(wa.getAttribute("href")).toContain("https://wa.me/?text=");
-    expect(decodeURIComponent(wa.getAttribute("href") ?? "")).toContain("/serve/missio/feedback/tok-1");
-    // Not a pastor: no new link, even with one showing.
-    expect(detail.querySelector("[data-testid=feedback-rotate]")).toBeNull();
+    expect(host.querySelector("[data-testid=feedback-copy]")).toBeNull();
+    expect(host.querySelector("[data-testid=feedback-rotate]")).toBeNull();
+    expect(host.querySelector("[data-testid=feedback-whatsapp]")).toBeNull();
+    expect(host.textContent).not.toContain("Copy the leader");
+    expect(host.textContent).not.toContain("Make a new link");
+    expect(calls).toEqual([]);
   });
 
-  it("only offers Make a new link when the viewer can rotate and a link is showing", async () => {
-    const calls: Array<[string, boolean]> = [];
-    const host = mount(<FeedbackHistory client={historyClient(calls)} canRotate />);
+  it("Copy public link copies the absolute /f/missio-weekly-feedback URL", async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (t: string) => void written.push(t) },
+    });
+    const host = mount(<FeedbackHistory client={historyClient([])} />);
     await settle();
-    const detail = detailOf(host);
-    expect(detail.querySelector("[data-testid=feedback-rotate]")).toBeNull();
     await act(async () => {
-      (detail.querySelector("[data-testid=feedback-copy]") as HTMLButtonElement).click();
+      (host.querySelector("[data-testid=public-feedback-copy]") as HTMLButtonElement).click();
       await Promise.resolve();
       await Promise.resolve();
     });
-    const rotate = detail.querySelector("[data-testid=feedback-rotate]") as HTMLButtonElement;
-    expect(rotate.textContent).toBe("Make a new link");
-    await act(async () => {
-      rotate.click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(calls).toEqual([
-      ["h5", false],
-      ["h5", true],
-    ]);
+    expect(written).toEqual([`${window.location.origin}/f/missio-weekly-feedback`]);
+    expect(host.querySelector("[role=status]")?.textContent).toContain("Link copied");
   });
 
-  it("takes rotate from the shell: pastors can, coaches and leaders can't", async () => {
+  it("is the same for pastors, coaches and leaders: nobody gets a per-house link here", async () => {
     const me = (roles: string[]) =>
       ({ currentOrg: "missio", orgs: [], rolesByOrg: { missio: roles } }) as unknown as MissioMe;
-    for (const [roles, expected] of [
-      [["pastor"], true],
-      [["coach"], false],
-      [["house_church_leader"], false],
-    ] as const) {
+    for (const roles of [["pastor"], ["coach"], ["house_church_leader"]]) {
       const host = mount(
-        <MissioViewerProvider me={me([...roles])}>
+        <MissioViewerProvider me={me(roles)}>
           <FeedbackHistory client={historyClient([])} />
         </MissioViewerProvider>
       );
       await settle();
-      const detail = detailOf(host);
-      await act(async () => {
-        (detail.querySelector("[data-testid=feedback-copy]") as HTMLButtonElement).click();
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(Boolean(detail.querySelector("[data-testid=feedback-rotate]"))).toBe(expected);
+      expect(host.querySelector("[data-testid=public-feedback-copy]")).not.toBeNull();
+      expect(host.querySelector("[data-testid=feedback-copy]")).toBeNull();
+      expect(host.querySelector("[data-testid=feedback-rotate]")).toBeNull();
     }
   });
 });

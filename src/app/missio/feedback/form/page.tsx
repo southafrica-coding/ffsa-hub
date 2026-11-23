@@ -42,6 +42,7 @@ export default async function MissioFeedbackFormPage() {
         records_attendance: row.records_attendance === true,
         label_id: (row.label_id as string | null) ?? null,
         access_mode: accessModeOf(row.access_mode),
+        kind: typeof row.kind === "string" ? row.kind : null,
         schema,
       };
     }

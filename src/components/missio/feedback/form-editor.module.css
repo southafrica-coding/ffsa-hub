@@ -63,12 +63,21 @@
   text-underline-offset: 3px;
 }
 
+.publicLink {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--rule, #ddd7c8);
+}
+
 @media (min-width: 768px) {
   .page {
     padding: 32px;
   }
 
   .note {
+    padding: 14px 32px;
+  }
+
+  .publicLink {
     padding: 14px 32px;
   }
 }

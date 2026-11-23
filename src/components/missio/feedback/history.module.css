@@ -550,13 +550,6 @@
   color: var(--ink-2, #5b574d);
 }
 
-.linkBlock {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-}
-
 .linkRow {
   display: flex;
   flex-wrap: wrap;
@@ -564,15 +557,13 @@
   margin-top: 4px;
 }
 
-/* Phone-first: the sm buttons are 36px; these are tapped, so 44px. */
-.linkBlock .linkRow .linkBtn {
+/* Phone-first: the sm buttons are 36px; these are tapped, so 44px.
+   Element + two classes so it beats ui's `.root .sm` in any CSS order. */
+.linkRow a.linkBtn,
+.linkRow button.linkBtn {
   height: 44px;
   min-height: 44px;
   max-width: 100%;
-}
-
-.linkUrl {
-  overflow-wrap: anywhere;
 }
 
 @media (min-width: 768px) {
@@ -609,4 +600,43 @@
     top: 0;
     padding: 22px;
   }
+}
+
+/* The one public link (Weekly feedback, Feedback form editor). */
+.publicLink {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.publicTitle {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.publicUrl {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.publicCompact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.publicLink .linkRow .publicBtn,
+.publicCompact .linkRow .publicBtn {
+  height: auto;
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
 }

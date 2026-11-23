@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
-import { isMissioPastor } from "../access";
 import { houseChurchesClient, type HouseChurchesClient } from "../house-churches/client";
 import { houseTitle, meetingDayLabel } from "../house-churches/format";
 import { useMissioLoad } from "../house-churches/load";
 import { HouseStatus } from "../house-churches/status";
 import type { FeedbackEntry, FeedbackHouse, FeedbackMood } from "../house-churches/types";
 import ui from "../house-churches/ui.module.css";
-import { useMissioViewer } from "../viewer";
 import styles from "./history.module.css";
+import { PublicFeedbackLink } from "./public-link";
 
 export const MOOD_LABEL: Record<FeedbackMood, string> = { hard: "Hard", okay: "Okay", good: "Good", great: "Great" };
 
@@ -155,20 +154,12 @@ function groups(houses: FeedbackHouse[]): Array<{ coach: string; houses: Feedbac
     .map(([coach, list]) => ({ coach, houses: list.sort((x, y) => x.number - y.number) }));
 }
 
-/** Board M4b: every house's last 4 weeks, 12 weeks or year, grouped by coach, and the picked house in full. */
-export function FeedbackHistory({
-  client = houseChurchesClient,
-  canRotate,
-}: {
-  client?: HouseChurchesClient;
-  /**
-   * Who may make a house a new link. Defaults to the shell's viewer being a
-   * Missio pastor, the same rule as the house page (abilities.place).
-   */
-  canRotate?: boolean;
-}) {
-  const viewer = useMissioViewer();
-  const rotate = canRotate ?? (viewer ? isMissioPastor(viewer) : false);
+/**
+ * Board M4b: every house's last 4 weeks, 12 weeks or year, grouped by coach,
+ * and the picked house in full. The one public link sits on top: leaders
+ * pick their house there, so there is no per-house link to copy here.
+ */
+export function FeedbackHistory({ client = houseChurchesClient }: { client?: HouseChurchesClient }) {
   const [weeks, setWeeks] = useState<FeedbackWeeks>(12);
   const { state, retry } = useMissioLoad(() => client.feedbackHistory(weeks), [client, weeks]);
   const [picked, setPicked] = useState<string | null>(null);
@@ -224,6 +215,7 @@ export function FeedbackHistory({
           This Sunday’s results ↗
         </Link>
       </header>
+      <PublicFeedbackLink />
       {state.phase === "loading" ? (
         <div className={`${ui.card} ${styles.state}`} role="status">
           Loading feedback…
@@ -276,7 +268,7 @@ export function FeedbackHistory({
           </div>
           <aside ref={detailRef} className={`${ui.card} ${styles.detail}`} aria-live="polite">
             {open ? (
-              <FeedbackDetail house={open} weeks={weeks} client={client} canRotate={rotate} />
+              <FeedbackDetail house={open} weeks={weeks} />
             ) : (
               <p className={styles.quiet}>Choose a house to see what its leaders wrote.</p>
             )}
@@ -289,17 +281,7 @@ export function FeedbackHistory({
 
 const monthName = new Intl.DateTimeFormat("en-ZA", { month: "long", timeZone: "UTC" });
 
-function FeedbackDetail({
-  house,
-  weeks,
-  client,
-  canRotate,
-}: {
-  house: FeedbackHouse;
-  weeks: number;
-  client: Pick<HouseChurchesClient, "feedbackLink">;
-  canRotate: boolean;
-}) {
+function FeedbackDetail({ house, weeks }: { house: FeedbackHouse; weeks: number }) {
   const last = house.entries[0] ?? null;
   const first = house.entries[house.entries.length - 1] ?? null;
   const change = last && first && first !== last ? last.attendance - first.attendance : null;
@@ -312,8 +294,7 @@ function FeedbackDetail({
           Open house
         </Link>
       </div>
-      {/* Keyed by house: picking another house starts with no link showing. */}
-      <FeedbackLinkActions key={house.houseId} houseId={house.houseId} client={client} canRotate={canRotate} />
+      <FillThisWeek houseId={house.houseId} />
       {last ? (
         <div className={styles.stats}>
           <div>
@@ -373,15 +354,13 @@ export function EntryItem({ entry }: { entry: FeedbackEntry }) {
   );
 }
 
-/** The house page's "Weekly feedback" panel: last week, 12-week bars, and the leader's link. */
+/** The house page's "Weekly feedback" panel: last week, 12-week bars, Fill in this week and the public link. */
 export function HouseFeedbackPanel({
   houseId,
   client = houseChurchesClient,
-  canRotate,
 }: {
   houseId: string;
-  client?: Pick<HouseChurchesClient, "feedbackHistory" | "feedbackLink">;
-  canRotate: boolean;
+  client?: Pick<HouseChurchesClient, "feedbackHistory">;
 }) {
   const { state } = useMissioLoad(() => client.feedbackHistory(12), [client]);
   const house = state.phase === "ready" ? state.data.houses.find((row) => row.houseId === houseId) ?? null : null;
@@ -415,105 +394,31 @@ export function HouseFeedbackPanel({
               {last.notes ? <p className={styles.panelQuote}>“{last.notes}”</p> : null}
             </>
           ) : (
-            <p className={styles.quiet}>Nothing sent yet. Fill it in, or send the leader the link below; it takes about five minutes after the meeting.</p>
+            <p className={styles.quiet}>Nothing sent yet. Fill it in, or send the leader the public link below; it takes about five minutes after the meeting.</p>
           )}
         </>
       ) : null}
-      <FeedbackLinkActions houseId={houseId} client={client} canRotate={canRotate} />
+      <FillThisWeek houseId={houseId} />
+      <PublicFeedbackLink compact />
     </section>
   );
 }
 
 /**
- * Fill in this week, Copy the leader’s link, Send on WhatsApp and (pastors
- * only) Make a new link. One copy, used by the house page's panel and the
- * Weekly feedback page's picked house. The link is made on first copy
- * (POST /api/missio/house-churches/:id/feedback/link), which also checks
- * the house is in this person's scope; rotating is refused there for
- * anyone who isn't a pastor, whatever this shows.
+ * Fill in this week, for a signed-in leader: the page already knows the
+ * house (/missio-feedback/:houseId). Quiet on purpose; the public link is
+ * the one to send.
  */
-export function FeedbackLinkActions({
-  houseId,
-  client = houseChurchesClient,
-  canRotate,
-}: {
-  houseId: string;
-  client?: Pick<HouseChurchesClient, "feedbackLink">;
-  canRotate: boolean;
-}) {
-  const [link, setLink] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  async function getLink(rotate: boolean) {
-    setPending(true);
-    setNotice(null);
-    try {
-      const { path } = await client.feedbackLink(houseId, rotate);
-      const url = `${typeof window === "undefined" ? "" : window.location.origin}${path}`;
-      setLink(url);
-      try {
-        await navigator.clipboard?.writeText(url);
-        setNotice(rotate ? "New link copied. The old one no longer works." : "Link copied. Send it to the leader.");
-      } catch {
-        setNotice(rotate ? "New link made. The old one no longer works." : "Here’s the link. Send it to the leader.");
-      }
-    } catch {
-      setNotice("That didn’t work. Try again.");
-    } finally {
-      setPending(false);
-    }
-  }
-
+export function FillThisWeek({ houseId }: { houseId: string }) {
   return (
-    <div className={styles.linkBlock} data-testid="feedback-link-actions">
-      <div className={styles.linkRow}>
-        {/* Signed-in leaders fill it here; the link is for sending on. */}
-        <Link className={`${ui.btn} ${ui.s} ${ui.sm} ${styles.linkBtn}`} href={`/missio-feedback/${houseId}`} data-testid="feedback-fill">
-          Fill in this week
-        </Link>
-        <button
-          type="button"
-          className={`${ui.btn} ${ui.s} ${ui.sm} ${styles.linkBtn}`}
-          disabled={pending}
-          onClick={() => void getLink(false)}
-          data-testid="feedback-copy"
-        >
-          Copy the leader’s link
-        </button>
-        {link ? (
-          <a
-            className={`${ui.btn} ${ui.s} ${ui.sm} ${styles.linkBtn}`}
-            href={`https://wa.me/?text=${encodeURIComponent(`How was house church this week? It takes about five minutes: ${link}`)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-testid="feedback-whatsapp"
-          >
-            Send on WhatsApp
-          </a>
-        ) : null}
-        {canRotate && link ? (
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.g} ${ui.sm} ${styles.linkBtn}`}
-            disabled={pending}
-            onClick={() => void getLink(true)}
-            data-testid="feedback-rotate"
-          >
-            Make a new link
-          </button>
-        ) : null}
-      </div>
-      {link ? (
-        <p className={`${styles.entryLine} ${styles.linkUrl}`} data-testid="feedback-link">
-          {link}
-        </p>
-      ) : null}
-      {notice ? (
-        <p className={styles.quiet} role="status">
-          {notice}
-        </p>
-      ) : null}
+    <div className={styles.linkRow}>
+      <Link
+        className={`${ui.btn} ${ui.g} ${ui.sm} ${styles.linkBtn}`}
+        href={`/missio-feedback/${encodeURIComponent(houseId)}`}
+        data-testid="feedback-fill"
+      >
+        Fill in this week
+      </Link>
     </div>
   );
 }

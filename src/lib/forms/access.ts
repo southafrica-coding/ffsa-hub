@@ -15,9 +15,12 @@ export type FormAccessDecision = "open" | "sign_in" | "closed";
  * The runtime page and the submit route both ask this.
  *   public    → open to anyone with the link.
  *   logged_in → open once signed in to the Hub.
- *   token     → closed. Per-subject links (the 20 house links) are a
- *               later step; until they exist nobody can open one, so it
- *               fails closed rather than falling back to public.
+ *   token     → closed at /f/<slug>: it opens only from a per-subject
+ *               link, so it fails closed rather than falling back to
+ *               public. The one exception is the Missio weekly feedback
+ *               form, which the page and submit route hand to its own
+ *               public flow with a house church picker before asking
+ *               this (isMissioPublicFeedbackForm).
  */
 export function formAccessDecision(mode: FormAccessMode, signedIn: boolean): FormAccessDecision {
   if (mode === "public") return "open";

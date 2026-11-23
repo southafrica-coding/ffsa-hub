@@ -252,7 +252,7 @@ export function HouseDetailView({
             </section>
 
             <div className={hd.feedback}>
-              <HouseFeedbackPanel houseId={house.id} client={client} canRotate={canWrite} />
+              <HouseFeedbackPanel houseId={house.id} client={client} />
             </div>
 
             <section className={hd.people}>
