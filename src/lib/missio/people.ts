@@ -12,8 +12,10 @@ import type {
   MissioErrorCode,
   MissioPeopleResponse,
   MissioPerson,
+  MissioPersonHouse,
   MissioStatus,
 } from "@/lib/missio/types";
+import { membershipIsCurrent } from "@/lib/missio/house-church-import";
 
 function fail(status: number, code: MissioErrorCode, error: string) {
   return { ok: false as const, status, code, error };
@@ -174,8 +176,12 @@ export async function listPeople(auth: OrgAccess, query: z.infer<typeof peopleQu
     request = request.or(NAME_COLUMNS.map((column) => `${column}.ilike.${term}`).join(","));
   }
 
+  // A to Z (boards M2a/M2b), so the phone list can carry letter headings.
   const { data, error, count } = await request
-    .order("created_at", { ascending: false })
+    .order("first_name", { ascending: true })
+    .order("last_name", { ascending: true })
+    .order("preferred_name", { ascending: true })
+    .order("id", { ascending: true })
     .range(query.offset, query.offset + query.limit - 1);
 
   if (error) {
@@ -184,7 +190,62 @@ export async function listPeople(auth: OrgAccess, query: z.infer<typeof peopleQu
   }
 
   const rows = ((data ?? []) as PersonRow[]).map(toMissioPerson);
-  return { ok: true, body: { rows, total: typeof count === "number" ? count : rows.length } };
+  const houses = await currentHousesFor(auth, rows.map((row) => row.contactId));
+  const withHouses = houses ? rows.map((row) => ({ ...row, houses: houses.get(row.contactId) ?? [] })) : rows;
+  return { ok: true, body: { rows: withHouses, total: typeof count === "number" ? count : rows.length } };
+}
+
+const HOUSE_ROLE_ORDER: Record<MissioPersonHouse["role"], number> = { leader: 0, co_leader: 1, member: 2 };
+
+/**
+ * Current house memberships for one page of people, by contact id. Best
+ * effort: null when either read fails, so the list still loads and the row
+ * says nothing about houses rather than "not in a house".
+ */
+async function currentHousesFor(auth: OrgAccess, contactIds: string[]): Promise<Map<string, MissioPersonHouse[]> | null> {
+  const byContact = new Map<string, MissioPersonHouse[]>();
+  if (contactIds.length === 0) return byContact;
+  const members = await auth.supabase
+    .from("house_church_members")
+    .select("contact_id, house_church_id, role, started_at, ended_at")
+    .in("contact_id", contactIds);
+  if (members.error) {
+    console.error("[missio] people memberships failed", members.error.message ?? "query error");
+    return null;
+  }
+  const open = ((members.data ?? []) as Array<{
+    contact_id: string;
+    house_church_id: string;
+    role: string;
+    started_at: string | null;
+    ended_at: string | null;
+  }>).filter(
+    (row) => row.role in HOUSE_ROLE_ORDER && membershipIsCurrent({ startedAt: row.started_at, endedAt: row.ended_at })
+  );
+  if (open.length === 0) return byContact;
+  const houseRows = await auth.supabase
+    .from("house_churches")
+    .select("id, number, name")
+    .eq("org_id", auth.orgId)
+    .in("id", [...new Set(open.map((row) => row.house_church_id))]);
+  if (houseRows.error) {
+    console.error("[missio] people houses failed", houseRows.error.message ?? "query error");
+    return null;
+  }
+  const byId = new Map(
+    ((houseRows.data ?? []) as Array<{ id: string; number: number; name: string | null }>).map((row) => [row.id, row])
+  );
+  for (const row of open) {
+    const house = byId.get(row.house_church_id);
+    if (!house) continue;
+    const list = byContact.get(row.contact_id) ?? [];
+    list.push({ houseId: house.id, number: Number(house.number), name: house.name ?? null, role: row.role as MissioPersonHouse["role"] });
+    byContact.set(row.contact_id, list);
+  }
+  for (const list of byContact.values()) {
+    list.sort((a, b) => HOUSE_ROLE_ORDER[a.role] - HOUSE_ROLE_ORDER[b.role] || a.number - b.number);
+  }
+  return byContact;
 }
 
 const SEARCH_CAP = 5;

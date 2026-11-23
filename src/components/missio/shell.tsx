@@ -218,7 +218,7 @@ function MissioSidebar({
       key: "volunteers",
       href: "/missio/volunteers",
       label: "Volunteers",
-      on: pathname.startsWith("/missio/volunteers"),
+      on: pathname.startsWith("/missio/volunteers") || pathname.startsWith("/serve/missio/preview/pastor"),
       icon: <UsersRound />,
       show: pastor,
     },

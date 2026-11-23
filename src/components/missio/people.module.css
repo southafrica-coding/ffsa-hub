@@ -231,6 +231,19 @@
   color: var(--frame-ink, #f3efe4);
 }
 
+/* Campus pill under the phone search (M2b): 34px to the eye, 44px to the thumb. */
+.root .pill {
+  position: relative;
+  height: 34px;
+  padding: 0 16px;
+}
+
+.root .pill::after {
+  content: "";
+  position: absolute;
+  inset: -5px 0;
+}
+
 .root .fchipActive {
   height: 32px;
   padding: 0 6px 0 14px;
@@ -238,35 +251,6 @@
 
 .sheet .fchip {
   height: 44px;
-}
-
-/* Segmented control: People | Households (M14a). */
-.seg {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  padding: 4px;
-  background: var(--subtle, #eeeadf);
-  border-radius: 12px;
-}
-
-.root .seg button {
-  height: 44px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--sub, #5b574d);
-  font-family: var(--body), Archivo, system-ui, sans-serif !important;
-  font-size: 14px;
-  font-weight: 600 !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-  cursor: pointer;
-}
-
-.root .seg .segOn {
-  background: var(--frame, #1d2520);
-  color: #fff;
 }
 
 /* Desktop filter chips: a native menu inside a chip, so each filter
@@ -406,6 +390,12 @@
   height: 28px;
   font-size: 11px;
 }
+
+.a1 { background: #f6e4d9; color: #8e3d1f; }
+.a2 { background: #e3eadf; color: #3f5940; }
+.a3 { background: #f4ead2; color: #7a5a17; }
+.a4 { background: #dde8e3; color: #2f5d50; }
+.a5 { background: #eeeadf; color: #5b574d; }
 
 .tag {
   display: inline-flex;
@@ -786,15 +776,5 @@
   .searchRow {
     width: 340px;
     flex: none;
-  }
-
-  .seg {
-    width: 260px;
-    margin-left: auto;
-    order: 2;
-  }
-
-  .root .seg button {
-    height: 36px;
   }
 }

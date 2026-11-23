@@ -15,6 +15,19 @@ export const MOOD_LABEL: Record<FeedbackMood, string> = { hard: "Hard", okay: "O
 const shortDate = new Intl.DateTimeFormat("en-ZA", { day: "numeric", month: "short", timeZone: "UTC" });
 const dayName = new Intl.DateTimeFormat("en-ZA", { weekday: "long", timeZone: "UTC" });
 
+/** Board M4b's range switch. A year is 52 weeks, the most the route returns. */
+export const FEEDBACK_RANGES = [
+  { weeks: 4, label: "4 weeks", span: "4 weeks" },
+  { weeks: 12, label: "12 weeks", span: "12 weeks" },
+  { weeks: 52, label: "Year", span: "the last year" },
+] as const;
+
+export type FeedbackWeeks = (typeof FEEDBACK_RANGES)[number]["weeks"];
+
+function spanOf(weeks: number): string {
+  return FEEDBACK_RANGES.find((range) => range.weeks === weeks)?.span ?? `${weeks} weeks`;
+}
+
 export function feedbackDate(iso: string): string {
   const date = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
   return Number.isNaN(date.getTime()) ? iso : shortDate.format(date);
@@ -49,7 +62,7 @@ export function FeedbackBars({ entries, weeks = 12, now }: { entries: FeedbackEn
   const reported = starts.filter((start) => byWeek.has(start)).length;
   const newest = [...starts].reverse().find((start) => byWeek.has(start));
   return (
-    <span className={styles.bars} role="img" aria-label={`${reported} of the last ${weeks} weeks reported`}>
+    <span className={`${styles.bars} ${weeks > 12 ? styles.barsDense : ""}`} role="img" aria-label={`${reported} of the last ${weeks} weeks reported`}>
       {starts.map((start) => {
         const entry = byWeek.get(start);
         return (
@@ -93,7 +106,8 @@ export function AttendanceChart({ house, weeks = 12, now }: { house: FeedbackHou
           .map((start) => byWeek.get(start)?.attendance ?? "no report")
           .join(", ")}, with ${fresh} new ${fresh === 1 ? "person" : "people"}`;
   return (
-    <div className={styles.chart} role="img" aria-label={label}>
+    // A year is too many columns for a count, date and word each: bars only.
+    <div className={`${styles.chart} ${weeks > 12 ? styles.chartDense : ""}`} role="img" aria-label={label}>
       {starts.map((start) => {
         const entry = byWeek.get(start);
         const date = chartDate(entry?.meetingDate ?? start);
@@ -139,9 +153,10 @@ function groups(houses: FeedbackHouse[]): Array<{ coach: string; houses: Feedbac
     .map(([coach, list]) => ({ coach, houses: list.sort((x, y) => x.number - y.number) }));
 }
 
-/** Board M4b: every house's last 12 weeks, grouped by coach, and the picked house in full. */
+/** Board M4b: every house's last 4 weeks, 12 weeks or year, grouped by coach, and the picked house in full. */
 export function FeedbackHistory({ client = houseChurchesClient }: { client?: HouseChurchesClient }) {
-  const { state, retry } = useMissioLoad(() => client.feedbackHistory(12), [client]);
+  const [weeks, setWeeks] = useState<FeedbackWeeks>(12);
+  const { state, retry } = useMissioLoad(() => client.feedbackHistory(weeks), [client, weeks]);
   const [picked, setPicked] = useState<string | null>(null);
   const detailRef = useRef<HTMLElement>(null);
   const houses = useMemo(() => (state.phase === "ready" ? state.data.houses : []), [state]);
@@ -177,6 +192,19 @@ export function FeedbackHistory({ client = houseChurchesClient }: { client?: Hou
               {newLastWeek > 0 ? ` · ${newLastWeek} new` : ""}
             </p>
           ) : null}
+        </div>
+        <div className={styles.range} role="group" aria-label="Range" data-testid="feedback-range">
+          {FEEDBACK_RANGES.map((range) => (
+            <button
+              key={range.weeks}
+              type="button"
+              className={weeks === range.weeks ? styles.rangeOn : undefined}
+              aria-pressed={weeks === range.weeks}
+              onClick={() => setWeeks(range.weeks)}
+            >
+              {range.label}
+            </button>
+          ))}
         </div>
         <Link href="/missio-feedback" className={`${ui.btn} ${ui.s} ${styles.results}`} data-testid="feedback-sunday-results">
           This Sunday’s results ↗
@@ -214,7 +242,7 @@ export function FeedbackHistory({ client = houseChurchesClient }: { client?: Hou
                             <span className={`${ui.serif} ${styles.tileName}`}>{houseTitle(house)}</span>
                             <span className={`${ui.mono} ${styles.tileDay}`}>{meetingDayLabel(house.meetingDay).slice(0, 3)}</span>
                           </span>
-                          <FeedbackBars entries={house.entries} />
+                          <FeedbackBars entries={house.entries} weeks={weeks} />
                           <span className={styles.tileLast}>
                             {last ? (
                               <>
@@ -234,7 +262,7 @@ export function FeedbackHistory({ client = houseChurchesClient }: { client?: Hou
           </div>
           <aside ref={detailRef} className={`${ui.card} ${styles.detail}`} aria-live="polite">
             {open ? (
-              <FeedbackDetail house={open} />
+              <FeedbackDetail house={open} weeks={weeks} />
             ) : (
               <p className={styles.quiet}>Choose a house to see what its leaders wrote.</p>
             )}
@@ -247,7 +275,7 @@ export function FeedbackHistory({ client = houseChurchesClient }: { client?: Hou
 
 const monthName = new Intl.DateTimeFormat("en-ZA", { month: "long", timeZone: "UTC" });
 
-function FeedbackDetail({ house }: { house: FeedbackHouse }) {
+function FeedbackDetail({ house, weeks }: { house: FeedbackHouse; weeks: number }) {
   const last = house.entries[0] ?? null;
   const first = house.entries[house.entries.length - 1] ?? null;
   const change = last && first && first !== last ? last.attendance - first.attendance : null;
@@ -276,11 +304,11 @@ function FeedbackDetail({ house }: { house: FeedbackHouse }) {
           ) : null}
           <div>
             <div className={`${ui.num} ${styles.stat} ${fresh > 0 ? styles.fresh : ""}`}>{fresh}</div>
-            <div className={styles.statLabel}>new in 12 weeks</div>
+            <div className={styles.statLabel}>new in {spanOf(weeks)}</div>
           </div>
         </div>
       ) : null}
-      <AttendanceChart house={house} />
+      <AttendanceChart house={house} weeks={weeks} />
       {last ? (
         <div className={styles.legend} aria-hidden="true">
           <span>
@@ -292,7 +320,9 @@ function FeedbackDetail({ house }: { house: FeedbackHouse }) {
           <span>word below = how the leader said it went</span>
         </div>
       ) : null}
-      {house.entries.length === 0 ? <p className={styles.quiet}>Nothing sent in the last 12 weeks.</p> : null}
+      {house.entries.length === 0 ? (
+        <p className={styles.quiet}>Nothing sent in {weeks === 52 ? "the last year" : `the last ${weeks} weeks`}.</p>
+      ) : null}
       <ol className={styles.entries}>
         {house.entries.map((entry) => (
           <EntryItem key={entry.meetingDate} entry={entry} />

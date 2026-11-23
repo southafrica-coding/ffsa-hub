@@ -224,10 +224,9 @@ describe("house church grid", () => {
       expect.stringContaining("Thandi Zulu"),
       expect.stringContaining("No coach yet"),
     ]);
-    expect(map.textContent).toContain("Choose a coach to see their houses.");
-    act(() => (coaches[0] as HTMLButtonElement).click());
-    await settle();
+    // Board M3b: the first coach is already open, so houses show without a tap.
     expect(coaches[0]?.getAttribute("aria-expanded")).toBe("true");
+    expect(map.textContent).not.toContain("Choose a coach to see their houses.");
     const house = [...map.querySelectorAll("[aria-label='Houses coached by Thandi Zulu'] button")];
     expect(house).toHaveLength(1);
     expect(house[0]?.textContent).toContain("Oak Table");

@@ -699,6 +699,7 @@ describe("GET /api/missio/people", () => {
         status: "active",
         joinedAt: null,
         currentStage: null,
+        houses: [],
       },
     ]);
     expect(state.adminBuilds).toBe(0);
@@ -710,13 +711,47 @@ describe("GET /api/missio/people", () => {
     const page = await paged.json();
     expect(page.total).toBe(3);
     expect(page.rows).toHaveLength(1);
-    expect(page.rows[0].id).toBe("p2");
+    // A to Z by first then last name: Joburg One, Potch One, Potch Two.
+    expect(page.rows[0].id).toBe("p1");
     const list = state.ops.find((op) => op.table === "org_people_directory" && op.op.range);
     expect(list?.op.range).toEqual({ from: 1, to: 1 });
 
     state.ops = [];
     await get("/api/missio/people");
     expect(state.ops.find((op) => op.table === "org_people_directory")?.op.range).toEqual({ from: 0, to: 49 });
+  });
+
+  it("adds each person's current houses, leaders first, and leaves houses off when that read fails", async () => {
+    addContact({ id: "c-amina", first: "Amina", last: "Kruger", personId: "amina" });
+    addContact({ id: "c-dineo", first: "Dineo", last: "Phiri", personId: "dineo", stage: "contacted" });
+    state.tables.house_churches = [
+      { id: "h1", org_id: MISSIO, number: 1, name: null },
+      { id: "h4", org_id: MISSIO, number: 4, name: null },
+      { id: "h-ffsa", org_id: FFSA, number: 2, name: null },
+    ];
+    state.tables.house_church_members = [
+      { id: "m1", house_church_id: "h4", contact_id: "c-amina", role: "member", started_at: "2025-01-01", ended_at: null },
+      { id: "m2", house_church_id: "h1", contact_id: "c-amina", role: "leader", started_at: "2025-01-01", ended_at: null },
+      // Ended, and another org's house: neither counts.
+      { id: "m3", house_church_id: "h1", contact_id: "c-dineo", role: "member", started_at: "2024-01-01", ended_at: "2024-06-01" },
+      { id: "m4", house_church_id: "h-ffsa", contact_id: "c-dineo", role: "member", started_at: "2024-01-01", ended_at: null },
+    ];
+
+    const body = await (await get("/api/missio/people")).json();
+    const byId = new Map(body.rows.map((row: { id: string }) => [row.id, row]));
+    expect((byId.get("amina") as { houses: unknown }).houses).toEqual([
+      { houseId: "h1", number: 1, name: null, role: "leader" },
+      { houseId: "h4", number: 4, name: null, role: "member" },
+    ]);
+    expect((byId.get("dineo") as { houses: unknown }).houses).toEqual([]);
+    expect(state.ops.filter((op) => op.table === "house_church_members").every((op) => op.client === "user")).toBe(true);
+
+    state.tableError = "house_church_members";
+    const failed = await get("/api/missio/people");
+    expect(failed.status).toBe(200);
+    const rows = (await failed.json()).rows as Array<{ houses?: unknown }>;
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => !("houses" in row))).toBe(true);
   });
 
   it("rejects an unknown campus, status, or an oversized limit", async () => {

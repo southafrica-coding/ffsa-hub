@@ -106,6 +106,19 @@
   text-underline-offset: 3px;
 }
 
+/* Board M3b: on a phone the map opens on its signal chips, then Missio and the
+   coaches. The view switch, Review names and Weekly feedback sit under it. */
+@media (max-width: 767px) {
+  .pageMap .head,
+  .pageMap .feedbackLink {
+    order: 1;
+  }
+
+  .pageMap .feedbackLink {
+    margin: -6px 0 0;
+  }
+}
+
 .state {
   padding: 18px;
   color: var(--ink-2, #5b574d);

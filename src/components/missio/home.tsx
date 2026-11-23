@@ -39,11 +39,8 @@ function johannesburgNow(now = new Date()) {
 export type HouseOverview = {
   houses: number;
   people: number;
-  /** Sum of people marked ready to lead (M12d). Null when no house reports it. */
-  readyToLead: number | null;
   readyToMultiply: number;
   noCoLeader: number;
-  noLeader: number;
   noCoach: number;
   bars: { id: string; number: number; size: number; ready: boolean }[];
 };
@@ -54,20 +51,16 @@ export function houseOverview(houses: HouseSummary[]): HouseOverview {
   let people = 0;
   let readyToMultiply = 0;
   let noCoLeader = 0;
-  let noLeader = 0;
   let noCoach = 0;
-  let readyToLead: number | null = null;
   const bars = sorted.map((house) => {
     people += house.memberCount;
-    if (typeof house.readyToLead === "number") readyToLead = (readyToLead ?? 0) + house.readyToLead;
     const ready = isReadyToMultiply(house);
     if (ready) readyToMultiply += 1;
     if (house.memberCount > 0 && house.coLeaders.length === 0) noCoLeader += 1;
-    if (house.memberCount > 0 && house.leaders.length === 0) noLeader += 1;
     if (house.memberCount > 0 && house.coaches.length === 0) noCoach += 1;
     return { id: house.id, number: house.number, size: house.memberCount, ready };
   });
-  return { houses: sorted.length, people, readyToLead, readyToMultiply, noCoLeader, noLeader, noCoach, bars };
+  return { houses: sorted.length, people, readyToMultiply, noCoLeader, noCoach, bars };
 }
 
 type Load<T> = { state: "loading" } | { state: "ready"; data: T } | { state: "error" };
@@ -214,10 +207,7 @@ export function MissioHome({
     };
   }, [loadName]);
 
-  const loadHouses = useCallback(async () => {
-    const [list, review] = await Promise.all([houses.listHouses(), houses.listReview()]);
-    return { overview: houseOverview(list.houses), toReview: review.items.length };
-  }, [houses]);
+  const loadHouses = useCallback(async () => ({ overview: houseOverview((await houses.listHouses()).houses) }), [houses]);
   const loadFollowUp = useCallback(async () => {
     const lists = await Promise.all(OPEN_STAGES.map(({ stage }) => followUp.list({ stage }).then((r) => r.people)));
     const all = lists.flat();
@@ -293,7 +283,6 @@ export function MissioHome({
   }
 
   const overview = houseLoad.state === "ready" ? houseLoad.data.overview : null;
-  const toReview = houseLoad.state === "ready" ? houseLoad.data.toReview : 0;
   const follow = followLoad.state === "ready" ? followLoad.data : null;
   const followTotal = follow ? follow.stages.reduce((sum, item) => sum + item.count, 0) : 0;
   const newCount = follow?.stages.find((item) => item.stage === "new")?.count ?? 0;
@@ -329,16 +318,14 @@ export function MissioHome({
                   <dd>{overview.people}</dd>
                   <dt>members</dt>
                 </div>
-                {overview.readyToLead != null ? (
-                  <div>
-                    <dd>{overview.readyToLead}</dd>
-                    <dt>ready to lead</dt>
-                  </div>
-                ) : null}
+                {/* The board's third number is "new this month". Membership start
+                    dates can't give it yet: the house-church import stamped every
+                    imported member with the import day. So it stays off rather
+                    than count the whole church as new. */}
               </dl>
               {overview.bars.length > 0 ? (
                 <div
-                  className={home.bars}
+                  className={`${home.bars} ${home.deskOnly}`}
                   role="img"
                   aria-label={`House sizes, house 1 to ${overview.houses}: ${overview.bars.map((bar) => bar.size).join(", ")}. Green is ready to multiply.`}
                 >
@@ -356,17 +343,9 @@ export function MissioHome({
                   <span className={`${home.chip} ${home.chipOlive}`}>{overview.readyToMultiply} ready to multiply</span>
                 ) : null}
                 {overview.noCoLeader > 0 ? <span className={`${home.chip} ${home.chipGold}`}>{overview.noCoLeader} no co-leader</span> : null}
-                {overview.noLeader > 0 ? <span className={`${home.chip} ${home.chipGold}`}>{overview.noLeader} no leader</span> : null}
-                {overview.noCoach > 0 ? <span className={`${home.chip} ${home.chipGold}`}>{overview.noCoach} no coach</span> : null}
-                {toReview > 0 ? (
-                  <Link
-                    href="/missio/house-churches/review"
-                    className={`${home.chip} ${home.chipGold} ${home.chipLink}`}
-                    data-testid="home-review"
-                  >
-                    <CircleHelp aria-hidden="true" />
-                    {plural(toReview, "name", "names")} to review
-                  </Link>
+                {/* Phone shows the two chips board M11a has; desktop adds no coach. */}
+                {overview.noCoach > 0 ? (
+                  <span className={`${home.chip} ${home.chipGold} ${home.deskOnly}`}>{overview.noCoach} no coach</span>
                 ) : null}
               </div>
             </>

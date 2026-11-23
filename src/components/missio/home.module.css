@@ -242,23 +242,9 @@ a.card:focus-visible,
   color: var(--gold-ink, #7a5a17);
 }
 
-/* Sits above the card's stretched link, with a 44px tall hit area. */
-.chipLink {
-  position: relative;
-  z-index: 1;
-}
-
-.chipLink::before {
-  content: "";
-  position: absolute;
-  inset: -10px 0;
-}
-
-a.chipLink:hover,
-a.chipLink:focus-visible {
-  color: var(--gold-ink, #7a5a17);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+/* Desktop-only parts of the House churches card (bars, no coach): phone M11a has neither. */
+.houses .deskOnly {
+  display: none;
 }
 
 /* Not in a house yet: one row on the phone (number · words · button). */
@@ -529,6 +515,14 @@ a.chipLink:focus-visible {
   .stats dt {
     font-size: 14px;
     line-height: 20px;
+  }
+
+  .houses .bars.deskOnly {
+    display: flex;
+  }
+
+  .houses .chip.deskOnly {
+    display: inline-flex;
   }
 
   .bars {

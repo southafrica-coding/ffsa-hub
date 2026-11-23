@@ -87,7 +87,9 @@ export function HouseMap({
   signals?: { signal: HouseSignal; count: number }[];
 }) {
   const branches = useMemo(() => coachBranches(houses), [houses]);
-  const [coachKey, setCoachKey] = useState<string | null>(null);
+  // Board M3b opens with one coach open, so houses show without a tap:
+  // the coach with the most houses (the first branch).
+  const [coachKey, setCoachKey] = useState<string | null>(() => branches[0]?.key ?? null);
   const [houseId, setHouseId] = useState<string | null>(null);
   const [lit, setLit] = useState<HouseSignal | null>(null);
   const open = branches.find((branch) => branch.key === coachKey) ?? null;

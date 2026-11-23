@@ -3,6 +3,8 @@ export const MISSIO_CRUMB_LABELS: ReadonlyArray<{ prefix: string; label: string 
   { prefix: "/missio/house-churches", label: "House churches" },
   { prefix: "/missio/follow-up", label: "Follow-up" },
   { prefix: "/missio/volunteers", label: "Volunteers" },
+  // The pastor grid preview is the Volunteers page with fixture data (board M6c).
+  { prefix: "/serve/missio/preview/pastor", label: "Volunteers" },
   { prefix: "/missio/people", label: "People" },
   { prefix: "/missio/next-leaders", label: "Next leaders" },
   { prefix: "/missio/care", label: "Care" },

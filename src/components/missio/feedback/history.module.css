@@ -53,6 +53,43 @@
   flex: none;
 }
 
+/* 4 weeks · 12 weeks · Year (M4b, top right). */
+.range {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--subtle, #eeeadf);
+}
+
+.range button {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2, #5b574d);
+  white-space: nowrap;
+}
+
+.range button:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 1px;
+}
+
+.range .rangeOn {
+  background: var(--frame, #1d2520);
+  color: #fff;
+}
+
 .state {
   padding: 18px;
   color: var(--ink-2, #5b574d);
@@ -205,6 +242,10 @@
   background: var(--olive, #4e6b4f);
 }
 
+.barsDense {
+  gap: 1px;
+}
+
 .gap {
   flex: 1;
   min-width: 0;
@@ -293,6 +334,21 @@
   gap: 4px;
   padding-top: 10px;
   border-bottom: 1px solid var(--rule, #ddd7c8);
+}
+
+.chartDense {
+  gap: 1px;
+}
+
+.chartDense .colValue,
+.chartDense .colDate,
+.chartDense .colMood {
+  display: none;
+}
+
+.chartDense .colBar,
+.chartDense .colBarEmpty {
+  border-radius: 2px 2px 0 0;
 }
 
 .col {

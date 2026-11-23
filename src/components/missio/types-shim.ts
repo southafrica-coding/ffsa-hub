@@ -55,6 +55,16 @@ export interface MissioPerson {
   status: MissioStatus;
   joinedAt: string | null;
   currentStage: string | null;
+  /** Current house memberships, leaders first. Absent when the list couldn't read them. */
+  houses?: MissioPersonHouse[];
+}
+
+/** One current house membership on a People row (board M2a/M2b). */
+export interface MissioPersonHouse {
+  houseId: string;
+  number: number;
+  name: string | null;
+  role: "leader" | "co_leader" | "member";
 }
 
 /**

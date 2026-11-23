@@ -17,7 +17,7 @@ import { MissioDialog } from "./missio-dialog";
 import { HouseholdsView } from "./households/households-view";
 import { missioPortalClass } from "./portal";
 import people from "./people.module.css";
-import type { MissioCampus, MissioPerson, MissioStatus } from "./types-shim";
+import type { MissioCampus, MissioPerson, MissioPersonHouse, MissioStatus } from "./types-shim";
 import content from "./content.module.css";
 import styles from "./shell.module.css";
 
@@ -50,8 +50,37 @@ export function Avatar({ id, name, small = false }: { id: string; name: string; 
   );
 }
 
+const ROLE_WORD: Record<MissioPersonHouse["role"], string> = { leader: "Leader", co_leader: "Co-leader", member: "Member" };
+
+function houseName(house: MissioPersonHouse): string {
+  return house.name?.trim() || `House ${house.number}`;
+}
+
+function inFollowUp(person: MissioPerson): boolean {
+  return Boolean(stageLabel(person)) && person.currentStage?.trim().toLowerCase() !== "joined";
+}
+
+/**
+ * The row's second line (board M2b): their house and role ("House 1 · Leader",
+ * "House 4 + 1 more"), or "Not in a house yet" with their follow-up stage.
+ * When the houses couldn't be read, status and when they joined instead.
+ */
+export function personMeta(person: MissioPerson): { text: string; follow: boolean } {
+  if (person.houses) {
+    const [first, ...rest] = person.houses;
+    if (first) {
+      const role = first.role === "member" ? "" : ` · ${ROLE_WORD[first.role]}`;
+      return { text: `${houseName(first)}${role}${rest.length > 0 ? ` + ${rest.length} more` : ""}`, follow: false };
+    }
+    if (inFollowUp(person)) return { text: `Not in a house yet · ${stageLabel(person)}`, follow: true };
+    if (person.status === "inactive") return { text: "Not in a house yet · Inactive", follow: false };
+    return { text: "Not in a house yet", follow: person.status === "visitor" };
+  }
+  return statusMeta(person);
+}
+
 /** "Visitor · Contacted" while someone is in follow-up, otherwise status and when they joined. */
-function personMeta(person: MissioPerson): { text: string; follow: boolean } {
+function statusMeta(person: MissioPerson): { text: string; follow: boolean } {
   const stage = stageLabel(person);
   if (stage && person.currentStage?.trim().toLowerCase() !== "joined") {
     return { text: `${STATUS_LABEL[person.status]} · ${stage}`, follow: true };
@@ -84,7 +113,9 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<MissioPerson | null>(null);
   const [filtering, setFiltering] = useState(false);
-  const [view, setView] = useState<"people" | "households">(() => (params.get("view") === "households" ? "households" : "people"));
+  // Households open from a person's household card (board M14a). An old
+  // ?view=households link still lands on the list.
+  const view: "people" | "households" = params.get("view") === "households" ? "households" : "people";
   const [focusPersonId, setFocusPersonId] = useState<string | null>(null);
 
   const query = useMemo<PeopleQuery>(
@@ -130,6 +161,7 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
   }, [focusPersonId, list]);
 
   const total = list.phase === "ready" ? list.total : 0;
+  const sorted = useMemo(() => (list.phase === "ready" ? byName(list.rows) : []), [list]);
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + DEFAULT_PEOPLE_LIMIT, total);
   const activeFilters = (campus ? 1 : 0) + (status ? 1 : 0);
@@ -209,21 +241,6 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
           </button>
         </div>
 
-        <div className={people.seg} role="tablist" aria-label="View">
-          {(["people", "households"] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              role="tab"
-              aria-selected={view === option}
-              className={view === option ? people.segOn : undefined}
-              onClick={() => setView(option)}
-            >
-              {option === "people" ? "People" : "Households"}
-            </button>
-          ))}
-        </div>
-
         {view === "people" ? (
           <div className={`${people.activeRow} ${people.deskOnly}`}>
             <ChipSelect
@@ -254,12 +271,18 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
 
         {view === "people" ? (
           <div className={`${people.activeRow} ${people.phoneOnly}`} data-testid="people-active-filters">
-            {campus ? (
-              <button type="button" className={`${people.fchip} ${people.fchipOn} ${people.fchipActive}`} onClick={() => pickCampus("")} aria-label={`Remove ${CAMPUS_SHORT[campus]} filter`}>
-                {CAMPUS_SHORT[campus]}
-                <XIcon />
+            {/* Campus pills under the search (board M2b): one tap filters, a second clears. */}
+            {(["potch", "jhb"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`${people.fchip} ${people.pill} ${campus === option ? people.fchipOn : ""}`}
+                aria-pressed={campus === option}
+                onClick={() => pickCampus(campus === option ? "" : option)}
+              >
+                {CAMPUS_SHORT[option]}
               </button>
-            ) : null}
+            ))}
             {status ? (
               <button type="button" className={`${people.fchip} ${people.fchipOn} ${people.fchipActive}`} onClick={() => pickStatus("")} aria-label={`Remove ${STATUS_LABEL[status]} filter`}>
                 {STATUS_LABEL[status]}
@@ -327,15 +350,14 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
           {list.phase === "ready" && list.rows.length > 0 ? (
             <>
               <ul className={`${people.list} ${people.bleed} ${people.phoneOnly}`} data-testid="people-cards">
-                {list.rows.map((person, index) => {
+                {sorted.map((person, index) => {
                   const letter = firstLetter(person.name);
-                  // Letter headings only when the list really is A to Z (the route sorts newest first today).
-                  const showLetter = alphabetical(list.rows) && (index === 0 || firstLetter(list.rows[index - 1].name) !== letter);
+                  const showLetter = index === 0 || firstLetter(sorted[index - 1].name) !== letter;
                   const meta = personMeta(person);
                   return (
                     <li key={person.id}>
                       {showLetter ? (
-                        <div className={people.sect} aria-hidden="true">
+                        <div className={people.sect} aria-hidden="true" data-testid="people-letter">
                           {letter}
                         </div>
                       ) : null}
@@ -360,9 +382,10 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
                   <thead>
                     <tr>
                       <th>Name</th>
+                      <th>House church</th>
+                      <th>Role</th>
                       <th>Status</th>
                       <th>Follow-up stage</th>
-                      <th>Joined</th>
                       <th>Campus</th>
                       <th>
                         <span className={people.visuallyHidden}>Edit</span>
@@ -370,7 +393,7 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
                     </tr>
                   </thead>
                   <tbody>
-                    {list.rows.map((person) => (
+                    {sorted.map((person) => (
                       <tr key={person.id}>
                         <td>
                           <Link href={`/missio/people/${encodeURIComponent(person.id)}`} className={people.nmcell}>
@@ -378,6 +401,7 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
                             <span>{person.name}</span>
                           </Link>
                         </td>
+                        <HouseCells person={person} />
                         <td>
                           <span className={`${people.chip} ${statusChip(person.status)}`} data-status={person.status}>
                             <span className={people.dot} />
@@ -385,7 +409,6 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
                           </span>
                         </td>
                         <td className={stageLabel(person) ? people.ink2 : people.ink3}>{stageLabel(person) || "—"}</td>
-                        <td className={person.joinedAt ? people.ink2 : people.ink3}>{person.joinedAt ? formatJoined(person.joinedAt) : "—"}</td>
                         <td>
                           <span className={people.tag}>{CAMPUS_SHORT[person.campus]}</span>
                         </td>
@@ -469,8 +492,31 @@ export function PeopleDirectory({ client = missioClient }: { client?: MissioClie
   );
 }
 
-function alphabetical(rows: MissioPerson[]): boolean {
-  return rows.every((row, index) => index === 0 || rows[index - 1].name.localeCompare(row.name, "en", { sensitivity: "base" }) <= 0);
+/** Board M2a: "House 4 + Oak Table" and the role there. "—" when they're in no house or it couldn't be read. */
+function HouseCells({ person }: { person: MissioPerson }) {
+  const [first, ...rest] = person.houses ?? [];
+  if (!first) {
+    return (
+      <>
+        <td className={people.ink3}>—</td>
+        <td className={people.ink3}>—</td>
+      </>
+    );
+  }
+  return (
+    <>
+      <td className={people.ink2}>
+        {houseName(first)}
+        {rest.length > 0 ? <span className={people.ink3}> + {rest.map(houseName).join(", ")}</span> : null}
+      </td>
+      <td className={people.ink2}>{ROLE_WORD[first.role]}</td>
+    </>
+  );
+}
+
+/** A to Z by the name shown, so letter headings never repeat within a page. */
+function byName(rows: MissioPerson[]): MissioPerson[] {
+  return [...rows].sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
 }
 
 function firstLetter(name: string): string {

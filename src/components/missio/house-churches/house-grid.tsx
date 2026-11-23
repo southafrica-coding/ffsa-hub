@@ -90,7 +90,7 @@ export function HouseChurchGrid({ client = houseChurchesClient }: { client?: Hou
   }`;
 
   return (
-    <div className={`${ui.root} ${g.page}`}>
+    <div className={`${ui.root} ${g.page} ${ready && shownView === "map" ? g.pageMap : ""}`}>
       <div className={g.head}>
         <div className={g.headText}>
           <h1 className={`${ui.serif} ${g.title}`}>House churches</h1>

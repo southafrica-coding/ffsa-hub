@@ -23,6 +23,20 @@ export type MissioPerson = {
   status: MissioStatus;
   joinedAt: string | null;
   currentStage: string | null;
+  /**
+   * Current house memberships, leaders first (GET /api/missio/people only).
+   * Empty when they're in no house. Absent when the read failed, so a list
+   * never claims "not in a house" it couldn't check.
+   */
+  houses?: MissioPersonHouse[];
+};
+
+/** One current house membership on a People row (board M2a/M2b). */
+export type MissioPersonHouse = {
+  houseId: string;
+  number: number;
+  name: string | null;
+  role: HouseChurchRole;
 };
 
 export type MissioMe = {

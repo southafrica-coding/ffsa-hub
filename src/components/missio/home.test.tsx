@@ -99,11 +99,8 @@ describe("houseOverview", () => {
     expect(overview.people).toBe(57);
     expect(overview.readyToMultiply).toBe(2);
     expect(overview.noCoLeader).toBe(1);
-    expect(overview.noLeader).toBe(1);
     expect(overview.bars.map((bar) => bar.number)).toEqual([1, 2, 3, 4, 5]);
     expect(overview.bars.filter((bar) => bar.ready).map((bar) => bar.number)).toEqual([1, 3]);
-    expect(overview.readyToLead).toBeNull();
-    expect(houseOverview([{ ...house(1, 20), readyToLead: 2 }, { ...house(2, 8), readyToLead: 0 }]).readyToLead).toBe(2);
   });
 });
 
@@ -116,7 +113,7 @@ describe("Missio home", () => {
     while (hosts.length) hosts.pop()?.remove();
   });
 
-  it("shows a pastor the houses, the review queue and who is not in a house yet", async () => {
+  it("shows a pastor the houses and who is not in a house yet", async () => {
     const { host, root } = render(
       <MissioViewerProvider me={pastor}>
         <MissioHome {...clients({ review: 135 })} />
@@ -130,14 +127,15 @@ describe("Missio home", () => {
     expect(housesCard.textContent).toContain("57members");
     expect(housesCard.textContent).toContain("2 ready to multiply");
     expect(housesCard.textContent).toContain("1 no co-leader");
-    expect(housesCard.textContent).toContain("1 no leader");
-    // No house reports readyToLead, so there is no third number to show.
+    // Board M11a: no "no leader" chip, and no stand-in for the "new this month" number.
+    expect(housesCard.textContent).not.toContain("no leader");
     expect(housesCard.textContent).not.toContain("ready to lead");
+    expect(housesCard.querySelectorAll("dl > div")).toHaveLength(2);
     expect(housesCard.querySelector("[role=img]")?.getAttribute("aria-label")).toContain("24, 9, 18, 0, 6");
     expect((host.querySelector("[data-testid=home-houses]") as HTMLAnchorElement).getAttribute("href")).toBe("/missio/house-churches");
-    const review = host.querySelector("[data-testid=home-review]") as HTMLAnchorElement;
-    expect(review.getAttribute("href")).toBe("/missio/house-churches/review");
-    expect(review.textContent).toContain("135 names to review");
+    // Names to review live on the House churches page, not this card.
+    expect(host.querySelector("[data-testid=home-review]")).toBeNull();
+    expect(housesCard.textContent).not.toContain("to review");
     const followCard = host.querySelector("[data-testid=home-follow-card]") as HTMLElement;
     expect(followCard.textContent).toContain("Not in a house yet");
     expect(followCard.textContent).toContain("6");
@@ -171,18 +169,6 @@ describe("Missio home", () => {
     expect(serve.getAttribute("href")).toBe("/missio/volunteers");
     expect(serve.textContent).toContain("No serving sign-ups in the Hub yet");
     expect(serve.textContent).not.toMatch(/\d/);
-  });
-
-  it("hides the review notice when nothing is waiting", async () => {
-    const { host, root } = render(
-      <MissioViewerProvider me={pastor}>
-        <MissioHome {...clients()} />
-      </MissioViewerProvider>
-    );
-    roots.push(root);
-    hosts.push(host);
-    await settle();
-    expect(host.querySelector("[data-testid=home-review]")).toBeNull();
   });
 
   it("keeps the other cards when house churches fail, and retries", async () => {
