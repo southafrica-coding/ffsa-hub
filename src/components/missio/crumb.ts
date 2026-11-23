@@ -9,6 +9,7 @@ export const MISSIO_CRUMB_LABELS: ReadonlyArray<{ prefix: string; label: string 
   { prefix: "/missio/next-leaders", label: "Next leaders" },
   { prefix: "/missio/care", label: "Care" },
   { prefix: "/missio/sundays", label: "Sundays" },
+  { prefix: "/missio/calendar", label: "Calendar" },
   { prefix: "/missio/finance", label: "Finance" },
   { prefix: "/missio/whatsapp", label: "WhatsApp" },
 ];

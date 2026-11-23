@@ -4,7 +4,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Calendar, Heart, House, Mail, MessageCircle, Settings, Sprout, Sunrise, UserCheck, Users, UsersRound, Wallet } from "lucide-react";
+import { Calendar, CalendarDays, Heart, House, Mail, MessageCircle, Settings, Sprout, Sunrise, UserCheck, Users, UsersRound, Wallet } from "lucide-react";
 import { canAccessMissio, canSeeMissioCare, isMissioPastor, missioSkinVars, orgHref, sortOrgs } from "./access";
 import { MissioViewerProvider } from "./viewer";
 import { MissioApiError, missioClient, type MissioClient } from "./api";
@@ -214,6 +214,15 @@ function MissioSidebar({
     { key: "follow-up", href: "/missio/follow-up", label: "Follow-up", on: section === "follow", icon: <UserCheck />, show: pastor },
     { key: "care", href: "/missio/care", label: "Care", on: pathname.startsWith("/missio/care"), icon: <Heart />, show: showCare },
     { key: "sundays", href: "/missio/sundays", label: "Sundays", on: section === "sundays", icon: <Calendar />, show: true },
+    // Pastors only, and in the menu only: a sixth phone tab would crowd the M11a set.
+    {
+      key: "calendar",
+      href: "/missio/calendar",
+      label: "Calendar",
+      on: pathname.startsWith("/missio/calendar"),
+      icon: <CalendarDays />,
+      show: pastor,
+    },
     {
       key: "volunteers",
       href: "/missio/volunteers",

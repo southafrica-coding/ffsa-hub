@@ -141,6 +141,12 @@ describe("Missio access state", () => {
     expect(whatsapp.getAttribute("href")).toBe("/missio/whatsapp");
     expect(finance.nextElementSibling).toBe(whatsapp);
     expect(host.querySelector("[data-testid=missio-tab-whatsapp]")).toBeNull();
+    // Calendar (#700): pastors only, right after Sundays, menu only. Both it and
+    // WhatsApp stay in the menu; neither becomes a sixth phone tab.
+    const calendar = host.querySelector("[data-testid=missio-nav-calendar]") as HTMLAnchorElement;
+    expect(calendar.getAttribute("href")).toBe("/missio/calendar");
+    expect(host.querySelector("[data-testid=missio-nav-sundays]")?.nextElementSibling).toBe(calendar);
+    expect(host.querySelector("[data-testid=missio-tab-calendar]")).toBeNull();
     expect(host.querySelectorAll("[data-testid=missio-tab-bar] a")).toHaveLength(5);
     expect((host.querySelector("[data-testid=missio-nav-sundays]") as HTMLAnchorElement).getAttribute("href")).toBe("/missio/sundays");
   });
@@ -248,6 +254,8 @@ describe("Missio access state", () => {
     expect(host.querySelector("a[href='/missio/finance']")).toBeNull();
     expect(host.querySelector("[data-testid=missio-nav-whatsapp]")).toBeNull();
     expect(host.querySelector("a[href='/missio/whatsapp']")).toBeNull();
+    expect(host.querySelector("[data-testid=missio-nav-calendar]")).toBeNull();
+    expect(host.querySelector("a[href='/missio/calendar']")).toBeNull();
     const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")];
     expect(tabs.map((tab) => tab.getAttribute("href"))).toEqual(["/missio", "/missio/house-churches", "/missio/care", "/missio/sundays"]);
     expect(host.querySelector("[data-testid=missio-tab-care]")?.getAttribute("aria-current")).toBe("page");
