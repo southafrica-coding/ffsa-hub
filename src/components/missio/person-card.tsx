@@ -78,7 +78,7 @@ function CardBody({ profile, access, households }: { profile: PersonProfile; acc
           <span className={shell.tag}>{CAMPUS_LABEL[person.campus]}</span>
         </p>
       </div>
-      <ContactActions phone={contact.phone} email={contact.email} />
+      <ContactActions phone={contact.phone} email={contact.email} personId={person.id} />
 
       <dl className={styles.facts}>
         <div>

@@ -14,6 +14,10 @@ describe("Missio breadcrumb", () => {
     expect(missioCrumbLabel("/missio/follow-up?stage=joined")).toBe("Follow-up");
     expect(missioCrumbLabel("/missio/volunteers")).toBe("Volunteers");
     expect(missioCrumbLabel("/serve/missio/preview/pastor")).toBe("Volunteers");
+    expect(missioCrumbLabel("/missio/calendar")).toBe("Calendar");
+    expect(missioCrumbLabel("/missio/finance")).toBe("Finance");
+    expect(missioCrumbLabel("/missio/whatsapp")).toBe("WhatsApp");
+    expect(missioCrumbLabel("/missio/whatsapp/thread-1")).toBe("WhatsApp");
     expect(missioCrumbLabel("/missio/feedback/form")).toBe("Feedback form");
     // The history page stays under House churches.
     expect(missioCrumbLabel("/missio/house-churches/feedback")).toBe("House churches");

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { JourneyEvent, PersonProfile, ProfileHouse } from "@/lib/missio/profile";
-import { STATUS_LABEL } from "./access";
+import { isMissioPastor, STATUS_LABEL } from "./access";
 import { fetchHubAccess, fetchPersonProfile, MissioApiError, missioClient, saveHubRole, type MissioClient } from "./api";
 import { EditPerson } from "./people-directory";
 import type { MissioPerson } from "./types-shim";
@@ -13,6 +13,9 @@ import { houseTitle, ROLE_LABEL } from "./house-churches/format";
 import { useMissioLoad } from "./house-churches/load";
 import { HouseStatus } from "./house-churches/status";
 import { telHref, whatsAppHref } from "./follow-up/whatsapp";
+import { whatsAppE164 } from "@/lib/missio/whatsapp/phone";
+import { whatsAppThreadHref } from "./whatsapp/client";
+import { useMissioViewer } from "./viewer";
 import { householdsClient, type HouseholdsClient } from "./households/client";
 import { HouseholdCard } from "./households/household-card";
 import shell from "./shell.module.css";
@@ -244,7 +247,7 @@ function Profile({
           </p>
         </div>
         <div className={styles.headActions}>
-          <ContactActions phone={contact.phone} email={contact.email} />
+          <ContactActions phone={contact.phone} email={contact.email} personId={person.id} />
           <button type="button" className={`${styles.btn} ${styles.btnS} ${styles.btnIc}`} aria-label="More: edit, mark inactive" onClick={onMore}>
             ···
           </button>
@@ -422,9 +425,16 @@ function HouseRow({ house }: { house: ProfileHouse }) {
   );
 }
 
-export function ContactActions({ phone, email }: { phone: string | null; email: string | null }) {
+/**
+ * Call · WhatsApp · Email. For a pastor, WhatsApp opens the Hub conversation
+ * and sends from Missio's number; for anyone else it stays a wa.me link that
+ * sends from their own phone. No button when the number won't work on WhatsApp.
+ */
+export function ContactActions({ phone, email, personId }: { phone: string | null; email: string | null; personId?: string }) {
+  const me = useMissioViewer();
+  const hub = Boolean(personId && me && isMissioPastor(me));
   const call = telHref(phone);
-  const chat = whatsAppHref(phone);
+  const chat = hub ? (whatsAppE164(phone) ? whatsAppThreadHref({ personId: personId as string }) : null) : whatsAppHref(phone);
   if (!call && !chat && !email) return null;
   const count = [call, chat, email].filter(Boolean).length;
   return (
@@ -435,7 +445,12 @@ export function ContactActions({ phone, email }: { phone: string | null; email: 
           Call
         </a>
       ) : null}
-      {chat ? (
+      {chat && hub ? (
+        <Link className={`${styles.btn} ${styles.btnP} ${styles.action} ${styles.actionMain}`} href={chat} data-whatsapp="hub">
+          <ChatIcon />
+          WhatsApp
+        </Link>
+      ) : chat ? (
         <a className={`${styles.btn} ${styles.btnP} ${styles.action} ${styles.actionMain}`} href={chat} target="_blank" rel="noopener noreferrer">
           <ChatIcon />
           WhatsApp
