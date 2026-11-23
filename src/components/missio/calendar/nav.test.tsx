@@ -67,7 +67,7 @@ describe("Calendar in the Missio menu", () => {
     const host = await frame(me("pastor"));
     const tabs = [...host.querySelectorAll("[data-testid=missio-tab-bar] a")].map((a) => a.textContent);
     expect(tabs).toEqual(["Home", "People", "Houses", "Sundays", "Follow-up"]);
-    for (const key of ["teams", "communications", "finance"]) expect(host.querySelector(`[data-testid=missio-soon-${key}]`)).not.toBeNull();
+    for (const key of ["teams", "communications"]) expect(host.querySelector(`[data-testid=missio-soon-${key}]`)).not.toBeNull();
   });
 
   it("is hidden from leaders and coaches", async () => {

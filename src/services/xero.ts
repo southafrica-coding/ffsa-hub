@@ -1614,3 +1614,74 @@ export async function listXeroDonationLines(
     return { ...empty, error: msg };
   }
 }
+
+// ────────────────────────────────────────────────────────────
+// MONEY RECEIVED INTO ONE BANK ACCOUNT (read-only)
+// ────────────────────────────────────────────────────────────
+
+export type XeroBankReceiptsResult =
+  | { status: "ok"; bankTransactions: Record<string, unknown>[]; payments: Record<string, unknown>[] }
+  | { status: "not_connected" | "needs_scope" | "error"; message: string };
+
+/**
+ * Receive Money bank transactions and customer payments into one bank
+ * account, dated `from`..`to` (YYYY-MM-DD). GET only: nothing is written to
+ * Xero. Used by the Missio income report (src/lib/missio/finance/server.ts),
+ * which does the filtering and the SnapScan split.
+ *
+ * Needs the `accounting.banktransactions.read` and `accounting.payments.read`
+ * scopes. A connection made without them gets 401/403 here, reported as
+ * "needs_scope" (reconnect Xero with XERO_REQUEST_BANK_READ_SCOPES=1).
+ */
+export async function listXeroBankReceipts(
+  supabase: Client,
+  region: XeroRegion,
+  options: { accountId: string; from: string; to: string }
+): Promise<XeroBankReceiptsResult> {
+  const { accountId, from, to } = options;
+  if (!/^[0-9a-f-]{36}$/i.test(accountId) || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    return { status: "error", message: "Bad bank account or dates." };
+  }
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) {
+    return { status: "not_connected", message: "Xero isn't connected, or its authorisation has lapsed." };
+  }
+  const dt = (ymd: string) => `DateTime(${ymd.slice(0, 4)},${ymd.slice(5, 7)},${ymd.slice(8, 10)})`;
+  const range = `Date>=${dt(from)} AND Date<=${dt(to)}`;
+
+  async function pages(endpoint: string, where: string, key: string) {
+    const out: Record<string, unknown>[] = [];
+    for (let page = 1; page < 100; page++) {
+      const json = (await xeroGet(
+        auth!.accessToken,
+        auth!.tenantId,
+        `${endpoint}?where=${encodeURIComponent(where)}&page=${page}`,
+        { timeoutMs: 20000 }
+      )) as Record<string, unknown>;
+      const list = (json[key] as Record<string, unknown>[] | undefined) ?? [];
+      out.push(...list);
+      if (list.length < 100) break;
+    }
+    return out;
+  }
+
+  try {
+    const bankTransactions = await pages(
+      "BankTransactions",
+      `BankAccount.AccountID==guid("${accountId}") AND ${range}`,
+      "BankTransactions"
+    );
+    const payments = await pages("Payments", `Account.AccountID==guid("${accountId}") AND ${range}`, "Payments");
+    return { status: "ok", bankTransactions, payments };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/\((401|403)\)/.test(msg)) {
+      return {
+        status: "needs_scope",
+        message: "Xero refused to share bank transactions. Reconnect Xero with bank and payment read access.",
+      };
+    }
+    console.error("[xero] bank receipts read failed", msg.slice(0, 200));
+    return { status: "error", message: "Xero didn't answer." };
+  }
+}

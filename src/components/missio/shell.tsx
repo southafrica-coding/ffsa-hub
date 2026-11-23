@@ -231,6 +231,9 @@ function MissioSidebar({
       icon: <UsersRound />,
       show: pastor,
     },
+    // Pastors only. Not a phone tab: the M11a bar keeps its five, so Finance
+    // lives in this menu on phones.
+    { key: "finance", href: "/missio/finance", label: "Finance", on: pathname.startsWith("/missio/finance"), icon: <Wallet />, show: pastor },
   ];
 
   return (
@@ -268,7 +271,6 @@ function MissioSidebar({
         {[
           { key: "teams", label: "Teams", icon: <UsersRound /> },
           { key: "communications", label: "Communications", icon: <Mail /> },
-          { key: "finance", label: "Finance", icon: <Wallet /> },
         ].map((item) => (
           <div key={item.key} className={styles.soon} aria-disabled="true" data-testid={`missio-soon-${item.key}`}>
             {item.icon}
