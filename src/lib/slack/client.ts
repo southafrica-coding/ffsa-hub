@@ -268,6 +268,25 @@ export function listUsers(cursor?: string) {
 }
 
 // ────────────────────────────────────────────────────────────
+// conversations.history (bot token)
+// ------------------------------------------------------------
+// Recent messages in a DM the bot is part of (needs im:history). The
+// Hub assistant reads the last few so a reply like "the second one"
+// keeps its context.
+// ────────────────────────────────────────────────────────────
+
+export function conversationHistory(
+  args: { channel: string; latest?: string; limit?: number },
+  bot?: SlackBotId
+) {
+  return callSlack<{ messages?: SlackHistoryMessage[] }>(
+    "conversations.history",
+    { channel: args.channel, latest: args.latest, limit: args.limit ?? 10 },
+    bot
+  );
+}
+
+// ────────────────────────────────────────────────────────────
 // Acting as a person (user token)
 // ------------------------------------------------------------
 // With a user token the message is theirs: it appears in their own
@@ -295,6 +314,7 @@ export function postMessageAs(
 export type SlackHistoryMessage = {
   ts: string;
   user?: string;
+  bot_id?: string;
   text?: string;
   subtype?: string;
 };

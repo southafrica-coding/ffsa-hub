@@ -1,0 +1,37 @@
+{
+  "display_information": {
+    "name": "Hub",
+    "description": "Private FFSA Hub assistant for ministry leaders.",
+    "long_description": "The FFSA Hub's private assistant for ministry leaders. DM it to see your team's Hub access, look up one person's access, give or remove a Hub permission for someone in a ministry you lead, resend a Hub invite to someone who hasn't set up their account, or report a problem to the Hub team. Every change waits for you to press Confirm. It only answers ministry leaders, and only in a direct message.",
+    "background_color": "#0a0a0a"
+  },
+  "features": {
+    "app_home": {
+      "home_tab_enabled": false,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
+    "bot_user": {
+      "display_name": "Hub",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": ["chat:write", "im:history", "im:write"]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://www.ffsahub.com/api/slack/assistant/events",
+      "bot_events": ["message.im"]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://www.ffsahub.com/api/slack/assistant/interactions"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}
