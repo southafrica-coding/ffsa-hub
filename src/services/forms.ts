@@ -26,6 +26,20 @@ export async function getFormById(supabase: Client, id: string) {
     .maybeSingle();
 }
 
+/**
+ * The Missio weekly feedback form, by slug and kind. Under RLS a
+ * non-admin only sees it while it is active.
+ */
+export async function getMissioWeeklyFeedbackForm(supabase: Client) {
+  return supabase
+    .from("forms")
+    .select("id, name, slug, kind, event_id, is_active, records_attendance, label_id, access_mode, schema")
+    .eq("slug", "missio-weekly-feedback")
+    .eq("kind", "missio_weekly_feedback")
+    .is("event_id", null)
+    .maybeSingle();
+}
+
 export async function getFormBySlug(supabase: Client, slug: string) {
   return supabase
     .from("forms")

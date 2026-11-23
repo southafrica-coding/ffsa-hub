@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
+import { isMissioPastor } from "../access";
 import { houseChurchesClient, type HouseChurchesClient } from "../house-churches/client";
 import { houseTitle, meetingDayLabel } from "../house-churches/format";
 import { useMissioLoad } from "../house-churches/load";
 import { HouseStatus } from "../house-churches/status";
 import type { FeedbackEntry, FeedbackHouse, FeedbackMood } from "../house-churches/types";
 import ui from "../house-churches/ui.module.css";
+import { useMissioViewer } from "../viewer";
 import styles from "./history.module.css";
 
 export const MOOD_LABEL: Record<FeedbackMood, string> = { hard: "Hard", okay: "Okay", good: "Good", great: "Great" };
@@ -154,7 +156,19 @@ function groups(houses: FeedbackHouse[]): Array<{ coach: string; houses: Feedbac
 }
 
 /** Board M4b: every house's last 4 weeks, 12 weeks or year, grouped by coach, and the picked house in full. */
-export function FeedbackHistory({ client = houseChurchesClient }: { client?: HouseChurchesClient }) {
+export function FeedbackHistory({
+  client = houseChurchesClient,
+  canRotate,
+}: {
+  client?: HouseChurchesClient;
+  /**
+   * Who may make a house a new link. Defaults to the shell's viewer being a
+   * Missio pastor, the same rule as the house page (abilities.place).
+   */
+  canRotate?: boolean;
+}) {
+  const viewer = useMissioViewer();
+  const rotate = canRotate ?? (viewer ? isMissioPastor(viewer) : false);
   const [weeks, setWeeks] = useState<FeedbackWeeks>(12);
   const { state, retry } = useMissioLoad(() => client.feedbackHistory(weeks), [client, weeks]);
   const [picked, setPicked] = useState<string | null>(null);
@@ -262,7 +276,7 @@ export function FeedbackHistory({ client = houseChurchesClient }: { client?: Hou
           </div>
           <aside ref={detailRef} className={`${ui.card} ${styles.detail}`} aria-live="polite">
             {open ? (
-              <FeedbackDetail house={open} weeks={weeks} />
+              <FeedbackDetail house={open} weeks={weeks} client={client} canRotate={rotate} />
             ) : (
               <p className={styles.quiet}>Choose a house to see what its leaders wrote.</p>
             )}
@@ -275,7 +289,17 @@ export function FeedbackHistory({ client = houseChurchesClient }: { client?: Hou
 
 const monthName = new Intl.DateTimeFormat("en-ZA", { month: "long", timeZone: "UTC" });
 
-function FeedbackDetail({ house, weeks }: { house: FeedbackHouse; weeks: number }) {
+function FeedbackDetail({
+  house,
+  weeks,
+  client,
+  canRotate,
+}: {
+  house: FeedbackHouse;
+  weeks: number;
+  client: Pick<HouseChurchesClient, "feedbackLink">;
+  canRotate: boolean;
+}) {
   const last = house.entries[0] ?? null;
   const first = house.entries[house.entries.length - 1] ?? null;
   const change = last && first && first !== last ? last.attendance - first.attendance : null;
@@ -288,6 +312,8 @@ function FeedbackDetail({ house, weeks }: { house: FeedbackHouse; weeks: number 
           Open house
         </Link>
       </div>
+      {/* Keyed by house: picking another house starts with no link showing. */}
+      <FeedbackLinkActions key={house.houseId} houseId={house.houseId} client={client} canRotate={canRotate} />
       {last ? (
         <div className={styles.stats}>
           <div>
@@ -358,31 +384,8 @@ export function HouseFeedbackPanel({
   canRotate: boolean;
 }) {
   const { state } = useMissioLoad(() => client.feedbackHistory(12), [client]);
-  const [link, setLink] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
   const house = state.phase === "ready" ? state.data.houses.find((row) => row.houseId === houseId) ?? null : null;
   const last = house?.entries[0] ?? null;
-
-  async function getLink(rotate: boolean) {
-    setPending(true);
-    setNotice(null);
-    try {
-      const { path } = await client.feedbackLink(houseId, rotate);
-      const url = `${typeof window === "undefined" ? "" : window.location.origin}${path}`;
-      setLink(url);
-      try {
-        await navigator.clipboard?.writeText(url);
-        setNotice(rotate ? "New link copied. The old one no longer works." : "Link copied. Send it to the leader.");
-      } catch {
-        setNotice(rotate ? "New link made. The old one no longer works." : "Here’s the link. Send it to the leader.");
-      }
-    } catch {
-      setNotice("That didn’t work. Try again.");
-    } finally {
-      setPending(false);
-    }
-  }
 
   return (
     <section className={`${ui.card} ${styles.panel}`} data-testid="house-feedback">
@@ -416,14 +419,62 @@ export function HouseFeedbackPanel({
           )}
         </>
       ) : null}
+      <FeedbackLinkActions houseId={houseId} client={client} canRotate={canRotate} />
+    </section>
+  );
+}
+
+/**
+ * Fill in this week, Copy the leader’s link, Send on WhatsApp and (pastors
+ * only) Make a new link. One copy, used by the house page's panel and the
+ * Weekly feedback page's picked house. The link is made on first copy
+ * (POST /api/missio/house-churches/:id/feedback/link), which also checks
+ * the house is in this person's scope; rotating is refused there for
+ * anyone who isn't a pastor, whatever this shows.
+ */
+export function FeedbackLinkActions({
+  houseId,
+  client = houseChurchesClient,
+  canRotate,
+}: {
+  houseId: string;
+  client?: Pick<HouseChurchesClient, "feedbackLink">;
+  canRotate: boolean;
+}) {
+  const [link, setLink] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function getLink(rotate: boolean) {
+    setPending(true);
+    setNotice(null);
+    try {
+      const { path } = await client.feedbackLink(houseId, rotate);
+      const url = `${typeof window === "undefined" ? "" : window.location.origin}${path}`;
+      setLink(url);
+      try {
+        await navigator.clipboard?.writeText(url);
+        setNotice(rotate ? "New link copied. The old one no longer works." : "Link copied. Send it to the leader.");
+      } catch {
+        setNotice(rotate ? "New link made. The old one no longer works." : "Here’s the link. Send it to the leader.");
+      }
+    } catch {
+      setNotice("That didn’t work. Try again.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className={styles.linkBlock} data-testid="feedback-link-actions">
       <div className={styles.linkRow}>
         {/* Signed-in leaders fill it here; the link is for sending on. */}
-        <Link className={`${ui.btn} ${ui.s} ${ui.sm}`} href={`/missio-feedback/${houseId}`} data-testid="feedback-fill">
+        <Link className={`${ui.btn} ${ui.s} ${ui.sm} ${styles.linkBtn}`} href={`/missio-feedback/${houseId}`} data-testid="feedback-fill">
           Fill in this week
         </Link>
         <button
           type="button"
-          className={`${ui.btn} ${ui.s} ${ui.sm}`}
+          className={`${ui.btn} ${ui.s} ${ui.sm} ${styles.linkBtn}`}
           disabled={pending}
           onClick={() => void getLink(false)}
           data-testid="feedback-copy"
@@ -432,22 +483,29 @@ export function HouseFeedbackPanel({
         </button>
         {link ? (
           <a
-            className={`${ui.btn} ${ui.s} ${ui.sm}`}
+            className={`${ui.btn} ${ui.s} ${ui.sm} ${styles.linkBtn}`}
             href={`https://wa.me/?text=${encodeURIComponent(`How was house church this week? It takes about five minutes: ${link}`)}`}
             target="_blank"
             rel="noopener noreferrer"
+            data-testid="feedback-whatsapp"
           >
             Send on WhatsApp
           </a>
         ) : null}
         {canRotate && link ? (
-          <button type="button" className={`${ui.btn} ${ui.g} ${ui.sm}`} disabled={pending} onClick={() => void getLink(true)}>
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.g} ${ui.sm} ${styles.linkBtn}`}
+            disabled={pending}
+            onClick={() => void getLink(true)}
+            data-testid="feedback-rotate"
+          >
             Make a new link
           </button>
         ) : null}
       </div>
       {link ? (
-        <p className={styles.entryLine} data-testid="feedback-link">
+        <p className={`${styles.entryLine} ${styles.linkUrl}`} data-testid="feedback-link">
           {link}
         </p>
       ) : null}
@@ -456,6 +514,6 @@ export function HouseFeedbackPanel({
           {notice}
         </p>
       ) : null}
-    </section>
+    </div>
   );
 }

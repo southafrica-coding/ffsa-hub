@@ -90,6 +90,8 @@ export function FormBuilder({
   responsesHref,
   backHref,
   backLabel,
+  questionsOnly = false,
+  contextLabel,
 }: {
   /** Set for an event form; absent for a Hub form under /forms. */
   eventId?: string;
@@ -100,6 +102,15 @@ export function FormBuilder({
   responsesHref: string;
   backHref?: string;
   backLabel?: string;
+  /**
+   * The Missio pastor editor for the weekly feedback form: questions and
+   * name only. No publish / unpublish, no "who can fill it in", no /f link
+   * (the form opens from per-house links), and a save sends just name and
+   * schema, which is all /api/forms/[id] lets a pastor change.
+   */
+  questionsOnly?: boolean;
+  /** The small line above the name. Defaults to "Event form" / "Hub form". */
+  contextLabel?: string;
 }) {
   const isEvent = Boolean(eventId);
   const router = useRouter();
@@ -218,12 +229,16 @@ export function FormBuilder({
     }
     setBusy(true);
     const nextActive = publish === undefined ? isActive : publish;
-    const body: Record<string, unknown> = {
-      name: name.trim(),
-      schema,
-      is_active: nextActive,
-    };
-    if (isEvent) {
+    const body: Record<string, unknown> = questionsOnly
+      ? { name: name.trim(), schema }
+      : {
+          name: name.trim(),
+          schema,
+          is_active: nextActive,
+        };
+    if (questionsOnly) {
+      // name and schema only; see the prop.
+    } else if (isEvent) {
       body.label_id = labelId || null;
       body.records_attendance = recordsAttendance;
     } else if (accessMode !== (form.access_mode ?? "public")) {
@@ -383,14 +398,16 @@ export function FormBuilder({
             ← {backLabel ?? "Back"}
           </Link>
         )}
-        <div className="masthead-context mt-1">{isEvent ? "Event form" : "Hub form"}</div>
+        <div className="masthead-context mt-1">{contextLabel ?? (isEvent ? "Event form" : "Hub form")}</div>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           aria-label="Form name"
           className="masthead-title w-full outline-none"
         />
-        <p className="mt-1.5 break-all font-mono text-[11px] text-[color:var(--text-tertiary)]">{publicUrl}</p>
+        {!questionsOnly && (
+          <p className="mt-1.5 break-all font-mono text-[11px] text-[color:var(--text-tertiary)]">{publicUrl}</p>
+        )}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <StatusPill tone={isActive ? "good" : "quiet"}>{isActive ? "Published" : "Draft"}</StatusPill>
           {!isEvent && <StatusPill>{ACCESS_MODE_LABELS[accessMode]}</StatusPill>}
@@ -402,7 +419,7 @@ export function FormBuilder({
           <button type="button" onClick={() => save()} disabled={busy} className={BTN}>
             Save
           </button>
-          {isActive ? (
+          {questionsOnly ? null : isActive ? (
             <button type="button" onClick={() => save(false)} disabled={busy} className={BTN}>
               Unpublish
             </button>
@@ -414,22 +431,26 @@ export function FormBuilder({
         </div>
       </div>
 
-      <div className="space-y-3 px-5 py-5 md:px-8">
+      <div className={questionsOnly && !err && !msg ? "hidden" : "space-y-3 px-5 py-5 md:px-8"}>
         {notices}
-        {!hasContactField(schema) && (
+        {!questionsOnly && !hasContactField(schema) && (
           <p className="border border-amber-border bg-[color:var(--yellow-dim,#FFF6DD)] px-3 py-2 text-[13px] text-amber">
             People can&rsquo;t send this form yet: it needs an Email or Phone question saved into
             the contact&rsquo;s email or phone.
           </p>
         )}
-        <SharePanel
-          url={scannableUrl}
-          formName={name}
-          accessMode={isEvent ? "public" : accessMode}
-          isActive={isActive}
-        />
+        {!questionsOnly && (
+          <SharePanel
+            url={scannableUrl}
+            formName={name}
+            accessMode={isEvent ? "public" : accessMode}
+            isActive={isActive}
+          />
+        )}
       </div>
 
+      {!questionsOnly && (
+      <>
       <div className="section-bar">
         <span className="section-bar-title">Settings</span>
       </div>
@@ -491,6 +512,8 @@ export function FormBuilder({
           </label>
         )}
       </div>
+      </>
+      )}
 
       {schema.steps.map((step, sIdx) => (
         <section key={step.id} aria-label={step.title || `Section ${sIdx + 1}`}>

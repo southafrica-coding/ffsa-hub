@@ -550,11 +550,29 @@
   color: var(--ink-2, #5b574d);
 }
 
+.linkBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
 .linkRow {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 4px;
+}
+
+/* Phone-first: the sm buttons are 36px; these are tapped, so 44px. */
+.linkBlock .linkRow .linkBtn {
+  height: 44px;
+  min-height: 44px;
+  max-width: 100%;
+}
+
+.linkUrl {
+  overflow-wrap: anywhere;
 }
 
 @media (min-width: 768px) {
