@@ -323,7 +323,7 @@ export function RegisterView({
                 {/* Phone: bookable/total and what needs attention, on the right. */}
                 <span className="shrink-0 whitespace-nowrap text-right tabular-nums md:hidden">
                   <span className="hire-display block text-[24px] leading-none">
-                    {p.bookable}/{p.total}
+                    {p.tracking === "consumable" ? p.total : `${p.bookable}/${p.total}`}
                   </span>
                   <span
                     className={cn(
@@ -342,10 +342,10 @@ export function RegisterView({
                 <span
                   className={cn(
                     "hire-display hidden text-right text-[22px] tabular-nums md:block",
-                    p.bookable < p.total && "!text-[color:var(--hire-accent)]"
+                    p.bookable < p.total && p.tracking !== "consumable" && "!text-[color:var(--hire-accent)]"
                   )}
                 >
-                  {p.bookable}
+                  {p.tracking === "consumable" ? "—" : p.bookable}
                 </span>
                 <span
                   className={cn(

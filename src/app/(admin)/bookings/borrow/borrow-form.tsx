@@ -26,7 +26,7 @@ export type BorrowItem = {
   photo: string | null;
 };
 
-const INPUT = "h-11 w-full border border-rule-strong bg-white px-3 text-[16px] text-ink md:text-[14px]";
+const INPUT = "h-11 w-full border border-rule-strong bg-white px-3 text-[16px] normal-case tracking-normal text-ink md:text-[14px]";
 
 function Label({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
