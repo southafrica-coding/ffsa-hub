@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { SUPER_ADMIN_ONLY_MODULES } from "@/config/modules";
+import { canManageFinance } from "@/lib/api-auth";
 import {
   accountIsActive,
   grantCounts,
@@ -38,25 +39,28 @@ type GrantRow = {
   permissions?: { module?: string; key?: string } | { module?: string; key?: string }[] | null;
 };
 
+type ModuleDecision = "allow" | "deny" | "error";
+
 /**
- * The one access rule behind all three exports: true if an active user holds
- * a bypass role (see bypassRoles), a direct user_permission for any of the
- * modules, or one through an assigned role's bundle
- * (user_roles -> role_permissions -> permissions).
- *
- * Unscoped grants count everywhere. A program-scoped grant counts only when
- * `scope.programId` matches. finance.* keys still need an unscoped grant
- * (migration 316). The account read, the roles and the direct grant go out
- * together; the bundle lookup only runs if neither settles it.
- * Any failed read is false.
+ * Main has no /home page, so a denial stays on the dashboard.
+ * The departments branch sends the same denials to /home.
  */
-async function canAccessAnyModule(
+const MODULE_DENIAL = "/dashboard";
+
+/**
+ * Permission and bypass-role half of canAccessAnyModule.
+ *
+ * "error" is any failed read, a missing account, or is_active = false.
+ * NULL is_active is still active. Callers must not treat "error" as a
+ * clean deny: a later rule must not open the door after a failed read.
+ */
+async function moduleGrantDecision(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   userId: string,
   modules: string[],
   scope?: GrantScope
-): Promise<boolean> {
+): Promise<ModuleDecision> {
   const directQuery = supabase
     .from("user_permissions")
     .select("scope_type, scope_id, permissions!inner(module, key)")
@@ -72,7 +76,7 @@ async function canAccessAnyModule(
       ? directQuery.eq("permissions.module", modules[0])
       : directQuery.in("permissions.module", modules),
   ]);
-  if (!active || rolesResult.error || permsResult.error) return false;
+  if (!active || rolesResult.error || permsResult.error) return "error";
 
   const assignments = ((rolesResult.data ?? []) as Array<{
     role_id?: string;
@@ -98,7 +102,7 @@ async function canAccessAnyModule(
         grantCounts(row.scope_type, row.scope_id, scope)
     )
   ) {
-    return true;
+    return "allow";
   }
 
   const direct = (permsResult.data ?? []) as GrantRow[];
@@ -112,7 +116,7 @@ async function canAccessAnyModule(
       );
     })
   ) {
-    return true;
+    return "allow";
   }
 
   const roleIds = [
@@ -122,7 +126,7 @@ async function canAccessAnyModule(
         .map((row) => row.role_id)
     ),
   ];
-  if (roleIds.length === 0) return false;
+  if (roleIds.length === 0) return "deny";
 
   const bundleQuery = supabase
     .from("role_permissions")
@@ -131,7 +135,7 @@ async function canAccessAnyModule(
   const bundled = await (modules.length === 1
     ? bundleQuery.eq("permissions.module", modules[0])
     : bundleQuery.in("permissions.module", modules));
-  if (bundled.error) return false;
+  if (bundled.error) return "error";
 
   return ((bundled.data ?? []) as GrantRow[]).some((row) => {
     const perm = permissionOf(row);
@@ -141,7 +145,47 @@ async function canAccessAnyModule(
         assignment.role_id === row.role_id &&
         grantCounts(assignment.scope_type, assignment.scope_id, scope, perm.key)
     );
-  });
+  })
+    ? "allow"
+    : "deny";
+}
+
+/**
+ * The one access rule behind all three exports: true if an active user holds
+ * a bypass role (see bypassRoles), a direct user_permission for any of the
+ * modules, or one through an assigned role's bundle
+ * (user_roles -> role_permissions -> permissions).
+ *
+ * The finance module also accepts whoever canManageFinance accepts, and only
+ * that module: an unscoped finance_admin role, or a direct finance.manage /
+ * finance.write grant. super_admin and admin already bypass. This is an
+ * extra arm, not a replacement — finance.view, finance.edit and
+ * finance.donor_statements still open finance, and a program-scoped
+ * finance_admin still does not (canManageFinance counts only an unscoped
+ * role). No other module grows a role bypass. ROLE_ONLY_MODULES is not
+ * applied here.
+ *
+ * Unscoped grants count everywhere. A program-scoped grant counts only when
+ * `scope.programId` matches. finance.* keys still need an unscoped grant
+ * (migration 316). The account read, the roles and the direct grant go out
+ * together; the bundle lookup only runs if neither settles it.
+ * Any failed read is false, and is not retried through canManageFinance.
+ */
+async function canAccessAnyModule(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  modules: string[],
+  scope?: GrantScope
+): Promise<boolean> {
+  const decision = await moduleGrantDecision(supabase, userId, modules, scope);
+  if (decision === "allow") return true;
+  // Any-of stays any-of. A finance_admin asked for ["finance", "users"] is
+  // allowed, because finance access is enough for this call. "users" on its
+  // own is still denied. A failed read ("error"), including the users row,
+  // is not a clean deny and is not retried here.
+  if (decision !== "deny" || !modules.includes("finance")) return false;
+  return canManageFinance(supabase, userId);
 }
 
 /**
@@ -149,10 +193,13 @@ async function canAccessAnyModule(
  *
  * An active super_admin passes; an active `admin` passes for every module
  * except the SUPER_ADMIN_ONLY_MODULES carve-outs. Everyone else must have at
- * least one matching user_permission (direct or via a role bundle). Pass
- * `{ programId }` on a program page so a grant scoped to that program counts.
+ * least one matching user_permission (direct or via a role bundle). The
+ * finance module also passes for whoever canManageFinance allows (an
+ * unscoped finance_admin, or a direct finance.manage / finance.write grant).
+ * Pass `{ programId }` on a program page so a grant scoped to that program
+ * counts.
  * Callers that omit it only see unscoped grants. A deactivated account
- * (is_active = false) never passes.
+ * (is_active = false) never passes. A denial redirects to /dashboard.
  *
  * Usage:
  *   await requireModuleAccess(supabase, userId, "finance");
@@ -165,7 +212,7 @@ export async function requireModuleAccess(
   scope?: GrantScope
 ) {
   if (await canAccessAnyModule(supabase, userId, [module], scope)) return;
-  redirect("/dashboard");
+  redirect(MODULE_DENIAL);
 }
 
 /**
@@ -196,5 +243,5 @@ export async function requireAnyModuleAccess(
   scope?: GrantScope
 ) {
   if (await canAccessAnyModule(supabase, userId, modules, scope)) return;
-  redirect("/dashboard");
+  redirect(MODULE_DENIAL);
 }
