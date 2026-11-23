@@ -9,7 +9,8 @@ import { markWhatsAppThreadRead } from "@/services/missio-whatsapp";
 //
 // Missio pastors only. Clears the unread count when a pastor opens a
 // conversation. Through the pastor's own client: 396 grants pastors UPDATE
-// on unread_count and last_read_at and nothing else.
+// on unread_count and last_read_at and nothing else. updated_at is stamped
+// by the SECURITY DEFINER trigger missio_whatsapp_touch(), never by them.
 
 export const dynamic = "force-dynamic";
 

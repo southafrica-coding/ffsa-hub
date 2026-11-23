@@ -145,9 +145,18 @@ CREATE TABLE IF NOT EXISTS public.missio_whatsapp_status_events (
 -- ────────────────────────────────────────────────────────────
 -- 4. updated_at
 -- ────────────────────────────────────────────────────────────
+-- Pastors mark a thread read through their own session, and they hold
+-- UPDATE on unread_count and last_read_at only. This trigger also sets
+-- updated_at. Postgres checks column privileges against the statement's
+-- SET list, not what a BEFORE trigger changes, so it works either way; it
+-- is SECURITY DEFINER anyway (as missio_finance_entries_audit() in 394), so
+-- the stamp never depends on the caller's grants. It touches only NEW, with
+-- an empty search_path, and nobody may call it directly (REVOKE below).
+-- Pastors are NOT granted UPDATE on updated_at or any other column.
 CREATE OR REPLACE FUNCTION public.missio_whatsapp_touch()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = '' AS $$
 BEGIN
   NEW.updated_at := now();
@@ -286,6 +295,16 @@ COMMIT;
 --                     -- unread_count, last_read_at (plus SELECT on every column)
 --   SELECT has_function_privilege('authenticated',
 --     'public.missio_whatsapp_bump_thread(uuid, uuid, text, timestamptz, text, text)', 'EXECUTE');   -- false
+--   SELECT prosecdef, proconfig FROM pg_proc WHERE proname = 'missio_whatsapp_touch';
+--                     -- true, {search_path=""}
+--   SELECT has_function_privilege('authenticated', 'public.missio_whatsapp_touch()', 'EXECUTE');   -- false
+--   Mark read as a pastor (no rows exist yet, so this only proves no 42501):
+--     BEGIN; SET LOCAL ROLE authenticated;
+--     UPDATE public.missio_whatsapp_threads SET unread_count = 0, last_read_at = now() WHERE false;
+--     ROLLBACK;     -- UPDATE 0, no permission error
+--     BEGIN; SET LOCAL ROLE authenticated;
+--     UPDATE public.missio_whatsapp_threads SET updated_at = now() WHERE false;
+--     ROLLBACK;     -- ERROR 42501: pastors still can't write updated_at themselves
 --   SELECT count(*) FROM public.missio_whatsapp_threads;   -- 0 (no seed)
 -- ============================================================
 
