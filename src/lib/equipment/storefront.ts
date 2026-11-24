@@ -44,7 +44,7 @@ export type StoreItem = {
   /**
    * False for gear that's on show but can't be hired: it stays in the
    * building, or every unit is in a room that doesn't allow hire
-   * (migration 398). Shown greyed out; it can never be picked.
+   * (migration 384). Shown greyed out; it can never be picked.
    */
   forHire: boolean;
 };
