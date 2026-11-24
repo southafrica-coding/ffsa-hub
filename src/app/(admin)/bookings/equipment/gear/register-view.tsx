@@ -368,7 +368,7 @@ function UnitList({ product, units }: { product: RegisterProduct; units: Registe
     <div className="bg-[color:var(--hire-surface)] md:px-9 md:pb-4 md:pl-[52px]">
       <Link
         href={`/bookings/equipment/gear/products/${product.id}`}
-        className="flex min-h-[48px] items-center justify-between gap-3 border-t border-[color:var(--hire-line)] pl-8 pr-[18px] text-[13px] hover:text-[color:var(--hire-ink)] md:min-h-0 md:border-t-0 md:px-0 md:pb-2.5"
+        className="flex min-h-[48px] items-center justify-between gap-3 border-t border-[color:var(--hire-line)] pl-8 pr-[18px] text-[13px] hover:!text-[color:var(--hire-ink)] md:min-h-0 md:border-t-0 md:px-0 md:pb-2.5"
       >
         <span>
           Store:{" "}

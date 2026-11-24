@@ -147,7 +147,7 @@ export default async function UnitPage({ params }: { params: Promise<{ tag: stri
         <div className="min-w-0">
           <Link
             href={product ? `/bookings/equipment/gear?open=${product.id}` : "/bookings/equipment/gear"}
-            className="mb-3 inline-flex min-h-[44px] items-center gap-1.5 text-[13px] text-[color:var(--hire-muted)] hover:text-[color:var(--hire-ink)] md:min-h-0"
+            className="mb-3 inline-flex min-h-[44px] items-center gap-1.5 text-[13px] !text-[color:var(--hire-muted)] hover:!text-[color:var(--hire-ink)] md:min-h-0"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Register
           </Link>
@@ -318,7 +318,7 @@ export default async function UnitPage({ params }: { params: Promise<{ tag: stri
             {product && (
               <Link
                 href={`/bookings/equipment/gear/products/${product.id}`}
-                className="mt-1.5 block text-[color:var(--hire-accent)] underline-offset-4 hover:underline"
+                className="mt-1.5 block !text-[color:var(--hire-accent)] underline-offset-4 hover:underline"
               >
                 Edit listing ›
               </Link>

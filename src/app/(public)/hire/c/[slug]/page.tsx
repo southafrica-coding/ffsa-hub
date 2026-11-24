@@ -74,11 +74,11 @@ export default async function CategoryPage({
         </p>
         <div className="mt-5 flex flex-col gap-2 text-[15px]">
           {other && (
-            <Link href={withDates(`/hire/c/${other.slug}`, range)} className="text-[color:var(--hire-ink)] underline underline-offset-4">
+            <Link href={withDates(`/hire/c/${other.slug}`, range)} className="!text-[color:var(--hire-ink)] underline underline-offset-4">
               See what&apos;s in {other.name} instead
             </Link>
           )}
-          <Link href={withDates("/hire/c/all", range)} className="text-[color:var(--hire-ink)] underline underline-offset-4">
+          <Link href={withDates("/hire/c/all", range)} className="!text-[color:var(--hire-ink)] underline underline-offset-4">
             See all gear
           </Link>
         </div>
@@ -140,7 +140,7 @@ export default async function CategoryPage({
       <div className="md:grid md:grid-cols-[260px_minmax(0,1fr)]">
         {/* Desktop filters (46a). */}
         <aside className="hidden flex-col gap-7 border-r border-[color:var(--hire-line)] py-7 pl-10 pr-7 md:flex">
-          <Link href={href({ only: onlyFree ? undefined : "free" })} className="flex items-center justify-between text-[14px] font-medium text-[color:var(--hire-ink)]">
+          <Link href={href({ only: onlyFree ? undefined : "free" })} className="flex items-center justify-between text-[14px] font-medium !text-[color:var(--hire-ink)]">
             Only free on my dates
             <span className={cn("relative h-[22px] w-[38px] rounded-[999px]", onlyFree ? "bg-[color:var(--hire-accent)]" : "bg-[color:var(--hire-line-strong)]")}>
               <span
@@ -154,12 +154,12 @@ export default async function CategoryPage({
           {category && category.children.length > 0 && (
             <div className="flex flex-col gap-2.5">
               <div className="hire-label">Type</div>
-              <Link href={href({ type: undefined })} className="flex items-center gap-2.5 text-[14px] text-[color:var(--hire-ink)]">
+              <Link href={href({ type: undefined })} className="flex items-center gap-2.5 text-[14px] !text-[color:var(--hire-ink)]">
                 <span className={cn("h-4 w-4 rounded-[4px]", !type ? "bg-[color:var(--hire-accent)]" : "border border-[color:var(--hire-dim)]")} />
                 All {category.name.toLowerCase()}
               </Link>
               {category.children.map((c) => (
-                <Link key={c.id} href={href({ type: c.slug })} className="flex items-center gap-2.5 text-[14px] text-[color:var(--hire-ink)]">
+                <Link key={c.id} href={href({ type: c.slug })} className="flex items-center gap-2.5 text-[14px] !text-[color:var(--hire-ink)]">
                   <span className={cn("h-4 w-4 rounded-[4px]", type?.id === c.id ? "bg-[color:var(--hire-accent)]" : "border border-[color:var(--hire-dim)]")} />
                   {c.name}
                   <span className="ml-auto text-[color:var(--hire-muted)]">{typeCounts.get(c.id) ?? 0}</span>
@@ -171,7 +171,7 @@ export default async function CategoryPage({
             <div className="flex flex-col gap-2.5">
               <div className="hire-label">Categories</div>
               {categories.map((c) => (
-                <Link key={c.id} href={withDates(`/hire/c/${c.slug}`, range)} className="text-[14px] text-[color:var(--hire-ink)] hover:underline">
+                <Link key={c.id} href={withDates(`/hire/c/${c.slug}`, range)} className="text-[14px] !text-[color:var(--hire-ink)] hover:underline">
                   {c.name}
                 </Link>
               ))}

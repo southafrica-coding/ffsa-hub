@@ -55,7 +55,7 @@ export default async function HireHome({
             <b className="text-[color:var(--hire-ink)]">Booking for a ministry wing?</b> Sign in with your Hub account to see internal
             rates. Internal bookings go to the rental manager for approval.
           </span>
-          <Link href="/login?redirect=/hire" className="shrink-0 font-bold text-[color:var(--hire-accent)]">
+          <Link href="/login?redirect=/hire" className="shrink-0 font-bold !text-[color:var(--hire-accent)]">
             Sign in →
           </Link>
         </div>
