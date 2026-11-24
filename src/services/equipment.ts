@@ -703,16 +703,23 @@ export async function deleteProductPhoto(supabase: Client, id: string) {
   return supabase.from("equipment_product_photos").delete().eq("id", id).select().maybeSingle();
 }
 
-/** Free count and stock for every listed product over [from, to] (migration 257). */
+/**
+ * Free count and stock for every listed product over [from, to] (migrations
+ * 257, 398). `stock` and `free` count hireable units only; `onSite` counts
+ * units that exist but stay in a room that doesn't allow hire.
+ */
 export async function listedAvailability(
   supabase: Client,
   from: string,
   to: string
-): Promise<{ data: Map<string, { stock: number; free: number }>; error: { message: string } | null }> {
+): Promise<{
+  data: Map<string, { stock: number; free: number; onSite: number }>;
+  error: { message: string } | null;
+}> {
   const { data, error } = await supabase.rpc("equipment_listed_availability", { p_from: from, p_to: to });
-  const map = new Map<string, { stock: number; free: number }>();
-  for (const r of (data ?? []) as { product_id: string; stock: number; free: number }[]) {
-    map.set(r.product_id, { stock: r.stock, free: r.free });
+  const map = new Map<string, { stock: number; free: number; onSite: number }>();
+  for (const r of (data ?? []) as { product_id: string; stock: number; free: number; on_site?: number }[]) {
+    map.set(r.product_id, { stock: r.stock, free: r.free, onSite: r.on_site ?? 0 });
   }
   return { data: map, error };
 }

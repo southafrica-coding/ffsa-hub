@@ -41,15 +41,27 @@ export type StoreItem = {
   photo: string | null;
   /** For booked items: the first day one is free again. */
   freeFrom: string | null;
+  /**
+   * False for gear that's on show but can't be hired: it stays in the
+   * building, or every unit is in a room that doesn't allow hire
+   * (migration 398). Shown greyed out; it can never be picked.
+   */
+  forHire: boolean;
 };
+
+/** For hire: allowed out, and at least one unit in a room that allows hire. */
+export function isForHire(p: { can_leave_building: boolean }, stock: number): boolean {
+  return p.can_leave_building && stock > 0;
+}
 
 export type StoreCategory = EquipmentCategory & { children: EquipmentCategory[] };
 
 export const DEFAULT_SETTINGS: QuoteSettings = { vat_bps: 1500, waiver_bps: 1000 };
 
-/** Fully free first, then partly free, then booked; alphabetical within each. */
-export function sortForStore<T extends { free: number; stock: number; name: string }>(items: T[]): T[] {
-  const rank = (i: T) => (i.free > 0 && i.free >= i.stock ? 0 : i.free > 0 ? 1 : 2);
+/** Fully free first, then partly free, then booked, then not for hire; alphabetical within each. */
+export function sortForStore<T extends { free: number; stock: number; name: string; forHire?: boolean }>(items: T[]): T[] {
+  const rank = (i: T) =>
+    i.forHire === false ? 3 : i.free > 0 && i.free >= i.stock ? 0 : i.free > 0 ? 1 : 2;
   return [...items].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
 
@@ -109,8 +121,10 @@ export async function loadStore(
       }
       const q = quote([{ product: p, quantity: 1 }], range.from, range.to, "external", settings);
       const line = q.lines[0];
+      // A kit's stock is only what its parts allow today, so don't read it as "not for hire".
+      const forHire = p.is_kit ? p.can_leave_building : isForHire(p, stock);
       const nextFree =
-        opts?.withFreeFrom && free === 0 && stock > 0
+        opts?.withFreeFrom && forHire && free === 0 && stock > 0
           ? (await freeFrom(supabase, p.id, addDays(range.to, 1))).data
           : null;
       return {
@@ -127,6 +141,7 @@ export async function loadStore(
         periodText: periodLabel(line.period, q.days),
         photo: firstPhoto.get(p.id) ?? null,
         freeFrom: nextFree,
+        forHire,
       };
     })
   );

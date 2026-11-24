@@ -61,6 +61,8 @@ export function parsePickRequest(body: unknown, today: string): ParseResult<Pick
 export type StockItem = {
   id: string;
   title: string;
+  /** False: on show only (migration 398). Always refused. */
+  forHire: boolean;
   free: number;
   /** Per unit, for the whole period, excl. VAT. */
   priceCents: number;
@@ -79,7 +81,7 @@ export type PricedLine = {
   periodText: string;
 };
 
-export type StockProblem = { productId: string; title: string; wanted: number; free: number };
+export type StockProblem = { productId: string; title: string; wanted: number; free: number; notForHire?: boolean };
 
 export function checkPickAgainstStock(
   lines: PickRequest["lines"],
@@ -92,6 +94,10 @@ export function checkPickAgainstStock(
     const s = byId.get(l.productId);
     if (!s) {
       problems.push({ productId: l.productId, title: "An item", wanted: l.quantity, free: 0 });
+      continue;
+    }
+    if (!s.forHire) {
+      problems.push({ productId: s.id, title: s.title, wanted: l.quantity, free: 0, notForHire: true });
       continue;
     }
     const allowed = Math.min(s.free, s.maxPerOrder ?? Infinity);
@@ -114,6 +120,7 @@ export function checkPickAgainstStock(
 
 /** One sentence per line that no longer fits. */
 export function problemText(p: StockProblem): string {
+  if (p.notForHire) return `${p.title} is on show only. It isn't for hire.`;
   if (p.free === 0) return `${p.title} isn't free on your dates any more.`;
   return `Only ${p.free} of ${p.title} ${p.free === 1 ? "is" : "are"} free on your dates. You asked for ${p.wanted}.`;
 }

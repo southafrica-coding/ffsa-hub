@@ -15,9 +15,12 @@ const base = {
   phone: "082 555 0100",
 };
 
+const DESK = "44444444-4444-4444-8444-444444444444";
+
 const stock: StockItem[] = [
-  { id: SPEAKER, title: "Powered speaker", free: 2, priceCents: 45000, periodText: "per weekend", depositCents: 100000, maxPerOrder: null },
-  { id: MIC, title: "Wireless mic", free: 4, priceCents: 15000, periodText: "per weekend", depositCents: 20000, maxPerOrder: 2 },
+  { id: SPEAKER, title: "Powered speaker", forHire: true, free: 2, priceCents: 45000, periodText: "per weekend", depositCents: 100000, maxPerOrder: null },
+  { id: MIC, title: "Wireless mic", forHire: true, free: 4, priceCents: 15000, periodText: "per weekend", depositCents: 20000, maxPerOrder: 2 },
+  { id: DESK, title: "dLive desk", forHire: false, free: 0, priceCents: 580000, periodText: "per day", depositCents: 6000000, maxPerOrder: null },
 ];
 
 describe("parsePickRequest", () => {
@@ -64,6 +67,13 @@ describe("checkPickAgainstStock", () => {
       "Only 2 of Wireless mic are free on your dates. You asked for 3.",
       "An item isn't free on your dates any more.",
     ]);
+  });
+
+  it("refuses gear that's on show only, however it was asked for", () => {
+    const r = checkPickAgainstStock([{ productId: DESK, quantity: 1 }], stock);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.problems.map(problemText)).toEqual(["dLive desk is on show only. It isn't for hire."]);
   });
 });
 

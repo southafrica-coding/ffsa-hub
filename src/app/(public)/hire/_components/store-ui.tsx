@@ -105,8 +105,13 @@ export function HelperBanner({ range, className }: { range: Range & { chosen?: b
   );
 }
 
-/** "2 free" / "2 of 4 free" / "Booked" — and its colour. */
-export function freeText(i: Pick<StoreItem, "free" | "stock">): { text: string; tone: "ok" | "some" | "none" } {
+export const NOT_FOR_HIRE = "Not for hire";
+
+/** "2 free" / "2 of 4 free" / "Booked" / "Not for hire" — and its colour. */
+export function freeText(
+  i: Pick<StoreItem, "free" | "stock"> & { forHire?: boolean }
+): { text: string; tone: "ok" | "some" | "none" | "off" } {
+  if (i.forHire === false) return { text: NOT_FOR_HIRE, tone: "off" };
   if (i.free <= 0) return { text: "Booked", tone: "none" };
   if (i.free >= i.stock) return { text: `${i.free} free`, tone: "ok" };
   return { text: `${i.free} of ${i.stock} free`, tone: "some" };
@@ -116,6 +121,7 @@ const toneClass = {
   ok: "text-[color:var(--hire-ok)]",
   some: "text-[color:var(--hire-accent)]",
   none: "text-[color:var(--hire-ink)]",
+  off: "text-[color:var(--hire-muted)]",
 };
 
 export function Photo({ src, alt, className }: { src: string | null; alt: string; className?: string }) {
@@ -136,9 +142,12 @@ export function Photo({ src, alt, className }: { src: string | null; alt: string
 /**
  * One product: a card in a grid on desktop (46a), a two-column row on a
  * phone (47a-2). Booked items are dimmed and say when they're free again.
+ * Gear that's not for hire is dimmed further and says so; its page can be
+ * opened, but nothing on it lets anyone pick it.
  */
 export function ItemCard({ item, range, label }: { item: StoreItem; range: Range; label?: string }) {
   const f = freeText(item);
+  const off = f.tone === "off";
   const booked = f.tone === "none";
   const href = withDates(`/hire/p/${item.slug}`, range);
   const title = itemTitle(item);
@@ -147,7 +156,8 @@ export function ItemCard({ item, range, label }: { item: StoreItem; range: Range
       href={href}
       className={cn(
         "grid grid-cols-[92px_minmax(0,1fr)] items-center gap-3.5 border-b border-[color:var(--hire-line)] px-[18px] py-3.5 md:flex md:flex-col md:items-stretch md:gap-2.5 md:border-0 md:p-0",
-        booked && "opacity-55"
+        booked && "opacity-55",
+        off && "opacity-45"
       )}
     >
       <div className="relative">
@@ -162,12 +172,17 @@ export function ItemCard({ item, range, label }: { item: StoreItem; range: Range
             Booked on your dates
           </span>
         )}
+        {off && (
+          <span className="absolute left-3 top-3 hidden rounded-[4px] border border-[color:var(--hire-dim)] bg-[color:var(--hire-bg)] px-2 py-1 text-[12px] font-bold text-[color:var(--hire-ink)] md:block">
+            {NOT_FOR_HIRE}
+          </span>
+        )}
       </div>
       <div className="flex min-w-0 flex-col gap-1 md:gap-2">
         {label && <span className="hidden text-[12px] uppercase tracking-[0.14em] text-[color:var(--hire-muted)] md:block">{label}</span>}
         <span className="text-[15px] font-medium text-[color:var(--hire-ink)] md:text-[16px]">{title}</span>
         <span className="flex flex-col gap-1 md:flex-row md:items-baseline md:justify-between">
-          <span className={cn("hire-display text-[24px] md:text-[30px]", booked ? "!text-[color:var(--hire-body)]" : "!text-[color:var(--hire-accent)]")}>
+          <span className={cn("hire-display text-[24px] md:text-[30px]", booked || off ? "!text-[color:var(--hire-body)]" : "!text-[color:var(--hire-accent)]")}>
             {randsShort(item.priceCents)}{" "}
             <span className="font-sans text-[12px] text-[color:var(--hire-muted)] md:text-[13px]">{item.periodText}</span>
           </span>

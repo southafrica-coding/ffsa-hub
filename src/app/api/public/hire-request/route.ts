@@ -59,6 +59,7 @@ export async function POST(request: Request) {
   const stock: StockItem[] = store.items.map((i) => ({
     id: i.id,
     title: itemTitle(i),
+    forHire: i.forHire,
     free: i.free,
     priceCents: i.priceCents,
     periodText: i.periodText,

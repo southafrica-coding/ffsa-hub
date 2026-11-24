@@ -19,6 +19,8 @@ export type PickItem = {
   title: string;
   group: string;
   photo: string | null;
+  /** False: on show only. Listed greyed out, never pickable. */
+  forHire: boolean;
   free: number;
   /** Most one order may take: free, capped by the product's per-order limit. */
   max: number;
@@ -97,6 +99,7 @@ export function PickList({
   const notFitting = Object.entries(initialPicks).flatMap(([slug, n]) => {
     const item = bySlug.get(slug);
     if (!item) return [];
+    if (!item.forHire) return [`${item.title} is on show only. It isn't for hire.`];
     if (item.max <= 0) return [`${item.title} isn't free on these dates.`];
     if (n > item.max) return [`Only ${item.max} of ${item.title} can be booked on these dates, so we've set it to ${item.max}.`];
     return [];
@@ -114,9 +117,12 @@ export function PickList({
   const deposit = chosen.reduce((sum, i) => sum + i.depositCents * picks[i.slug], 0);
   const units = chosen.reduce((sum, i) => sum + picks[i.slug], 0);
 
+  // Pickable gear, plus gear that's on show only (greyed, no stepper).
+  // For-hire gear that's booked on these dates is left out and counted.
   const free = items.filter((i) => i.max > 0);
-  const bookedCount = items.length - free.length;
-  const groups = Array.from(new Set(free.map((i) => i.group)));
+  const shown = items.filter((i) => i.max > 0 || !i.forHire);
+  const bookedCount = items.filter((i) => i.forHire && i.max <= 0).length;
+  const groups = Array.from(new Set(shown.map((i) => i.group)));
   const helperHref = `/hire/helper${datesChosen ? `?from=${from}&to=${to}` : ""}`;
 
   function changeDates(e: React.FormEvent) {
@@ -236,16 +242,19 @@ export function PickList({
             <section key={g}>
               <h2 className="hire-display mb-2 text-[30px] md:text-[40px]">{g}</h2>
               <ul className="border-t border-[color:var(--hire-line)]">
-                {free
+                {shown
                   .filter((i) => i.group === g)
+                  .sort((a, b) => Number(b.forHire) - Number(a.forHire))
                   .map((i) => {
                     const n = picks[i.slug] ?? 0;
                     return (
                       <li
                         key={i.id}
+                        aria-disabled={!i.forHire || undefined}
                         className={cn(
                           "grid grid-cols-[64px_minmax(0,1fr)] items-center gap-3 border-b border-[color:var(--hire-line)] py-3 sm:grid-cols-[64px_minmax(0,1fr)_auto]",
-                          n > 0 && "bg-[color:var(--hire-surface)]"
+                          n > 0 && "bg-[color:var(--hire-surface)]",
+                          !i.forHire && "opacity-45"
                         )}
                       >
                         <Photo src={i.photo} alt={i.title} className="h-16 w-16 rounded-[6px]" />
@@ -258,17 +267,31 @@ export function PickList({
                           </Link>
                           <span className="text-[13px]">
                             {rands(i.priceCents)} {i.periodText} ·{" "}
-                            <span className="text-[color:var(--hire-ok)]">{i.free} free</span>
-                            {i.max < i.free && <span className="text-[color:var(--hire-muted)]"> · up to {i.max} per booking</span>}
+                            {i.forHire ? (
+                              <>
+                                <span className="text-[color:var(--hire-ok)]">{i.free} free</span>
+                                {i.max < i.free && (
+                                  <span className="text-[color:var(--hire-muted)]"> · up to {i.max} per booking</span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-[color:var(--hire-muted)]">On show only</span>
+                            )}
                           </span>
                         </div>
                         <div className="col-start-2 sm:col-start-3">
-                          <Stepper
-                            label={i.title}
-                            value={n}
-                            max={i.max}
-                            onChange={(v) => setPicks((p) => ({ ...p, [i.slug]: Math.max(0, Math.min(v, i.max)) }))}
-                          />
+                          {i.forHire ? (
+                            <Stepper
+                              label={i.title}
+                              value={n}
+                              max={i.max}
+                              onChange={(v) => setPicks((p) => ({ ...p, [i.slug]: Math.max(0, Math.min(v, i.max)) }))}
+                            />
+                          ) : (
+                            <span className="inline-flex h-[44px] items-center rounded-[6px] border border-dashed border-[color:var(--hire-line-strong)] px-3 text-[13px] font-medium text-[color:var(--hire-muted)]">
+                              Not for hire
+                            </span>
+                          )}
                         </div>
                       </li>
                     );
