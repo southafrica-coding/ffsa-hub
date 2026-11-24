@@ -1,6 +1,8 @@
 -- ============================================================
--- FFSA Hub — Migration 398: gear that's on show but not for hire
--- Requires migrations 255, 257 and 285. Run BEFORE 399.
+-- FFSA Hub — Migration 400: gear that's on show but not for hire
+-- Applied to production on 24 Nov 2026 under its first number, 398;
+-- renumbered because a Missio migration took 398 too. Don't run it again.
+-- Requires migrations 255, 257 and 285. Run BEFORE 401.
 --
 -- FFSA wants every piece of gear on the hire store, but the gear kept in
 -- the Auditorium, the Vault (studio) and the SBS classroom must never go
@@ -25,7 +27,7 @@
 --    apart from "Booked". Its return type changes, so it is dropped and
 --    recreated (same SECURITY DEFINER, same default EXECUTE).
 --
--- No unit, order or price changes here; 399 sets the prices.
+-- No unit, order or price changes here; 401 sets the prices.
 -- Safe to run twice.
 -- To undo: re-run 255's equipment_free_count, 257's
 -- equipment_listed_availability, restore the old CHECK, and drop the column.

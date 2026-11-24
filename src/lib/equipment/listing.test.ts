@@ -12,7 +12,7 @@ const base = {
 describe("going live", () => {
   it("is allowed exactly when the database CHECK would pass", () => {
     expect(goLiveBlockers(base)).toEqual([]);
-    // Gear that stays in the building may be listed: it shows as Not for hire (migration 398).
+    // Gear that stays in the building may be listed: it shows as Not for hire (migration 400).
     expect(goLiveBlockers({ ...base, can_leave_building: false })).toEqual([]);
     expect(goLiveBlockers({ ...base, price_day_cents: null })).toHaveLength(1);
     expect(goLiveBlockers({ ...base, can_leave_building: false, price_day_cents: null })).toHaveLength(1);

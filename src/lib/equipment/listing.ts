@@ -1,5 +1,5 @@
 // When a product may go on the store (spec rule 1, as changed by migration
-// 398). The database enforces
+// 400). The database enforces
 //   CHECK (NOT is_listed OR price_day_cents IS NOT NULL)
 // and this says the same thing in plain words before anyone hits it.
 // Gear that can't leave the building may still be listed: it shows as
