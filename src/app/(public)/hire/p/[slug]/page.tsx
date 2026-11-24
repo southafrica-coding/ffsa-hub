@@ -103,7 +103,7 @@ export default async function ItemPage({
     stock = ((units ?? []) as { status: string }[]).filter((u) => u.status === "available").length;
   }
   // On show but not for hire: it stays in the building, or every unit is in a
-  // room that doesn't allow hire (migration 398). Nothing below lets anyone pick it.
+  // room that doesn't allow hire (migration 384). Nothing below lets anyone pick it.
   const forHire = isForHire(product, stock);
   const perDay = new Map(((daysRes.data ?? []) as { day: string; free: number }[]).map((d) => [d.day, d.free]));
 

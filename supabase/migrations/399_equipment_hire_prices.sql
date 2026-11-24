@@ -1,6 +1,6 @@
 -- ============================================================
 -- FFSA Hub — Migration 399: hire prices from the FFSA price list
--- Requires migrations 256, 257, 286 and 398. Run AFTER 398.
+-- Requires migrations 256, 257, 286 and 384. Run AFTER 384.
 --
 -- Source: the "Hire price list" tab of the FFSA INVENTORY sheet
 -- (November 2026). Rand excl. VAT, about 10% under the cheapest
@@ -11,7 +11,7 @@
 -- on product ids or slugs. Every row of the price list becomes one
 -- product update, listed on the store with a store category.
 --
--- What ends up hireable is decided by ROOM (398), not here: products with
+-- What ends up hireable is decided by ROOM (384), not here: products with
 -- units Upstairs (DTS-DBS) or in the Old DBS classroom can be picked;
 -- everything else shows as "Not for hire". can_leave_building is set
 -- from the rooms at the end so the admin pages agree.

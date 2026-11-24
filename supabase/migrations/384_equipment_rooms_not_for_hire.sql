@@ -1,5 +1,5 @@
 -- ============================================================
--- FFSA Hub — Migration 398: gear that's on show but not for hire
+-- FFSA Hub — Migration 384: gear that's on show but not for hire
 -- Requires migrations 255, 257 and 285. Run BEFORE 399.
 --
 -- FFSA wants every piece of gear on the hire store, but the gear kept in

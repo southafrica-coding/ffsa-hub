@@ -61,7 +61,7 @@ export function parsePickRequest(body: unknown, today: string): ParseResult<Pick
 export type StockItem = {
   id: string;
   title: string;
-  /** False: on show only (migration 398). Always refused. */
+  /** False: on show only (migration 384). Always refused. */
   forHire: boolean;
   free: number;
   /** Per unit, for the whole period, excl. VAT. */
