@@ -1,12 +1,21 @@
 import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 import {
   createBearerClient,
   getBearerToken,
   hasBearerHeader,
 } from "@/lib/supabase/bearer";
+import {
+  ACTIVITY_COOKIE,
+  activityCookieValue,
+  activityDay,
+  isCountableRequest,
+  recordUserActivity,
+  shouldRecordMobile,
+  type ActivityClient,
+} from "@/lib/user-activity";
 
-export async function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest, event?: NextFetchEvent) {
   const { pathname } = request.nextUrl;
   const isApi = pathname === "/api" || pathname.startsWith("/api/");
 
@@ -115,7 +124,7 @@ export async function middleware(request: NextRequest) {
   // Protected /api/* with `Authorization: Bearer …`: the phone app. The token
   // decides, even if cookies are present too; no cookie work happens.
   if (isApi && hasBearerHeader(request)) {
-    return bearerGate(request);
+    return bearerGate(request, event);
   }
 
   const supabase = createServerClient(
@@ -224,6 +233,27 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Daily activity (DAU / WAU): once per browser per day, after the response
+  // is on its way. Never awaited, never throws. See src/lib/user-activity.ts.
+  if (user && !isDeactivated && !isPublicRoute && isCountableRequest(request)) {
+    const day = activityDay();
+    const seen = activityCookieValue(user.id, day);
+    if (request.cookies.get(ACTIVITY_COOKIE)?.value !== seen) {
+      const pending = recordUserActivity(
+        supabase as unknown as ActivityClient,
+        "web"
+      );
+      if (event) event.waitUntil(pending);
+      supabaseResponse.cookies.set(ACTIVITY_COOKIE, seen, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 36,
+      });
+    }
+  }
+
   return supabaseResponse;
 }
 
@@ -235,7 +265,7 @@ export async function middleware(request: NextRequest) {
 // be deactivated. is_active is read with a client carrying that same bearer,
 // so RLS ("users can read own user record") applies; never the service role.
 // The token's own `sub` is only used to start that read early, as above.
-async function bearerGate(request: NextRequest) {
+async function bearerGate(request: NextRequest, event?: NextFetchEvent) {
   const token = getBearerToken(request);
   if (!token) {
     return apiUnauthenticated("The access token is missing or malformed.");
@@ -268,6 +298,15 @@ async function bearerGate(request: NextRequest) {
   const userRow =
     user.id === claimedUserId ? claimedRow : await readIsActive(user.id);
   if (userRow?.is_active === false) return apiDeactivated();
+
+  // Daily activity for the phone app: no cookies here, so throttle in memory.
+  if (isCountableRequest(request) && shouldRecordMobile(user.id, activityDay())) {
+    const pending = recordUserActivity(
+      supabase as unknown as ActivityClient,
+      "mobile"
+    );
+    if (event) event.waitUntil(pending);
+  }
 
   // The Authorization header is forwarded untouched, so the route's
   // createClient() runs as this user.
