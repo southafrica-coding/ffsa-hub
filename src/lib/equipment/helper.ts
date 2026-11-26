@@ -14,6 +14,13 @@
 import { z } from "zod";
 import { dayCount, isIsoDate } from "./dates";
 
+/**
+ * Where hire requests go (the pick list and the event helper), and the
+ * address the forms give when something fails. One inbox, run by the
+ * production team.
+ */
+export const HIRE_EMAIL = "production@ffsouthafrica.com";
+
 // ────────────────────────────────────────────────────────────
 // The options
 // ────────────────────────────────────────────────────────────
@@ -215,7 +222,7 @@ export function parseHelperAnswers(body: unknown, today: string): ParseResult<He
   const to = a.endDate ?? a.date;
   if (a.date < today) return { ok: false, error: "The event date can't be in the past." };
   if (to < a.date) return { ok: false, error: "The last day can't be before the first." };
-  if (dayCount(a.date, to) > MAX_DAYS) return { ok: false, error: "For events longer than a month, email us directly." };
+  if (dayCount(a.date, to) > MAX_DAYS) return { ok: false, error: `For events longer than a month, email ${HIRE_EMAIL}.` };
   if (a.eventType === "other" && !a.eventTypeOther) return { ok: false, error: "Tell us what kind of event it is." };
   return { ok: true, value: a };
 }

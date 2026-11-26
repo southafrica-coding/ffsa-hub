@@ -705,7 +705,7 @@ export async function deleteProductPhoto(supabase: Client, id: string) {
 
 /**
  * Free count and stock for every listed product over [from, to] (migrations
- * 257, 398). `stock` and `free` count hireable units only; `onSite` counts
+ * 257, 400). `stock` and `free` count hireable units only; `onSite` counts
  * units that exist but stay in a room that doesn't allow hire.
  */
 export async function listedAvailability(

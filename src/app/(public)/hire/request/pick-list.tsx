@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { rands } from "@/lib/equipment/money";
-import { FULFILMENT } from "@/lib/equipment/helper";
+import { FULFILMENT, HIRE_EMAIL } from "@/lib/equipment/helper";
 import { Photo } from "../_components/store-ui";
 
 export type PickItem = {
@@ -161,7 +161,7 @@ export function PickList({
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) {
-        setError(json?.error ?? "We couldn't send your list. Try again, or email us.");
+        setError(json?.error ?? `We couldn't send your list. Try again, or email ${HIRE_EMAIL}.`);
         if (Array.isArray(json?.problems)) setProblems(json.problems.map((p: { text: string }) => p.text));
         return;
       }
