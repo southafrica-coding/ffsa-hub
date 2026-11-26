@@ -27,6 +27,7 @@ const MODULE_ID: Record<string, string> = {
   evangelism: "evangelism",
   prayer_room: "prayer-room",
   brand_kit: "brand-kit",
+  song_library: "song-library",
 };
 
 export function toHubService(
