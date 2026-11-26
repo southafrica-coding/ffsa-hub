@@ -3,6 +3,8 @@
 
 import { isIsoDate, isUuid } from "@/lib/departments/validate";
 import {
+  L10_AUTO_HEADLINE_FIELD,
+  L10_AUTO_HEADLINE_FIELDS,
   L10_GOAL_DIRECTIONS,
   L10_ISSUE_STATUSES,
   L10_MEASURABLE_UNITS,
@@ -14,7 +16,7 @@ import {
   type L10Segment,
 } from "./types";
 
-export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
+export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string; code?: string };
 export type Row = Record<string, unknown>;
 
 const TITLE_MAX = 200;
@@ -193,6 +195,12 @@ const CREATE_ONLY = new Set(["source_meeting_id", "measurable_id", "week_start"]
 
 function parseFields(kind: L10ItemKind, body: unknown, mode: "create" | "patch"): Parsed<Row> {
   if (!isRecord(body)) return { ok: false, error: "Body must be a JSON object" };
+  if (kind === "headlines") {
+    const reserved = (L10_AUTO_HEADLINE_FIELDS as readonly string[]).find((key) => key in body);
+    if (reserved) {
+      return { ok: false, error: `${reserved} is set by the Hub, not by a request`, code: L10_AUTO_HEADLINE_FIELD };
+    }
+  }
   const spec = SPECS[kind];
   const out: Row = {};
   for (const key of Object.keys(body)) {

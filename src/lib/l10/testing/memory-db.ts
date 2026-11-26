@@ -32,6 +32,7 @@ const DEFAULTS: Record<string, Row> = {
   l10_meeting_attendees: { rating: null, followup_sent_at: null },
   l10_todos: { source_meeting_id: null, owner_id: null, due_on: null, done: false, done_at: null },
   l10_issues: { source_meeting_id: null, resolved_meeting_id: null, solved_at: null, priority: null },
+  l10_headlines: { is_auto: false, recap_of_meeting_id: null, dismissed_at: null, source_meeting_id: null },
   rocks: { team_id: null },
 };
 
@@ -81,7 +82,8 @@ function shape(rows: Row[], filters: Filter[]): Row[] {
 
 export function createMemoryDb(
   seed: Record<string, Row[]> = {},
-  opts: { unique?: (table: string, row: Row, all: Row[]) => boolean } = {}
+  /** false or an index name = a unique clash (23505, named like Postgres does). */
+  opts: { unique?: (table: string, row: Row, all: Row[]) => boolean | string } = {}
 ): MemoryDb {
   const tables: Record<string, Row[]> = {};
   for (const [t, rows] of Object.entries(seed)) tables[t] = rows.map((r) => ({ ...r }));
@@ -106,7 +108,10 @@ export function createMemoryDb(
           const made = list.map((p) => ({ id: randomUUID(), ...(DEFAULTS[table] ?? {}), ...p }));
           if (made.some((r) => !canWrite(table, r))) return { data: null, error: { code: "42501", message: "rls" } };
           for (const r of made) {
-            if (opts.unique && !opts.unique(table, r, all)) return { data: null, error: { code: "23505", message: "dup" } };
+            const u = opts.unique ? opts.unique(table, r, all) : true;
+            if (u !== true) {
+              return { data: null, error: { code: "23505", message: `duplicate key value violates unique constraint "${u || "dup"}"` } };
+            }
             all.push(r);
           }
           result = q.returning ? made.map((r) => ({ ...r })) : null;

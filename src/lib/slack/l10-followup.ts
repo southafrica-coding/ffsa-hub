@@ -1,4 +1,4 @@
-// After a P&W L10 meeting ends, each attendee gets one Slack DM from the
+// After an L10 meeting ends (any department's team), each attendee gets one Slack DM from the
 // FFSA Hub Activity bot with their open to-dos: the ones from this meeting,
 // then the others still open on that team, each with its due date, and a
 // button back to the team's L10 page in the Hub.
@@ -13,8 +13,16 @@
 // ending at once DM each person once. If Slack refuses the DM, the claim is
 // released (only if it is still ours), so a later end call can try again.
 //
-// Off everywhere except the live site (VERCEL_ENV=production and preview
-// writes not disabled), like Fleet: previews share the production database
+// Known residual (left on purpose): if the process dies after a claim and
+// before the send or the release (a function timeout or crash mid-call),
+// that stamp stays set and nobody retries, so that person gets no DM (or
+// the channel no recap). A stale-claim takeover would need a separate
+// "claimed" vs "sent" column to tell a stuck claim from a sent one, and
+// guessing wrong double-sends; a missed DM is the safer failure. The window
+// is one Slack call per person; the route allows 60 s (maxDuration).
+//
+// Off everywhere except the Hub's real deployment (Vercel's VERCEL_ENV and
+// preview writes not disabled), like Fleet: previews share the real database
 // and must never message anyone. Off, nothing is claimed.
 //
 // No "Mark done" button: the Slack interactivity route
@@ -37,13 +45,17 @@
 import { previewWritesDisabled } from "@/lib/preview-writes";
 import * as slack from "@/lib/slack/client";
 import { isBotConfigured } from "@/lib/slack/bots";
-import { L10_OPEN_ISSUE_STATUSES, L10_TABLES, type L10Todo } from "@/lib/l10/types";
+import { loadMeetingRecap, recapDateLabel, recapSummaryLines, type MeetingRecap, type RecapPersonItem } from "@/lib/l10/recap";
+import { L10_TABLES, type L10Todo } from "@/lib/l10/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
+/** Vercel's VERCEL_ENV value for the real deployment (a platform constant, not a team). */
+const VERCEL_REAL_DEPLOYMENT = "production";
+
 export function canSendL10Followup(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.VERCEL_ENV === "production" && !previewWritesDisabled(env);
+  return env.VERCEL_ENV === VERCEL_REAL_DEPLOYMENT && !previewWritesDisabled(env);
 }
 
 export function l10TeamUrl(departmentSlug: string, teamId: string, env: NodeJS.ProcessEnv = process.env): string {
@@ -279,35 +291,25 @@ export async function runL10Followup(
 }
 
 // ── The team channel recap ─────────────────────────────────
+// The data comes from lib/l10/recap (loadMeetingRecap), which also feeds
+// the cross-team headline, so both say the same thing.
 
-export type RecapTodo = { title: string; due_on: string | null; owner: string | null };
-export type RecapIssue = { title: string; owner: string | null };
-
-export function buildRecapMessage(input: {
-  teamName: string;
-  averageRating: number | null;
-  ratedCount: number;
-  todos: readonly RecapTodo[];
-  solved: readonly RecapIssue[];
-  open: readonly RecapIssue[];
-  url: string;
-  today: string;
-}): FollowupMessage {
+/** The recap as Slack blocks. */
+export function buildRecapMessage(r: MeetingRecap, url: string, today: string): FollowupMessage {
+  const l = recapSummaryLines(r);
   const who = (name: string | null) => (name ? esc(name) : "_no owner_");
   const rating =
-    input.averageRating === null
-      ? "No ratings given"
-      : `Average rating *${input.averageRating}* / 10 (${input.ratedCount} rated)`;
-  const todoLines = input.todos.length
-    ? input.todos.map((t) => `• ${esc(t.title)} — ${who(t.owner)}, _${dueLabel(t.due_on, input.today)}_`).join("\n")
+    r.averageRating === null ? "No ratings given" : `Average rating *${r.averageRating}* / 10 (${r.ratedCount} rated)`;
+  const todoLines = r.newTodos.length
+    ? r.newTodos.map((t) => `• ${esc(t.title)} — ${who(t.owner)}, _${dueLabel(t.due_on, today)}_`).join("\n")
     : "_None_";
-  const issueLines = (list: readonly RecapIssue[]) =>
+  const issueLines = (list: readonly RecapPersonItem[]) =>
     list.length ? list.map((i) => `• ${esc(i.title)}${i.owner ? ` — ${esc(i.owner)}` : ""}`).join("\n") : "_None_";
   const sections = [
-    `*${esc(input.teamName)} L10 recap*\n${rating}`,
+    `*${esc(r.teamName)} L10 recap* · ${recapDateLabel(r.date)}\n${rating}\n${esc(l.rocks)} · ${esc(l.todos)}`,
     `*To-dos from this meeting*\n${todoLines}`,
-    `*Issues solved*\n${issueLines(input.solved)}`,
-    `*Issues kept open* (back on the list next week)\n${issueLines(input.open)}`,
+    `*Issues solved*\n${issueLines(r.solved)}`,
+    `*Issues kept open* (back on the list next week)\n${issueLines(r.open)}`,
   ];
   const blocks: unknown[] = [
     ...sections.map((text) => ({ type: "section", text: { type: "mrkdwn", text: text.slice(0, 2900) } })),
@@ -317,14 +319,15 @@ export function buildRecapMessage(input: {
         {
           type: "button",
           action_id: "l10_open_team",
-          text: { type: "plain_text", text: `Open ${input.teamName} L10`.slice(0, 75) },
-          url: input.url,
+          text: { type: "plain_text", text: `Open ${r.teamName} L10`.slice(0, 75) },
+          url,
         },
       ],
     },
   ];
-  const avg = input.averageRating === null ? "no rating" : `rated ${input.averageRating}/10`;
-  const text = `${input.teamName} L10 recap: ${avg}, ${input.todos.length} to-do${input.todos.length === 1 ? "" : "s"}, ${input.solved.length} solved, ${input.open.length} open. ${input.url}`;
+  const avg = r.averageRating === null ? "no rating" : `rated ${r.averageRating}/10`;
+  const n = r.newTodos.length;
+  const text = `${r.teamName} L10 recap: ${avg}, ${n} to-do${n === 1 ? "" : "s"}, ${r.solved.length} solved, ${r.open.length} open. ${url}`;
   return { text, blocks };
 }
 
@@ -332,9 +335,6 @@ export type L10RecapRun = {
   outcome: "off" | "not-ended" | "not-found" | "no-channel" | "already-posted" | "posted" | "error";
   error?: string;
 };
-
-const personName = (p: Person & { last_name?: string | null }) =>
-  [p.preferred_name || p.first_name, p.last_name].filter(Boolean).join(" ") || null;
 
 /**
  * Post the meeting recap to the team's channel once. Safe to repeat and to
@@ -348,11 +348,7 @@ export async function runL10Recap(
   const deps = opts.deps ?? realDeps;
   const env = opts.env ?? process.env;
 
-  const m = await admin
-    .from(L10_TABLES.meetings)
-    .select("id, team_id, started_at, ended_at, recap_posted_at")
-    .eq("id", meetingId)
-    .maybeSingle();
+  const m = await admin.from(L10_TABLES.meetings).select("id, ended_at, recap_posted_at").eq("id", meetingId).maybeSingle();
   if (m.error) {
     deps.log(`[l10-recap] meeting ${meetingId}: cannot read the meeting (${m.error.code ?? ""} ${m.error.message}), skipped`);
     return { outcome: "error", error: "meeting read failed" };
@@ -362,75 +358,20 @@ export async function runL10Recap(
   if (m.data.recap_posted_at) return { outcome: "already-posted" };
   if (!canSendL10Followup(env) || !deps.slackReady()) return { outcome: "off" };
 
-  const team = await admin
-    .from(L10_TABLES.teams)
-    .select("id, name, department_id, slack_channel_id")
-    .eq("id", m.data.team_id)
-    .maybeSingle();
-  if (team.error || !team.data) {
-    deps.log(`[l10-recap] meeting ${meetingId}: no team channel to read (${team.error?.message ?? "team not found"}), skipped`);
-    return { outcome: "no-channel" };
+  const loaded = await loadMeetingRecap(admin, meetingId);
+  if (!loaded.ok) {
+    deps.log(`[l10-recap] meeting ${meetingId}: ${loaded.reason} ${loaded.detail ?? ""}`.trim());
+    return loaded.reason === "read-failed" ? { outcome: "error", error: "recap read failed" } : { outcome: loaded.reason };
   }
-  const channel = team.data.slack_channel_id as string | null | undefined;
+  const recap = loaded.recap;
+  const channel = recap.slackChannelId;
   if (!channel) {
-    deps.log(`[l10-recap] meeting ${meetingId}: team ${team.data.id} has no slack_channel_id, skipped`);
+    deps.log(`[l10-recap] meeting ${meetingId}: team ${recap.teamId} has no slack_channel_id, skipped`);
     return { outcome: "no-channel" };
   }
-  const dept = await admin.from("staff_ministries").select("slug").eq("id", team.data.department_id).maybeSingle();
+  const dept = await admin.from("staff_ministries").select("slug").eq("id", recap.departmentId).maybeSingle();
   if (dept.error || !dept.data) return { outcome: "error", error: "department not found" };
-
-  const teamId = team.data.id;
-  const [att, todos, solved, open] = await Promise.all([
-    admin.from(L10_TABLES.attendees).select("profile_id, rating").eq("team_id", teamId).eq("meeting_id", meetingId),
-    admin.from(L10_TABLES.todos).select("title, due_on, owner_id").eq("team_id", teamId).eq("source_meeting_id", meetingId),
-    admin
-      .from(L10_TABLES.issues)
-      .select("title, owner_id")
-      .eq("team_id", teamId)
-      .eq("status", "solved")
-      .eq("resolved_meeting_id", meetingId),
-    admin
-      .from(L10_TABLES.issues)
-      .select("title, owner_id, priority")
-      .eq("team_id", teamId)
-      .in("status", [...L10_OPEN_ISSUE_STATUSES])
-      .order("priority", { ascending: true, nullsFirst: false }),
-  ]);
-  for (const r of [att, todos, solved, open]) {
-    if (r.error) return { outcome: "error", error: "recap read failed" };
-  }
-  type Owned = { title: string; owner_id: string | null; due_on?: string | null };
-  const ownerIds = [
-    ...new Set(
-      [...(todos.data ?? []), ...(solved.data ?? []), ...(open.data ?? [])]
-        .map((r: Owned) => r.owner_id)
-        .filter((x: string | null): x is string => !!x)
-    ),
-  ];
-  const people = ownerIds.length
-    ? await admin.from("users").select("id, first_name, last_name, preferred_name").in("id", ownerIds)
-    : { data: [], error: null };
-  if (people.error) return { outcome: "error", error: "recap read failed" };
-  const nameOf = new Map<string, string | null>(
-    ((people.data ?? []) as (Person & { last_name?: string | null })[]).map((p) => [p.id, personName(p)])
-  );
-  const owner = (id: string | null) => (id ? nameOf.get(id) ?? null : null);
-
-  const ratings = ((att.data ?? []) as { rating: number | null }[])
-    .map((a) => a.rating)
-    .filter((r): r is number => typeof r === "number");
-  const average = ratings.length ? Math.round((ratings.reduce((s, r) => s + r, 0) / ratings.length) * 10) / 10 : null;
-
-  const message = buildRecapMessage({
-    teamName: team.data.name,
-    averageRating: average,
-    ratedCount: ratings.length,
-    todos: ((todos.data ?? []) as Owned[]).map((t) => ({ title: t.title, due_on: t.due_on ?? null, owner: owner(t.owner_id) })),
-    solved: ((solved.data ?? []) as Owned[]).map((i) => ({ title: i.title, owner: owner(i.owner_id) })),
-    open: ((open.data ?? []) as Owned[]).map((i) => ({ title: i.title, owner: owner(i.owner_id) })),
-    url: l10TeamUrl(dept.data.slug, team.data.id, env),
-    today: todayInSA(deps.now()),
-  });
+  const message = buildRecapMessage(recap, l10TeamUrl(dept.data.slug, recap.teamId, env), todayInSA(deps.now()));
 
   // The claim. Whoever gets the row back is the only one who posts.
   const stamp = deps.now().toISOString();

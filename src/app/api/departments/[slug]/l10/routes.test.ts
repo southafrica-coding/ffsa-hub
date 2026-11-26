@@ -11,10 +11,18 @@ import {
   OUTSIDER,
   PRODUCTION,
   PW_ID,
+  TEAM3,
   ROCK,
   SINGER,
   makeWorld,
   pwRls,
+  COOK,
+  GROUNDS,
+  GROUNDS_LEAD,
+  KITCHEN,
+  OPS_ID,
+  OPS_LEAD,
+  OPS_SLUG,
 } from "@/lib/l10/testing/world";
 
 const h = vi.hoisted(() => ({
@@ -25,14 +33,16 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@/lib/departments/internal/open", () => ({
   isOpened: (r: object) => !("response" in r),
-  openDepartment: async () => {
+  // Stands in for the department routes' gate: the department comes from the slug.
+  openDepartment: async (slug: string) => {
     if (!h.userId) return { response: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
-    if (h.userId === OUTSIDER) return { response: NextResponse.json({ error: "Department not found" }, { status: 404 }) };
+    const dept = h.db.tables.staff_ministries.find((d) => d.slug === slug);
+    if (h.userId === OUTSIDER || !dept) return { response: NextResponse.json({ error: "Department not found" }, { status: 404 }) };
     return {
       supabase: h.db.client({ userId: h.userId, rls: pwRls(h.db.tables) }),
       admin: h.db.client(),
       userId: h.userId,
-      department: { id: PW_ID, slug: "prayer_and_worship" },
+      department: { id: dept.id, slug: dept.slug },
       access: { canSeeDepartmentDetail: true, canEditRocks: h.userId === DEPT_LEAD },
     };
   },
@@ -56,6 +66,7 @@ const { POST: startMeeting } = await import("./teams/[teamId]/meetings/route");
 const { GET: getMeeting } = await import("./teams/[teamId]/meetings/[meetingId]/route");
 const { POST: advance } = await import("./teams/[teamId]/meetings/[meetingId]/advance/route");
 const { POST: end } = await import("./teams/[teamId]/meetings/[meetingId]/end/route");
+const { POST: dismiss, DELETE: restore } = await import("./teams/[teamId]/[kind]/[itemId]/dismiss/route");
 
 const json = (body: unknown, method = "POST") =>
   new Request("http://localhost/x", { method, body: JSON.stringify(body), headers: { "content-type": "application/json" } });
@@ -238,7 +249,7 @@ describe("a meeting, end to end", () => {
     expect(h.db.tables.l10_issues).toHaveLength(issuesBefore);
     const detail = await (await getTeam(get(), prod())).json();
     expect(detail.issues.map((i: { id: string }) => i.id)).toEqual([issue.id]);
-    expect(detail.live_meeting.meeting.id).toBe(next.meetingId);
+    expect(detail.running_meeting.meeting.id).toBe(next.meetingId);
     const recap = h.posts.filter((x) => x.channel === "C_PROD");
     expect(recap).toHaveLength(1);
     expect(recap[0].text).toContain("1 solved, 1 open");
@@ -247,5 +258,144 @@ describe("a meeting, end to end", () => {
   it("refuses to start a second running meeting", async () => {
     await runMeeting();
     expect((await startMeeting(json({}), prod())).status).toBe(409);
+  });
+});
+
+describe("the cross-team headline", () => {
+  /** A Production meeting that has ended, for Live to hear about. */
+  async function productionMeetingEnded(ratings: { user_id: string; rating: number }[] = []) {
+    h.userId = LEAD;
+    const started = await (await startMeeting(json({}), prod())).json();
+    const mp = prod({ meetingId: started.meeting.id });
+    await createKind(json({ title: "Tape the stage", owner_id: SINGER, source_meeting_id: started.meeting.id }), prod({ kind: "todos" }));
+    await end(json({ ratings }), mp);
+    return started.meeting.id as string;
+  }
+  const liveP = (extra: Record<string, string> = {}) => p({ teamId: LIVE, ...extra });
+
+  it("gives Live one headline recapping Production's last ended meeting, on start and on load", async () => {
+    const sourceId = await productionMeetingEnded([{ user_id: LEAD, rating: 8 }]);
+    h.userId = LIVE_ONLY;
+    const started = await (await startMeeting(json({}), liveP())).json();
+    expect(started.auto_headline).toBe("inserted");
+    // A second start while this one runs: one meeting, one headline, a coded 409.
+    const twice = await startMeeting(json({}), liveP());
+    expect(twice.status).toBe(409);
+    expect((await twice.json()).code).toBe("l10_meeting_already_open");
+    const mp = liveP({ meetingId: started.meeting.id });
+    const again = await (await getMeeting(get(), mp)).json();
+    expect(again.auto_headline).toBe("exists");
+    await advance(json({ from: "segue" }), mp);
+    await getTeam(get(), liveP());
+    const autos = h.db.tables.l10_headlines.filter((x) => x.is_auto);
+    expect(autos).toHaveLength(1);
+    expect(autos[0]).toMatchObject({ team_id: LIVE, source_meeting_id: started.meeting.id, recap_of_meeting_id: sourceId, author_id: null });
+    expect(again.headlines[0]).toMatchObject({ is_auto: true, dismissed_at: null });
+    expect(String(autos[0].body)).toContain("Production L10 on");
+    expect(String(autos[0].body)).toContain("Average rating 8/10 (1 rated)");
+  });
+
+  it("adds it to a meeting started before it existed, when the meeting is loaded", async () => {
+    await productionMeetingEnded();
+    h.userId = LIVE_ONLY;
+    const started = await (await startMeeting(json({}), liveP())).json();
+    h.db.tables.l10_headlines.length = 0; // as if it had been started earlier
+    const loaded = await (await getMeeting(get(), liveP({ meetingId: started.meeting.id }))).json();
+    expect(loaded.auto_headline).toBe("inserted");
+    expect(h.db.tables.l10_headlines.filter((x) => x.is_auto)).toHaveLength(1);
+  });
+
+  it("gives Team 3 (no pairing) nothing, and nothing while the source team has no ended meeting", async () => {
+    await productionMeetingEnded();
+    h.userId = LEAD;
+    const t3 = await (await startMeeting(json({}), p({ teamId: TEAM3 }))).json();
+    expect(t3.auto_headline).toBe("no-source-team");
+    h.userId = LIVE_ONLY;
+    // Production's ended meeting exists, but Live -> Production; check the reverse with nothing ended:
+    const w = h.db.tables;
+    w.l10_meetings.filter((m) => m.team_id === PRODUCTION).forEach((m) => (m.ended_at = null));
+    const live = await (await startMeeting(json({}), liveP())).json();
+    expect(live.auto_headline).toBe("no-ended-source-meeting");
+    expect(w.l10_headlines.filter((x) => x.is_auto)).toHaveLength(0);
+  });
+
+  it("refuses edits and deletes of an auto headline, lets anyone on the team dismiss it, and keeps is_auto off requests", async () => {
+    await productionMeetingEnded();
+    h.userId = LIVE_ONLY;
+    await startMeeting(json({}), liveP());
+    const auto = h.db.tables.l10_headlines.find((x) => x.is_auto)!;
+    const item = liveP({ kind: "headlines", itemId: auto.id as string });
+    const patched = await patchItem(json({ body: "edited" }, "PATCH"), item);
+    expect(patched.status).toBe(409);
+    expect((await patched.json()).code).toBe("l10_auto_headline_locked");
+    expect((await deleteItem(get(), item)).status).toBe(409);
+    expect(h.db.tables.l10_headlines.find((x) => x.id === auto.id)?.body).toBe(auto.body);
+
+    const dismissed = await (await dismiss(get(), item)).json();
+    expect(dismissed.headline.dismissed_at).toBeTruthy();
+    const list = await (await listKind(get(), liveP({ kind: "headlines" }))).json();
+    expect(list.headlines[0]).toMatchObject({ id: auto.id, is_auto: true });
+    expect(list.headlines[0].dismissed_at).toBeTruthy();
+    const shown = await (await restore(get(), item)).json();
+    expect(shown.headline).toMatchObject({ id: auto.id, is_auto: true, dismissed_at: null });
+
+    for (const body of [{ body: "x", is_auto: true }, { body: "x", recap_of_meeting_id: auto.id }, { body: "x", dismissed_at: "2026-01-01" }]) {
+      const r = await createKind(json(body), liveP({ kind: "headlines" }));
+      expect(r.status).toBe(400);
+      expect((await r.json()).code).toBe("l10_auto_headline_field");
+    }
+    expect(h.db.tables.l10_headlines.filter((x) => x.is_auto)).toHaveLength(1);
+    // An ordinary headline can still be edited and dismissed.
+    const mine = await (await createKind(json({ body: "New bassist" }), liveP({ kind: "headlines" }))).json();
+    expect(mine.headline).toMatchObject({ is_auto: false, author_id: LIVE_ONLY });
+    expect((await patchItem(json({ body: "New bass player" }, "PATCH"), liveP({ kind: "headlines", itemId: mine.headline.id }))).status).toBe(200);
+  });
+});
+
+describe("a second department uses the same L10 with nothing special-cased", () => {
+  const ops = (v: Record<string, string> = {}) => p({ slug: OPS_SLUG, ...v });
+
+  it("lists only its own teams, by slug", async () => {
+    h.userId = OPS_LEAD;
+    const all = await (await listTeams(get(), ops())).json();
+    expect(all.teams.map((t: { id: string; name: string }) => [t.id, t.name])).toEqual([[GROUNDS, "Grounds"], [KITCHEN, "Kitchen"]]);
+    h.userId = COOK;
+    const mine = await (await listTeams(get(), ops())).json();
+    expect(mine.teams.map((t: { name: string; my_role: string | null }) => [t.name, t.my_role])).toEqual([["Grounds", "member"], ["Kitchen", "leader"]]);
+    // A P&W team is not reachable through this department's slug, and vice versa.
+    expect((await getTeam(get(), ops({ teamId: PRODUCTION }))).status).toBe(404);
+    expect((await getTeam(get(), p({ teamId: GROUNDS }))).status).toBe(404);
+    h.userId = DEPT_LEAD; // P&W's leader oversees nothing here
+    expect((await (await listTeams(get(), ops())).json()).teams).toEqual([]);
+  });
+
+  it("ends a meeting with DMs and a channel recap, then recaps it on the paired team's next meeting", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    h.db.tables.l10_teams.find((t) => t.id === GROUNDS)!.slack_channel_id = "C_GROUNDS";
+    h.userId = GROUNDS_LEAD;
+    const started = await (await startMeeting(json({}), ops({ teamId: GROUNDS }))).json();
+    expect(started.auto_headline).toBe("no-ended-source-meeting"); // Kitchen has not met yet
+    const mp = ops({ teamId: GROUNDS, meetingId: started.meeting.id });
+    await createKind(json({ title: "Mow the field", owner_id: COOK, source_meeting_id: started.meeting.id }), ops({ teamId: GROUNDS, kind: "todos" }));
+    const ended = await (await end(json({ ratings: [{ user_id: GROUNDS_LEAD, rating: 9 }, { user_id: COOK, rating: 7 }] }), mp)).json();
+    expect(ended.average_rating).toBe(8);
+    await end(json({}), mp);
+
+    expect(h.posts.filter((x) => x.channel.startsWith("D_")).map((x) => x.channel).sort()).toEqual(["D_U_COOK", "D_U_GROUNDS"]);
+    const recaps = h.posts.filter((x) => x.channel === "C_GROUNDS");
+    expect(recaps).toHaveLength(1);
+    expect(recaps[0].text).toContain("Grounds");
+
+    h.userId = COOK;
+    const kitchen = await (await startMeeting(json({}), ops({ teamId: KITCHEN }))).json();
+    expect(kitchen.auto_headline).toBe("inserted");
+    await getMeeting(get(), ops({ teamId: KITCHEN, meetingId: kitchen.meeting.id }));
+    const autos = h.db.tables.l10_headlines.filter((x) => x.is_auto);
+    expect(autos).toHaveLength(1);
+    expect(autos[0]).toMatchObject({ team_id: KITCHEN, recap_of_meeting_id: started.meeting.id });
+    expect(String(autos[0].body)).toContain("Grounds L10 on");
+    expect(String(autos[0].body)).toContain("New to-dos: 1 (Kim C)");
+    expect(String(autos[0].body)).toContain("Average rating 8/10 (2 rated)");
+    expect(h.db.tables.l10_teams.find((t) => t.id === KITCHEN)!.department_id).toBe(OPS_ID);
   });
 });

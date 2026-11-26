@@ -6,8 +6,11 @@
 // ended_at is null, and segment_timings ({segue: {started_at, ended_at}, …})
 // says where it is: the segment that has started and not ended.
 
+import { isUniqueClash } from "./db-errors";
 import {
   L10_COLUMNS,
+  L10_MEETING_ALREADY_OPEN,
+  L10_ONE_OPEN_MEETING_INDEX,
   L10_SEGMENTS,
   L10_TABLES,
   type L10Meeting,
@@ -50,6 +53,22 @@ export function currentSegment(timings: L10SegmentTimings | null | undefined): L
   return current;
 }
 
+/**
+ * A timestamp for segment_timings / ended_at: always Date#toISOString()
+ * (UTC, "Z", milliseconds), which 416's strict ISO-8601-with-offset CHECK
+ * accepts, and never before any of `notBefore`. 416 refuses ended_at <
+ * started_at (23514); a server whose clock trails the one that started the
+ * segment would otherwise write exactly that.
+ */
+export function stampNotBefore(now: Date, ...notBefore: (string | null | undefined)[]): string {
+  let ms = now.getTime();
+  for (const t of notBefore) {
+    const v = t ? Date.parse(t) : NaN;
+    if (!Number.isNaN(v) && v > ms) ms = v;
+  }
+  return new Date(ms).toISOString();
+}
+
 export function withCurrentSegment<T extends { segment_timings: L10SegmentTimings | null }>(m: T) {
   return { ...m, current_segment: currentSegment(m.segment_timings) };
 }
@@ -82,7 +101,7 @@ export async function loadMeeting(
   return { ok: true, value: { meeting: meeting.data, attendees: attendees.data ?? [] } };
 }
 
-async function liveMeetings(supabase: Client, teamId: string) {
+async function runningMeetings(supabase: Client, teamId: string) {
   return supabase
     .from(L10_TABLES.meetings)
     .select("id, started_at")
@@ -100,10 +119,15 @@ export async function startMeeting(
   now: () => Date = () => new Date()
 ): Promise<MeetingResult<{ meeting: MeetingRow; attendees: AttendeeRow[] }>> {
   const teamId = team.id;
-  const live = await liveMeetings(supabase, teamId);
-  if (live.error) return { ok: false, kind: "db", error: live.error };
-  if (live.data?.length) {
-    return { ok: false, kind: "conflict", message: "This team already has a meeting running", extra: { meeting_id: live.data[0].id } };
+  const running = await runningMeetings(supabase, teamId);
+  if (running.error) return { ok: false, kind: "db", error: running.error };
+  if (running.data?.length) {
+    return {
+      ok: false,
+      kind: "conflict",
+      message: "This team already has a meeting running",
+      extra: { code: L10_MEETING_ALREADY_OPEN, meeting_id: running.data[0].id },
+    };
   }
 
   const members = await supabase.from(L10_TABLES.members).select("profile_id").eq("team_id", teamId);
@@ -131,16 +155,20 @@ export async function startMeeting(
     })
     .select(L10_COLUMNS.meetings)
     .single();
-  if (created.error) return { ok: false, kind: "db", error: created.error };
-  const meeting = created.data as MeetingRow;
-
-  // 416 has no unique index on a team's running meeting, so two starts can
-  // race. The earliest stays; a later one removes itself.
-  const after = await liveMeetings(supabase, teamId);
-  if (!after.error && (after.data ?? []).length > 1 && after.data[0].id !== meeting.id) {
-    await supabase.from(L10_TABLES.meetings).delete().eq("id", meeting.id).eq("team_id", teamId);
-    return { ok: false, kind: "conflict", message: "This team already has a meeting running", extra: { meeting_id: after.data[0].id } };
+  if (created.error) {
+    // Two starts raced: 416's l10_meetings_one_open_per_team lets one in.
+    if (isUniqueClash(created.error, L10_ONE_OPEN_MEETING_INDEX)) {
+      const open = await runningMeetings(supabase, teamId);
+      return {
+        ok: false,
+        kind: "conflict",
+        message: "This team already has a meeting running",
+        extra: { code: L10_MEETING_ALREADY_OPEN, meeting_id: open.data?.[0]?.id ?? null },
+      };
+    }
+    return { ok: false, kind: "db", error: created.error };
   }
+  const meeting = created.data as MeetingRow;
 
   const rows = attendeeIds.map((profile_id) => ({ team_id: teamId, meeting_id: meeting.id, profile_id }));
   const attendees = await supabase.from(L10_TABLES.attendees).insert(rows).select(L10_COLUMNS.attendees);
@@ -177,19 +205,24 @@ export async function advanceSegment(
   const next = nextSegment(current);
   if (!next) return { ok: false, kind: "bad_request", message: "This is the last segment. End the meeting instead." };
 
-  const at = now().toISOString();
+  const at = stampNotBefore(now(), current ? timings[current]?.started_at : null);
   const updated: L10SegmentTimings = { ...timings, [next]: { started_at: at, ended_at: null } };
   if (current) updated[current] = { ...timings[current], ended_at: at };
 
-  // Compare-and-set: only while the next segment has not started, so two
-  // clicks move it one step, not two.
+  // Compare-and-set in one UPDATE: only while the next segment has not
+  // started (->>started_at is null matches a missing key and a key that is
+  // there but not started), so two clicks move it one step, not two.
+  // This is exact because 416's CHECK (l10_segment_timings_valid) makes every
+  // segment value an object of started_at / ended_at strings or nulls: ->>
+  // on it never meets a scalar, so "is null" means missing or not started,
+  // and a started segment (a string) never matches.
   const moved = await supabase
     .from(L10_TABLES.meetings)
     .update({ segment_timings: updated })
     .eq("id", meetingId)
     .eq("team_id", teamId)
     .is("ended_at", null)
-    .is(`segment_timings->${next}`, null)
+    .is(`segment_timings->${next}->>started_at`, null)
     .select(L10_COLUMNS.meetings);
   if (moved.error) return { ok: false, kind: "db", error: moved.error };
   const row = (moved.data ?? [])[0];
@@ -239,9 +272,9 @@ export async function endMeeting(
 
   let already = !!meeting.ended_at;
   if (!already) {
-    const at = now().toISOString();
     const timings: L10SegmentTimings = { ...(meeting.segment_timings ?? {}) };
     const current = currentSegment(timings);
+    const at = stampNotBefore(now(), meeting.started_at, current ? timings[current]?.started_at : null);
     if (current) timings[current] = { ...timings[current], ended_at: at };
     const ended = await supabase
       .from(L10_TABLES.meetings)
@@ -254,6 +287,9 @@ export async function endMeeting(
     already = !(ended.data ?? []).length;
   }
 
+  // Only rating changes here. 416 refuses a signed-in change of an
+  // attendee's meeting_id / profile_id / team_id (42501 l10_attendee_immutable);
+  // no user path writes those (a wrong attendee is deleted and re-inserted).
   for (const r of input.ratings) {
     const saved = await supabase
       .from(L10_TABLES.attendees)

@@ -1,7 +1,7 @@
 import { getTeam } from "../../_lib/handlers";
 
 // GET /api/departments/[slug]/l10/teams/[teamId] — members, this quarter's rocks,
-// the scorecard, open to-dos and issues, the live meeting and the last five.
+// the scorecard, open to-dos and issues, the running meeting and the last five.
 
 export const dynamic = "force-dynamic";
 

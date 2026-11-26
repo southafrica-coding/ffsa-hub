@@ -94,15 +94,15 @@ export async function listItems(
 /**
  * Stamps that 416's CHECKs tie to a state: to-dos have done_at exactly when
  * done; issues have solved_at exactly when solved, and resolved_meeting_id
- * only when solved (default: the team's live meeting, if one is running).
+ * only when solved (default: the team's running meeting, if there is one).
  */
-export function withStamps(kind: L10ItemKind, values: Row, now: Date, liveMeetingId: string | null): Row {
+export function withStamps(kind: L10ItemKind, values: Row, now: Date, runningMeetingId: string | null): Row {
   const out = { ...values };
   if (kind === "todos" && "done" in values) out.done_at = values.done ? now.toISOString() : null;
   if (kind === "issues" && "status" in values) {
     if (values.status === "solved") {
       out.solved_at = now.toISOString();
-      if (!("resolved_meeting_id" in values)) out.resolved_meeting_id = liveMeetingId;
+      if (!("resolved_meeting_id" in values)) out.resolved_meeting_id = runningMeetingId;
     } else {
       out.solved_at = null;
       out.resolved_meeting_id = null;
@@ -124,15 +124,15 @@ export async function createItem(
   kind: L10ItemKind,
   values: Row,
   userId: string,
-  opts: { now?: Date; liveMeetingId?: string | null } = {}
+  opts: { now?: Date; runningMeetingId?: string | null } = {}
 ): Promise<DbResult<Row>> {
   const now = opts.now ?? new Date();
   const row: Row = {
-    ...withStamps(kind, values, now, opts.liveMeetingId ?? null),
+    ...withStamps(kind, values, now, opts.runningMeetingId ?? null),
     ...authorship(kind, userId, values),
     team_id: team.id,
   };
-  // A team rock lives in 320's rocks with the team's department (composite FK).
+  // A team rock is a row in 320's rocks with the team's department (composite FK).
   if (kind === "rocks") row.staff_ministry_id = team.department_id;
   const res = await supabase.from(tableOf(kind)).insert(row).select(L10_COLUMNS[kind]).single();
   if (res.error) return { data: null, error: res.error };
@@ -145,14 +145,16 @@ export async function updateItem(
   kind: L10ItemKind,
   itemId: string,
   values: Row,
-  opts: { now?: Date; liveMeetingId?: string | null } = {}
+  opts: { now?: Date; runningMeetingId?: string | null } = {}
 ): Promise<DbResult<Row | null>> {
-  const res = await supabase
+  let q = supabase
     .from(tableOf(kind))
-    .update(withStamps(kind, values, opts.now ?? new Date(), opts.liveMeetingId ?? null))
+    .update(withStamps(kind, values, opts.now ?? new Date(), opts.runningMeetingId ?? null))
     .eq("id", itemId)
-    .eq("team_id", teamId)
-    .select(L10_COLUMNS[kind]);
+    .eq("team_id", teamId);
+  // Auto headlines are the Hub's (lib/l10/auto-headline).
+  if (kind === "headlines") q = q.eq("is_auto", false);
+  const res = await q.select(L10_COLUMNS[kind]);
   if (res.error) return { data: null, error: res.error };
   return { data: ((res.data ?? []) as Row[])[0] ?? null, error: null };
 }
@@ -163,7 +165,9 @@ export async function deleteItem(
   kind: L10ItemKind,
   itemId: string
 ): Promise<DbResult<boolean>> {
-  const res = await supabase.from(tableOf(kind)).delete().eq("id", itemId).eq("team_id", teamId).select("id");
+  let q = supabase.from(tableOf(kind)).delete().eq("id", itemId).eq("team_id", teamId);
+  if (kind === "headlines") q = q.eq("is_auto", false);
+  const res = await q.select("id");
   if (res.error) return { data: null, error: res.error };
   return { data: ((res.data ?? []) as Row[]).length > 0, error: null };
 }
@@ -182,7 +186,7 @@ export async function isTeamMeeting(supabase: Client, teamId: string, meetingId:
 }
 
 /** The team's running meeting (ended_at is null), if any. */
-export async function liveMeetingId(supabase: Client, teamId: string): Promise<DbResult<string | null>> {
+export async function runningMeetingId(supabase: Client, teamId: string): Promise<DbResult<string | null>> {
   const res = await supabase
     .from(L10_TABLES.meetings)
     .select("id")

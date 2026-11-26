@@ -55,6 +55,51 @@ describe("segment order", () => {
     const stale = await advanceSegment(s, PRODUCTION, id, { from: "segue" });
     expect(stale).toMatchObject({ ok: false, kind: "conflict", extra: { current_segment: "scorecard" } });
   });
+
+  it("advances into a segment whose key is there but not started (started_at null)", async () => {
+    const { s, db } = session();
+    const id = await started(s);
+    const m = db.tables.l10_meetings.find((x) => x.id === id)!;
+    m.segment_timings = { ...(m.segment_timings as object), scorecard: { started_at: null, ended_at: null } };
+    const moved = await advanceSegment(s, PRODUCTION, id, { from: "segue" });
+    expect(moved.ok).toBe(true);
+    expect((db.tables.l10_meetings.find((x) => x.id === id)!.segment_timings as Record<string, { started_at: string | null }>).scorecard.started_at).toBeTruthy();
+    // And a started one is still refused by the same filter.
+    const again = await advanceSegment(s, PRODUCTION, id, { from: null });
+    expect(again.ok).toBe(true); // scorecard -> rocks
+    expect(await advanceSegment(s, PRODUCTION, id, { from: "scorecard" })).toMatchObject({ ok: false, kind: "conflict" });
+  });
+});
+
+/** 416's segment_timings rule: strict ISO-8601 with an offset, ended_at >= started_at. */
+const ISO = /^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.[0-9]{1,6})?)?(Z|[+-]([01][0-9]|2[0-3]):?[0-5][0-9])$/;
+function expectValidTimings(m: Record<string, unknown>) {
+  const timings = (m.segment_timings ?? {}) as Record<string, { started_at: string | null; ended_at: string | null }>;
+  for (const t of Object.values(timings)) {
+    for (const v of [t.started_at, t.ended_at]) if (v !== null) expect(v).toMatch(ISO);
+    if (t.started_at && t.ended_at) expect(Date.parse(t.ended_at)).toBeGreaterThanOrEqual(Date.parse(t.started_at));
+  }
+  if (m.ended_at) expect(Date.parse(m.ended_at as string)).toBeGreaterThanOrEqual(Date.parse(m.started_at as string));
+}
+
+describe("timestamps 416 accepts", () => {
+  it("never ends a segment or the meeting before it started, even when this server's clock is behind", async () => {
+    const { s, db } = session();
+    const t0 = new Date("2026-11-26T18:00:00.000Z");
+    const behind = () => new Date(t0.getTime() - 5 * 60_000); // another server, 5 min behind
+    const r = await startMeeting(s, TEAM, LEAD, { attendee_user_ids: null, facilitator_id: null }, () => t0);
+    if (!r.ok) throw new Error("start failed");
+    const id = r.value.meeting.id as string;
+    expect((await advanceSegment(s, PRODUCTION, id, { from: "segue" }, behind)).ok).toBe(true);
+    expect((await advanceSegment(s, PRODUCTION, id, { from: "scorecard" }, () => new Date(t0.getTime() + 60_000))).ok).toBe(true);
+    expect((await endMeeting(s, PRODUCTION, id, LEAD, { ratings: [] }, { canManage: true, now: behind })).ok).toBe(true);
+    const m = db.tables.l10_meetings.find((x) => x.id === id)!;
+    expectValidTimings(m);
+    const t = m.segment_timings as Record<string, { started_at: string; ended_at: string }>;
+    expect(t.segue).toEqual({ started_at: t0.toISOString(), ended_at: t0.toISOString() });
+    expect(t.rock_review.ended_at).toBe("2026-11-26T18:01:00.000Z");
+    expect(m.ended_at).toBe("2026-11-26T18:01:00.000Z");
+  });
 });
 
 describe("start", () => {
@@ -70,11 +115,36 @@ describe("start", () => {
 
   it("keeps one running meeting when two starts race", async () => {
     const { s, db } = session();
-    await Promise.all([
+    const results = await Promise.all([
       startMeeting(s, TEAM, LEAD, { attendee_user_ids: null, facilitator_id: null }),
       startMeeting(s, TEAM, SINGER, { attendee_user_ids: null, facilitator_id: null }),
     ]);
     expect(db.tables.l10_meetings.filter((m) => m.ended_at === null)).toHaveLength(1);
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.find((r) => !r.ok)).toMatchObject({ kind: "conflict", extra: { code: "l10_meeting_already_open" } });
+  });
+
+  it("turns the one-open-meeting index (23505) into a clean conflict when the pre-check misses it", async () => {
+    const { s, db } = session();
+    const first = await startMeeting(s, TEAM, LEAD, { attendee_user_ids: null, facilitator_id: null });
+    expect(first.ok).toBe(true);
+    // A racing start whose pre-check ran before the first insert: its first
+    // running-meeting read sees none, so only the unique index stops it.
+    const emptyRead = { select: () => ({ eq: () => ({ is: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) }) };
+    let first_read = true;
+    const real = s as { from: (t: string) => unknown };
+    const racing = {
+      from: (t: string) => {
+        if (t === "l10_meetings" && first_read) {
+          first_read = false;
+          return emptyRead;
+        }
+        return real.from(t);
+      },
+    };
+    const second = await startMeeting(racing, TEAM, SINGER, { attendee_user_ids: null, facilitator_id: null });
+    expect(second).toMatchObject({ ok: false, kind: "conflict", extra: { code: "l10_meeting_already_open" } });
+    expect(db.tables.l10_meetings).toHaveLength(1);
   });
 
   it("refuses an attendee or facilitator who is not on the team", async () => {
