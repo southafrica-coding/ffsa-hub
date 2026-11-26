@@ -3,16 +3,98 @@
 **PR:** https://github.com/southafrica-coding/ffsa-hub/pull/730 (draft, into `main`, not merged)
 **Branch:** `feat/ffsa-store` (from `origin/main` at `b517b4fb`)
 
+## Hub Review BLOCK follow-up (fix commit `5e34a649`)
+
+Hub Review blocked #730 on two security items. Both are fixed, plus the cheap nits. 412 is **still unapplied everywhere**, so I edited it in place (no 413). Nothing was applied, merged or deployed, and no Vercel env vars were set.
+
+### MUST 1: a buyer could get around the device cap with an UPDATE
+
+**The problem:** hosted Supabase grants ALL to `authenticated` by default, and 412 never took that away. The "own remove" UPDATE policy let a buyer's own UPDATE clear `removed_at`, so 3 active + 1 removed devices became 4 active.
+
+**What I changed in 412:**
+- **Table privileges, written out in full (section 5b, the same pattern as `351_fleet_rls.sql`).**
+  - `REVOKE ALL` on all ten `store_*` tables `FROM PUBLIC, anon, authenticated`, then grant back only what a policy needs.
+  - anon: `SELECT` on `store_products` and `store_variants` only.
+  - Buyers (`authenticated`): **`SELECT` only** on `store_devices`, `store_codes` and `store_order_items`. On `store_orders`, `SELECT` plus `UPDATE` (staff mark-paid/cancel, still gated by `store_can_manage()`). Staff-write tables keep S/I/U/D, and their policies still require `store.manage`.
+  - service_role: `ALL`.
+- **The buyer UPDATE policy on `store_devices` is gone.** `SELECT` ("own read") is now the only policy on that table.
+- **New `store_remove_device(p_user_id, p_device_id)`.**
+  - `SECURITY DEFINER`, `search_path = ''`, with the same per-user advisory lock as the register function.
+  - It only ever runs `SET removed_at = now()`, and only on that user's own active row. It returns true or false.
+  - Only the service role can run it.
+  - `DELETE /api/store/devices/[id]` checks the buyer session (confirmed email), then calls it with the service role.
+- **Every Store function** (`store_take_stock`, `store_register_device`, `store_remove_device`, `store_can_manage`, `store_can_view`, `store_buyer_email`) now has `REVOKE ALL … FROM PUBLIC, anon, authenticated` **before** its explicit `GRANT`.
+
+**How it was proven:**
+- **Real Postgres, not committed:** I ran both versions of 412 in a throwaway PGlite (Postgres 16) in `/tmp`, with stub `auth` / `storage` schemas and Supabase's default grants.
+  - **Old 412:** the buyer's `UPDATE … SET removed_at = NULL` succeeded, leaving **4 active**. That reproduces the reviewer's finding.
+  - **New 412:** that UPDATE, plus buyer INSERT/DELETE on `store_devices` and buyer calls to `store_remove_device` / `store_register_device`, all get **permission denied**. The cap stays at **3**. Anon can't read orders, and `store_buyer_email()` returns `''` for an unconfirmed user.
+- **Committed (`src/lib/store/__tests__/security.test.ts`):**
+  - The tests replay 412's GRANT/REVOKE statements, starting from Supabase's default grants, and assert the privileges above.
+  - A buyer client limited by those privileges tries `removed_at = NULL`, INSERT, DELETE and UPSERT on 3 active + 1 removed. Each is refused (42501), the count stays at 3, and a new device gets `limit`.
+  - The official Remove still works through the route: it removes your own device, gives 404 for someone else's, and 401 when you're signed out or your email isn't confirmed. `store_remove_device` never brings a device back.
+  - Against the old 412 these tests fail (7 of them). I checked by swapping the file back.
+
+### MUST 2: PayFast ITN failed open on a missing amount
+
+`handleStoreItn` (`src/lib/store/payments.ts`) now refuses to settle:
+- a `paid` ITN with no `amount_gross` (new outcome `amount-missing`);
+- an amount that isn't a whole number of cents (`NaN`);
+- any amount, on any status, that isn't exactly `order.total_cents`.
+
+The signature and postback checks are unchanged.
+
+New tests cover a missing amount, a non-numeric amount, amounts off by a cent either way (plus 0 and 100×), and a **real signed ITN without `amount_gross`** going through the shared adapter, which verifies to `null` and doesn't settle.
+
+### Nits
+
+- **Buyers need a confirmed email.**
+  - `getBuyer` → `buyerFromAuthUser` returns null unless `email_confirmed_at` is set.
+  - `store_buyer_email()` now reads `auth.users.email` for `auth.uid()` where `email_confirmed_at IS NOT NULL` (SECURITY DEFINER). It no longer uses the JWT `email` claim.
+- **EFT proof upload is locked down** (`/api/store/orders/[id]/eft-proof`).
+  - It needs a signed order token (an HMAC of the order id with `STORE_SIGNING_SECRET`, sent as form field `t`) or the signed-in buyer who placed the order. Otherwise it returns 404 either way, so order ids can't be probed.
+  - **No upsert.** Each proof goes to a fresh `eft/<order>/<uuid>.<ext>`, and the order only takes it while `eft_proof_path` is still empty. A second upload gets 409 and the first proof stays. If two uploads race, the loser's file is deleted.
+  - The thanks link now carries the token: checkout's `next`, PayFast's `return_url`, the EFT email, and the My Orders links (`thanksPath`). `/store/thanks` uses the same rule, so a bare order id now gets 404.
+- **The signed PDF upload has an explicit window.**
+  - storage-js 2.7.1's `createSignedUploadUrl` takes no `expiresIn`: Storage fixes its token at 2 hours, and the types won't accept the option.
+  - So the route passes `{ upsert: false }` explicitly and returns `expiresIn` / `expiresAt` (`SIGNED_UPLOAD_TTL_SECONDS` = 30 min).
+  - `/complete` and `/render` fail an asset still `awaiting_upload` after that window, with 410 "The upload link expired". A late PUT can land, but it is never rendered or made active.
+- Not done, as asked: the PayFast source-IP allowlist and the settle crash retry.
+
+### Tests (this follow-up)
+
+- `NODE_OPTIONS=--experimental-require-module npx tsc --noEmit`: **0 errors**.
+- Store vitest (`src/lib/store`): **102 passed, 1 skipped** (11 files). That includes **22 new tests**: 18 in `security.test.ts`, 3 in `payments.test.ts` and 1 in `upload-flow.test.ts`.
+- Full `vitest run`: **4,309 passed, 5 failed, 11 skipped**. All 5 also fail on untouched `352f80a3`. I re-checked the three fleet ones in a throwaway worktree. The 5 are:
+  - the two duplicate-`398_` assertions;
+  - fleet `fmtR`, a fleet model date test and fleet parity, which depend on locale and date.
+- None of the failures touch Store code.
+
+### Screenshots, this pass (390×844, `tmp/store-shots/`, untracked)
+
+- `jack-5-admin.png`, `jack-5b-admin-full.png`: `/store/admin` as a fake super_admin. It shows the one yellow TO DO band, the KPIs, Products and Recent orders.
+- `jack-5c-admin-order.png`: a pending EFT order, with Mark EFT paid and Cancel.
+- `jack-5d-admin-product.png`: the product editor.
+- `jack-4-thanks.png`: EFT thanks with a token (amount, reference, Upload proof of payment).
+- `jack-4b-thanks-paid.png`: paid thanks ("It's yours").
+- `jack-4c-thanks-no-token.png`: the same order without the token, which is a 404 (the new rule).
+
+How they were made:
+- `next dev` on `:3123` against the local mock on `127.0.0.1:54399` (`tmp/store-shots-tools/mock-staff.mjs`), with a fake staff user, fake orders and placeholder keys. No prod, no real credentials.
+- The mock answers "no full profile row" so the Hub's profile-completion gate doesn't cover the page. The Store's own staff guard still ran: `users.is_active`, the super_admin role and `has_permission`.
+- Page overflow is 0 px on all of them. On `/store/admin`, the Products and Orders tables scroll sideways **inside** their own box at 390 px (the last columns are cut off in the first shot). The page itself doesn't scroll sideways.
+
 ## ⚠️ Decision for Jack: where to apply migration 412
 
 `supabase/migrations/412_store.sql` is **not applied anywhere**. I didn't run it against any project.
 
 Vercel previews share the **production** database (`thodakhvkcodfystnkxa`). So the Store, including on a preview, works only after 412 has been applied **somewhere the app points at**: either prod, or a separate Supabase project whose keys you put on a preview. It is additive and safe to run on prod:
 
-- New `store_*` tables with RLS.
+- New `store_*` tables with RLS, and table privileges written out in full (buyers are read-only).
 - Two permission rows (`store.view`, `store.manage`), granted to nobody.
 - Three **private** buckets (`store-source` 50 MB cap, `store-pages`, `store-covers`).
 - **No** product, order or user rows.
+- Afterwards, run the grants check in 412's validation footer.
 
 Whether and where to apply it is your call. Until then, `/store` shows "can't load" and `/store/admin` says 412 isn't applied.
 
