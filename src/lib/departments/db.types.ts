@@ -166,6 +166,13 @@ export interface DepartmentBudgetLink {
 /** Postgres error message (SQLSTATE 42501) when a caller may not set an attendee rating. */
 export const L10_RATING_NOT_ALLOWED = "l10_rating_not_allowed" as const;
 
+/**
+ * Postgres error message (SQLSTATE 42501) when a signed-in user (admins and
+ * overseers included) changes meeting_id, profile_id or team_id on an
+ * attendee row. Only service_role may; to fix a row, delete and re-insert.
+ */
+export const L10_ATTENDEE_IMMUTABLE = "l10_attendee_immutable" as const;
+
 /** Postgres error message (SQLSTATE 42501) when a signed-in user writes a locked auto headline. */
 export const L10_AUTO_HEADLINE_LOCKED = "l10_auto_headline_locked" as const;
 
@@ -202,8 +209,15 @@ export const L10_SEGMENTS = [
 ] as const;
 export type L10Segment = (typeof L10_SEGMENTS)[number];
 
+/**
+ * One segment's timing. Each value is null / absent, or a strict ISO-8601
+ * timestamp WITH an offset, e.g. `new Date().toISOString()`
+ * ("2026-11-26T07:00:00.000Z") or "2026-11-26T09:00+02:00". No offset,
+ * date-only, a space separator or an impossible date fails the
+ * l10_meetings_segment_timings_shape CHECK (23514), as does
+ * ended_at < started_at when both are set.
+ */
 export interface L10SegmentTiming {
-  /** ISO timestamp, or null / absent until the segment starts. */
   started_at?: string | null;
   ended_at?: string | null;
 }
