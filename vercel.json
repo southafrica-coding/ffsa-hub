@@ -73,6 +73,14 @@
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/ops-morning",
+      "schedule": "0 5 * * 1-5"
+    },
+    {
+      "path": "/api/cron/ops-weekly",
+      "schedule": "0 15 * * 2"
+    },
+    {
       "path": "/api/cron/xero-code-mirror",
       "schedule": "30 2 * * *"
     },

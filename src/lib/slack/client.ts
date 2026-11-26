@@ -46,6 +46,8 @@ const FORM_ENCODED_METHODS = new Set([
   "users.info",
   "users.list",
   "conversations.history",
+  "files.getUploadURLExternal",
+  "files.completeUploadExternal",
 ]);
 
 async function callSlack<T = Record<string, unknown>>(
@@ -151,6 +153,39 @@ export async function downloadFile(url: string, bot: SlackBotId = "hub"): Promis
     throw new Error("Slack returned a web page instead of the file — is files:read granted?");
   }
   return Buffer.from(await res.arrayBuffer());
+}
+
+// ────────────────────────────────────────────────────────────
+// File upload (files.getUploadURLExternal → POST the bytes →
+// files.completeUploadExternal). Shares the file into a channel,
+// optionally inside a thread. Needs the files:write scope.
+// ────────────────────────────────────────────────────────────
+
+export async function uploadFile(args: {
+  channel: string;
+  thread_ts?: string;
+  filename: string;
+  data: Buffer;
+  title?: string;
+  bot?: SlackBotId;
+}): Promise<SlackResponse> {
+  const ticket = await callSlack<{ upload_url?: string; file_id?: string }>(
+    "files.getUploadURLExternal",
+    { filename: args.filename, length: args.data.length },
+    args.bot
+  );
+  if (!ticket.ok || !ticket.upload_url || !ticket.file_id) return ticket;
+  const put = await fetch(ticket.upload_url, { method: "POST", body: new Uint8Array(args.data) });
+  if (!put.ok) return { ok: false, error: `upload HTTP ${put.status}` };
+  return callSlack(
+    "files.completeUploadExternal",
+    {
+      files: JSON.stringify([{ id: ticket.file_id, title: args.title ?? args.filename }]),
+      channel_id: args.channel,
+      thread_ts: args.thread_ts,
+    },
+    args.bot
+  );
 }
 
 // ────────────────────────────────────────────────────────────
@@ -318,6 +353,34 @@ export type SlackHistoryMessage = {
   text?: string;
   subtype?: string;
 };
+
+// The bot reading a channel it has been added to (needs channels:history
+// for public channels, groups:history for private ones). Used by
+// Operations to pick up posts from the maintenance request form.
+export function conversationHistory(args: {
+  channel: string;
+  oldest?: string;
+  limit?: number;
+  cursor?: string;
+  bot?: SlackBotId;
+}) {
+  return callSlack<{
+    messages?: (SlackHistoryMessage & { bot_id?: string; blocks?: unknown[] })[];
+    has_more?: boolean;
+    response_metadata?: { next_cursor?: string };
+  }>(
+    "conversations.history",
+    {
+      channel: args.channel,
+      oldest: args.oldest,
+      // Exclusive: `oldest` is the last ts already imported.
+      inclusive: false,
+      limit: args.limit ?? 200,
+      cursor: args.cursor,
+    },
+    args.bot
+  );
+}
 
 export function conversationHistoryAs(
   userToken: string,

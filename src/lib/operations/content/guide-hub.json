@@ -1,0 +1,191 @@
+{
+  "about": "How the Hub does it: the part of each Operations area's guide that is kept with the code. Update it with every change to an Operations area, and add a dated line to `changes` (newest first). Blocks: {h} heading, {p} paragraph, {ul} list. The other part, How we do it, is written by the area's lead in the Hub.",
+  "areas": {
+    "maintenance": [
+      {
+        "id": "requests",
+        "title": "Requests from Slack",
+        "blocks": [
+          {
+            "p": "People ask for repairs in Slack. In the maintenance channel there is a pinned message with a New maintenance request button. It opens inside Slack: nobody has to log in to the Hub."
+          },
+          {
+            "ul": [
+              "Every time, the guidelines and rules come first, on their own screen. \"I agree\" sits under the last rule, so they have to scroll through them all to tick it. Only then does the form open.",
+              "What's wrong, where it is, and how urgent (Urgent, This week, When you can).",
+              "Up to 3 photos, if they want."
+            ]
+          },
+          {
+            "p": "Outside the Maintenance Crew's hours (Monday to Thursday 08:00–16:00, Friday 08:00–15:00), the form and the confirmation tell them when the crew works and when it will be handled: later today, first thing tomorrow, or first thing on Monday."
+          },
+          {
+            "p": "The person gets a Slack message straight away confirming the request, then another when it's in progress and when it's finished."
+          },
+          {
+            "h": "What the team sees"
+          },
+          {
+            "p": "Each request is posted in #maintenance-request-submissions: what's wrong first, then where and how urgent, then who asked and when. Under it are buttons for the status and Add a note. In its thread are the photos and a plain-text copy to paste into the crew's WhatsApp group (the crew aren't on Slack)."
+          },
+          {
+            "h": "Three statuses"
+          },
+          {
+            "ul": [
+              "Not started.",
+              "In progress.",
+              "Finished: it drops off the next morning's list but is kept, for the monthly report."
+            ]
+          },
+          {
+            "p": "Won't do is still there on the Hub, with a note saying why."
+          },
+          {
+            "h": "Who can change a status"
+          },
+          {
+            "p": "The people listed under Slack settings (now Gideon, HE Steyn, Dylan RDJ and Michelle Strydom) and the operations team. Their Slack must be linked to their Hub profile."
+          }
+        ]
+      },
+      {
+        "id": "messages",
+        "title": "The morning follow-up and the week",
+        "blocks": [
+          {
+            "h": "07:00, Monday to Friday"
+          },
+          {
+            "p": "The maintenance follow-up goes to #maintenance-followup: every active request, Not started then In progress, oldest first, with how many days it has been waiting. Each line has a dropdown to set Not started, In progress or Finished. Underneath is what was finished since the last message."
+          },
+          {
+            "p": "In its thread is the day's list for the crew, numbered, ready to paste into WhatsApp."
+          },
+          {
+            "p": "Other areas with something open get one message in their own Slack channel. Anyone with something given to them also gets a short message of their own, reminded the day before it's due and on the day."
+          },
+          {
+            "h": "The monthly report"
+          },
+          {
+            "p": "Operations → Maintenance → Monthly report: how many requests came in and were finished, the average days to finish, places that came up more than once, and what's still open. Use it in the operations meeting."
+          },
+          {
+            "h": "The week and the meeting"
+          },
+          {
+            "p": "The weekly summary goes to the Operations channel on Tuesday at 17:00, ready for the Wednesday 10:00 meeting. In the meeting, open Operations → This week and go through it."
+          }
+        ]
+      },
+      {
+        "id": "setup",
+        "title": "Settings (admins)",
+        "blocks": [
+          {
+            "p": "Operations → Slack settings holds the channels, the rules shown on the form, the crew's hours and the out-of-hours message, and who can change statuses. Change them there; no code change is needed."
+          },
+          {
+            "p": "Post the request button from the same page, then pin it in Slack. Send the follow-up now sends the 07:00 message straight away."
+          }
+        ]
+      }
+    ],
+    "teams": [
+      {
+        "id": "teams",
+        "title": "Teams and stages",
+        "blocks": [
+          {
+            "p": "Operations → Visiting teams lists every team that is coming, here or has left, with its dates, size, host and how many checklist steps are still open."
+          },
+          {
+            "h": "Stages"
+          },
+          {
+            "ul": [
+              "Enquiry: they've asked to come.",
+              "Confirmed: they're coming.",
+              "Preparing: the forms are out and the visit is being set up.",
+              "Here: from arrival to departure.",
+              "Left: the follow-up after they've gone.",
+              "A team can also end as Said no, Postponed or Cancelled."
+            ]
+          },
+          {
+            "p": "When every step of a stage is ticked, the team page suggests the next stage. Moving it on is always the host's choice."
+          },
+          {
+            "h": "Who sees what"
+          },
+          {
+            "ul": [
+              "The Visiting teams lead (a role given on the Hub) sees every team, adds teams and hands a team from one host to another.",
+              "A host sees and works only their own teams.",
+              "Team members, dietary needs and medical details are seen only by that team's host and the lead."
+            ]
+          }
+        ]
+      },
+      {
+        "id": "checklist",
+        "title": "The checklist",
+        "blocks": [
+          {
+            "p": "Every team gets the hosting checklist, grouped by stage. Steps that depend on the dates get a due date counted from arrival or departure. If the dates change, the due dates move with them."
+          },
+          {
+            "p": "Tick a step when it's done and add a note if something is worth knowing. Late steps show at the top of the Visiting teams page."
+          },
+          {
+            "p": "Every detail can be changed at any time, because plans change. Every change is kept in the team's History, with who made it and when."
+          }
+        ]
+      }
+    ],
+    "hospitality": [
+      {
+        "id": "soon",
+        "title": "Coming to the Hub",
+        "blocks": [
+          {
+            "p": "Rooms, who is in them, arrival and departure days, and room inspections will live here. Until then, this guide holds how Hospitality works today."
+          }
+        ]
+      }
+    ]
+  },
+  "changes": [
+    [
+      "2026-11-26",
+      "maintenance",
+      "Requests come through the Hub's own form in Slack (the rules on their own screen every time, then urgency, photos, and a notice outside the crew's hours). Simpler post with a WhatsApp copy, three statuses, the 07:00 follow-up and the monthly report."
+    ],
+    [
+      "2026-11-25",
+      "maintenance",
+      "The guide: How we do it, Resources and How the Hub does it, for every Operations area."
+    ],
+    [
+      "2026-11-25",
+      "teams",
+      "The guide: Mache and Michelle can write how hosting works, with the resources teams use."
+    ],
+    [
+      "2026-11-25",
+      "hospitality",
+      "The guide: base orientation, kitchens and housing can be written here before the rooms part is built."
+    ],
+    [
+      "2026-11-24",
+      "teams",
+      "Visiting teams: the teams list, each team's page and the hosting checklist."
+    ],
+    [
+      "2026-11-23",
+      "maintenance",
+      "Maintenance requests from Slack, the morning message, the week and the meeting."
+    ]
+  ]
+}
