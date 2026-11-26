@@ -269,13 +269,16 @@ export async function listRocks(
     .from("rocks")
     .select(ROCK_COLUMNS)
     .eq("staff_ministry_id", ministryId)
-    .eq("quarter", quarter);
+    .eq("quarter", quarter)
+    // 416: rows with team_id are L10 team rocks, not department rocks.
+    .is("team_id", null);
   if (error) return failed(error);
   return { data: Array.isArray(data) ? (data as RockRow[]) : [], error: null };
 }
 
 export async function listRocksForQuarter(supabase: Client, quarter: string): Promise<DbResult<RockRow[]>> {
-  const { data, error } = await supabase.from("rocks").select(ROCK_COLUMNS).eq("quarter", quarter);
+  // 416: rows with team_id are L10 team rocks, not department rocks.
+  const { data, error } = await supabase.from("rocks").select(ROCK_COLUMNS).eq("quarter", quarter).is("team_id", null);
   if (error) return failed(error);
   return { data: Array.isArray(data) ? (data as RockRow[]) : [], error: null };
 }
@@ -316,6 +319,8 @@ export async function updateRock(
     .update(patch)
     .eq("id", rockId)
     .eq("staff_ministry_id", ministryId)
+    // 416: the department rock routes must not edit an L10 team rock.
+    .is("team_id", null)
     .select(ROCK_COLUMNS)
     .maybeSingle();
   if (error) return failed(error);
