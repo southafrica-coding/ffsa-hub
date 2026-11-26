@@ -379,7 +379,8 @@ function applyFilters(rows: Row[], query: FakeQuery): Row[] {
       if (filter.op === "in") {
         const values = filter.args[1] as unknown[];
         if (!values.includes(value)) return false;
-      } else if (value !== filter.args[1]) {
+      } else if (filter.op === "is" ? (value ?? null) !== filter.args[1] : value !== filter.args[1]) {
+        // `is null` also matches a column the fixture row leaves out (rocks.team_id, 416).
         return false;
       }
     }
