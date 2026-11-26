@@ -47,7 +47,13 @@ function adminClient() {
 }
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => requestClient() }));
-vi.mock("@/lib/store/db", () => ({ storeAdminClient: () => adminClient() }));
+const storeAdminRef = vi.hoisted(() => ({ missing: false }));
+vi.mock("@/lib/store/db", () => ({
+  storeAdminClient: () => {
+    if (storeAdminRef.missing) throw new Error("Missing Supabase admin environment variables");
+    return adminClient();
+  },
+}));
 const sendTransactional = vi.hoisted(() => vi.fn(async (email: Record<string, unknown>) => ({ ok: true as const, to: email.to })));
 vi.mock("@/lib/email/send-transactional", () => ({ sendTransactional }));
 const limiterRef = vi.hoisted(() => ({ current: null as null | { reset: () => void } }));
@@ -135,6 +141,7 @@ beforeEach(() => {
   sendTransactional.mockClear();
 });
 afterEach(() => {
+    storeAdminRef.missing = false;
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
@@ -213,6 +220,19 @@ describe("POST /api/store/quote with a code", () => {
   it("a code that can't be used comes back as couponError with full totals", async () => {
     const q = await quote({ lines: [REVIEW], couponCode: "TEE-50" });
     expect(q).toMatchObject({ ok: true, discountCents: 0, totalCents: 15000, coupon: null, couponError: COUPON_ERRORS.wrong_product });
+  });
+
+  it("a missing service-role env still quotes, with the code unchecked and full totals", async () => {
+    storeAdminRef.missing = true;
+    const q = await quote({ lines: [REVIEW, TEES], couponCode: "welcome20" });
+    expect(q).toMatchObject({
+      ok: true,
+      subtotalCents: 65000,
+      discountCents: 0,
+      totalCents: 65000,
+      coupon: null,
+      couponError: "We couldn't check that code. Try again in a moment.",
+    });
   });
 });
 

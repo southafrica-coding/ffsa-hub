@@ -26,7 +26,13 @@ function requestClient() {
 }
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => requestClient() }));
-vi.mock("@/lib/store/db", () => ({ storeAdminClient: () => db.client }));
+const storeAdminRef = vi.hoisted(() => ({ missing: false }));
+vi.mock("@/lib/store/db", () => ({
+  storeAdminClient: () => {
+    if (storeAdminRef.missing) throw new Error("Missing Supabase admin environment variables");
+    return db.client;
+  },
+}));
 const sendTransactional = vi.hoisted(() => vi.fn(async (email: Record<string, unknown>) => ({ ok: true as const, to: email.to })));
 vi.mock("@/lib/email/send-transactional", () => ({ sendTransactional }));
 vi.mock("@/lib/rate-limit", async (orig) => {
@@ -57,7 +63,10 @@ beforeEach(() => {
   who = null;
   grants = [];
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  storeAdminRef.missing = false;
+  vi.unstubAllEnvs();
+});
 
 describe("catalogue as data: admin creates, storefront shows when published", () => {
   const newProduct = { title: "Example Year-End Review", kind: "digital", price_cents: 18000, status: "draft" };
@@ -232,6 +241,15 @@ describe("quote: collection only", () => {
     const res = await quote({ lines: [{ productId: IDS.tee, variantId: IDS.teeM, quantity: 1, purpose: "self" }], fulfilment: "delivery" });
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/don't deliver/);
+  });
+
+  it("still returns prices if the service-role client can't be built", async () => {
+    storeAdminRef.missing = true;
+    const res = await quote({ lines: [{ productId: IDS.review, quantity: 1, purpose: "self" }] });
+    expect(res.status).toBe(200);
+    const q = await res.json();
+    expect(q).toMatchObject({ ok: true, totalCents: 15000, fulfilment: "none", coupon: null, couponError: null });
+    expect(q.items?.[0]?.cover ?? null).toBeNull();
   });
 });
 
