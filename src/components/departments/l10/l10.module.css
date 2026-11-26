@@ -490,6 +490,14 @@
   text-overflow: ellipsis;
 }
 
+/* Team-picker cards: wrap at word breaks instead of clipping ("ROCKS ON TRA…") at 360-390px. */
+.statLabelWrap {
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-overflow: clip;
+  line-height: 1.3;
+}
+
 .meter {
   height: 4px;
   margin-top: 6px;
@@ -499,19 +507,6 @@
 .meterFill {
   height: 100%;
   background: var(--ink);
-}
-
-.addTeam {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 56px;
-  border: 1px dashed var(--rule-strong);
-  color: var(--text-tertiary);
-  font-family: var(--f-mono);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 /* ── Team page ────────────────────────────────────────────────── */

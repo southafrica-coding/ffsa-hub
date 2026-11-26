@@ -1,4 +1,5 @@
 import { L10_TABLES } from "@/lib/l10/types";
+import { asL10ReadClient } from "./l10-read-client";
 
 /**
  * True when this department has at least one active L10 team the viewer can
@@ -6,11 +7,9 @@ import { L10_TABLES } from "@/lib/l10/types";
  * "no", so the department home never breaks over the L10 link.
  */
 export async function departmentHasL10Teams(supabase: unknown, slug: string): Promise<boolean> {
-  // 416 / l10_teams is not in the generated Database type yet.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = supabase as any;
-  if (typeof db?.from !== "function") return false;
-  const ministry = await db.from("staff_ministries").select("id").eq("slug", slug).maybeSingle();
+  const db = asL10ReadClient(supabase);
+  if (!db) return false;
+  const ministry = await db.from<{ id: string }>("staff_ministries").select("id").eq("slug", slug).maybeSingle();
   if (ministry.error || !ministry.data?.id) return false;
   const teams = await db
     .from(L10_TABLES.teams)

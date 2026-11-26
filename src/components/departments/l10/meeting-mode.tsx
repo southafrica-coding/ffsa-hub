@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from "next/link";
 import { createL10Api, l10Pages, type FailureKind } from "./api";
 import { displayName, formatHm, issueFor, membersAsPeople, nextL10Date, rankChanges } from "./derive";
-import { buildConfirmSummary, buildEndMeetingPayload, readEndResponse, type Person, type SentView } from "./followup";
+import { buildConfirmSummary, buildEndMeetingPayload, readEndResponse, recapChannelLabel, type Person, type SentView } from "./followup";
 import { ConfirmDialog, QuickAddSheet, type QuickKind, type QuickValues, type SubmitOutcome } from "./meeting-sheets";
 import { SentBody } from "./meeting-sent";
 import { allowedRatingEntries, canRateAttendee, type RatingRights } from "./ratings";
@@ -433,6 +433,7 @@ export function MeetingMode({
 
   // ── Render ──────────────────────────────────────────────────────────
 
+  const recapChannel = recapChannelLabel(detail.team);
   const ctx: MeetingCtx = {
     meetingId,
     meetingStartedAt: meeting.started_at,
@@ -443,6 +444,7 @@ export function MeetingMode({
     attendees,
     ratings,
     ratingRights,
+    recapChannel,
     now,
     busy,
     actions,
@@ -591,8 +593,9 @@ export function MeetingMode({
             todos: detail.todos,
             issues: detail.issues,
             // Unknown (field not sent) counts as a channel; only an explicit null means none.
-            hasRecapChannel: detail.team.slack_channel_id !== null,
+            hasRecapChannel: recapChannel !== null,
           })}
+          recapChannel={recapChannel}
           ending={ending}
           failure={endFailure?.kind ?? null}
           failureCode={endFailure?.code ?? null}

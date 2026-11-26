@@ -174,6 +174,7 @@ function SumRow({ label, value, unit }: { label: string; value: number; unit: Re
 /** "End meeting?" over Conclude. Nothing is sent until End & send. */
 export function ConfirmDialog({
   summary,
+  recapChannel = null,
   ending,
   failure,
   failureCode = null,
@@ -181,6 +182,8 @@ export function ConfirmDialog({
   onConfirm,
 }: {
   summary: ConfirmSummary;
+  /** recapChannelLabel(team), e.g. "Live channel". Null: no recap line at all. */
+  recapChannel?: string | null;
   ending: boolean;
   failure: FailureKind | null;
   /** #741 `code` from the failed end, mapped to our copy before the kind fallback. */
@@ -199,7 +202,7 @@ export function ConfirmDialog({
         </h2>
         <p id={`${id}-d`} className="text-sm">
           Everyone with an open to-do gets a Slack DM listing theirs
-          {summary.recapPosts > 0 ? ", and the recap goes to the team channel." : ". This team has no recap channel set."}
+          {summary.recapPosts > 0 ? `, and the recap goes to the ${recapChannel ?? "team channel"}.` : "."}
         </p>
         {unrated.length > 0 ? (
           <p className={styles.warn}>
@@ -209,7 +212,7 @@ export function ConfirmDialog({
         ) : null}
         <div className="mt-2">
           <SumRow label="DMs with to-dos" value={summary.dmCount} unit={summary.dmCount === 1 ? "person" : "people"} />
-          <SumRow label="Recap to team channel" value={summary.recapPosts} unit={summary.recapPosts === 1 ? "post" : "posts"} />
+          <SumRow label={`Recap to ${summary.recapPosts > 0 && recapChannel ? recapChannel : "team channel"}`} value={summary.recapPosts} unit={summary.recapPosts === 1 ? "post" : "posts"} />
           <SumRow label="Issues kept for next week" value={summary.issuesKept} unit={summary.issuesKept === 1 ? "issue" : "issues"} />
         </div>
         {failure ? <p className={styles.fieldError}>{failureCopy(failure, failureCode)}</p> : null}

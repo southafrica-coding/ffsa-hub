@@ -5,6 +5,7 @@ import { sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { isUuid } from "@/lib/departments/validate";
 import { L10_TABLES } from "@/lib/l10/types";
+import { asL10ReadClient } from "./l10-read-client";
 
 /**
  * Signed in, active, and allowed to see the department; then its name.
@@ -29,12 +30,15 @@ export async function loadL10Department(slug: string, path: string) {
 export async function loadL10Team(slug: string, teamId: string, path: string) {
   if (!isUuid(teamId)) notFound();
   const loaded = await loadL10Department(slug, path);
-  // 416 / l10_teams is not in the generated Database type yet.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = loaded.supabase as any;
+  const db = asL10ReadClient(loaded.supabase);
+  if (!db) notFound();
   const [team, ministry] = await Promise.all([
-    db.from(L10_TABLES.teams).select("id, department_id, is_active").eq("id", teamId).maybeSingle(),
-    db.from("staff_ministries").select("id").eq("slug", loaded.department.slug).maybeSingle(),
+    db
+      .from<{ id: string; department_id: string; is_active: boolean }>(L10_TABLES.teams)
+      .select("id, department_id, is_active")
+      .eq("id", teamId)
+      .maybeSingle(),
+    db.from<{ id: string }>("staff_ministries").select("id").eq("slug", loaded.department.slug).maybeSingle(),
   ]);
   if (
     team.error ||

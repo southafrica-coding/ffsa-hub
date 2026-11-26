@@ -1,0 +1,125 @@
+// Shared fetch helper for the Song Library and Songwriting UIs.
+//
+// The backend routes do not exist yet. Reads treat any failure (404 while
+// the routes are missing, network, bad JSON) as "nothing to show", so the
+// pages render their empty states. Writes report a code, never the
+// server's text: only `code` and `fieldErrors` keys are read from a reply.
+
+export type ApiFailure = {
+  ok: false;
+  status: number;
+  code: string | null;
+  /** Field names the server flagged. Copy comes from the UI, not the server. */
+  fields: string[];
+};
+export type ApiResult<T> = { ok: true; data: T } | ApiFailure;
+
+/** Postgres codes we may see without an app code. */
+const PG_CODES: Record<string, string> = {
+  "42501": "forbidden",
+  "23514": "check_failed",
+  "23505": "duplicate",
+};
+
+function readCode(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null;
+  const code = (body as { code?: unknown }).code;
+  if (typeof code !== "string" || !code) return null;
+  return PG_CODES[code] ?? code;
+}
+
+function readFields(body: unknown): string[] {
+  if (!body || typeof body !== "object") return [];
+  const fe = (body as { fieldErrors?: unknown }).fieldErrors;
+  if (!fe || typeof fe !== "object") return [];
+  return Object.keys(fe as Record<string, unknown>);
+}
+
+export async function requestJson<T>(
+  url: string,
+  init?: { method?: string; body?: unknown; signal?: AbortSignal }
+): Promise<ApiResult<T>> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: init?.method ?? "GET",
+      headers: init?.body === undefined ? { accept: "application/json" } : { "content-type": "application/json", accept: "application/json" },
+      body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: init?.signal,
+    });
+  } catch {
+    return { ok: false, status: 0, code: "network", fields: [] };
+  }
+  let body: unknown = null;
+  try {
+    body = response.status === 204 ? null : await response.json();
+  } catch {
+    body = null;
+  }
+  if (!response.ok) {
+    const code = readCode(body) ?? (response.status === 401 ? "unauthenticated" : response.status === 403 ? "forbidden" : response.status === 404 ? "not_found" : null);
+    return { ok: false, status: response.status, code, fields: readFields(body) };
+  }
+  return { ok: true, data: body as T };
+}
+
+/** Read with a fallback: any failure becomes the empty value. */
+export async function readOr<T>(url: string, empty: T, signal?: AbortSignal): Promise<{ data: T; missing: boolean }> {
+  const result = await requestJson<T>(url, { signal });
+  if (!result.ok || result.data == null) return { data: empty, missing: true };
+  return { data: result.data, missing: false };
+}
+
+/** Fixed copy for a failed write. The server's own words are never shown. */
+export function errorCopy(code: string | null | undefined): string {
+  switch (code) {
+    case "unauthenticated":
+      return "Sign in again to continue.";
+    case "forbidden":
+      return "You don't have permission to do that.";
+    case "not_found":
+      return "That isn't there any more. Refresh and try again.";
+    case "invalid_input":
+    case "check_failed":
+      return "Check the details and try again.";
+    case "duplicate":
+      return "That already exists.";
+    case "splits_not_100":
+      return "Splits must add up to 100% before credits can be agreed.";
+    case "credits_agreed":
+      return "Credits are agreed. Undo the agreement before changing writers or splits.";
+    case "stage_not_allowed":
+      return "You can't move this song to that stage.";
+    case "too_large":
+      return "That file is too big. Try a shorter clip or an mp3.";
+    case "rate_limited":
+      return "Too many tries. Wait a minute and try again.";
+    case "network":
+      return "No connection. Check your internet and try again.";
+    default:
+      return "That didn't save. Please try again.";
+  }
+}
+
+/** Friendly copy per form field, for fieldErrors keys. */
+export function fieldCopy(field: string): string {
+  switch (field) {
+    case "title":
+      return "Give the song a working title.";
+    case "audience_label":
+      return "Name the training or group.";
+    case "month":
+    case "year":
+      return "Pick the month.";
+    case "split_pct":
+      return "Use a split from 0 to 100.";
+    case "people_trained":
+    case "songs_workshop":
+    case "songs_post":
+      return "Use a whole number, or leave it blank if unknown.";
+    default:
+      return "Check this field.";
+  }
+}

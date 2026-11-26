@@ -11,6 +11,7 @@ import type { DepartmentTab } from "@/lib/departments/data";
 import { StatusPill } from "@/components/ffsa";
 import { DataTable, EmptyNote, LocalTabs, PageHeading, SectionHeading, StackLink } from "../local-ui";
 import { l10Pages } from "@/components/departments/l10/api";
+import { songwritingHref } from "@/components/departments/songwriting/header";
 
 const ROCK_LABEL: Record<RockStatus, string> = {
   on_track: "On track",
@@ -24,6 +25,7 @@ export function DepartmentView({
   tabs,
   services,
   hasL10Teams,
+  hasSongwriting,
 }: {
   model: DepartmentHome;
   tab: DepartmentTab;
@@ -31,6 +33,8 @@ export function DepartmentView({
   services: HubService[];
   /** From the page loader: this department has an active L10 team the viewer can see. */
   hasL10Teams?: boolean;
+  /** From the page loader: this department has songwriting data the viewer can see. */
+  hasSongwriting?: boolean;
 }) {
   const { department, access } = model;
   const leaders = (model.people ?? []).filter((person) => person.capacity === "leader");
@@ -61,6 +65,7 @@ export function DepartmentView({
             )}
           </dl>
           {hasL10Teams ? <L10HomeLinkView slug={department.slug} /> : null}
+          {hasSongwriting ? <SongwritingHomeLinkView slug={department.slug} /> : null}
         </>
       )}
       {tab === "people" && access.canSeeDepartmentDetail && <PeopleTab model={model} />}
@@ -276,5 +281,9 @@ function ServicesTab({ model, services: catalogue }: { model: DepartmentHome; se
 
 export function L10HomeLinkView({ slug }: { slug: string }) {
   return <StackLink href={l10Pages(slug).teams} title="L10" meta="Weekly Level 10 meetings" />;
+}
+
+export function SongwritingHomeLinkView({ slug }: { slug: string }) {
+  return <StackLink href={songwritingHref(slug)} title="Songwriting" meta="Nations, trainings and the Song Library" />;
 }
 
