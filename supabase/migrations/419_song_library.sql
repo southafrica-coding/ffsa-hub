@@ -25,8 +25,9 @@
 -- Who does what (RLS; admin = active is_admin(), full access except
 -- where noted):
 --   read      every row, every table, for an active user who can use the
---             service (celebrate notes included). Exceptions:
---             subscriptions and notifications (own rows only).
+--             service. Exceptions: subscriptions and notifications (own
+--             rows only); celebrate notes (the song's writers, managers
+--             and admins only).
 --   writers   (song_library_writers rows with their user_id, lead or
 --             co-writer) edit their song and its versions, writers and
 --             splits, pathway, refine, share steps, celebrate notes and
@@ -322,7 +323,7 @@ CREATE TABLE IF NOT EXISTS public.song_library_celebrate_notes (
   PRIMARY KEY (song_id, prompt_no)
 );
 CREATE INDEX IF NOT EXISTS song_library_celebrate_notes_by_user_idx ON public.song_library_celebrate_notes (by_user);
-COMMENT ON TABLE public.song_library_celebrate_notes IS 'Optional Celebrate reflections. Read by every active user like the rest of the song; written by the song''s writers (and admins).';
+COMMENT ON TABLE public.song_library_celebrate_notes IS 'Optional Celebrate reflections. Read only by the song''s writers, Song Library managers (manage grant) and admins; written by the song''s writers (and admins).';
 
 CREATE TABLE IF NOT EXISTS public.song_library_writers (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1591,9 +1592,16 @@ BEGIN
 END
 $writer_tables$;
 
--- Earlier draft of 419 made celebrate notes writers-only; they are now
--- read like the rest of the song (policies from the loop above).
+-- Celebrate notes: written like the tables above, but read only by the
+-- song's writers, managers (manage grant, as song_library_can_manage) and
+-- admins. Replaces the loop's read-by-all policy.
 DROP POLICY IF EXISTS "Song library: writers only" ON public.song_library_celebrate_notes;
+DROP POLICY IF EXISTS "Song library: read" ON public.song_library_celebrate_notes;
+DROP POLICY IF EXISTS "Song library: writers, managers and admins read celebrate notes" ON public.song_library_celebrate_notes;
+CREATE POLICY "Song library: writers, managers and admins read celebrate notes" ON public.song_library_celebrate_notes
+  FOR SELECT TO authenticated
+  USING ((SELECT public.song_library_is_admin()) OR (SELECT public.song_library_can_manage())
+         OR song_id IN (SELECT public.song_library_my_song_ids()));
 
 -- writers: managers may also update (to confirm splits for writers with
 -- no Hub account). song_library_writers_before limits a manager who is

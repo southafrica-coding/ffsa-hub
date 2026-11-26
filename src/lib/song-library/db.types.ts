@@ -251,7 +251,11 @@ export interface SongLibraryShareStep {
   by_user: string | null;
 }
 
-/** Read by every active user; written by the song's writers (and admins). */
+/**
+ * Read only by the song's writers and co-writers, Song Library managers
+ * (manage grant: P&W members) and admins. Written by the song's writers
+ * (and admins).
+ */
 export interface SongLibraryCelebrateNote {
   song_id: string;
   /** 1–5 */

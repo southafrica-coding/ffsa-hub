@@ -161,10 +161,30 @@ describe("migration 419 song library", () => {
     expect(policy).not.toMatch(/song_library_my_song_ids/);
   });
 
-  it("lets every active user read celebrate notes", () => {
-    expect(code).not.toMatch(
-      /CREATE POLICY "[^"]*writers only[^"]*" ON public\.song_library_celebrate_notes/,
+  it("lets only writers, managers and admins read celebrate notes", () => {
+    const reads = [
+      ...code.matchAll(
+        /CREATE POLICY "([^"]+)" ON public\.song_library_celebrate_notes\s+FOR SELECT[^;]*/g,
+      ),
+    ];
+    expect(reads.map((m) => m[1])).toEqual([
+      "Song library: writers, managers and admins read celebrate notes",
+    ]);
+    const using = reads[0][0];
+    expect(using).toMatch(/song_library_is_admin/);
+    expect(using).toMatch(/song_library_can_manage/);
+    expect(using).toMatch(/song_library_my_song_ids/);
+    expect(using).not.toMatch(/song_library_can_read/);
+    // The writer-tables loop grants read-by-all; celebrate's copy is dropped.
+    expect(code).toMatch(
+      /DROP POLICY IF EXISTS "Song library: read" ON public\.song_library_celebrate_notes;/,
     );
+    const loopEnd = code.indexOf("$writer_tables$;");
+    expect(
+      code.indexOf(
+        'DROP POLICY IF EXISTS "Song library: read" ON public.song_library_celebrate_notes;',
+      ),
+    ).toBeGreaterThan(loopEnd);
   });
 
   it("does not FK source_training_id to 417 yet", () => {
