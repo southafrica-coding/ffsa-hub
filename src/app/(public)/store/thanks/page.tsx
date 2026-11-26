@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { getBuyer } from "@/lib/store/access";
 import { storeAdminClient } from "@/lib/store/db";
+import { canActOnOrder } from "@/lib/store/signing";
 import { eftDetails } from "@/lib/store/emails";
 import { formatZar } from "@/lib/store/money";
 import type { StoreOrder } from "@/lib/store/types";
@@ -11,16 +14,19 @@ import { EftProofForm, PendingRefresh } from "./thanks-client";
 export const metadata: Metadata = { title: "Thank you", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-// /store/thanks?order=<uuid> — after PayFast returns, or after an EFT
-// order. The order id (an unguessable UUID only the buyer was given) is
-// the key; the page shows status and payment details, nothing personal
-// beyond the email it went to.
-export default async function ThanksPage({ searchParams }: { searchParams: Promise<{ order?: string }> }) {
-  const { order: id } = await searchParams;
+// /store/thanks?order=<uuid>&t=<token> — after PayFast returns, or after an
+// EFT order. The order id alone opens nothing: the link carries a signed
+// order token (src/lib/store/signing.ts), or the signed-in buyer who placed
+// the order may open it without one. The page shows status and payment
+// details, nothing personal beyond the email it went to.
+export default async function ThanksPage({ searchParams }: { searchParams: Promise<{ order?: string; t?: string }> }) {
+  const { order: id, t: token } = await searchParams;
   if (!id || !/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { data } = await getOrder(storeAdminClient(), id);
   const order = data as StoreOrder | null;
   if (!order) notFound();
+  const buyer = await getBuyer(await createClient());
+  if (!canActOnOrder(order, { token, buyer })) notFound();
   const bank = eftDetails();
 
   const paid = order.status === "paid";
@@ -70,7 +76,7 @@ export default async function ThanksPage({ searchParams }: { searchParams: Promi
           </dl>
           <div>
             <div className="mono-label mb-2">Paid already? Speed it up</div>
-            {order.eft_proof_path ? <p className="text-[14px]">Thanks, we have your proof of payment.</p> : <EftProofForm orderId={order.id} />}
+            {order.eft_proof_path ? <p className="text-[14px]">Thanks, we have your proof of payment.</p> : <EftProofForm orderId={order.id} token={token ?? null} />}
           </div>
         </div>
       )}

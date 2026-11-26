@@ -101,7 +101,8 @@ describe("reading devices", () => {
     // Someone else's limit is their own; and nobody removes another's device.
     expect((await registerDevice(db.client, { userId: "u2", deviceHash: "h1", label: "x", limit: 3 })).data).toBe("ok");
     const { data: theirs } = await listDevices(db.client, "u2");
-    expect((await removeDevice(db.client, "u1", theirs[0].id)).data).toBeNull();
+    expect((await removeDevice(db.client, "u1", theirs[0].id)).data).toBe(false);
+    expect(db.table("store_devices").find((r) => r.id === theirs[0].id)?.removed_at).toBeNull();
   });
 
   it("labels devices plainly", () => {

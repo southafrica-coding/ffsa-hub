@@ -20,7 +20,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { createMemoryDb, storeRpcs, type MemoryDb } from "../testing/memory-db";
 import { catalogue, IDS } from "../testing/fixtures";
 import { startLocalStorage, type LocalStorage } from "../testing/local-storage";
-import { checkStoredObject, MAX_PDF_BYTES, validatePdfUpload } from "../upload";
+import { checkStoredObject, MAX_PDF_BYTES, SIGNED_UPLOAD_TTL_SECONDS, validatePdfUpload } from "../upload";
 import { buildSpreads } from "@/app/(public)/store/_components/flipbook";
 
 vi.mock("server-only", () => ({}));
@@ -28,7 +28,7 @@ vi.mock("server-only", () => ({}));
 let db: MemoryDb;
 let storage: LocalStorage;
 let sb: ReturnType<typeof createSupabase>;
-let who: { id: string; email: string } | null = null;
+let who: { id: string; email: string; email_confirmed_at?: string | null } | null = null;
 let grants: string[] = [];
 const background: Promise<unknown>[] = [];
 
@@ -47,7 +47,7 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/store/db", () => ({ storeAdminClient: () => ({ ...db.client, storage: sb.storage }) }));
 
 const STAFF = { id: "staff-1", email: "media@example.org" };
-const BUYER = { id: "buyer-1", email: "reader@example.org" };
+const BUYER = { id: "buyer-1", email: "reader@example.org", email_confirmed_at: "2026-01-01T00:00:00Z" };
 const SAMPLE = path.join(__dirname, "../fixtures/sample-review.pdf");
 const LOCAL_PDF = process.env.STORE_LOCAL_PDF?.trim();
 
@@ -193,6 +193,22 @@ describe("upload rules", () => {
     const res = await complete.POST(post(`/x`), ctx(s.assetId));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/didn't finish uploading/);
+  });
+
+  it("signs with an explicit window, and complete refuses an upload signed longer ago than that", async () => {
+    const sign = await import("@/app/api/store/admin/products/[id]/pdf/route");
+    const complete = await import("@/app/api/store/admin/assets/[id]/complete/route");
+    const s = await (await sign.POST(post(`/x`, { filename: "s.pdf", contentType: "application/pdf", size: 100 }), ctx(IDS.bundle))).json();
+    expect(s.expiresIn).toBe(SIGNED_UPLOAD_TTL_SECONDS);
+    expect(Date.parse(s.expiresAt) - Date.now()).toBeGreaterThan((SIGNED_UPLOAD_TTL_SECONDS - 60) * 1000);
+    // The upload lands, but only after the window closed.
+    await sb.storage.from(s.bucket).uploadToSignedUrl(s.path, s.token, new Blob([new Uint8Array(100)], { type: "application/pdf" }));
+    db.table("store_assets")[0].created_at = new Date(Date.now() - (SIGNED_UPLOAD_TTL_SECONDS + 1) * 1000).toISOString();
+    const res = await complete.POST(post(`/x`), ctx(s.assetId));
+    expect(res.status).toBe(410);
+    expect(db.table("store_assets")[0]).toMatchObject({ status: "failed" });
+    expect(db.table("store_assets")[0].is_active).not.toBe(true);
+    expect(background).toHaveLength(0);
   });
 });
 

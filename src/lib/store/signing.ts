@@ -83,3 +83,43 @@ export function verifyPageQuery(
   if (expiresAt < nowSec) return { ok: false, reason: "expired" };
   return { ok: true, claim };
 }
+
+// ────────────────────────────────────────────────────────────
+// Order tokens — the thanks page and EFT proof upload
+// ────────────────────────────────────────────────────────────
+// An order's UUID alone is not a key. The thanks link (returned to the
+// browser at checkout, used as PayFast's return_url and sent in the EFT
+// email) carries an HMAC of the order id. The thanks page and the EFT proof
+// upload accept either that token or a signed-in buyer who owns the order.
+
+function orderPayload(orderId: string): string {
+  return `store-order:${orderId.toLowerCase()}`;
+}
+
+export function signOrderToken(orderId: string, key = secret()): string {
+  return b64url(createHmac("sha256", key).update(orderPayload(orderId)).digest());
+}
+
+export function verifyOrderToken(orderId: string, token: string | null | undefined, key?: string): boolean {
+  if (!token || !/^[0-9a-f-]{36}$/i.test(orderId)) return false;
+  const expected = Buffer.from(signOrderToken(orderId, key));
+  const given = Buffer.from(token);
+  return expected.length === given.length && timingSafeEqual(expected, given);
+}
+
+/** /store/thanks?order=<id>&t=<token> */
+export function thanksPath(orderId: string, key?: string): string {
+  return `/store/thanks?${new URLSearchParams({ order: orderId, t: signOrderToken(orderId, key) }).toString()}`;
+}
+
+/** May this request act on this order? A valid token, or the signed-in buyer who placed it. */
+export function canActOnOrder(
+  order: { id: string; buyer_email: string; buyer_user_id: string | null },
+  input: { token?: string | null; buyer?: { userId: string; email: string } | null },
+  key?: string
+): boolean {
+  if (verifyOrderToken(order.id, input.token, key)) return true;
+  const b = input.buyer;
+  if (!b) return false;
+  return (order.buyer_user_id != null && order.buyer_user_id === b.userId) || order.buyer_email === b.email.toLowerCase();
+}

@@ -99,6 +99,34 @@ describe("Store ITN handling", () => {
     for (const x of [bad, short, eft]) expect(x.settle).not.toHaveBeenCalled();
   });
 
+  it("refuses to settle a paid ITN with no amount_gross, or a non-numeric one", async () => {
+    const missing = deps({ verify: async () => ({ orderId: ORDER, status: "paid", providerPaymentId: "1", amountCents: null }) });
+    expect(await handleStoreItn(missing.d, "x")).toBe("amount-missing");
+    expect(missing.settle).not.toHaveBeenCalled();
+    const nan = deps({ verify: async () => ({ orderId: ORDER, status: "paid", providerPaymentId: "1", amountCents: Number.NaN }) });
+    expect(await handleStoreItn(nan.d, "x")).toBe("amount-mismatch");
+    expect(nan.settle).not.toHaveBeenCalled();
+  });
+
+  it("refuses to settle when the amount is over or under the order total by any cent", async () => {
+    for (const amountCents of [14999, 15001, 0, 1500000]) {
+      const x = deps({ verify: async () => ({ orderId: ORDER, status: "paid", providerPaymentId: "1", amountCents }) });
+      expect(await handleStoreItn(x.d, "x")).toBe("amount-mismatch");
+      expect(x.settle).not.toHaveBeenCalled();
+    }
+  });
+
+  it("a real PayFast ITN without amount_gross verifies to a null amount, which never settles", async () => {
+    const noGross = fields.filter(([k]) => k !== "amount_gross");
+    sandbox();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("VALID")));
+    const r = await payfastProvider.verifyWebhook({ rawBody: signedItn(noGross, "test-pass-phrase"), headers: new Headers(), sourceIp: null });
+    expect(r.amountCents).toBeNull();
+    const d = deps({ verify: async () => r });
+    expect(await handleStoreItn(d.d, "x")).toBe("amount-missing");
+    expect(d.settle).not.toHaveBeenCalled();
+  });
+
   it("cancels a pending order PayFast says was cancelled, but never a paid one", async () => {
     const c = deps({ verify: async () => ({ orderId: ORDER, status: "cancelled", providerPaymentId: null, amountCents: null }) });
     expect(await handleStoreItn(c.d, "x")).toBe("cancelled");

@@ -35,6 +35,7 @@ export type ItnOutcome =
   | "rejected"
   | "unknown-order"
   | "amount-mismatch"
+  | "amount-missing"
   | "settled"
   | "already"
   | "cancelled"
@@ -72,11 +73,20 @@ export async function handleStoreItn(deps: ItnDeps, rawBody: string): Promise<It
     log(`[store/itn] no PayFast store order ${result.orderId}`);
     return "unknown-order";
   }
-  if (result.amountCents != null && result.amountCents !== order.total_cents) {
-    log(`[store/itn] amount mismatch on ${order.id}: expected ${order.total_cents}, got ${result.amountCents}`);
+  // Fail closed: an ITN that carries an amount must match the order exactly,
+  // and a "paid" ITN must carry one. A missing or unparseable amount_gross
+  // never settles.
+  const amount = result.amountCents;
+  const hasAmount = typeof amount === "number" && Number.isInteger(amount);
+  if (amount != null && (!hasAmount || amount !== order.total_cents)) {
+    log(`[store/itn] amount mismatch on ${order.id}: expected ${order.total_cents}, got ${amount}`);
     return "amount-mismatch";
   }
   if (result.status === "paid") {
+    if (!hasAmount) {
+      log(`[store/itn] refusing to settle ${order.id}: no amount_gross on a paid ITN`);
+      return "amount-missing";
+    }
     return deps.settle(order.id, result.providerPaymentId);
   }
   if ((result.status === "cancelled" || result.status === "failed") && order.status === "pending") {

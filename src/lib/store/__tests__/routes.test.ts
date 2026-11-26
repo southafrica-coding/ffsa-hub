@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryDb, storeRpcs, type MemoryDb } from "../testing/memory-db";
 import { catalogue, IDS } from "../testing/fixtures";
 import { listPublishedProducts } from "@/services/store";
+import { thanksPath } from "../signing";
 
 vi.mock("server-only", () => ({}));
 
@@ -9,7 +10,7 @@ vi.mock("server-only", () => ({}));
 // request client and the service-role client point at it; the request
 // client also answers auth.getUser and has_permission like Supabase would.
 let db: MemoryDb;
-let who: { id: string; email: string } | null = null;
+let who: { id: string; email: string; email_confirmed_at?: string | null } | null = null;
 let grants: string[] = [];
 
 function requestClient() {
@@ -31,7 +32,7 @@ vi.mock("@/lib/rate-limit", async (orig) => {
 });
 
 const STAFF = { id: "staff-1", email: "media@example.org" };
-const BUYER = { id: "buyer-1", email: "buyer@example.org" };
+const BUYER = { id: "buyer-1", email: "buyer@example.org", email_confirmed_at: "2026-01-01T00:00:00Z" };
 
 function seed() {
   db = createMemoryDb(
@@ -175,7 +176,9 @@ describe("checkout", () => {
     const res = await POST(json(body({ paymentMethod: "eft", lines: [{ productId: IDS.review, quantity: 1, purpose: "self" }], fulfilment: "none" })));
     expect(res.status).toBe(200);
     const out = await res.json();
-    expect(out.next).toBe(`/store/thanks?order=${out.orderId}`);
+    // The thanks link carries a signed order token; the bare id opens nothing.
+    expect(out.next).toBe(thanksPath(out.orderId));
+    expect(out.next).toMatch(/&t=[A-Za-z0-9_-]{20,}$/);
     expect(db.table("store_orders")[0]).toMatchObject({ status: "pending", payment_method: "eft" });
 
     // Media marks it paid → the buyer gets the entitlement, once.

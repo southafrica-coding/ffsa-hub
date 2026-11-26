@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { storeAdminClient } from "@/lib/store/db";
 import { kindHasFlipbook } from "@/lib/store/catalogue";
-import { MAX_PDF_BYTES, validatePdfUpload } from "@/lib/store/upload";
+import { MAX_PDF_BYTES, SIGNED_UPLOAD_TTL_SECONDS, validatePdfUpload } from "@/lib/store/upload";
 import { createAsset, getProduct } from "@/services/store";
 import { requireStoreStaff } from "../../../_guard";
 
@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const assetId = randomUUID();
   const path = `${id}/${assetId}.pdf`;
   const admin = storeAdminClient();
-  const { data: signed, error: signErr } = await admin.storage.from("store-source").createSignedUploadUrl(path);
+  const { data: signed, error: signErr } = await admin.storage.from("store-source").createSignedUploadUrl(path, { upsert: false });
   if (signErr || !signed) return NextResponse.json({ error: signErr?.message ?? "Couldn't start the upload" }, { status: 500 });
 
   const { error } = await createAsset(guard.supabase, {
@@ -43,5 +43,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     byte_size: parsed.value.size,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true, assetId, bucket: "store-source", path, token: signed.token, maxBytes: MAX_PDF_BYTES });
+  const expiresAt = new Date(Date.now() + SIGNED_UPLOAD_TTL_SECONDS * 1000).toISOString();
+  return NextResponse.json({ success: true, assetId, bucket: "store-source", path, token: signed.token, maxBytes: MAX_PDF_BYTES, expiresIn: SIGNED_UPLOAD_TTL_SECONDS, expiresAt });
 }

@@ -38,11 +38,23 @@ export async function getStoreStaffLevel(supabase: Client, userId: string): Prom
 
 export type Buyer = { userId: string; email: string };
 
-/** The signed-in reader, by verified email. Null when signed out. */
+type AuthUserLike = { id?: string; email?: string | null; email_confirmed_at?: string | null } | null | undefined;
+
+/**
+ * Pure decision: a buyer is a signed-in auth user whose email is CONFIRMED
+ * (email_confirmed_at set by Supabase Auth). Same rule as
+ * public.store_buyer_email() in 412. An unconfirmed email is never trusted
+ * to open orders, entitlements or devices tied to that address.
+ */
+export function buyerFromAuthUser(user: AuthUserLike): Buyer | null {
+  if (!user?.id || !user.email || !user.email_confirmed_at) return null;
+  return { userId: user.id, email: String(user.email).toLowerCase() };
+}
+
+/** The signed-in reader, by confirmed email. Null when signed out or unconfirmed. */
 export async function getBuyer(supabase: Client): Promise<Buyer | null> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user?.email) return null;
-  return { userId: user.id, email: String(user.email).toLowerCase() };
+  return buyerFromAuthUser(user);
 }

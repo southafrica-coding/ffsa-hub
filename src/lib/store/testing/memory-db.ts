@@ -132,7 +132,7 @@ export function createMemoryDb(
   return { client: client as any, tables, log, table: t };
 }
 
-/** The two Store RPCs, as migration 412 defines them. */
+/** The Store RPCs, as migration 412 defines them. */
 export const storeRpcs = {
   store_take_stock: (args: Record<string, unknown>, db: Record<string, Row[]>) => {
     const v = (db.store_variants ?? []).find((r) => r.id === args.p_variant_id);
@@ -153,5 +153,12 @@ export const storeRpcs = {
     if (mine.length >= ((args.p_limit as number) ?? 3)) return "limit";
     rows.push({ id: randomUUID(), user_id: args.p_user_id, device_hash: args.p_device_hash, label: args.p_label, created_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), removed_at: null });
     return "ok";
+  },
+  // Only ever sets removed_at, only on the user's own active row.
+  store_remove_device: (args: Record<string, unknown>, db: Record<string, Row[]>) => {
+    const row = (db.store_devices ?? []).find((r) => r.id === args.p_device_id && r.user_id === args.p_user_id && !r.removed_at);
+    if (!row) return false;
+    row.removed_at = new Date().toISOString();
+    return true;
   },
 };

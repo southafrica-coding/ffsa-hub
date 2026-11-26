@@ -23,10 +23,16 @@
 --   * Buyers: a plain Supabase auth user (magic link). They get NO users row
 --     and NO user_roles, so nothing in the staff Hub opens for them. They read
 --     their own orders / entitlements / devices / codes, matched on
---     auth.uid() or their verified auth email. Every write a buyer makes goes
+--     auth.uid() or their CONFIRMED auth email (auth.users.email_confirmed_at,
+--     never the bare JWT claim). Buyers have SELECT only: every write a buyer
+--     makes (checkout, redeem, register / remove a device, EFT proof) goes
 --     through a route handler using the service role after server-side checks
 --     (cart totals, paid state and entitlements are never trusted from the
 --     client).
+--   * Table privileges are explicit (section 5b): REVOKE ALL from PUBLIC, anon
+--     and authenticated, then GRANT only what a policy below needs. Hosted
+--     Supabase default-grants ALL to anon/authenticated, so RLS alone is not
+--     the fence.
 --   * Anonymous: published products, their variants and preview page rows.
 --   * Storage: three PRIVATE buckets. Nobody but the service role reads them;
 --     pages leave only through the watermarking route.
@@ -58,14 +64,27 @@ AS $$
   SELECT public.store_can_manage() OR public.has_permission('store.view');
 $$;
 
--- The signed-in buyer's verified email, lower-cased ('' when anonymous).
+-- The signed-in buyer's email, lower-cased, ONLY once it is confirmed
+-- (auth.users.email_confirmed_at). '' when anonymous or unconfirmed, which
+-- matches no row (buyer_email / email are NOT NULL and never ''). Read from
+-- auth.users, not the JWT claim, so an unconfirmed or stale email in a token
+-- never opens someone else's orders. SECURITY DEFINER to read auth.users.
 CREATE OR REPLACE FUNCTION public.store_buyer_email()
 RETURNS text
-LANGUAGE sql STABLE SET search_path = ''
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
 AS $$
-  SELECT lower(coalesce(auth.jwt() ->> 'email', ''));
+  SELECT coalesce((
+    SELECT lower(u.email)
+      FROM auth.users u
+     WHERE u.id = auth.uid()
+       AND u.email_confirmed_at IS NOT NULL
+       AND u.email IS NOT NULL
+  ), '');
 $$;
 
+REVOKE ALL ON FUNCTION public.store_can_manage() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.store_can_view() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.store_buyer_email() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.store_can_manage() TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.store_can_view() TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.store_buyer_email() TO anon, authenticated, service_role;
@@ -171,7 +190,7 @@ CREATE TABLE IF NOT EXISTS public.store_orders (
   fulfilment_method    text NOT NULL DEFAULT 'none' CHECK (fulfilment_method IN ('none', 'delivery', 'collect')),
   delivery_address     jsonb,
   provider_payment_id  text,
-  eft_proof_path       text,                       -- store-source/eft/<order>.<ext> (private)
+  eft_proof_path       text,                       -- store-source/eft/<order>/<random>.<ext> (private; set once)
   paid_at              timestamptz,
   marked_paid_by       uuid REFERENCES public.users (id) ON DELETE SET NULL,
   cancelled_at         timestamptz,
@@ -376,15 +395,14 @@ CREATE POLICY "store codes: purchaser reads own, staff read all"
     )
   );
 
--- Devices: the buyer sees and removes their own. Registering goes through
--- store_register_device (limit check).
+-- Devices: the buyer SEES their own, nothing more. There is deliberately no
+-- INSERT / UPDATE / DELETE policy and no write privilege (5b): registering
+-- goes through store_register_device (the 3-device cap) and removing through
+-- store_remove_device (only ever sets removed_at), both service-role only.
+-- A buyer-side UPDATE could clear removed_at and lift the cap.
 CREATE POLICY "store devices: own read"
   ON public.store_devices FOR SELECT TO authenticated
   USING (user_id = auth.uid() OR public.store_can_manage());
-CREATE POLICY "store devices: own remove"
-  ON public.store_devices FOR UPDATE TO authenticated
-  USING (user_id = auth.uid() OR public.store_can_manage())
-  WITH CHECK (user_id = auth.uid() OR public.store_can_manage());
 
 CREATE POLICY "store fulfilments: buyer reads own, staff read all"
   ON public.store_fulfilments FOR SELECT TO authenticated
@@ -400,13 +418,38 @@ CREATE POLICY "store fulfilments: staff write"
   ON public.store_fulfilments FOR ALL TO authenticated
   USING (public.store_can_manage()) WITH CHECK (public.store_can_manage());
 
--- Table privileges: anon reads the catalogue only.
+-- ────────────────────────────────────────────────────────────
+-- 5b. Table privileges (pattern: 351_fleet_rls.sql)
+-- ────────────────────────────────────────────────────────────
+-- Start from nothing, then grant exactly the commands a policy above allows.
+-- RLS still decides WHICH rows; these decide which COMMANDS can run at all.
+--   anon          : SELECT on the published catalogue.
+--   authenticated : SELECT on everything (policies scope buyers to their own
+--                   rows and staff to store.view); INSERT / UPDATE / DELETE
+--                   only where a staff (store.manage) policy exists.
+--                   store_orders: staff UPDATE only (mark paid, cancel).
+--                   store_order_items, store_codes, store_devices: SELECT only.
+--   service_role  : everything (checkout, ITN, settle, devices, redeem).
 REVOKE ALL ON TABLE
   public.store_products, public.store_variants, public.store_assets, public.store_asset_pages,
   public.store_orders, public.store_order_items, public.store_entitlements, public.store_codes,
   public.store_devices, public.store_fulfilments
-FROM anon;
+FROM PUBLIC, anon, authenticated;
+
 GRANT SELECT ON TABLE public.store_products, public.store_variants TO anon;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+  public.store_products, public.store_variants, public.store_assets, public.store_asset_pages,
+  public.store_entitlements, public.store_fulfilments
+TO authenticated;
+GRANT SELECT, UPDATE ON TABLE public.store_orders TO authenticated;
+GRANT SELECT ON TABLE public.store_order_items, public.store_codes, public.store_devices TO authenticated;
+
+GRANT ALL ON TABLE
+  public.store_products, public.store_variants, public.store_assets, public.store_asset_pages,
+  public.store_orders, public.store_order_items, public.store_entitlements, public.store_codes,
+  public.store_devices, public.store_fulfilments
+TO service_role;
 
 -- ────────────────────────────────────────────────────────────
 -- 6. Atomic helpers (service role only)
@@ -459,10 +502,30 @@ BEGIN
 END;
 $$;
 
+-- Remove one of a buyer's reading devices. Only ever SETS removed_at (never
+-- clears it), only on that user's own active row. Returns true when a row was
+-- removed, false when there was nothing of theirs to remove. The route checks
+-- the buyer session and passes their auth uid; buyers can't call this.
+CREATE OR REPLACE FUNCTION public.store_remove_device(p_user_id uuid, p_device_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtext('store_devices:' || p_user_id::text));
+  UPDATE public.store_devices
+     SET removed_at = now()
+   WHERE id = p_device_id AND user_id = p_user_id AND removed_at IS NULL;
+  RETURN FOUND;
+END;
+$$;
+
+-- Service role only. REVOKE from every role first, then grant the one.
 REVOKE ALL ON FUNCTION public.store_take_stock(uuid, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.store_register_device(uuid, text, text, integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.store_remove_device(uuid, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.store_take_stock(uuid, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.store_register_device(uuid, text, text, integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.store_remove_device(uuid, uuid) TO service_role;
 
 -- ────────────────────────────────────────────────────────────
 -- 7. Storage — all private
@@ -493,4 +556,11 @@ COMMIT;
 --     -- expect relrowsecurity = true on all ten
 --   SELECT id, public FROM storage.buckets WHERE id LIKE 'store-%';
 --     -- expect three rows, public = false
+--   SELECT grantee, table_name, string_agg(privilege_type, ',' ORDER BY privilege_type)
+--     FROM information_schema.role_table_grants
+--    WHERE table_name LIKE 'store\_%' AND grantee IN ('anon', 'authenticated', 'PUBLIC')
+--    GROUP BY 1, 2 ORDER BY 1, 2;
+--     -- expect anon: SELECT on store_products / store_variants only;
+--     -- authenticated: SELECT only on store_devices / store_codes /
+--     -- store_order_items, SELECT,UPDATE on store_orders; no PUBLIC rows.
 -- ============================================================

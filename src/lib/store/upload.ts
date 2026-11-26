@@ -25,6 +25,24 @@
  *  (migration 412, file_size_limit) so a hand-crafted PUT can't exceed it. */
 export const MAX_PDF_BYTES = 50 * 1024 * 1024; // 50 MB
 
+/**
+ * How long a signed PDF upload stays usable, in seconds. Explicit, not the
+ * Storage default: storage-js 2.7.1's createSignedUploadUrl takes no
+ * expiresIn (Storage fixes its token at 2 hours), so the Hub enforces this
+ * shorter window itself: /complete and /render refuse an asset still
+ * awaiting_upload once SIGNED_UPLOAD_TTL_SECONDS have passed since it was
+ * signed, and mark it failed. A late PUT can land a file, but it is never
+ * rendered or made active. Upsert is always off, so a token can't
+ * overwrite an object that already landed.
+ */
+export const SIGNED_UPLOAD_TTL_SECONDS = 30 * 60;
+
+/** Is a signed upload issued at `signedAt` still inside its window? */
+export function uploadWindowOpen(signedAt: string | null | undefined, now = Date.now()): boolean {
+  const t = signedAt ? Date.parse(signedAt) : NaN;
+  return Number.isFinite(t) && now - t <= SIGNED_UPLOAD_TTL_SECONDS * 1000;
+}
+
 /** What Vercel lets through a function body; documentation only. */
 export const VERCEL_BODY_LIMIT_BYTES = 4.5 * 1024 * 1024;
 

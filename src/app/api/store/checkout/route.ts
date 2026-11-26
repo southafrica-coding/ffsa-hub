@@ -9,6 +9,7 @@ import { appUrl, storePaymentsEnabled } from "@/lib/store/flags";
 import { splitName, storePayfastAllowed } from "@/lib/store/payments";
 import type { StoreProduct, StoreVariant } from "@/lib/store/types";
 import { createOrder, getProductsByIds, listVariants } from "@/services/store";
+import { thanksPath } from "@/lib/store/signing";
 import { bad, NO_STORE, readJson } from "../_shared";
 
 // POST /api/store/checkout — public. Prices the cart on the server, creates
@@ -84,12 +85,13 @@ export async function POST(request: Request) {
   if (error || !created) return bad("We couldn't save your order. Try again.", 500);
   const { order } = created;
   const base = appUrl();
-  const thanks = `${base}/store/thanks?order=${order.id}`;
+  const thanksAt = thanksPath(order.id);
+  const thanks = `${base}${thanksAt}`;
 
   if (input.paymentMethod === "eft") {
     const mail = eftInstructionsEmail(order, bank!, thanks);
     await sendStoreEmail({ to: order.buyer_email, ...mail, category: "store_eft_instructions", sourceId: order.id });
-    return NextResponse.json({ ok: true, orderId: order.id, next: `/store/thanks?order=${order.id}` }, { headers: NO_STORE });
+    return NextResponse.json({ ok: true, orderId: order.id, next: thanksAt }, { headers: NO_STORE });
   }
 
   const { firstName, lastName } = splitName(order.buyer_name);

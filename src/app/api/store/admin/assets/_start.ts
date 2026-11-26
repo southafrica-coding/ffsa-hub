@@ -5,7 +5,7 @@
 import { after, NextResponse } from "next/server";
 import { storeAdminClient } from "@/lib/store/db";
 import { processUploadedAsset } from "@/lib/store/pdf/process-asset";
-import { checkStoredObject, RENDER_STALE_MS } from "@/lib/store/upload";
+import { checkStoredObject, RENDER_STALE_MS, uploadWindowOpen } from "@/lib/store/upload";
 import type { StoreAsset } from "@/lib/store/types";
 import { claimAssetForRender, getAsset, updateAsset } from "@/services/store";
 import { requireStoreStaff } from "../_guard";
@@ -17,6 +17,12 @@ export async function startRender(id: string, from: StoreAsset["status"][]) {
   if (!asset) return NextResponse.json({ error: "Upload not found" }, { status: 404 });
 
   const admin = storeAdminClient();
+  // The signed upload window (SIGNED_UPLOAD_TTL_SECONDS) is ours to enforce.
+  if (asset.status === "awaiting_upload" && !uploadWindowOpen(asset.created_at)) {
+    const error = "The upload link expired. Upload the PDF again.";
+    await updateAsset(admin, id, { status: "failed", error });
+    return NextResponse.json({ error }, { status: 410 });
+  }
   // A render killed by the function timeout leaves "rendering" behind; let
   // a retry take it over once it's clearly dead.
   const stale = asset.status === "rendering" && asset.render_started_at && Date.now() - Date.parse(asset.render_started_at) > RENDER_STALE_MS;

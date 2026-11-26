@@ -17,7 +17,7 @@ export function PendingRefresh() {
   return <div className="h-1 w-full overflow-hidden bg-bone-2"><div className="h-full w-1/3 animate-pulse bg-ink" /></div>;
 }
 
-export function EftProofForm({ orderId }: { orderId: string }) {
+export function EftProofForm({ orderId, token }: { orderId: string; token: string | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +27,7 @@ export function EftProofForm({ orderId }: { orderId: string }) {
     setError(null);
     const form = new FormData();
     form.append("file", file);
+    if (token) form.append("t", token);
     const res = await fetch(`/api/store/orders/${orderId}/eft-proof`, { method: "POST", body: form }).catch(() => null);
     const body = await res?.json().catch(() => ({}));
     setBusy(false);

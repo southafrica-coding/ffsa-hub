@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { StatusPill } from "@/components/ffsa";
 import { createClient } from "@/lib/supabase/server";
 import { getBuyer } from "@/lib/store/access";
+import { thanksPath } from "@/lib/store/signing";
 import { formatZar } from "@/lib/store/money";
 import { fulfilmentLabel } from "@/lib/store/settle";
 import type { FulfilmentStatus, StoreCode, StoreOrder, StoreOrderItem } from "@/lib/store/types";
@@ -88,7 +89,7 @@ export default async function OrdersPage() {
                   })}
                 </ul>
                 {o.status === "pending" && (
-                  <Link href={`/store/thanks?order=${o.id}`} className="block border-t border-rule px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] hover:bg-bone">
+                  <Link href={thanksPath(o.id)} className="block border-t border-rule px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] hover:bg-bone">
                     {o.payment_method === "eft" ? "EFT details and proof of payment →" : "Check payment →"}
                   </Link>
                 )}

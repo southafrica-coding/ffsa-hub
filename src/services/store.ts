@@ -289,8 +289,15 @@ export async function listDevices(supabase: Client, userId: string) {
     .order("last_seen_at", { ascending: false });
 }
 
+/**
+ * Remove one of a buyer's devices through store_remove_device (service role
+ * only; it only ever sets removed_at). Buyers have no UPDATE on
+ * store_devices, so a removed device can't be brought back to lift the cap.
+ * data: true when removed, false when it wasn't theirs / already removed.
+ */
 export async function removeDevice(supabase: Client, userId: string, id: string) {
-  return supabase.from("store_devices").update({ removed_at: new Date().toISOString() }).eq("id", id).eq("user_id", userId).select("id").maybeSingle();
+  const { data, error } = await supabase.rpc("store_remove_device", { p_user_id: userId, p_device_id: id });
+  return { data: data === true, error };
 }
 
 export async function isDeviceActive(supabase: Client, userId: string, deviceHash: string) {
