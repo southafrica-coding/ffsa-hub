@@ -24,3 +24,5 @@ Routes: `app/(app)/staff-decisions/`. This is a hidden route of the signed-in ta
 **Stays on the website** (via `openWebPage`): Arrival, applications and the rest of the school page.
 
 **Offline.** The last good copy of each screen is kept with finance's `useCachedLoad` (encrypted store, per user).
+
+**Look (redesign R3, frames 12.1–12.6).** Both screens draw their own `LargeTitle` header (the stack has no native header). A school row is its name and one line of counts; a student row is the decision as a `StatusChip` (yes = green + check, no = quiet + cross, undecided = dashed), the note, who decided, and small buttons. The sheet's Yes / No is the kit's `ChoiceSegments`: the kit segmented control's look, but a radio group that starts with nothing chosen. A missing note for a no is said on the note field itself.

@@ -1,0 +1,129 @@
+// ============================================================
+// Store — PDF → page images
+// ============================================================
+// Renders every page of an uploaded PDF to a compressed WebP sized for
+// phones. pdfjs-dist (legacy build, the one that runs in Node) draws onto
+// an @napi-rs/canvas surface; sharp encodes the result. Server-only.
+//
+// Pages are stored clean in the private store-pages bucket and the
+// flipbook serves them as is, so one render serves every buyer. The
+// Print + Digital PDF is built from these same pages (low-res-pdf.ts).
+// ============================================================
+
+import "server-only";
+import path from "node:path";
+import sharp from "sharp";
+
+/** Width of a stored page. ~2x a 390px phone, which keeps text crisp on a
+ *  retina screen while a typical magazine page stays near 100-200 KB. */
+export const PAGE_WIDTH = 1080;
+export const PAGE_QUALITY = 72;
+/** Landscape pages (a two-page spread saved as one PDF page, as in Jack's
+ *  2026 draft) are drawn 1.5x wider so each half keeps ~810px of detail. */
+export const LANDSCAPE_SCALE = 1.5;
+
+/** Pixel width to draw a page at, from its PDF size. */
+export function targetWidth(pdfWidth: number, pdfHeight: number, width = PAGE_WIDTH): number {
+  return pdfWidth > pdfHeight ? Math.round(width * LANDSCAPE_SCALE) : width;
+}
+
+export type RenderedPage = {
+  pageNo: number;
+  width: number;
+  height: number;
+  webp: Buffer;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PdfJs = any;
+
+// PDFs that lean on the 14 standard fonts without embedding them need
+// pdfjs's own font data; in Node it's read straight off disk. Traced into
+// the serverless bundle by next.config.ts (outputFileTracingIncludes).
+function standardFontDataUrl(): string {
+  return path.join(process.cwd(), "node_modules/pdfjs-dist/standard_fonts") + path.sep;
+}
+
+async function loadPdfJs(): Promise<PdfJs> {
+  // Dynamic import: pdfjs is ESM-only and heavy; only the render route
+  // and the admin upload pay for it.
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  // In Node, pdfjs disables Web Workers and sets up a "fake worker" that
+  // still does `import(GlobalWorkerOptions.workerSrc)`, defaulting to
+  // "./pdf.worker.mjs". nft does not follow that string, so the file was
+  // missing from the Vercel function at /var/task/.../pdf.worker.mjs
+  // ("Setting up fake worker failed"). An explicit import traces the
+  // worker into the bundle, and assigning globalThis.pdfjsWorker lets
+  // the fake-worker path use it without a second lookup.
+  // The worker entry ships no types; the runtime export is the module itself.
+  // @ts-expect-error pdfjs has no declaration for the worker entry.
+  const worker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = worker;
+  return pdfjs;
+}
+
+export async function countPdfPages(pdf: Uint8Array): Promise<number> {
+  const pdfjs = await loadPdfJs();
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(pdf), useSystemFonts: false, isEvalSupported: false, standardFontDataUrl: standardFontDataUrl() }).promise;
+  const n = doc.numPages as number;
+  await doc.destroy();
+  return n;
+}
+
+/**
+ * Render pages of a PDF. `onPage` is called as each page finishes so the
+ * caller can upload as it goes instead of holding every page in memory.
+ */
+export async function renderPdfToWebp(
+  pdf: Uint8Array,
+  opts: {
+    width?: number;
+    quality?: number;
+    /** Called once with the page count, before any page renders. */
+    onStart?: (pageCount: number) => Promise<void> | void;
+    onPage?: (page: RenderedPage) => Promise<void> | void;
+  } = {}
+): Promise<RenderedPage[]> {
+  const width = opts.width ?? PAGE_WIDTH;
+  const quality = opts.quality ?? PAGE_QUALITY;
+  const pdfjs = await loadPdfJs();
+  const { createCanvas } = await import("@napi-rs/canvas");
+
+  const doc = await pdfjs.getDocument({
+    data: new Uint8Array(pdf),
+    isEvalSupported: false,
+    useSystemFonts: false,
+    standardFontDataUrl: standardFontDataUrl(),
+  }).promise;
+
+  const out: RenderedPage[] = [];
+  try {
+    if (opts.onStart) await opts.onStart(doc.numPages);
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const base = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: targetWidth(base.width, base.height, width) / base.width });
+      const w = Math.round(viewport.width);
+      const h = Math.round(viewport.height);
+      const canvas = createCanvas(w, h);
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, w, h);
+      await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+      const png = await canvas.encode("png");
+      const webp = await sharp(png).webp({ quality, effort: 4 }).toBuffer();
+      const rendered = { pageNo: i, width: w, height: h, webp };
+      page.cleanup();
+      if (opts.onPage) await opts.onPage(rendered);
+      out.push(opts.onPage ? { ...rendered, webp: Buffer.alloc(0) } : rendered);
+    }
+  } finally {
+    await doc.destroy();
+  }
+  return out;
+}
+
+/** Which pages are free previews by default: the first three. */
+export function defaultPreviewPages(pageCount: number, n = 3): number[] {
+  return Array.from({ length: Math.min(n, pageCount) }, (_, i) => i + 1);
+}

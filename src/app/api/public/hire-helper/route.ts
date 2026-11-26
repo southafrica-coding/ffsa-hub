@@ -2,7 +2,7 @@ import { after, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clientIp, getRateLimiter, retryAfterSeconds } from "@/lib/rate-limit";
 import { rangeLabel, sastToday } from "@/lib/equipment/dates";
-import { helperRange, parseHelperAnswers, summariseAnswers, summaryText } from "@/lib/equipment/helper";
+import { HIRE_EMAIL, helperRange, parseHelperAnswers, summariseAnswers, summaryText } from "@/lib/equipment/helper";
 import { notifyHireQuoteRequest } from "@/lib/email/send-hire-quote-request";
 import { insertQuoteRequest } from "@/services/equipment-helper";
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   const limited = await getRateLimiter().hit(`hire-helper:${clientIp(request)}`, LIMIT);
   if (!limited.allowed) {
     return NextResponse.json(
-      { error: "Too many requests from this connection. Try again later, or email us." },
+      { error: `Too many requests from this connection. Try again later, or email ${HIRE_EMAIL}.` },
       { status: 429, headers: { "Retry-After": String(retryAfterSeconds(limited)) } }
     );
   }
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   });
   if (error || !order) {
     console.error("[hire-helper] quote insert failed:", error?.message);
-    return NextResponse.json({ error: "We couldn't send your answers. Try again, or email us." }, { status: 500 });
+    return NextResponse.json({ error: `We couldn't send your answers. Try again, or email ${HIRE_EMAIL}.` }, { status: 500 });
   }
 
   after(() =>

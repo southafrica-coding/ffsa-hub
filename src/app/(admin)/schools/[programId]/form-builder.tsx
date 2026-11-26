@@ -104,8 +104,8 @@ function QuestionRow({
       className={cn(
         "mb-[5px] flex items-center gap-3.5 border px-3.5 py-2.5 hover:border-ink",
         isSection && "border-ink bg-ink",
-        !isSection && isConditional && "border-rule bg-[#F7F5EE]",
-        !isSection && !isConditional && "border-[#E7E4D9] bg-white"
+        !isSection && isConditional && "border-rule bg-[var(--surface-hover)]",
+        !isSection && !isConditional && "border-bone-3 bg-white"
       )}
     >
       <button
@@ -115,7 +115,7 @@ function QuestionRow({
         aria-label={`Reorder ${question.label}`}
         className={cn(
           "shrink-0 cursor-grab font-mono text-[12px] active:cursor-grabbing",
-          isSection ? "text-[#8E8B82]" : "text-[#B4B0A2]"
+          isSection ? "text-[color:var(--text-quiet)]" : "text-[#B4B0A2]"
         )}
       >
         ⠿
@@ -329,7 +329,7 @@ export function FormBuilder({
           <button
             type="button"
             onClick={() => onAddOfType("short_answer")}
-            className="mt-1.5 w-full border border-dashed border-[#B4B0A2] px-3 py-3 font-mono text-[10px] font-bold tracking-[0.14em] text-[color:var(--text-tertiary)] hover:border-ink hover:text-ink"
+            className="mt-1.5 w-full border border-dashed border-rule-strong px-3 py-3 font-mono text-[10px] font-bold tracking-[0.14em] text-[color:var(--text-tertiary)] hover:border-ink hover:text-ink"
           >
             + ADD QUESTION
           </button>
@@ -350,7 +350,7 @@ export function FormBuilder({
               the list, since one slot is as wrong as none. */}
           {requiredSlotCount < MIN_REQUIRED_SLOTS && (
             <div className="border-b border-rule px-6 py-5 text-center">
-              <p className="text-sm font-semibold text-[#8A6400]">
+              <p className="text-sm font-semibold text-amber">
                 {slots.length === 0
                   ? "This school is asking for no references"
                   : `This school is only asking for ${requiredSlotCount} of ${MIN_REQUIRED_SLOTS} references`}
@@ -369,7 +369,7 @@ export function FormBuilder({
             slots.map((slot, i) => (
               <div
                 key={slot.id}
-                className="group/slot flex items-center gap-3.5 border-b border-rule px-5 py-3 hover:bg-[#F7F5EE] md:px-6"
+                className="group/slot flex items-center gap-3.5 border-b border-rule px-5 py-3 hover:bg-[var(--surface-hover)] md:px-6"
               >
                 <button
                   type="button"
@@ -478,7 +478,7 @@ export function FormPreview({
           {q.is_required && <span className="text-[color:var(--amber)]"> *</span>}
         </div>
         {q.type === "long_answer" ? (
-          <div className="h-[78px] border border-rule-strong bg-[#FDFCF8]" />
+          <div className="h-[78px] border border-rule-strong bg-[var(--surface-hover)]" />
         ) : q.type === "yes_no" ? (
           <div className="flex gap-2">
             <span className="flex-1 border border-ink bg-ink py-2 text-center text-[13px] font-semibold text-white">
@@ -500,11 +500,11 @@ export function FormPreview({
             ))}
           </div>
         ) : q.type === "file" ? (
-          <div className="border border-dashed border-[#B4B0A2] px-3 py-3.5 text-center font-mono text-[9.5px] font-bold tracking-[0.1em] text-[color:var(--text-tertiary)]">
+          <div className="border border-dashed border-rule-strong px-3 py-3.5 text-center font-mono text-[9.5px] font-bold tracking-[0.1em] text-[color:var(--text-tertiary)]">
             DROP A FILE
           </div>
         ) : (
-          <div className="h-[38px] border border-rule-strong bg-[#FDFCF8]" />
+          <div className="h-[38px] border border-rule-strong bg-[var(--surface-hover)]" />
         )}
       </div>
     );

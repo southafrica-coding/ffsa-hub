@@ -19,6 +19,9 @@ function relative(file: string): string {
   return path.relative(ROOT, file).split(path.sep).join("/");
 }
 
+const IMPORTS_INTERNAL =
+  /(?:from\s+|import\s*\(\s*|require\(\s*)["'][^"']*(?:\/internal(?:["'/])|departments\/http)/;
+
 const OURS = [
   "src/app/(admin)/departments/",
   "src/app/(admin)/home/",
@@ -46,7 +49,9 @@ describe("department page boundary", () => {
     const offenders: string[] = [];
     for (const file of files) {
       const text = readFileSync(file, "utf8");
-      if (text.includes("/internal") || text.includes("departments/http")) offenders.push(relative(file));
+      // Import specifiers only: a URL such as "http://internal.local/serve"
+      // (the Missio serve pages' rate-limit key) is not an import.
+      if (IMPORTS_INTERNAL.test(text)) offenders.push(relative(file));
     }
     expect(offenders).toEqual([]);
   });

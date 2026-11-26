@@ -26,7 +26,9 @@ vi.mock("@/lib/sidebar-access", () => ({
     menuLoadFailed: false,
   }),
 }));
-vi.mock("@/lib/user-initials", () => ({ getUserInitials: async () => "TL" }));
+vi.mock("@/lib/user-initials", () => ({
+  getShellProfile: async () => ({ initials: "TL", colorScheme: null }),
+}));
 vi.mock("@/services/equipment", () => ({ hasEquipmentAccess: async () => false }));
 vi.mock("@/components/hub-shell", () => ({
   HubShell: ({

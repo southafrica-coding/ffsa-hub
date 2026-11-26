@@ -1,5 +1,7 @@
 "use client";
 
+import { dueBackFrom } from "@/lib/vehicles/return-day";
+import { DueBackNote } from "@/components/vehicles/due-back-note";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -27,6 +29,8 @@ type DriverRow = {
   user_id: string;
   name: string;
   phone: string;
+  /** Outsiders only: where their pick-up and return instructions go (Hub users get theirs on Slack and email). */
+  email: string;
   has_sa_license: boolean;
   is_first_time: boolean;
   /** Staged licence / passport files — uploaded after the booking POST
@@ -40,6 +44,7 @@ const EMPTY_DRIVER: DriverRow = {
   user_id: "",
   name: "",
   phone: "",
+  email: "",
   has_sa_license: false,
   is_first_time: false,
   license: null,
@@ -120,13 +125,14 @@ export function VehicleBookingForm({
     if (error) setError(null);
     const person = peopleById.get(userId);
     if (!person) {
-      setDriver(i, { user_id: "", name: "", phone: "" });
+      setDriver(i, { user_id: "", name: "", phone: "", email: "" });
       return;
     }
     setDriver(i, {
       user_id: userId,
       name: person.name,
       phone: person.phone ?? "",
+      email: "",
       // A licence already on file is the answer to both of these, so the
       // requester never has to self-declare them for a known person.
       has_sa_license: toIso2(person.country) === "ZA",
@@ -158,7 +164,7 @@ export function VehicleBookingForm({
             dryRun: true,
             booking_name: form.booking_name || "x",
             checkout_date: form.checkout_date,
-            return_date: form.return_date,
+            return_date: dueBackFrom(form.return_date),
           }),
         });
         const json = await res.json().catch(() => ({}));
@@ -188,8 +194,8 @@ export function VehicleBookingForm({
     if (!form.booking_name.trim()) return "Please enter a booking name (team or person).";
     if (!form.point_person.trim()) return "Please enter the point person for this booking.";
     if (!form.destination.trim()) return "Please say where you plan to go with the vehicle.";
-    if (!form.checkout_date || !form.return_date) return "Please choose collection and return dates.";
-    if (form.return_date < form.checkout_date) return "The return date must be on or after the collection date.";
+    if (!form.checkout_date || !form.return_date) return "Please choose the collection date and the last day you need it.";
+    if (form.return_date < form.checkout_date) return "The last day must be on or after the collection date.";
     if (form.purpose === "other" && !form.purpose_note.trim())
       return "Please describe the purpose.";
     const clashing = vehicleIds.filter((id) => unavailableIds.includes(id));
@@ -228,7 +234,7 @@ export function VehicleBookingForm({
     setError(null);
 
     const cleanDrivers = drivers
-      .map((d) => ({ ...d, name: d.name.trim(), phone: d.phone.trim() }))
+      .map((d) => ({ ...d, name: d.name.trim(), phone: d.phone.trim(), email: d.email.trim() }))
       .filter((d) => d.name);
 
     const res = await fetch("/api/vehicles/bookings", {
@@ -245,7 +251,7 @@ export function VehicleBookingForm({
         requester_phone: form.requester_phone.trim() || null,
         num_people: form.num_people ? parseInt(form.num_people, 10) : null,
         checkout_date: form.checkout_date,
-        return_date: form.return_date,
+        return_date: dueBackFrom(form.return_date),
         home_country: form.home_country || null,
         notes: form.notes.trim() || null,
         vehicle_ids: vehicleIds,
@@ -255,6 +261,7 @@ export function VehicleBookingForm({
           user_id: d.user_id || null,
           name: d.name,
           phone: d.phone,
+          email: d.user_id ? undefined : d.email || undefined,
           has_sa_license: d.has_sa_license,
           is_first_time: d.is_first_time,
         })),
@@ -446,7 +453,7 @@ export function VehicleBookingForm({
               <DateInput value={form.checkout_date} onChange={(v) => update("checkout_date", v)} />
             </div>
             <div className="space-y-2">
-              <Label>Return date *</Label>
+              <Label>Last day you need it *</Label>
               <DateInput value={form.return_date} onChange={(v) => update("return_date", v)} />
             </div>
             <div className="space-y-2">
@@ -460,9 +467,10 @@ export function VehicleBookingForm({
               />
             </div>
           </div>
+          <DueBackNote lastDay={form.return_date} purpose={form.purpose} className="sm:max-w-[66%]" />
           {days > 0 && (
             <p className="text-xs text-muted-foreground">
-              {days} day{days === 1 ? "" : "s"} (collection → return, inclusive).
+              {days} day{days === 1 ? "" : "s"} (collection to last day, inclusive).
             </p>
           )}
 
@@ -471,7 +479,7 @@ export function VehicleBookingForm({
             <Label>Vehicle(s) requested</Label>
             <p className="text-xs text-muted-foreground">
               Pick the vehicles you&apos;d like — the coordinator confirms the final
-              assignment. Unavailable vehicles are already booked for your dates.
+              assignment. Unavailable vehicles are already booked, in the workshop, or held after an international team for your dates.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
               {vehicles.map((v) => {
@@ -561,6 +569,14 @@ export function VehicleBookingForm({
                       onChange={(e) => setDriver(i, { phone: e.target.value })}
                       placeholder="WhatsApp number"
                       className="h-9 w-40"
+                    />
+                    <Input
+                      type="email"
+                      value={d.email}
+                      onChange={(e) => setDriver(i, { email: e.target.value })}
+                      placeholder="Email (for their instructions)"
+                      aria-label="Driver email"
+                      className="h-9 w-56"
                     />
                     <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <input

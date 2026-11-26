@@ -274,7 +274,7 @@ export function EmailsTab({ eventId }: { eventId: string }) {
                   type="button"
                   disabled={busy}
                   onClick={() => call("POST", senderBody(), "Sender created — this event now sends as it.")}
-                  className="px-3 py-1.5 bg-ink text-white text-xs hover:bg-[#262622] disabled:opacity-50"
+                  className="px-3 py-1.5 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
                 >
                   {busy ? "Saving…" : "Create sender and use it"}
                 </button>
@@ -283,7 +283,7 @@ export function EmailsTab({ eventId }: { eventId: string }) {
                   type="button"
                   disabled={busy}
                   onClick={() => call("PUT", senderBody(), "Sender saved.")}
-                  className="px-3 py-1.5 bg-ink text-white text-xs hover:bg-[#262622] disabled:opacity-50"
+                  className="px-3 py-1.5 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
                 >
                   {busy ? "Saving…" : "Save sender"}
                 </button>
@@ -298,7 +298,7 @@ export function EmailsTab({ eventId }: { eventId: string }) {
                       choice === BRAND ? "Back to the brand sender." : "Sender switched."
                     )
                   }
-                  className="px-3 py-1.5 bg-ink text-white text-xs hover:bg-[#262622] disabled:opacity-50"
+                  className="px-3 py-1.5 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
                 >
                   {busy ? "Saving…" : "Use this sender"}
                 </button>

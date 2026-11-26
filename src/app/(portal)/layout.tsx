@@ -1,7 +1,7 @@
 import { HubShell } from "@/components/hub-shell";
 import { departmentsForShell } from "@/lib/departments/load";
 import { getSidebarAccess } from "@/lib/sidebar-access";
-import { getUserInitials } from "@/lib/user-initials";
+import { getShellProfile } from "@/lib/user-initials";
 import { getRequestViewer } from "@/lib/viewer-cache";
 import { hasEquipmentAccess } from "@/services/equipment";
 
@@ -13,13 +13,17 @@ export default async function PortalLayout({
   const viewer = await getRequestViewer();
   const supabase = viewer.supabase;
   const known = viewer.user ? { userId: viewer.user.id, active: viewer.active } : undefined;
-  const [{ userRoles, roleNames, permittedModules, staffSignals, menuLoadFailed }, initials, equipmentStaff, departments] =
-    await Promise.all([
-      getSidebarAccess(supabase, known),
-      getUserInitials(supabase, viewer.user ?? undefined),
-      hasEquipmentAccess(supabase).catch(() => false),
-      departmentsForShell(supabase),
-    ]);
+  const [
+    { userRoles, roleNames, permittedModules, staffSignals, menuLoadFailed },
+    { initials, colorScheme },
+    equipmentStaff,
+    departments,
+  ] = await Promise.all([
+    getSidebarAccess(supabase, known),
+    getShellProfile(supabase, viewer.user ?? undefined),
+    hasEquipmentAccess(supabase).catch(() => false),
+    departmentsForShell(supabase),
+  ]);
 
   return (
     <HubShell
@@ -29,6 +33,7 @@ export default async function PortalLayout({
       permittedModules={permittedModules}
       menuLoadFailed={menuLoadFailed}
       initials={initials}
+      colorScheme={colorScheme}
       departments={departments}
       equipmentStaff={equipmentStaff}
       variant="portal"

@@ -8,7 +8,8 @@ import { CheckInEventsScreen } from "../screens/CheckInEventsScreen";
 import { makeMe } from "../testing/fixtures";
 
 const mockPush = jest.fn();
-jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush }) }));
+const mockBack = jest.fn();
+jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush, back: mockBack, canGoBack: () => true, replace: jest.fn() }) }));
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
 
 const mockFetch = apiFetch as unknown as jest.Mock;
@@ -30,6 +31,7 @@ function api(handlers: { me?: () => unknown; events?: () => unknown }) {
 beforeEach(() => {
   mockFetch.mockReset();
   mockPush.mockReset();
+  mockBack.mockReset();
 });
 
 describe("Check-in: pick an event", () => {
@@ -47,6 +49,22 @@ describe("Check-in: pick an event", () => {
       pathname: "/tickets/check-in/[eventId]",
       params: { eventId: "e1", title: "Send Night" },
     });
+  });
+
+  it("header: the Check-in title, and back to My tickets", async () => {
+    api({});
+    await render(<CheckInEventsScreen />, { wrapper: MeProvider });
+    expect(screen.getByRole("header", { name: "Check-in" })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Back to My tickets" }));
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  it("success: rows say when and where, and carry no counts", async () => {
+    api({});
+    await render(<CheckInEventsScreen />, { wrapper: MeProvider });
+    const row = await screen.findByTestId("event-e1");
+    expect(row).toHaveTextContent(/Send Night.*Tue 3 Nov 2026 · 18:00.*Cape Town/);
+    expect(row).not.toHaveTextContent(/checked in|expected/i);
   });
 
   it("empty", async () => {

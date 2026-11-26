@@ -144,7 +144,7 @@ export function PayLaterSettings({
                   type="button"
                   disabled={busy}
                   onClick={() => patch({ retry_held: true }, "Retried.")}
-                  className="px-2.5 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:opacity-50"
+                  className="px-2.5 py-1 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
                 >
                   Retry held invoices
                 </button>
@@ -195,7 +195,7 @@ export function PayLaterSettings({
                         onClick={() =>
                           patch({ item_code: matches[0].match!.code, create_item: true }, "Linked in both orgs.")
                         }
-                        className="px-2.5 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
+                        className="px-2.5 py-1 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:bg-[color:var(--surface-4)]"
                       >
                         Use this code in both
                       </button>
@@ -260,7 +260,7 @@ export function PayLaterSettings({
               type="button"
               disabled={busy || !dirty}
               onClick={() => patch({ enabled, due_date: dueDate || null }, "Saved.")}
-              className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
+              className="px-3 py-1 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:bg-[color:var(--surface-4)]"
             >
               {busy ? "Saving…" : "Save"}
             </button>

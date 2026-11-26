@@ -139,7 +139,7 @@ export function FollowupDrawer({
         side="right"
         className="overflow-y-auto"
         style={{
-          background: "#0A0A0A",
+          background: "var(--ink-bg)",
           borderColor: "var(--rule)",
           width: "100%",
           maxWidth: "560px",
@@ -153,12 +153,12 @@ export function FollowupDrawer({
 
         <div className="mt-2 space-y-1">
           {row.contact.email && (
-            <div style={{ color: "#7C786C", fontSize: "13px" }}>
+            <div style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>
               {row.contact.email}
             </div>
           )}
           {row.contact.phone && (
-            <div style={{ color: "#7C786C", fontSize: "13px" }}>
+            <div style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>
               {row.contact.phone}
             </div>
           )}
@@ -167,7 +167,7 @@ export function FollowupDrawer({
         <div
           className="mt-5 p-4 space-y-3"
           style={{
-            background: "#FFFFFF",
+            background: "var(--surface-1)",
             border: "1px solid var(--rule)",
           }}
         >
@@ -208,7 +208,7 @@ export function FollowupDrawer({
             <p
               style={{
                 fontSize: "11px",
-                color: "#55524A",
+                color: "var(--text-muted)",
                 fontStyle: "italic",
               }}
             >
@@ -233,7 +233,7 @@ export function FollowupDrawer({
           <div
             className="mt-2 p-4"
             style={{
-              background: "#FFFFFF",
+              background: "var(--surface-1)",
               border: "1px solid var(--rule)",
             }}
           >
@@ -245,7 +245,7 @@ export function FollowupDrawer({
                 labels={detail.form_submission.field_labels ?? {}}
               />
             ) : (
-              <p style={{ color: "#55524A", fontSize: "12px" }}>
+              <p style={{ color: "var(--text-muted)", fontSize: "12px" }}>
                 No form submission linked.
               </p>
             )}
@@ -286,7 +286,7 @@ export function FollowupDrawer({
             disabled={busy}
             style={{
               borderColor: "var(--rule-strong)",
-              color: "#9A9689",
+              color: "var(--text-quiet)",
             }}
           >
             Close
@@ -328,7 +328,7 @@ function KV({ label, value }: { label: string; value: string }) {
           fontSize: "10px",
           letterSpacing: "0.15em",
           fontWeight: 700,
-          color: "#45423B",
+          color: "var(--text-secondary)",
           textTransform: "uppercase",
           minWidth: "80px",
         }}
@@ -349,7 +349,7 @@ function Eyebrow({ label }: { label: string }) {
         fontSize: "9px",
         letterSpacing: "0.25em",
         fontWeight: 700,
-        color: "#0A0A0A",
+        color: "var(--text-primary)",
         textTransform: "uppercase",
       }}
     >
@@ -370,7 +370,7 @@ function FormAnswers({
   );
   if (entries.length === 0) {
     return (
-      <p style={{ color: "#55524A", fontSize: "12px" }}>
+      <p style={{ color: "var(--text-muted)", fontSize: "12px" }}>
         Empty submission.
       </p>
     );
@@ -384,7 +384,7 @@ function FormAnswers({
               fontSize: "10px",
               letterSpacing: "0.15em",
               fontWeight: 700,
-              color: "#45423B",
+              color: "var(--text-secondary)",
               textTransform: "uppercase",
             }}
           >
@@ -417,7 +417,7 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
 
   if (detail.workflow_steps.length === 0) {
     return (
-      <p style={{ color: "#55524A", fontSize: "12px" }}>
+      <p style={{ color: "var(--text-muted)", fontSize: "12px" }}>
         This workflow has no steps configured.
       </p>
     );
@@ -439,12 +439,12 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
         ) : current ? (
           <Clock
             className="h-3.5 w-3.5"
-            style={{ color: "#0A0A0A" }}
+            style={{ color: "var(--text-primary)" }}
           />
         ) : (
           <CircleDashed
             className="h-3.5 w-3.5"
-            style={{ color: "#2A2822" }}
+            style={{ color: "var(--text-strong)" }}
           />
         );
 
@@ -473,7 +473,7 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
               <div
                 style={{
                   fontSize: "12px",
-                  color: pending ? "#55524A" : "var(--text-primary)",
+                  color: pending ? "var(--text-muted)" : "var(--text-primary)",
                 }}
               >
                 {stepIcon}
@@ -483,7 +483,7 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
                 <div
                   style={{
                     fontSize: "10px",
-                    color: "#45423B",
+                    color: "var(--text-secondary)",
                     marginTop: "2px",
                   }}
                 >
@@ -521,21 +521,21 @@ function Skeleton() {
       <div
         style={{
           height: "12px",
-          background: "#0A0A0A",
+          background: "var(--ink-bg)",
           width: "60%",
         }}
       />
       <div
         style={{
           height: "12px",
-          background: "#0A0A0A",
+          background: "var(--ink-bg)",
           width: "80%",
         }}
       />
       <div
         style={{
           height: "12px",
-          background: "#0A0A0A",
+          background: "var(--ink-bg)",
           width: "50%",
         }}
       />

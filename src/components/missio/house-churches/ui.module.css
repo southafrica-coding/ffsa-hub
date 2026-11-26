@@ -1,0 +1,297 @@
+/* House churches: the board primitives (M1b) these screens are built from.
+   Card, button, chip, avatar, list row, section label, field. Values are the
+   board's own (Missio.dc.html). The FFSA globals put mono caps on buttons and
+   fields, so .root resets them to Archivo. */
+
+.root {
+  min-width: 0;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  color: var(--ink, #1c1b17);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.root button,
+.root input,
+.root textarea,
+.root select,
+.root label {
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.root h1,
+.root h2,
+.root h3,
+.root p {
+  margin: 0;
+}
+
+.serif {
+  font-family: var(--display, var(--font-missio-display)), Fraunces, Georgia, serif;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+}
+
+.num {
+  font-family: var(--display, var(--font-missio-display)), Fraunces, Georgia, serif;
+  font-weight: 560;
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.mono {
+  font-family: var(--font-missio-mono), "Roboto Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.ink2 {
+  color: var(--ink-2, #5b574d);
+}
+
+.card {
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-md, 14px);
+  box-shadow: var(--shadow-1, 0 1px 2px rgba(28, 27, 23, 0.05));
+  min-width: 0;
+}
+
+/* ── buttons ───────────────────────────────────── */
+
+.root .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius-sm, 10px);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background-color 0.16s ease,
+    transform 0.12s ease;
+}
+
+.root .btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.root .btn:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.root .btn:disabled {
+  background: var(--subtle, #eeeadf);
+  color: #8a8475;
+  border-color: var(--subtle, #eeeadf);
+  cursor: default;
+}
+
+.root .p {
+  background: var(--terra, #b4532e);
+  color: #ffffff;
+}
+
+.root .p:hover:not(:disabled) {
+  background: #9e4626;
+  color: #ffffff;
+}
+
+.root .s {
+  background: var(--panel, #fbf9f4);
+  color: var(--ink, #1c1b17);
+  border-color: var(--rule-strong, #cfc8b6);
+}
+
+.root .s:hover:not(:disabled) {
+  background: var(--page, #f3f0e8);
+}
+
+.root .g {
+  background: transparent;
+  color: var(--link, #2f5d50);
+  padding: 0 10px;
+}
+
+.root .sm {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 14px;
+  border-radius: 9px;
+}
+
+.root .ic {
+  width: 44px;
+  padding: 0;
+}
+
+/* ── chips, tags, avatars ──────────────────────── */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.cOlive {
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-ink, #3f5940);
+}
+
+.cGold {
+  background: var(--gold-soft, #f4ead2);
+  color: var(--gold-ink, #7a5a17);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--rule-strong, #cfc8b6);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2, #5b574d);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.av {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.avSm {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+
+.a1 {
+  background: #f6e4d9;
+  color: #8e3d1f;
+}
+.a2 {
+  background: #e3eadf;
+  color: #3f5940;
+}
+.a3 {
+  background: #f4ead2;
+  color: #7a5a17;
+}
+.a4 {
+  background: #dde8e3;
+  color: #2f5d50;
+}
+.a5 {
+  background: #eeeadf;
+  color: #5b574d;
+}
+
+/* ── list rows, labels, fields ─────────────────── */
+
+.nm {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: 14px;
+  color: var(--ink-2, #5b574d);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.sect {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2, #5b574d);
+  letter-spacing: 0.02em;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--ink, #1c1b17) !important;
+}
+
+.root .input {
+  height: 48px;
+  border: 1px solid var(--rule-strong, #cfc8b6) !important;
+  border-radius: var(--radius-sm, 10px) !important;
+  background: #ffffff !important;
+  padding: 0 14px !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  color: var(--ink, #1c1b17) !important;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.root textarea.input {
+  height: auto;
+  min-height: 72px;
+  padding: 10px 14px !important;
+  resize: vertical;
+}
+
+.root .input:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 1px;
+  border-color: var(--link, #2f5d50) !important;
+}
+
+.help {
+  font-size: 13px;
+  color: var(--ink-2, #5b574d);
+  font-weight: 400;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

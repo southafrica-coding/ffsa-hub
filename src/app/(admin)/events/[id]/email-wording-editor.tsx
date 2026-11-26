@@ -234,7 +234,7 @@ export function EmailWordingEditor({
                           type="button"
                           disabled={busy !== null || !dirty}
                           onClick={() => save(key, subject, message, "save")}
-                          className="px-3 py-1.5 bg-ink text-white text-xs hover:bg-[#262622] disabled:opacity-50"
+                          className="px-3 py-1.5 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
                         >
                           {busy === "save" ? "Saving…" : "Save"}
                         </button>

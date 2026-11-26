@@ -14,20 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle, Ban, CalendarPlus, CalendarX2, Lock } from "lucide-react";
+import { CalendarPlus, CalendarX2, Lock } from "lucide-react";
 import { WEEKDAY_OPTIONS, RECURRENCE_INTERVAL_OPTIONS, weekdayLabel } from "@/lib/bookings/recurrence";
 import { humanDate, todayISO } from "@/lib/bookings/dates";
 import type { Venue, Ministry, BookingSeries, Booking } from "@/services/bookings";
 import { SectionBar } from "@/components/ffsa";
-
-type Conflict = {
-  date: string;
-  existingId: string;
-  existingTitle: string;
-  existingTime?: string;
-  occupiedUntil?: string;
-  who?: string | null;
-};
+import { ClashPanel, overrideBody, type ClashConflict as Conflict } from "../../clash-panel";
 
 type Plan = {
   add: string[];
@@ -61,6 +53,9 @@ export function SeriesEditForm({
   const [plan, setPlan] = useState<Plan | null>(null);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [blocked, setBlocked] = useState(false);
+  const [canOverride, setCanOverride] = useState(false);
+  const [overriding, setOverriding] = useState(false);
+  const [reason, setReason] = useState("");
 
   const [form, setForm] = useState({
     venue_id: series.venue_id,
@@ -96,6 +91,8 @@ export function SeriesEditForm({
     if (plan) setPlan(null);
     if (conflicts.length) setConflicts([]);
     if (blocked) setBlocked(false);
+    if (overriding) setOverriding(false);
+    if (reason) setReason("");
     if (error) setError(null);
   }
 
@@ -111,6 +108,7 @@ export function SeriesEditForm({
   function payload(dryRun: boolean) {
     return {
       dryRun,
+      ...(dryRun ? {} : overrideBody(overriding, reason)),
       venue_id: form.venue_id,
       ministry_id: form.ministry_id === "none" ? null : form.ministry_id,
       title: form.title.trim(),
@@ -141,6 +139,7 @@ export function SeriesEditForm({
         plan?: Plan;
         conflicts?: Conflict[];
         blocked?: boolean;
+        canOverride?: boolean;
         reopened?: boolean;
       };
     };
@@ -167,17 +166,27 @@ export function SeriesEditForm({
       setPlan(dry.json.plan ?? null);
       setConflicts(dry.json.conflicts ?? []);
       setBlocked(!!dry.json.blocked);
+      setCanOverride(!!dry.json.canOverride);
+      setLoading(false);
+      return;
+    }
+    if (blocked && !(overriding && reason.trim())) {
       setLoading(false);
       return;
     }
 
     const res = await send(false);
     if (!res.ok) {
-      if (res.json.blocked && res.json.conflicts) {
-        setConflicts(res.json.conflicts);
+      if (res.json.blocked) {
+        // Someone holds the space at some of those times (perhaps since the check).
+        setConflicts(res.json.conflicts ?? []);
         setBlocked(true);
+        setCanOverride(!!res.json.canOverride);
+        setOverriding(false);
+        setReason("");
+      } else {
+        setError(res.json.error ?? "Could not update the series.");
       }
-      setError(res.json.error ?? "Could not update the series.");
       setLoading(false);
       return;
     }
@@ -421,58 +430,41 @@ export function SeriesEditForm({
             )}
 
             {conflicts.length > 0 && (
-              <div
-                className={
-                  blocked
-                    ? "border border-destructive p-3 text-sm"
-                    : "border border-ink bg-bone p-3 text-sm"
-                }
-              >
-                <p
-                  className={
-                    blocked
-                      ? "flex items-center gap-2 font-semibold text-destructive"
-                      : "flex items-center gap-2 font-semibold"
-                  }
-                >
-                  {blocked ? <Ban className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-                  {blocked
-                    ? "This space is already booked at some of those times"
-                    : "The new dates clash with existing bookings in this venue"}
-                </p>
-                <ul className="mt-2 space-y-0.5 text-muted-foreground">
-                  {conflicts.slice(0, 8).map((c, i) => (
-                    <li key={`${c.existingId}-${i}`}>
-                      {humanDate(c.date)} —{" "}
-                      <span className="font-medium text-foreground">{c.existingTitle}</span>
-                      {c.who ? ` (${c.who})` : ""}
-                      {c.existingTime ? `, ${c.existingTime}` : ""}
-                      {c.occupiedUntil ? ` · holds it until ${c.occupiedUntil}` : ""}
-                    </li>
-                  ))}
-                  {conflicts.length > 8 && <li>…and {conflicts.length - 8} more</li>}
-                </ul>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {blocked
-                    ? "Pick a day or time that doesn't overlap — back-to-back is fine."
-                    : "You can still save — clashes here are flagged for the space's manager, not blocked."}
-                </p>
-              </div>
+              <ClashPanel
+                conflicts={conflicts}
+                venueName={venues.find((v) => v.id === form.venue_id)?.name}
+                canOverride={canOverride}
+                overriding={overriding}
+                onOverridingChange={setOverriding}
+                reason={reason}
+                onReasonChange={setReason}
+              />
+            )}
+            {blocked && !overriding && (
+              <p className="text-xs text-[color:var(--text-secondary)]">
+                Pick a day or time that doesn&apos;t overlap, then check again. Back-to-back is fine.
+              </p>
             )}
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
-            <div className="flex gap-3 pt-1">
-              <Button type="submit" disabled={loading || blocked}>
+            <div className="flex flex-wrap gap-3 pt-1">
+              <Button
+                type="submit"
+                className="min-h-11"
+                disabled={loading || (blocked && !(overriding && reason.trim()))}
+              >
                 {loading
                   ? "Working…"
                   : blocked
-                    ? "Unavailable"
+                    ? overriding
+                      ? "Book anyway"
+                      : "Time taken"
                     : plan
                       ? "Save series"
                       : "Check the dates"}
               </Button>
-              <Button type="button" variant="outline" onClick={() => router.back()}>
+              <Button type="button" variant="outline" className="min-h-11" onClick={() => router.back()}>
                 Cancel
               </Button>
             </div>

@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEnrollmentsByUser, getResponsesByUser } from "@/services/schools";
+import { getOpenVisaCaseForUser } from "@/services/visas";
+import { VISA_STATUS_LABEL, type VisaStatus } from "@/lib/visas/status";
 import Link from "next/link";
 import {
   Masthead,
@@ -114,18 +116,24 @@ export default async function MySchoolsPage() {
       (result) => !result.error && result.data != null,
       () => false
     );
-  const [canViewAttendance, { data: enrollments }, { data: myResponses }, { data: openPrograms }] =
-    await Promise.all([
-      profileRead,
-      getEnrollmentsByUser(supabase, userId),
-      getResponsesByUser(supabase, userId),
-      supabase
-        .from("programs")
-        .select("id, name, code, credit_hours")
-        .eq("application_open", true)
-        .eq("status", "active")
-        .order("name", { ascending: true }),
-    ]);
+  const [
+    canViewAttendance,
+    { data: enrollments },
+    { data: myResponses },
+    { data: visaCase },
+    { data: openPrograms },
+  ] = await Promise.all([
+    profileRead,
+    getEnrollmentsByUser(supabase, userId),
+    getResponsesByUser(supabase, userId),
+    getOpenVisaCaseForUser(supabase, userId),
+    supabase
+      .from("programs")
+      .select("id, name, code, credit_hours")
+      .eq("application_open", true)
+      .eq("status", "active")
+      .order("name", { ascending: true }),
+  ]);
 
   const responses = (myResponses ?? []) as ResponseRow[];
   const enrolled = (enrollments ?? []) as EnrollmentRow[];
@@ -169,6 +177,25 @@ export default async function MySchoolsPage() {
         </NeedsYou>
       )}
 
+      {/* Visa: only for someone with an open visa case. */}
+      {visaCase && (
+        <section>
+          <SectionBar title="Visa" />
+          <Link
+            href="/my-schools/visa"
+            className="flex min-h-[48px] items-center justify-between gap-4 border-b border-rule px-5 py-3.5 hover:bg-bone md:px-8"
+          >
+            <div className="min-w-0">
+              <div className="truncate font-display text-[17px] font-black uppercase leading-none text-ink">Your visa</div>
+              <div className="mono-label mt-1.5 truncate">
+                {VISA_STATUS_LABEL[(visaCase as { status: VisaStatus }).status]}
+              </div>
+            </div>
+            <span className="mono-label">Open</span>
+          </Link>
+        </section>
+      )}
+
       {/* Open applications */}
       {programs.length > 0 && (
         <section>
@@ -199,7 +226,7 @@ export default async function MySchoolsPage() {
                   ) : (
                     <Link
                       href={`/my-schools/apply/${program.id}`}
-                      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white"
+                      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[var(--ink-bg-hover)] hover:text-white"
                     >
                       Apply
                     </Link>
@@ -265,7 +292,7 @@ export default async function MySchoolsPage() {
                 <li key={enrollment.id} className="border-b border-rule">
                   <Link
                     href={`/my-schools/${enrollment.id}`}
-                    className="flex min-h-[48px] items-center justify-between gap-4 px-5 py-3.5 hover:bg-[#F7F5EE] md:px-8"
+                    className="flex min-h-[48px] items-center justify-between gap-4 px-5 py-3.5 hover:bg-[var(--surface-hover)] md:px-8"
                   >
                     <div className="min-w-0">
                       <div className="truncate font-display text-[17px] font-black uppercase leading-none text-ink">

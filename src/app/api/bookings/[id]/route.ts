@@ -5,12 +5,23 @@ import { getAuthedUser } from "@/lib/api-auth";
 import {
   getBookingAccess,
   getBookingById,
+  getSeriesOccurrences,
   getVenueApproval,
   updateBooking,
   updateSeries,
   updateSeriesOccurrences,
 } from "@/services/bookings";
 import { callerLeadsBookingMinistry } from "@/lib/auth/check-ministry-access";
+import {
+  canOverrideClash,
+  clashErrorResponse,
+  clashResponse,
+  findVenueClashes,
+  parseOverride,
+  serverError,
+  todaySAST,
+  type ClashCandidate,
+} from "@/lib/bookings/clash-guard";
 
 const EDITABLE_TEXT = ["venue_id", "title", "description", "point_person", "ministry_id"] as const;
 const EDITABLE_DATETIME = [
@@ -90,7 +101,7 @@ export async function PATCH(
     const { error: occErr } = await updateSeriesOccurrences(supabase, booking.series_id, {
       status: "cancelled",
     });
-    if (occErr) return NextResponse.json({ error: occErr.message }, { status: 500 });
+    if (occErr) return serverError("cancel series", occErr, "Could not cancel the booking.");
     await updateSeries(supabase, booking.series_id, { status: "cancelled" });
     after(syncBookingAlerts); // prayer-room DM alerts (Auditorium over devo sets)
     return NextResponse.json({ ok: true, appliedToSeries: true });
@@ -136,9 +147,69 @@ export async function PATCH(
   );
   let reopened = false;
 
+  const seriesWide = body.applyToSeries === true && !!booking.series_id && body.cancel !== true;
+  const targetVenueId = (patch.venue_id as string | undefined) ?? booking.venue_id;
+  const venue =
+    movedSlot || seriesWide ? (await getVenueApproval(supabase, targetVenueId)).data : null;
+
+  // "Apply to all dates" pushes the shared details onto the other occurrences
+  // from today (SAST) onward. Dates that already happened are history and are
+  // left exactly as they were.
+  const today = todaySAST();
+
+  // ── Clash check. Only a move is checked (space, date or time): renaming or
+  //    re-describing a booking that already overlaps another still works, and
+  //    so does cancelling it. The database applies the same rule. ──
+  const canOverride = canOverrideClash(access);
+  const override = parseOverride(body, access);
+  if ("response" in override) return override.response;
+  const overrideFields = override.reason ? { clash_override_reason: override.reason } : {};
+
+  const isLive = (status: unknown) => status === "pending" || status === "approved";
+  const slotOf = (row: Record<string, unknown>, changes: Record<string, unknown>) => {
+    const pick = (key: (typeof SLOT_FIELDS)[number]) =>
+      ((key in changes ? changes[key] : row[key]) ?? null) as string | null;
+    return {
+      booking_date: pick("booking_date") as string,
+      end_date: pick("end_date"),
+      setup_time: pick("setup_time"),
+      start_time: pick("start_time"),
+      end_time: pick("end_time"),
+      setdown_time: pick("setdown_time"),
+    };
+  };
+
+  const candidates: ClashCandidate[] = [];
+  const movingIds = new Set<string>([id]);
+  if (movedSlot && isLive(booking.status)) {
+    candidates.push({ id, ...slotOf(booking, patch) });
+  }
+  if (seriesWide) {
+    // The dates stay per-occurrence; the space and times are shared.
+    const sharedSlotKeys = SLOT_FIELDS.filter(
+      (key) => key in patch && key !== "booking_date" && key !== "end_date"
+    );
+    if (sharedSlotKeys.length > 0) {
+      const shared = Object.fromEntries(sharedSlotKeys.map((key) => [key, patch[key]]));
+      const { data: occRaw } = await getSeriesOccurrences(supabase, booking.series_id);
+      for (const occ of (occRaw ?? []) as Array<Record<string, unknown> & { id: string; booking_date: string }>) {
+        if (occ.id === id || !isLive(occ.status) || occ.booking_date < today) continue;
+        if (sharedSlotKeys.every((key) => sameSlotValue(shared[key], occ[key]))) continue;
+        movingIds.add(occ.id);
+        candidates.push({ id: occ.id, ...slotOf(occ, shared) });
+      }
+    }
+  }
+  const findClashes = () =>
+    findVenueClashes(supabase, targetVenueId, candidates, { excludeIds: movingIds });
+  const conflicts = candidates.length > 0 ? await findClashes() : [];
+  if (conflicts.length > 0 && !override.reason) {
+    return clashResponse(conflicts, venue?.name, canOverride);
+  }
+  const refused = (err: { code?: string; message?: string } | null) =>
+    clashErrorResponse(err, { recheck: findClashes, venueName: venue?.name, canOverride });
+
   if (movedSlot && booking.status === "approved" && !editorApproves) {
-    const targetVenueId = (patch.venue_id as string | undefined) ?? booking.venue_id;
-    const { data: venue } = await getVenueApproval(supabase, targetVenueId);
     if (venue?.requires_approval) {
       patch.status = "pending";
       patch.decided_by = null;
@@ -149,15 +220,22 @@ export async function PATCH(
     }
   }
 
-  const { error: updErr } = await updateBooking(supabase, id, patch);
+  const { error: updErr } = await updateBooking(supabase, id, { ...patch, ...overrideFields });
   if (updErr) {
-    return NextResponse.json({ error: updErr.message }, { status: 500 });
+    return (
+      (await refused(updErr)) ??
+      serverError(
+        body.cancel === true ? "cancel booking" : "update booking",
+        updErr,
+        body.cancel === true ? "Could not cancel the booking." : "Could not update the booking."
+      )
+    );
   }
 
-  // "Apply to all dates" — push the shared details onto every other occurrence
-  // in the series. The dates themselves stay per-occurrence (each one is a
+  // "Apply to all dates" — push the shared details onto the other occurrences
+  // from today onward. The dates themselves stay per-occurrence (each one is a
   // different day by definition), so they're excluded from the series patch.
-  if (body.applyToSeries === true && booking.series_id && body.cancel !== true) {
+  if (seriesWide) {
     const seriesPatch: Record<string, unknown> = {};
     const skip = new Set(["booking_date", "end_date"]);
     if (reopened && !movedSharedSlot) {
@@ -172,12 +250,15 @@ export async function PATCH(
       const { error: occErr } = await updateSeriesOccurrences(
         supabase,
         booking.series_id,
-        seriesPatch,
+        { ...seriesPatch, ...overrideFields },
         false,
-        { excludeId: id, skipClosed: true }
+        { excludeId: id, skipClosed: true, fromDate: today }
       );
       if (occErr) {
-        return NextResponse.json({ error: occErr.message }, { status: 500 });
+        return (
+          (await refused(occErr)) ??
+          serverError("update series dates", occErr, "Could not update the booking.")
+        );
       }
       // Keep the series definition itself in step, so future views/edits of
       // the series show the same details.

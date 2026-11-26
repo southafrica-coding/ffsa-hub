@@ -1,25 +1,26 @@
 // Small building blocks shared by the Me document screens: a load hook with
-// the four states, a choice field (bottom sheet), a switch row, a read-only
-// field and the document-file block (view / photograph / replace / remove).
+// the four states, a choice field (bottom sheet), a switch row and a
+// read-only field. The document photo itself is DocFile (kit PhotoSlot).
 
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
-import { Camera, Check, FileText, ImageUp, Trash2 } from "lucide-react-native";
+import { Check } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Pressable, RefreshControl, ScrollView, Switch, View } from "react-native";
+import { Alert, View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
-import { Banner, Button, Screen, Text, TextField } from "@/components";
+import { Banner, EmptyState, SelectField, Sheet, Text, TextField, Toggle } from "@/components";
 import { ServerRefusal } from "@/features/bookings/http";
-import { Sheet } from "@/features/finance/components/Sheet";
-import { SkeletonRows, StateMessage } from "@/features/shell";
 import { ApiError } from "@/lib/api";
 import { getEnv } from "@/lib/env";
-import { refreshControlColors, switchColors } from "@/theme/styles";
-import { hairline, radius, touch } from "@/theme/tokens";
+import { space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-import { isAllowedSignedUrl, isPdfName } from "../docs-logic";
+import { isAllowedSignedUrl } from "../docs-logic";
 import { meStrings } from "../strings";
+
+import { Group, GroupSkeleton } from "./me-kit";
+import { MePage } from "./MePage";
 
 const d = meStrings.docs;
 
@@ -100,13 +101,13 @@ export function LoadGate({
   loadingLabel: string;
   errorTitle: string;
 }) {
-  if (load.status === "loading") return <SkeletonRows count={4} label={loadingLabel} />;
+  if (load.status === "loading") return <GroupSkeleton count={4} label={loadingLabel} />;
   if (load.status !== "error") return null;
   if (isForbidden(load.error)) {
-    return <StateMessage testID="forbidden" title={d.forbidden.title} body={d.forbidden.body} />;
+    return <EmptyState testID="forbidden" title={d.forbidden.title} body={d.forbidden.body} />;
   }
   return (
-    <Banner tone="danger" title={errorTitle} action={<Button label={d.retry} variant="secondary" onPress={load.retry} />}>
+    <Banner tone="error" title={errorTitle} actionLabel={d.retry} onAction={load.retry}>
       {errorText(load.error, d.loadError)}
     </Banner>
   );
@@ -142,80 +143,62 @@ export function OptionField({
   const list = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
   return (
     <View style={{ gap: 6 }}>
-      <Text variant="label" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
-        {label}
-      </Text>
-      <Pressable
+      <SelectField
         testID={testID}
-        accessibilityRole="button"
+        label={label}
+        value={value ? shown : undefined}
+        placeholder={d.choose(label)}
+        error={error}
         accessibilityLabel={`${label}: ${shown}`}
-        accessibilityHint={error ?? d.chooseHint}
+        accessibilityHint={d.chooseHint}
         onPress={() => {
           setFilter("");
           setOpen(true);
         }}
-        style={({ pressed }) => ({
-          minHeight: touch.minTarget,
-          justifyContent: "center",
-          paddingHorizontal: 12,
-          borderWidth: error ? 2 : hairline,
-          borderColor: error ? colors.danger : colors.ruleStrong,
-          borderRadius: radius.default,
-          backgroundColor: pressed ? colors.surface : colors.bg,
-        })}
-      >
-        <Text tone={value ? "default" : "secondary"}>{shown}</Text>
-      </Pressable>
-      {error ? (
-        <Text variant="caption" tone="danger" accessibilityRole="alert">
-          {error}
-        </Text>
-      ) : null}
+      />
       <Sheet visible={open} title={d.choose(label)} onClose={() => setOpen(false)}>
-        {searchable ? (
-          <View style={{ paddingBottom: 8 }}>
-            <TextField label={label} value={filter} onChangeText={setFilter} autoCorrect={false} autoCapitalize="none" />
-          </View>
-        ) : null}
-        {list.map((o) => {
-          const on = o.value === value;
-          return (
-            <Pressable
-              key={o.value}
-              accessibilityRole="radio"
-              accessibilityLabel={o.label}
-              accessibilityState={{ selected: on, checked: on }}
-              onPress={() => {
-                onChange(o.value);
-                setOpen(false);
-              }}
-              style={({ pressed }) => ({
-                minHeight: touch.minTarget,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                borderBottomWidth: hairline,
-                borderBottomColor: colors.rule,
-                backgroundColor: pressed ? colors.surface : "transparent",
-              })}
-            >
-              <Text variant={on ? "bodyStrong" : "body"} style={{ flex: 1 }}>
-                {o.label}
-              </Text>
-              {on ? (
-                <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                  <Check size={18} color={colors.text} />
-                </View>
-              ) : null}
-            </Pressable>
-          );
-        })}
+        {searchable ? <TextField label={label} value={filter} onChangeText={setFilter} autoCorrect={false} autoCapitalize="none" /> : null}
+        <Group style={{ marginHorizontal: 0 }}>
+          {list.map((o) => {
+            const on = o.value === value;
+            return (
+              <Pressable
+                key={o.value}
+                accessibilityRole="radio"
+                accessibilityLabel={o.label}
+                accessibilityState={{ selected: on, checked: on }}
+                onPress={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                style={({ pressed }) => ({
+                  minHeight: touch.minTarget,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: space.sm,
+                  paddingVertical: space.sm,
+                  paddingHorizontal: space.lg,
+                  backgroundColor: pressed ? colors.surfaceStrong : "transparent",
+                })}
+              >
+                <Text variant={on ? "rowTitle" : "body"} style={{ flex: 1 }}>
+                  {o.label}
+                </Text>
+                {on ? (
+                  <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                    <Check size={18} color={colors.text} />
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </Group>
       </Sheet>
     </View>
   );
 }
 
-/** A labelled on/off row (48dp+). */
+/** A labelled on/off row inside a form (56pt+). The switch carries the name and hint. */
 export function ToggleRow({
   label,
   hint,
@@ -231,65 +214,56 @@ export function ToggleRow({
   disabled?: boolean;
   testID?: string;
 }) {
-  const { colors, scheme } = useTheme();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: touch.minTarget }}>
-      <View style={{ flex: 1, gap: 2 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Text variant="bodyStrong">{label}</Text>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 56 }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Text variant="rowTitle">{label}</Text>
         {hint ? (
           <Text variant="caption" tone="secondary">
             {hint}
           </Text>
         ) : null}
       </View>
-      <Switch
-        testID={testID}
-        accessibilityRole="switch"
-        accessibilityLabel={label}
-        accessibilityHint={hint}
-        accessibilityState={{ checked: value, disabled: !!disabled }}
-        value={value}
-        disabled={disabled}
-        onValueChange={onChange}
-        {...switchColors(colors, scheme, value)}
-      />
+      <Toggle testID={testID} accessibilityLabel={label} accessibilityHint={hint} value={value} disabled={disabled} onValueChange={onChange} />
     </View>
   );
 }
 
-/** A read-only label + value, read as one line. */
-export function ReadField({ label, value }: { label: string; value: string }) {
+/** A read-only label + value (+ a quiet note), read as one line. */
+export function ReadField({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <View accessible accessibilityLabel={`${label}: ${value}`} style={{ gap: 2 }}>
-      <Text variant="label" tone="secondary">
-        {label}
-      </Text>
+    <View accessible accessibilityLabel={`${label}: ${value}`} accessibilityHint={note} style={{ gap: 2 }}>
+      <Text variant="label">{label}</Text>
       <Text>{value}</Text>
+      {note ? (
+        <Text variant="caption" tone="secondary">
+          {note}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
-/** A pushed Me screen: header from the stack, keyboard-aware, pull-to-refresh. */
+/** A pushed Me document screen: compact nav bar, keyboard-aware, pull-to-refresh. */
 export function DocScreen({
+  title,
+  backLabel,
+  tabBarHidden,
   children,
   refreshing,
   onRefresh,
 }: {
+  title: string;
+  backLabel?: string;
+  tabBarHidden?: boolean;
   children: ReactNode;
   refreshing: boolean;
   onRefresh: () => void;
 }) {
-  const { colors } = useTheme();
   return (
-    <Screen scroll={false} keyboard edges={["bottom"]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />}
-      >
-        {children}
-      </ScrollView>
-    </Screen>
+    <MePage title={title} backLabel={backLabel} tabBarHidden={tabBarHidden} refreshing={refreshing} onRefresh={onRefresh}>
+      <View style={{ gap: space.lg }}>{children}</View>
+    </MePage>
   );
 }
 
@@ -331,99 +305,4 @@ export async function openSignedFile(url: string | null, colors: { text: string;
   } catch {
     return false;
   }
-}
-
-export function FileBlock({
-  label,
-  hasFile,
-  fileName,
-  meta,
-  busy,
-  error,
-  onView,
-  onTake,
-  onChoose,
-  onRemove,
-}: {
-  label: string;
-  hasFile: boolean;
-  fileName: string | null;
-  meta?: string;
-  busy: "upload" | "remove" | null;
-  error: string | null;
-  onView: () => void;
-  onTake: () => void;
-  onChoose: () => void;
-  onRemove: () => void;
-}) {
-  const { colors } = useTheme();
-  const f = d.file;
-  const status = hasFile ? f.onFile : f.none;
-  return (
-    <View style={{ gap: 12 }} testID="file-block">
-      <View
-        accessible
-        accessibilityLabel={`${label}: ${status}${meta ? `. ${meta}` : ""}`}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          padding: 12,
-          borderWidth: hairline,
-          borderColor: colors.ruleStrong,
-          backgroundColor: colors.surface,
-        }}
-      >
-        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <FileText size={22} color={colors.text} />
-        </View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text variant="label" tone="secondary">
-            {label}
-          </Text>
-          <Text variant="bodyStrong">{status}</Text>
-          {meta ? (
-            <Text variant="caption" tone="secondary">
-              {meta}
-            </Text>
-          ) : null}
-        </View>
-      </View>
-      {hasFile && isPdfName(fileName) ? <Text tone="secondary">{f.pdfOnFile}</Text> : null}
-      {hasFile ? <Button label={f.view} variant="secondary" onPress={onView} accessibilityHint={f.viewHint} /> : null}
-      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-        <Button
-          label={hasFile ? `${f.replace}: ${f.takePhoto.toLowerCase()}` : f.takePhoto}
-          icon={<Camera size={18} color={colors.onInverse} />}
-          onPress={onTake}
-          loading={busy === "upload"}
-          disabled={busy !== null}
-          style={{ flexGrow: 1 }}
-        />
-        <Button
-          label={f.choosePhoto}
-          variant="secondary"
-          icon={<ImageUp size={18} color={colors.text} />}
-          onPress={onChoose}
-          disabled={busy !== null}
-          style={{ flexGrow: 1 }}
-        />
-      </View>
-      {hasFile ? (
-        <Button
-          label={f.remove}
-          variant="ghost"
-          icon={<Trash2 size={18} color={colors.danger} />}
-          onPress={onRemove}
-          loading={busy === "remove"}
-          disabled={busy !== null}
-        />
-      ) : null}
-      {error ? (
-        <Text tone="danger" accessibilityRole="alert" accessibilityLiveRegion="polite">
-          {error}
-        </Text>
-      ) : null}
-    </View>
-  );
 }

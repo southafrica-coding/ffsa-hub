@@ -52,14 +52,14 @@ export function CyclesManager({ cycles }: { cycles: OkrCycle[] }) {
                 {c.is_current && <StatusPill tone="good">Current</StatusPill>}
               </div>
               <div className="flex items-center gap-4">
-                <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+                <span className="font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
                   {c.starts_on} → {c.ends_on}
                 </span>
                 {!c.is_current && (
                   <button
                     type="button"
                     onClick={() => makeCurrent(c)}
-                    className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#55524A] underline hover:text-ink"
+                    className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-muted)] underline hover:text-ink"
                   >
                     Make current
                   </button>

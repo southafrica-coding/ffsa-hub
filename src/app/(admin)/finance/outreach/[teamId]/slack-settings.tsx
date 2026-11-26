@@ -77,7 +77,7 @@ export function SlackSettings({
       </label>
 
       <div className="grid gap-1.5 sm:max-w-md">
-        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#55524A]">
+        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[color:var(--text-muted)]">
           Team channel ID (optional)
         </span>
         <Input

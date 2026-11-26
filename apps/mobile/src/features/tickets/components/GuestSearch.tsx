@@ -1,11 +1,11 @@
 import { Check } from "lucide-react-native";
 import { useEffect, useState } from "react";
 
-import { announce } from "@/lib/a11y";
 import { ActivityIndicator, View } from "react-native";
 
-import { Button, Text, TextField } from "@/components";
-import { hairline } from "@/theme/tokens";
+import { Button, ListGroup, Text, TextField } from "@/components";
+import { announce } from "@/lib/a11y";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import type { DoorClient, Guest } from "../api";
@@ -70,9 +70,10 @@ export function GuestSearch({ door, online, busy, onCheckIn }: Props) {
   }
 
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: space.sm }}>
       <TextField
         label={strings.checkIn.searchField}
+        placeholder={strings.checkIn.searchField}
         hint={online ? strings.checkIn.searchHint : strings.checkIn.searchOffline}
         value={query}
         onChangeText={setQuery}
@@ -83,64 +84,71 @@ export function GuestSearch({ door, online, busy, onCheckIn }: Props) {
       />
       {results.state === "loading" ? <ActivityIndicator color={colors.text} accessibilityLabel={strings.a11y.searching} /> : null}
       {results.state === "error" ? (
-        <Text tone="danger" accessibilityRole="alert">
+        <Text variant="caption" tone="danger" accessibilityRole="alert">
           {strings.checkIn.searchError}
         </Text>
       ) : null}
-      {results.state === "done" && results.guests.length === 0 ? <Text tone="secondary">{strings.checkIn.searchEmpty}</Text> : null}
-      {results.state === "done"
-        ? results.guests.map((g) => {
-            const inAt = g.status === "checked_in" ? formatClock(g.checkedInAt) : null;
-            return (
-              <View
-                key={g.ticketId}
-                testID={`guest-${g.ticketId}`}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  paddingVertical: 10,
-                  borderBottomWidth: hairline,
-                  borderBottomColor: colors.rule,
-                }}
-              >
-                <View style={{ flex: 1 }} accessible accessibilityLabel={[
-                    g.name,
-                    g.ticketTypeName,
-                    inAt ? strings.checkIn.guestIn(inAt) : g.status === "checked_in" ? strings.status.checked_in : null,
-                  ]
-                    .filter(Boolean)
-                    .join(". ")}
+      {results.state === "done" && results.guests.length === 0 ? (
+        <Text variant="caption" tone="secondary">
+          {strings.checkIn.searchEmpty}
+        </Text>
+      ) : null}
+      {results.state === "done" && results.guests.length > 0 ? (
+        <>
+          <ListGroup inset={false}>
+            {results.guests.map((g) => {
+              const inAt = g.status === "checked_in" ? formatClock(g.checkedInAt) : null;
+              return (
+                <View
+                  key={g.ticketId}
+                  testID={`guest-${g.ticketId}`}
+                  style={{ flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 56, paddingVertical: space.sm, paddingLeft: space.lg, paddingRight: space.md }}
                 >
-                  <Text variant="bodyStrong">{g.name}</Text>
-                  <Text variant="caption" tone="secondary">
-                    {g.ticketTypeName}
-                  </Text>
-                </View>
-                {g.status === "checked_in" ? (
-                  // Already in the row's label above, so not read twice.
                   <View
-                    style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-                    accessibilityElementsHidden
-                    importantForAccessibility="no-hide-descendants"
+                    style={{ flex: 1, minWidth: 0 }}
+                    accessible
+                    accessibilityLabel={[
+                      g.name,
+                      g.ticketTypeName,
+                      inAt ? strings.checkIn.guestIn(inAt) : g.status === "checked_in" ? strings.status.checked_in : null,
+                    ]
+                      .filter(Boolean)
+                      .join(". ")}
                   >
-                    <Check size={16} color={colors.textSecondary} accessibilityElementsHidden importantForAccessibility="no" />
-                    <Text variant="label" tone="secondary">
-                      {inAt ? strings.checkIn.guestIn(inAt) : strings.status.checked_in}
+                    <Text variant="rowTitle">{g.name}</Text>
+                    <Text variant="caption" tone="secondary">
+                      {g.ticketTypeName}
                     </Text>
                   </View>
-                ) : (
-                  <Button
-                    label={strings.checkIn.guestCheckIn}
-                    accessibilityLabel={strings.checkIn.guestCheckInA11y(g.name)}
-                    disabled={busy}
-                    onPress={() => void checkIn(g)}
-                  />
-                )}
-              </View>
-            );
-          })
-        : null}
+                  {g.status === "checked_in" ? (
+                    // Already in the row's label above, so not read twice.
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center", gap: space.xs }}
+                      accessibilityElementsHidden
+                      importantForAccessibility="no-hide-descendants"
+                    >
+                      <Check size={14} color={colors.textSecondary} />
+                      <Text variant="label">{inAt ? strings.checkIn.guestIn(inAt) : strings.status.checked_in}</Text>
+                    </View>
+                  ) : (
+                    <Button
+                      label={strings.checkIn.guestCheckIn}
+                      accessibilityLabel={strings.checkIn.guestCheckInA11y(g.name)}
+                      size="small"
+                      disabled={busy}
+                      onPress={() => void checkIn(g)}
+                    />
+                  )}
+                </View>
+              );
+            })}
+          </ListGroup>
+          {/* Spoken once by the announcement above; shown here for everyone else. */}
+          <Text variant="caption" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
+            {strings.a11y.searchResults(results.guests.length)}
+          </Text>
+        </>
+      ) : null}
     </View>
   );
 }

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clientIp, getRateLimiter, retryAfterSeconds } from "@/lib/rate-limit";
 import { rangeLabel, sastToday } from "@/lib/equipment/dates";
-import { summaryText } from "@/lib/equipment/helper";
+import { HIRE_EMAIL, summaryText } from "@/lib/equipment/helper";
 import {
   checkPickAgainstStock,
   parsePickRequest,
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   const limited = await getRateLimiter().hit(`hire-request:${clientIp(request)}`, LIMIT);
   if (!limited.allowed) {
     return NextResponse.json(
-      { error: "Too many requests from this connection. Try again later, or email us." },
+      { error: `Too many requests from this connection. Try again later, or email ${HIRE_EMAIL}.` },
       { status: 429, headers: { "Retry-After": String(retryAfterSeconds(limited)) } }
     );
   }
@@ -59,6 +59,7 @@ export async function POST(request: Request) {
   const stock: StockItem[] = store.items.map((i) => ({
     id: i.id,
     title: itemTitle(i),
+    forHire: i.forHire,
     free: i.free,
     priceCents: i.priceCents,
     periodText: i.periodText,
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
   });
   if (error || !order) {
     console.error("[hire-request] order insert failed:", error?.message);
-    return NextResponse.json({ error: "We couldn't send your list. Try again, or email us." }, { status: 500 });
+    return NextResponse.json({ error: `We couldn't send your list. Try again, or email ${HIRE_EMAIL}.` }, { status: 500 });
   }
 
   const { error: linesError } = await insertQuoteLines(

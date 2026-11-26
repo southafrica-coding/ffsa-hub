@@ -1,16 +1,15 @@
-import { ExternalLink, UserCheck } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { Globe, Lock, UserCheck, X } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, Masthead, Screen, Text } from "@/components";
-import { ErrorState, SectionBar, Skeleton, Tag } from "@/features/finance/components/ui";
+import { Bleed, Button, EmptyState, FadeIn, Freshness, LargeTitleScrollView, ListGroup, ListRow, LoadError, NeedsYouBand, SectionHeader, SkeletonList, StatusChip, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { Freshness, StatusTag } from "@/features/schools/components/ui";
-import { ListRow, StateMessage, openWebPage } from "@/features/shell";
+import { openWebPage } from "@/features/shell";
 import { apiFetch } from "@/lib/api-client";
-import { hairline, touch } from "@/theme/tokens";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { getSchool, loadErrorMessage, type SchoolDetail, type StaffDecisionRow } from "../api";
@@ -29,6 +28,7 @@ type Open = { row: StaffDecisionRow; step: SheetStep } | null;
 // students are still waiting on a decision", only while the school isn't
 // archived. Arrival and the rest of the school page stay on the website.
 export default function SchoolDetailScreen({ programId }: { programId: string }) {
+  const router = useRouter();
   const { colors } = useTheme();
   const { session } = useSession();
   const userId = session?.user?.id ?? null;
@@ -54,62 +54,77 @@ export default function SchoolDetailScreen({ programId }: { programId: string })
   const waiting = data ? needsDecisionCount(data) : 0;
 
   return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
+    <>
+      <LargeTitleScrollView
+        back={{ label: strings.list.title, onPress: () => router.back() }}
+        eyebrow={s.context}
+        title={data ? data.school.name : strings.list.title}
+        gap={0}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
       >
-        <Masthead context={s.context} title={data ? data.school.name : strings.list.title} />
-
-        {state.status === "loading" ? <Skeleton label={s.loading} /> : null}
-        {forbidden ? (
-          <StateMessage testID="forbidden" icon={UserCheck} title={strings.gate.title} body={strings.common.forbidden} />
-        ) : state.status === "error" ? (
-          <ErrorState title={s.errorTitle} message={state.message} onRetry={retry} />
+        {data ? (
+          <View style={{ marginTop: -space.sm, gap: space.sm }}>
+            {data.school.archived ? <StatusChip label={strings.list.archived} variant="quiet" icon={null} testID="archived" /> : null}
+            <Text variant="caption" tone="secondary">
+              {s.intro}
+            </Text>
+            <Text variant="sectionTitle" style={{ fontVariant: ["tabular-nums"] }} testID="counts">
+              {s.counts(data.school.yes, data.school.no, data.school.undecided)}
+            </Text>
+          </View>
         ) : null}
-        <Freshness state={state} onRetry={retry} />
 
-        {waiting > 0 ? (
-          <Banner tone="needsYou" title={s.needsYouTitle} testID="needs-you">
-            {waiting === 1 ? s.needsYouOne : s.needsYouMany(waiting)}
-          </Banner>
-        ) : null}
+        <Bleed style={{ gap: space.md, marginTop: data ? space.lg : 0 }}>
+          {state.status === "loading" ? <SkeletonList label={s.loading} count={5} inset={false} /> : null}
+          {forbidden ? (
+            <EmptyState testID="forbidden" icon={Lock} title={strings.gate.title} body={strings.common.forbidden} />
+          ) : state.status === "error" ? (
+            <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
+          ) : null}
+          <Freshness state={state} onRetry={retry} />
+
+          {/* The one yellow band. No button: each waiting student has Decide on their own row. */}
+          {waiting > 0 ? (
+            <NeedsYouBand eyebrow={s.needsYouTitle} text={waiting === 1 ? s.needsYouOne : s.needsYouMany(waiting)} testID="needs-you" />
+          ) : null}
+        </Bleed>
 
         {data ? (
-          <>
-            {data.school.archived ? <StatusTag label={strings.list.archived} tone="default" testID="archived" /> : null}
-            <Text tone="secondary">{s.intro}</Text>
-
-            <View>
-              <SectionBar title={s.students} meta={s.counts(data.school.yes, data.school.no, data.school.undecided)} />
+          <FadeIn>
+            <SectionHeader title={s.studentsCount(data.rows.length)} inset={false} />
+            <Bleed>
               {data.rows.length === 0 ? (
-                <StateMessage testID="empty" icon={UserCheck} title={s.emptyTitle} body={s.emptyBody} />
+                <EmptyState testID="empty" icon={UserCheck} title={s.emptyTitle} body={s.emptyBody} />
               ) : (
-                data.rows.map((row) => (
-                  <StudentRow
-                    key={row.enrollmentId}
-                    row={row}
-                    onDecide={() => setOpen({ row, step: "decide" })}
-                    onMakeStaff={() => setOpen({ row, step: "make-staff" })}
-                  />
-                ))
+                <ListGroup inset={false} testID="students">
+                  {data.rows.map((row) => (
+                    <StudentRow
+                      key={row.enrollmentId}
+                      row={row}
+                      onDecide={() => setOpen({ row, step: "decide" })}
+                      onMakeStaff={() => setOpen({ row, step: "make-staff" })}
+                    />
+                  ))}
+                </ListGroup>
               )}
-            </View>
+            </Bleed>
 
-            <View>
-              <ListRow
-                icon={ExternalLink}
-                title={s.openWeb}
-                subtitle={s.openWebSub}
-                trailing="web"
-                accessibilityHint={s.openWebHint}
-                onPress={() => void openWebPage(`/schools/${data.school.id}?tab=staff_decision`, colors)}
-                testID="open-web"
-              />
-            </View>
-          </>
+            <Bleed style={{ marginTop: space.lg }}>
+              <ListGroup inset={false}>
+                <ListRow
+                  icon={Globe}
+                  title={s.openWeb}
+                  subtitle={s.openWebSub}
+                  trailing="web"
+                  accessibilityHint={s.openWebHint}
+                  onPress={() => void openWebPage(`/schools/${data.school.id}?tab=staff_decision`, colors)}
+                  testID="open-web"
+                />
+              </ListGroup>
+            </Bleed>
+          </FadeIn>
         ) : null}
-      </ScrollView>
+      </LargeTitleScrollView>
 
       {open && data ? (
         <DecisionSheet
@@ -121,46 +136,57 @@ export default function SchoolDetailScreen({ programId }: { programId: string })
           onChanged={refresh}
         />
       ) : null}
-    </Screen>
+    </>
   );
 }
 
 function StudentRow({ row, onDecide, onMakeStaff }: { row: StaffDecisionRow; onDecide: () => void; onMakeStaff: () => void }) {
-  const { colors } = useTheme();
   const word = decisionWord(row);
   const decided = decidedLine(row);
   return (
     <View
-      style={{ minHeight: touch.minTarget, paddingVertical: 12, borderBottomWidth: hairline, borderBottomColor: colors.rule, gap: 8 }}
+      style={{ minHeight: 56, justifyContent: "center", paddingVertical: space.md, paddingLeft: space.lg, paddingRight: space.md, gap: space.md }}
       testID={`student-${row.enrollmentId}`}
     >
       {/* One stop for the screen reader: name, email, staff, decision, note, when. */}
-      <View accessible accessibilityLabel={rowA11yLabel(row)} style={{ gap: 4 }}>
-        <Text variant="bodyStrong">{row.name}</Text>
+      <View accessible accessibilityLabel={rowA11yLabel(row)} style={{ gap: 2 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: space.sm, rowGap: space.xs }}>
+          <Text variant="rowTitle" style={{ flexShrink: 1 }}>
+            {row.name}
+          </Text>
+          {row.isStaff ? <StatusChip label={s.staff} variant="positive" /> : null}
+        </View>
         {row.email ? (
-          <Text variant="caption" tone="secondary" numberOfLines={1}>
+          <Text variant="caption" tone="secondary">
             {row.email}
           </Text>
         ) : null}
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-          <Tag tone={word.tone}>{word.label}</Tag>
-          {row.isStaff ? <Tag tone="positive">{s.staff}</Tag> : null}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+          {/* Yes = green + check, no = quiet + cross, undecided = dashed: a word and a shape each, never colour alone. */}
+          {!row.decision ? (
+            <StatusChip label={word.label} variant="dashed" />
+          ) : row.decision.accepted ? (
+            <StatusChip label={word.label} variant="positive" />
+          ) : (
+            <StatusChip label={word.label} variant="neutral" icon={X} />
+          )}
         </View>
         {row.decision?.note ? (
-          <Text tone="secondary" numberOfLines={3} testID={`note-${row.enrollmentId}`}>
-            {row.decision.note}
+          <Text variant="caption" numberOfLines={3} testID={`note-${row.enrollmentId}`} style={{ marginTop: space.xs }}>
+            {s.noteLine(row.decision.note)}
           </Text>
         ) : null}
         {decided ? (
-          <Text variant="caption" tone="secondary">
+          <Text variant="caption" tone="secondary" style={{ marginTop: space.xs }}>
             {decided}
           </Text>
         ) : null}
       </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
         <Button
           label={row.decision ? s.change : s.decide}
           variant={row.decision ? "secondary" : "primary"}
+          size="small"
           accessibilityLabel={row.decision ? s.changeA11y(row.name) : s.decideA11y(row.name)}
           accessibilityHint={s.decideHint}
           onPress={onDecide}
@@ -170,6 +196,7 @@ function StudentRow({ row, onDecide, onMakeStaff }: { row: StaffDecisionRow; onD
           <Button
             label={s.makeStaff}
             variant="secondary"
+            size="small"
             accessibilityLabel={s.makeStaffA11y(row.name)}
             accessibilityHint={s.makeStaffHint}
             onPress={onMakeStaff}

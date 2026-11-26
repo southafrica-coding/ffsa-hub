@@ -124,7 +124,7 @@ export function JoinForm({ code, type }: Props) {
         href="/login"
         className="mt-6 flex items-center justify-between gap-3 border border-ink bg-bone px-4 py-3.5 transition-colors hover:bg-bone-3"
       >
-        <span className="text-[13px] leading-snug text-[#2A2822]">
+        <span className="text-[13px] leading-snug text-[color:var(--text-strong)]">
           Already have an account?{" "}
           <span className="font-semibold text-ink underline underline-offset-4">Sign in instead</span>
         </span>

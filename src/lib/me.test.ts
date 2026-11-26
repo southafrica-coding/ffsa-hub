@@ -131,6 +131,7 @@ describe("buildMePayload", () => {
       },
       roles: [],
       permissions: [],
+      training: null,
       serverTime: "2026-11-02T08:00:00.000Z",
     });
   });

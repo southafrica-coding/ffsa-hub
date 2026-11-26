@@ -1,0 +1,349 @@
+/* Board M6a: one column, centred wordmark, six dates with a Yes / Maybe / No
+   track each, and a Send bar pinned to the bottom. Desktop shows the same
+   single column, centred. */
+
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--page, #f3f0e8);
+  color: var(--ink, #1c1b17);
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.column {
+  flex: 1;
+  width: 100%;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 0 20px 24px;
+  min-width: 0;
+  box-sizing: border-box;
+  animation: rise 0.32s ease both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .column {
+    animation: none;
+  }
+}
+
+.page h1.title,
+.page h1.sentTitle {
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--ink, #1c1b17);
+}
+
+.page h1.title {
+  font-size: 30px;
+  line-height: 34px;
+  margin: 6px 0 0;
+}
+
+.lede {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: var(--ink-2, #5b574d);
+}
+
+.days {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.day {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.day legend {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.day legend b {
+  font-weight: 700;
+}
+
+.closed {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--subtle, #eeeadf);
+  color: var(--ink-2, #5b574d);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* The segmented track (board M1b): an unanswered date is the bare track;
+   each answer pairs an icon and a word with its colour. */
+.choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  background: var(--subtle, #eeeadf);
+  border-radius: 12px;
+}
+
+.page button {
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 44px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 9px !important;
+  background: transparent;
+  color: var(--ink-2, #5b574d);
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: background-color 160ms ease, transform 120ms ease;
+}
+
+.choice:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.choice:focus-visible,
+.send:focus-visible,
+.change:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.day:disabled .choice {
+  cursor: default;
+}
+
+.day:disabled .choice[aria-pressed="false"] {
+  opacity: 0.55;
+}
+
+.choice[aria-pressed="true"][data-status="available"] {
+  background: var(--ok, #3f6e45);
+  color: #fff;
+}
+
+.choice[aria-pressed="true"][data-status="maybe"] {
+  background: var(--gold-soft, #f4ead2);
+  color: var(--gold-ink, #7a5a17);
+  box-shadow: inset 0 0 0 1.5px var(--gold, #b98a2e);
+}
+
+.choice[aria-pressed="true"][data-status="unavailable"] {
+  background: var(--ink, #1c1b17);
+  color: var(--frame-ink, #f3efe4);
+}
+
+.icon {
+  flex: none;
+}
+
+/* Send bar */
+.footer {
+  position: sticky;
+  bottom: 0;
+  border-top: 1px solid #e7e2d5;
+  background: var(--panel, #fbf9f4);
+}
+
+.footerInner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 10px 20px calc(10px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+.count {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--ink-2, #5b574d);
+}
+
+.send {
+  flex: none;
+  height: 52px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--terra, #b4532e);
+  color: #fff;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: background-color 160ms ease, transform 120ms ease;
+}
+
+.send:hover:not(:disabled) {
+  background: #9e4626;
+}
+
+.send:active:not(:disabled) {
+  background: var(--terra-ink, #8e3d1f);
+  transform: scale(0.98);
+}
+
+.send:disabled {
+  background: var(--subtle, #eeeadf);
+  color: #8a8475;
+  cursor: default;
+}
+
+/* Sent */
+.sent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 28px 8px 0;
+}
+
+.sentMark {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-ink, #3f5940);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sentMark .icon {
+  width: 28px;
+  height: 28px;
+}
+
+.page h1.sentTitle {
+  font-size: 38px;
+  line-height: 42px;
+  margin: 0;
+}
+
+.sentBody {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink-2, #5b574d);
+}
+
+.summary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(28, 27, 23, 0.05);
+  overflow: hidden;
+}
+
+.summary li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 16px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #e7e2d5;
+}
+
+.summary li:last-child {
+  border-bottom: 0;
+}
+
+.summary b {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.answer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2, #5b574d);
+}
+
+.answer .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.answer[data-status="available"] {
+  color: var(--ok, #3f6e45);
+}
+
+.answer[data-status="maybe"] {
+  color: var(--gold-ink, #7a5a17);
+}
+
+.answer[data-status="unavailable"] {
+  color: var(--ink, #1c1b17);
+}
+
+.change {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link, #2f5d50);
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+}
+
+.change:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

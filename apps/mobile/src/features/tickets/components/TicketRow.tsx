@@ -1,8 +1,10 @@
-import { Check, ChevronRight, Ticket as TicketIcon, X } from "lucide-react-native";
-import { Pressable, View } from "react-native";
+import { ChevronRight, Clock, Ticket as TicketIcon, type LucideIcon } from "lucide-react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
-import { Text } from "@/components";
-import { hairline, touch } from "@/theme/tokens";
+import { StatusChip, Text } from "@/components";
+import type { ChipVariant } from "@/theme/styles";
+import { fontFamily, fontSize, hairline, letterSpacingEm, radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import type { MyRegistration, MyTicket } from "../api";
@@ -17,31 +19,35 @@ function DateBlock({ day }: { day: string }) {
       accessible={false}
       importantForAccessibility="no-hide-descendants"
       // minWidth, not width: a large day number grows the box instead of clipping.
-      style={{ minWidth: 48, alignItems: "center", borderWidth: hairline, borderColor: colors.text, paddingVertical: 4 }}
+      style={{ minWidth: 48, alignItems: "center", borderWidth: hairline, borderColor: colors.text, borderRadius: radius.control, paddingVertical: 4 }}
     >
-      <Text variant="title" style={{ fontVariant: ["tabular-nums"] }}>
-        {b.day}
-      </Text>
-      <Text variant="label" tone="secondary">
+      <Text style={{ fontFamily: fontFamily.bodyBold, fontSize: 18, lineHeight: 22, fontVariant: ["tabular-nums"] }}>{b.day}</Text>
+      <Text
+        tone="secondary"
+        style={{ fontFamily: fontFamily.bodyBold, fontSize: fontSize.monoLabel, lineHeight: 16, letterSpacing: fontSize.monoLabel * letterSpacingEm.eyebrow }}
+      >
         {b.mon}
       </Text>
     </View>
   );
 }
 
-/** Status as icon + words: never colour alone. */
+// Checked in and Cancelled take the kit's own icons (check, X); the rest say
+// what they are with a ticket or a clock.
+const STATUS_LOOK: Record<string, { variant: ChipVariant; icon?: LucideIcon }> = {
+  valid: { variant: "neutral", icon: TicketIcon },
+  checked_in: { variant: "positive" },
+  void: { variant: "danger" },
+  confirmed: { variant: "neutral", icon: TicketIcon },
+  pending: { variant: "neutral", icon: Clock },
+  waitlisted: { variant: "neutral", icon: Clock },
+  cancelled: { variant: "danger" },
+};
+
+/** Status as a chip: icon + words, never colour alone. */
 export function StatusTag({ status }: { status: string }) {
-  const { colors } = useTheme();
-  const label = strings.status[status] ?? strings.status.unknown;
-  const Icon = status === "checked_in" ? Check : status === "void" || status === "cancelled" ? X : TicketIcon;
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-      <Icon size={14} color={colors.textSecondary} accessibilityElementsHidden importantForAccessibility="no" />
-      <Text variant="label" tone="secondary">
-        {label}
-      </Text>
-    </View>
-  );
+  const look = STATUS_LOOK[status] ?? { variant: "neutral" as const, icon: TicketIcon };
+  return <StatusChip label={strings.status[status] ?? strings.status.unknown} variant={look.variant} icon={look.icon} />;
 }
 
 type RowProps = {
@@ -55,6 +61,7 @@ type RowProps = {
   testID?: string;
 };
 
+/** A row for the kit's ListGroup: date block, title, when, where, holder, status. Grows with text. */
 function Row({ title, when, where, holder, status, day, onPress, testID }: RowProps) {
   const { colors } = useTheme();
   const statusLabel = strings.status[status] ?? strings.status.unknown;
@@ -64,34 +71,38 @@ function Row({ title, when, where, holder, status, day, onPress, testID }: RowPr
   const body = (
     <>
       <DateBlock day={day} />
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="bodyStrong" numberOfLines={2}>
-          {title}
-        </Text>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text variant="rowTitle">{title}</Text>
         <Text variant="caption" tone="secondary">
           {when}
         </Text>
-        <Text variant="caption" tone="secondary" numberOfLines={1}>
+        <Text variant="caption" tone="secondary">
           {where}
         </Text>
         {holder ? (
-          <Text variant="caption" tone="secondary" numberOfLines={1}>
+          <Text variant="caption" tone="secondary">
             {holder}
           </Text>
         ) : null}
-        <StatusTag status={status} />
+        <View style={{ marginTop: space.xs }}>
+          <StatusTag status={status} />
+        </View>
       </View>
-      {onPress ? <ChevronRight size={20} color={colors.textSecondary} accessibilityElementsHidden importantForAccessibility="no" /> : null}
+      {onPress ? (
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ alignSelf: "center" }}>
+          <ChevronRight size={18} color={colors.textTertiary} />
+        </View>
+      ) : null}
     </>
   );
   const style = {
     flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 14,
-    minHeight: touch.minTarget,
-    paddingVertical: 14,
-    borderBottomWidth: hairline,
-    borderBottomColor: colors.rule,
+    alignItems: "flex-start" as const,
+    gap: space.md,
+    minHeight: 56,
+    paddingVertical: space.md,
+    paddingLeft: space.lg,
+    paddingRight: space.md,
   };
   if (!onPress) {
     return (
@@ -107,7 +118,7 @@ function Row({ title, when, where, holder, status, day, onPress, testID }: RowPr
       accessibilityLabel={a11y}
       accessibilityHint={strings.myTickets.openTicketHint}
       onPress={onPress}
-      style={({ pressed }) => [style, pressed ? { backgroundColor: colors.surface } : null]}
+      style={({ pressed }) => [style, pressed ? { backgroundColor: colors.surfaceStrong } : null]}
     >
       {body}
     </Pressable>

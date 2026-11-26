@@ -2,13 +2,16 @@
 // shared by the Hub route and the Slack DM buttons, so both enforce the same
 // licence re-check and tell the requester the same way (Slack DM + email).
 
+import { blockEnd } from "@/lib/vehicles/hold";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { dateRangeLabel } from "@/lib/bookings/dates";
 import {
   updateVehicleBooking,
   getBookingDrivers,
   getLicenceFactsFor,
   eligibilityInput,
   getVehicleBookingById,
+  getWorkshopBlocks,
   getOverlappingAssignments,
   setBookingVehicles,
 } from "@/services/vehicles";
@@ -56,6 +59,10 @@ export async function decideVehicleBooking(
   // only at request time would let both through.
   if (decision === "approved") {
     const { data: booking } = await getVehicleBookingById(supabase, id);
+    // Nobody approves their own booking, not even a coordinator (Jack's review of #712).
+    if (booking && booking.requested_by && booking.requested_by === userId) {
+      return { ok: false, error: "You booked this, so another Vehicle Coordinator or an admin has to approve it.", status: 403 };
+    }
     const { data: drivers } = await getBookingDrivers(supabase, id);
     // Every booking goes out with at least one driver, and every outsider
     // driver's licence + passport photo must actually be on the booking (a
@@ -74,6 +81,23 @@ export async function decideVehicleBooking(
           status: 409,
           blockedDriver: d.id,
           reason: !d.license_file_url ? "no_licence" : "no_passport",
+        };
+      }
+    }
+    // A workshop visit booked after the request went in blocks its vehicle too
+    // (SPEC 7.3): approving over it would promise a vehicle that's at the workshop.
+    if (booking) {
+      const assigned = ((booking.assignments ?? []) as { vehicle: { id: string; name: string } | null }[])
+        .map((a) => a.vehicle)
+        .filter((v): v is { id: string; name: string } => !!v);
+      const blocks = await getWorkshopBlocks(createAdminClient(), booking.checkout_date, booking.return_date);
+      const hit = assigned.map((v) => ({ v, b: blocks.find((x) => x.vehicle_id === v.id) })).find((x) => x.b);
+      if (hit && hit.b) {
+        const when = dateRangeLabel(hit.b.date, hit.b.until && hit.b.until > hit.b.date ? hit.b.until : null);
+        return {
+          ok: false,
+          error: `Can't approve — ${hit.v.name} is booked in at ${hit.b.provider || "the workshop"} ${when}. Assign a different vehicle, or move the workshop visit in Fleet.`,
+          status: 409,
         };
       }
     }
@@ -138,13 +162,13 @@ export async function decideVehicleBooking(
  */
 export async function assignVehiclesChecked(
   admin: Client,
-  booking: { id: string; checkout_date: string; return_date: string },
+  booking: { id: string; checkout_date: string; return_date: string; purpose?: string | null; hold_released_at?: string | null },
   vehicleIds: string[]
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const overlapping = await getOverlappingAssignments(admin, booking.checkout_date, booking.return_date, booking.id);
+  const overlapping = await getOverlappingAssignments(admin, booking.checkout_date, blockEnd(booking), booking.id);
   const unavailable = new Set(overlapping.map((a) => a.vehicle_id));
   if (vehicleIds.some((v) => unavailable.has(v))) {
-    return { ok: false, error: "One or more of those vehicles is already booked for an overlapping period." };
+    return { ok: false, error: "One or more of those vehicles is already booked, in the workshop, or held after an international team for those dates." };
   }
   const { error } = await setBookingVehicles(admin, booking.id, vehicleIds);
   return error ? { ok: false, error: error.message } : { ok: true };

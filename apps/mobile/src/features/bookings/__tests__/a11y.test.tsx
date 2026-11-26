@@ -6,13 +6,14 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { AccessibilityInfo, Platform, View } from "react-native";
 
 import type { MeState } from "@/features/shell";
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
+import { RadioRow } from "@/components";
 
 import { makeMe } from "../../../../test/fixtures";
 import { bookingsFetch } from "../client";
 import { ConflictList } from "../components/ConflictList";
 import { DateTimeField } from "../components/DateTimeField";
-import { CheckRow, ChoiceRow, FormError, StatusLine } from "../components/ui";
+import { CheckRow, FormError, StatusLine } from "../components/ui";
 import { loadMine, loadPending, loadSpaceBooking, loadSpaceOptions, loadVehicleBooking } from "../data";
 import ApprovalsScreen from "../screens/ApprovalsScreen";
 import BookingsHomeScreen from "../screens/BookingsHomeScreen";
@@ -35,6 +36,7 @@ jest.mock("@react-native-community/datetimepicker", () => ({ __esModule: true, d
 let mockMeState: MeState = { status: "loading", me: null, error: null, refresh: jest.fn() };
 jest.mock("@/features/shell", () => ({ ...jest.requireActual("@/features/shell"), useMe: () => mockMeState }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../data", () => ({
   ...jest.requireActual("../data"),
   loadMine: jest.fn(),
@@ -197,7 +199,7 @@ describe("New request flow", () => {
       ministries: [],
     });
     await render(inSafeArea(<NewRequestScreen />));
-    expect(screen.getByRole("header", { name: strings.a11y.stepChanged(strings.steps.of(1, 1), strings.steps.titles.type) })).toBeTruthy();
+    expect(screen.getByRole("header", { name: strings.a11y.stepChanged(strings.home.newRequest, strings.steps.titles.type) })).toBeTruthy();
     noProblems();
     await fireEvent.press(screen.getByTestId("type-space"));
     const room = await screen.findByRole("radio", { name: /Prayer room/ });
@@ -215,12 +217,12 @@ describe("Bookings components", () => {
     expect(screen.getByRole("checkbox", { name: "Quantum" }).props.accessibilityState).toEqual({ checked: false, disabled: true });
   });
 
-  it("ChoiceRow is a radio with checked + selected", async () => {
+  it("RadioRow is a radio with checked + selected", async () => {
     await render(
       <View accessibilityRole="radiogroup">
-        <ChoiceRow selected accessibilityLabel="Main hall" onPress={() => {}}>
+        <RadioRow mark="leading" checked accessibilityLabel="Main hall" onPress={() => {}}>
           <View />
-        </ChoiceRow>
+        </RadioRow>
       </View>,
     );
     expect(screen.getByRole("radio", { name: "Main hall" }).props.accessibilityState).toEqual({ checked: true, selected: true });
@@ -260,5 +262,24 @@ describe("Bookings components", () => {
     );
     expect(screen.getByRole("alert", { name: strings.clash.blockedTitle })).toBeTruthy();
     expect(spoken()).toEqual([strings.clash.blockedTitle]);
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("largest text: nothing is capped or clipped", () => {
+  it("Bookings home", async () => {
+    const dims = atLargestText();
+    signedInAs(["bookings.view", "bookings.approve"]);
+    mine.mockResolvedValue({ spaces: [spaceBooking({ booking_date: "2099-01-10" })], vehicles: [] });
+    pending.mockResolvedValue({ spaces: [spaceBooking()], vehicles: [] });
+    await render(inSafeArea(<BookingsHomeScreen />));
+    await screen.findByText(strings.home.needsYou(1));
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    noProblems();
+    dims.mockRestore();
   });
 });

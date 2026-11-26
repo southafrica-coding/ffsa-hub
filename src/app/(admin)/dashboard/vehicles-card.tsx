@@ -59,7 +59,7 @@ export function VehiclesCard() {
 
   if (requests === null) {
     return (
-      <WidgetShell title="Vehicle Requests">
+      <WidgetShell title="Vehicle requests">
         <WidgetEmpty>Loading…</WidgetEmpty>
       </WidgetShell>
     );
@@ -67,7 +67,7 @@ export function VehiclesCard() {
 
   if (requests.length === 0 && activity.length === 0) {
     return (
-      <WidgetShell title="Vehicle Requests" href="/bookings/vehicles" hrefLabel="Fleet">
+      <WidgetShell title="Vehicle requests" href="/bookings/vehicles" hrefLabel="Fleet">
         <WidgetEmpty>No pending vehicle requests.</WidgetEmpty>
       </WidgetShell>
     );
@@ -75,14 +75,14 @@ export function VehiclesCard() {
 
   if (requests.length === 0) {
     return (
-      <WidgetShell title="Vehicle Requests" href="/bookings/vehicles" hrefLabel="Fleet">
+      <WidgetShell title="Vehicle requests" href="/bookings/vehicles" hrefLabel="Fleet">
         <ActivityList activity={activity} />
       </WidgetShell>
     );
   }
 
   return (
-    <WidgetShell title="Vehicle Requests" href="/bookings/vehicles" hrefLabel="Review all">
+    <WidgetShell title="Vehicle requests" href="/bookings/vehicles" hrefLabel="Review all">
       <div>
         {requests.map((r) => {
           const span = [dateLabel(r.checkoutDate), dateLabel(r.returnDate)]

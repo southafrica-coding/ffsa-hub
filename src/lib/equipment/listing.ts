@@ -1,6 +1,9 @@
-// When a product may go on the store (spec rule 1). The database enforces
-//   CHECK (NOT is_listed OR (price_day_cents IS NOT NULL AND can_leave_building))
+// When a product may go on the store (spec rule 1, as changed by migration
+// 400). The database enforces
+//   CHECK (NOT is_listed OR price_day_cents IS NOT NULL)
 // and this says the same thing in plain words before anyone hits it.
+// Gear that can't leave the building may still be listed: it shows as
+// "Not for hire" and nobody can pick it.
 // Warnings don't block: the product can go live, it just won't look right.
 
 export type ListingFields = {
@@ -14,9 +17,6 @@ export type ListingFields = {
 /** Reasons the product can't go live. Empty = it can. */
 export function goLiveBlockers(p: ListingFields): string[] {
   const out: string[] = [];
-  if (!p.can_leave_building) {
-    out.push("Turn on “Can leave the building”. Gear that has to stay here can't be hired out.");
-  }
   if (p.price_day_cents == null) {
     out.push("Set a day price. Without one there's nothing to charge.");
   }
@@ -29,6 +29,9 @@ export function listingWarnings(
   extra: { photos: number; bookable: number }
 ): string[] {
   const out: string[] = [];
+  if (!p.can_leave_building) {
+    out.push("“Can leave the building” is off, so it will show as Not for hire: people can see it but not pick it.");
+  }
   if (extra.photos === 0) out.push("No photos yet. People rarely hire what they can't see.");
   if (!p.store_category_id) out.push("No store category, so it only shows under “All gear”.");
   if (extra.bookable === 0) out.push("No units are bookable right now, so it will show as booked.");

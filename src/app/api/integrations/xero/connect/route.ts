@@ -12,7 +12,14 @@ export async function GET(request: Request) {
     // New granular scopes (required for apps created after March 2, 2026).
     // accounting.settings (write, not just .read): event pay-later creates
     // the event's sales Item — Xero refuses that with .read (tested 2026-10-15).
-    const scopes = "openid profile email offline_access accounting.invoices accounting.contacts accounting.settings";
+    // XERO_REQUEST_BANK_READ_SCOPES=1 also asks for read-only bank
+    // transactions and payments (the Missio income report). Off by default:
+    // switch it on, then reconnect, once the Xero app allows those scopes.
+    const bankRead =
+      process.env.XERO_REQUEST_BANK_READ_SCOPES === "1"
+        ? " accounting.banktransactions.read accounting.payments.read"
+        : "";
+    const scopes = `openid profile email offline_access accounting.invoices accounting.contacts accounting.settings${bankRead}`;
     // Encode region in state so we know which region on callback
     const state = JSON.stringify({
       nonce: crypto.randomBytes(16).toString("hex"),

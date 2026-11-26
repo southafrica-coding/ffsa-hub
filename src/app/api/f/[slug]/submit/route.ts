@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { accessModeOf, formAccessDecision } from "@/lib/forms/access";
 import { getFormBySlug } from "@/services/forms";
 import { upsertContactWithDedup } from "@/services/contact-upsert";
 import { addLabelToContact } from "@/services/labels";
@@ -11,6 +13,10 @@ import {
   createEnrollment,
 } from "@/services/workflows";
 import { runEnrollment } from "@/lib/workflows/runner";
+import { previewWriteRefusal } from "@/lib/preview-writes";
+import { isMissioPublicFeedbackForm } from "@/lib/missio/public-feedback-link";
+import { handlePublicWeeklyFeedback } from "@/lib/missio/public-feedback";
+import { runFormRoutes, submissionSubject } from "@/lib/forms/route-runner";
 import { evaluateTrigger, type WorkflowTrigger } from "@/lib/workflows/types";
 import {
   isContactFieldKey,
@@ -36,6 +42,45 @@ export async function POST(
   }
   if (!form.is_active) {
     return NextResponse.json({ error: "This form is not currently open" }, { status: 403 });
+  }
+
+  // The Missio weekly feedback form's one public link: the person picks a
+  // house church and the answers save against that house through the
+  // weekly feedback path (honeypot, rate limit, house checked there). No
+  // contact upsert, labels or workflows: it is about a house, not a person.
+  if (isMissioPublicFeedbackForm(form)) {
+    return handlePublicWeeklyFeedback(request, supabase);
+  }
+
+  // Same rule as the page (migration 390): logged_in needs a Hub session,
+  // token forms stay closed until per-subject links exist.
+  const accessMode = accessModeOf((form as { access_mode?: unknown }).access_mode);
+  if (accessMode !== "public") {
+    const auth = await createClient();
+    const {
+      data: { user },
+    } = await auth.auth.getUser();
+    const decision = formAccessDecision(accessMode, Boolean(user));
+    if (decision === "sign_in") {
+      return NextResponse.json({ error: "Sign in to the Hub to send this form" }, { status: 401 });
+    }
+    if (decision === "closed") {
+      return NextResponse.json({ error: "This form opens from a personal link" }, { status: 403 });
+    }
+  }
+
+  // Hub forms (no event) are new with /forms: a preview deployment shares
+  // the production database, so it saves nothing and runs no routes. Event
+  // forms keep working as before; their routes are skipped on a preview
+  // by the runner.
+  if (!form.event_id) {
+    const refusal = previewWriteRefusal();
+    if (refusal) {
+      return NextResponse.json(
+        { ...refusal.body, message: "This preview deployment cannot send Hub forms. Use the live Hub." },
+        { status: refusal.status }
+      );
+    }
   }
 
   let body: { data?: Record<string, unknown> };
@@ -105,6 +150,34 @@ export async function POST(
     .single();
   if (subErr) {
     return NextResponse.json({ error: subErr.message }, { status: 500 });
+  }
+
+  // 2a. Routes (Hub Forms F3): run what fired for each answer. Best
+  //     effort: a route problem never fails the submission.
+  try {
+    const run = await runFormRoutes(supabase, {
+      form: {
+        id: form.id,
+        name: form.name,
+        slug: form.slug,
+        event_id: form.event_id,
+        department_id: (form as { department_id?: string | null }).department_id ?? null,
+      },
+      schema,
+      data,
+      submissionId: submission.id,
+      contactId,
+      subject: submissionSubject(form as { subject_type?: unknown; event_id?: string | null; department_id?: string | null }, contactId),
+    });
+    if (run.length > 0) {
+      console.info(
+        "[form submit] routes",
+        form.id,
+        run.map((r) => `${r.action}:${r.status}${r.reason ? `:${r.reason}` : ""}`).join(" ")
+      );
+    }
+  } catch (e) {
+    console.error("[form submit] routes failed", e);
   }
 
   // If the contact was queued for manual review, stop here — labels and

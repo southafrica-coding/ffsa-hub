@@ -214,14 +214,14 @@ export function BudgetSheetImport({
             }}
             className="flex w-full flex-col items-center gap-2 border border-dashed border-rule-strong px-6 py-12 text-center hover:bg-bone"
           >
-            <Upload className="h-6 w-6 text-[#7C786C]" />
+            <Upload className="h-6 w-6 text-[color:var(--text-tertiary)]" />
             <span className="font-medium">Choose a file or drop it here</span>
             <span className="text-sm text-muted-foreground">.csv, .xlsx or .xls</span>
           </button>
         ) : (
           <div className="space-y-4">
             {importedCount > 0 && (
-              <div className="flex gap-2 border border-amber-border bg-[#FFF8E6] px-3 py-2 text-sm">
+              <div className="flex gap-2 border border-amber-border bg-yellow-dim px-3 py-2 text-sm">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
                 <span>
                   This replaces the {importedCount} {importedCount === 1 ? "line" : "lines"} from the last
@@ -249,14 +249,14 @@ export function BudgetSheetImport({
                 </span>
               )}
               <span className="ml-auto font-mono text-sm">
-                <span className="text-[#7C786C]">from </span>
+                <span className="text-[color:var(--text-tertiary)]">from </span>
                 {filename}
               </span>
             </div>
 
             <div className="overflow-x-auto border border-ink">
               <table className="w-full min-w-[820px] text-sm">
-                <thead className="bg-bone font-mono text-[10px] uppercase tracking-[0.1em] text-[#55524A]">
+                <thead className="bg-bone font-mono text-[10px] uppercase tracking-[0.1em] text-[color:var(--text-muted)]">
                   <tr>
                     <th className="w-8 px-2 py-2" />
                     <th className="px-2 py-2 text-left">Line</th>

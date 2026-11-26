@@ -1,5 +1,11 @@
 # FFSA Hub — design tokens extracted from the web app
 
+> **Phone app note (18 Nov 2026):** this file records the *web's* tokens as extracted on 1 Nov.
+> The phone app's live values are in `apps/mobile/src/theme/tokens.ts`; the iPhone redesign moved
+> several of them (6/8pt radius, light surface `#FBFAF7`, rule `#E7E4D9`, ruleStrong `#8E8A7C`,
+> greys `#55524A`/`#6B675D`, danger `#D92D20`, Roboto 900 titles instead of Roboto Condensed
+> 900). See `apps/mobile/docs/redesign-kit.md`.
+
 Sources: `src/app/globals.css` (read to ~line 490 of 602), `tailwind.config.ts`, `CLAUDE.md` (redesign section), `docs/redesign/design` readme, `src/components/mobile-tab-bar.tsx`. Prepared 1 Nov 2026. Items marked (unverified) were inferred.
 
 ## 1. The web's committed direction: "MOVEMENT, QUIET" (option 2a)

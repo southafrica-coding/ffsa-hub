@@ -15,7 +15,7 @@ const state = vi.hoisted(() => ({
 function query(result: { data: unknown; error: { message: string } | null }, rejectRead: boolean) {
   const builder: Record<string, unknown> = {};
   const self = () => builder;
-  for (const method of ["select", "eq", "in", "order", "limit"]) builder[method] = self;
+  for (const method of ["select", "eq", "neq", "in", "is", "not", "order", "limit"]) builder[method] = self;
   const finish = () => (rejectRead ? Promise.reject(new Error("users read failed")) : Promise.resolve(result));
   builder.maybeSingle = finish;
   builder.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>

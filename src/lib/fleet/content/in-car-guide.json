@@ -1,0 +1,86 @@
+{
+  "about": "Text of the printable in-car guide (one per vehicle, laminated, in the cubby hole). before/after rows: [title, text].",
+  "before": [
+    [
+      "Licence disc",
+      "Look at the round disc on the inside of the windscreen. The date must not have passed."
+    ],
+    [
+      "Walk around",
+      "Walk slowly all the way round. Look for new dents, scratches, cracks or broken lights. Take a photo of anything new before you leave, so you’re not blamed for it."
+    ],
+    [
+      "Tyres",
+      "Look at all four tyres. Does one look flatter than the others? Any cuts, lumps or nails? If so, don’t drive: call the coordinator."
+    ],
+    [
+      "Under the van",
+      "Look at the ground under the vehicle. A puddle of oil, coolant (green, pink or orange) or fuel means: don’t drive."
+    ],
+    [
+      "Seat belts",
+      "Every passenger needs a seat that has a working belt. Pull each belt quickly: it must lock. Click it in: it must hold."
+    ],
+    [
+      "Warning lights",
+      "Start the engine. All the dashboard lights should go out within a few seconds. A red light that stays on means: don’t drive."
+    ],
+    [
+      "Lights",
+      "Switch on the headlights and the hazards and walk round: every light should work. Ask someone to check the brake lights."
+    ],
+    [
+      "Emergency kit",
+      "Check the warning triangle, jack, wheel spanner and spare wheel are in the vehicle."
+    ],
+    [
+      "Fuel and km",
+      "Record the fuel level and the km reading when you sign the vehicle out."
+    ]
+  ],
+  "road": [
+    "A red warning light comes on",
+    "The temperature needle goes above the middle, or you see steam",
+    "Thick smoke from the exhaust, or a burning smell",
+    "The brakes grind, feel soft, or the vehicle pulls hard when braking",
+    "A tyre feels flat, or the vehicle wobbles or pulls",
+    "A loud new noise: knocking, grinding or banging"
+  ],
+  "after": [
+    [
+      "Walk around again",
+      "Look for any new damage and take photos of it. Report it honestly when you hand the vehicle back: accidents happen, hiding them causes bigger problems."
+    ],
+    [
+      "Tyres",
+      "Look at all four tyres again for damage or a soft tyre."
+    ],
+    [
+      "Warning lights",
+      "Did any light come on during the trip, even for a moment? Tell the vehicle coordinator when you hand it back."
+    ],
+    [
+      "Clean out",
+      "Remove all rubbish, food and personal things. Shake out the mats if they’re sandy."
+    ],
+    [
+      "Fuel and km",
+      "Record the fuel level and the km reading when you hand the vehicle back."
+    ],
+    [
+      "Keys",
+      "Hand back every key and remote."
+    ],
+    [
+      "Report problems",
+      "Tell the vehicle coordinator about anything that didn’t feel, sound or smell right, however small."
+    ]
+  ],
+  "breakdown": [
+    "Switch on the hazard lights and pull off the road as far as you safely can.",
+    "Everyone gets out on the side away from the traffic and waits behind a barrier or well off the road.",
+    "Put on the reflective vest. Place the warning triangle about 45 m behind the vehicle (about 60 big steps).",
+    "Call roadside assistance (number on the emergency card in the cubby hole), then the vehicle coordinator.",
+    "In an emergency call 112 from a cellphone, or 10111 for the police."
+  ]
+}

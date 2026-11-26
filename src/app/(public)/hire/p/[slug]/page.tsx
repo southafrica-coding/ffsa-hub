@@ -42,8 +42,8 @@ import {
 import { photoUrl } from "@/lib/equipment/photos";
 import { randsShort } from "@/lib/equipment/money";
 import { periodForDates } from "@/lib/equipment/pricing";
-import { DEFAULT_SETTINGS, loadStore, withDates } from "@/lib/equipment/storefront";
-import { DateBar, ItemCard, Photo } from "../../_components/store-ui";
+import { DEFAULT_SETTINGS, isForHire, loadStore, withDates } from "@/lib/equipment/storefront";
+import { DateBar, ItemCard, NOT_FOR_HIRE, Photo } from "../../_components/store-ui";
 import { ItemBooking } from "./item-booking";
 import ItemSkeleton from "./skeleton";
 
@@ -125,6 +125,9 @@ async function ItemBody({
     const { data: units } = await listUnits(supabase, { productId: product.id });
     stock = ((units ?? []) as { status: string }[]).filter((u) => u.status === "available").length;
   }
+  // On show but not for hire: it stays in the building, or every unit is in a
+  // room that doesn't allow hire (migration 400). Nothing below lets anyone pick it.
+  const forHire = isForHire(product, stock);
   const perDay = new Map(((daysRes.data ?? []) as { day: string; free: number }[]).map((d) => [d.day, d.free]));
 
   const allFreeFromIso = free < stock ? (await freeFrom(supabase, product.id, addDays(range.to, 1), stock)).data : null;
@@ -279,8 +282,18 @@ async function ItemBody({
           <div className="flex flex-col gap-2 md:hidden">
             <div className="flex justify-between text-[14px]">
               <span className="text-[color:var(--hire-ink)]">{rangeLabel(range.from, range.to)}</span>
-              <span className={free === 0 ? "text-[color:var(--hire-ink)]" : free < stock ? "text-[color:var(--hire-accent)]" : "text-[color:var(--hire-ok)]"}>
-                {free === 0 ? "Booked" : free < stock ? `${free} of ${stock} free` : `${free} free`}
+              <span
+                className={
+                  !forHire
+                    ? "text-[color:var(--hire-muted)]"
+                    : free === 0
+                      ? "text-[color:var(--hire-ink)]"
+                      : free < stock
+                        ? "text-[color:var(--hire-accent)]"
+                        : "text-[color:var(--hire-ok)]"
+                }
+              >
+                {!forHire ? NOT_FOR_HIRE : free === 0 ? "Booked" : free < stock ? `${free} of ${stock} free` : `${free} free`}
               </span>
             </div>
             <div className="grid grid-cols-7 gap-1">
@@ -309,6 +322,7 @@ async function ItemBody({
           <div className="hidden md:block">
             <ItemBooking
               slug={product.slug}
+              forHire={forHire}
               variant="box"
               product={quoteProduct}
               settings={qSettings}
@@ -465,6 +479,7 @@ async function ItemBody({
       >
         <ItemBooking
           slug={product.slug}
+          forHire={forHire}
           variant="bar"
           product={quoteProduct}
           settings={qSettings}

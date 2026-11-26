@@ -204,7 +204,7 @@ function ImageSlot({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={src} alt={label} className="h-full w-full object-contain" />
         ) : (
-          <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[#7C786C]">None yet</span>
+          <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[color:var(--text-tertiary)]">None yet</span>
         )}
       </div>
       <p className="mt-1 text-xs text-[color:var(--text-tertiary)]">{hint}</p>

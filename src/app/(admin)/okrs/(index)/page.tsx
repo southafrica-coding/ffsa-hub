@@ -222,7 +222,7 @@ export default async function OkrsPage({
                   // a sibling section, so the not-started list gets the
                   // quieter sub-heading band the Ministry tab uses.
                   <div className={section.started.length > 0 ? "mt-4" : undefined}>
-                    <div className="mono-label border-t border-rule bg-[#F7F5EE] px-4 py-2 md:px-5">
+                    <div className="mono-label border-t border-rule bg-[var(--surface-hover)] px-4 py-2 md:px-5">
                       Not started yet · {section.notStarted.length}
                     </div>
                     <div className="border-t border-rule">
@@ -280,12 +280,12 @@ function OwnerRow({
         >
           {owner.name}
           {retired && (
-            <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.14em] text-[#7C786C]">
+            <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--text-tertiary)]">
               retired
             </span>
           )}
         </span>
-        <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+        <span className="font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
           {empty ? (
             "Start →"
           ) : (

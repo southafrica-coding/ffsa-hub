@@ -14,20 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle, Ban, CheckCircle2, Clock } from "lucide-react";
+import { CheckCircle2, Clock } from "lucide-react";
 import { WEEKDAY_OPTIONS } from "@/lib/bookings/recurrence";
-import { humanDate } from "@/lib/bookings/dates";
 import type { Venue, Ministry } from "@/services/bookings";
 import { SectionBar } from "@/components/ffsa";
-
-type Conflict = {
-  date: string;
-  existingId: string;
-  existingTitle: string;
-  existingTime?: string;
-  occupiedUntil?: string;
-  who?: string | null;
-};
+import { ClashPanel, overrideBody, type ClashConflict as Conflict } from "./clash-panel";
 
 export function BookingForm({
   venues,
@@ -53,8 +44,12 @@ export function BookingForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
-  // True when the clash is on an auto-confirm space — a hard block, not a warning.
+  // A clash is refused on every space. A space manager can still book over it
+  // with a reason ("Book anyway" in the clash panel).
   const [blocked, setBlocked] = useState(false);
+  const [canOverride, setCanOverride] = useState(false);
+  const [overriding, setOverriding] = useState(false);
+  const [reason, setReason] = useState("");
 
   const [form, setForm] = useState({
     venue_id: defaultVenueId || venues[0]?.id || "",
@@ -80,7 +75,15 @@ export function BookingForm({
     // Any change invalidates the previous clash check.
     if (conflicts.length) setConflicts([]);
     if (blocked) setBlocked(false);
+    if (overriding) setOverriding(false);
+    if (reason) setReason("");
     if (error) setError(null);
+  }
+
+  function showClash(json: { conflicts?: Conflict[]; canOverride?: boolean }) {
+    setConflicts(json.conflicts ?? []);
+    setBlocked(true);
+    setCanOverride(!!json.canOverride);
   }
 
   const selectedVenue = venues.find((v) => v.id === form.venue_id);
@@ -110,6 +113,7 @@ export function BookingForm({
     const isRecurring = form.recurrence !== "none";
     return {
       dryRun,
+      ...(dryRun ? {} : overrideBody(overriding, reason)),
       venue_id: form.venue_id,
       ministry_id: form.ministry_id === "none" ? null : form.ministry_id,
       title: form.title.trim(),
@@ -148,21 +152,23 @@ export function BookingForm({
         count?: number;
         autoConfirm?: boolean;
         blocked?: boolean;
+        canOverride?: boolean;
       };
     };
   }
 
-  async function submit(force: boolean) {
+  async function submit() {
     const v = validate();
     if (v) {
       setError(v);
       return;
     }
+    if (blocked && !(overriding && reason.trim())) return;
     setLoading(true);
     setError(null);
 
-    // Step 1: clash check (unless the user already chose to book anyway).
-    if (!force) {
+    // Step 1: clash check (skipped once a manager has chosen to book over it).
+    if (!blocked) {
       const dry = await post(true);
       if (!dry.ok) {
         setError(dry.json.error ?? "Could not check availability.");
@@ -170,9 +176,7 @@ export function BookingForm({
         return;
       }
       if (dry.json.conflicts && dry.json.conflicts.length > 0) {
-        setConflicts(dry.json.conflicts);
-        // On auto-confirm spaces a clash is a hard block (no "Book anyway").
-        setBlocked(!!dry.json.blocked);
+        showClash(dry.json);
         setLoading(false);
         return;
       }
@@ -181,12 +185,14 @@ export function BookingForm({
     // Step 2: create.
     const res = await post(false);
     if (!res.ok) {
-      // A 409 means the server blocked a double-booking on an auto-confirm space.
-      if (res.json.blocked && res.json.conflicts) {
-        setConflicts(res.json.conflicts);
-        setBlocked(true);
+      // 409: someone holds the space (perhaps booked since the check).
+      if (res.json.blocked) {
+        showClash(res.json);
+        setOverriding(false);
+        setReason("");
+      } else {
+        setError(res.json.error ?? "Could not submit the booking.");
       }
-      setError(res.json.error ?? "Could not submit the booking.");
       setLoading(false);
       return;
     }
@@ -217,7 +223,7 @@ export function BookingForm({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            submit(hasConflicts);
+            submit();
           }}
           className="space-y-5"
         >
@@ -432,62 +438,43 @@ export function BookingForm({
             </div>
           </div>
 
-          {/* Clash — a hard BLOCK on auto-confirm spaces, a warning otherwise */}
+          {/* Clash — refused on every space; managers can book over it with a reason */}
           {hasConflicts && (
-            <div
-              className={
-                blocked
-                  ? "border border-destructive p-3 text-sm"
-                  : "border border-ink bg-bone p-3 text-sm"
-              }
-            >
-              <p
-                className={
-                  blocked
-                    ? "flex items-center gap-2 font-semibold text-destructive"
-                    : "flex items-center gap-2 font-semibold"
-                }
-              >
-                {blocked ? <Ban className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-                {blocked
-                  ? "This space is already booked at that time"
-                  : `This ${form.recurrence !== "none" ? "series clashes" : "booking clashes"} with an existing booking in this venue`}
-              </p>
-              <ul className="mt-2 space-y-0.5 text-muted-foreground">
-                {conflicts.slice(0, 8).map((c, i) => (
-                  <li key={`${c.existingId}-${i}`}>
-                    {humanDate(c.date)} —{" "}
-                    <span className="font-medium text-foreground">{c.existingTitle}</span>
-                    {c.who ? ` (${c.who})` : ""}
-                    {c.existingTime ? `, ${c.existingTime}` : ""}
-                    {c.occupiedUntil ? ` · holds it until ${c.occupiedUntil}` : ""}
-                  </li>
-                ))}
-                {conflicts.length > 8 && <li>…and {conflicts.length - 8} more</li>}
-              </ul>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {blocked
-                  ? "Pick a time that doesn't overlap — even a small gap is fine (back-to-back is allowed)."
-                  : "You can still submit it — clashes here are flagged, not blocked."}
-              </p>
-            </div>
+            <ClashPanel
+              conflicts={conflicts}
+              venueName={selectedVenue?.name}
+              canOverride={canOverride}
+              overriding={overriding}
+              onOverridingChange={setOverriding}
+              reason={reason}
+              onReasonChange={setReason}
+            />
+          )}
+          {hasConflicts && !overriding && (
+            <p className="text-xs text-[color:var(--text-secondary)]">
+              Change the date, time or space above and try again. Back-to-back is fine.
+            </p>
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <div className="flex gap-3 pt-1">
-            <Button type="submit" disabled={loading || blocked}>
+          <div className="flex flex-wrap gap-3 pt-1">
+            <Button
+              type="submit"
+              className="min-h-11"
+              disabled={loading || (blocked && !(overriding && reason.trim()))}
+            >
               {loading
                 ? "Working…"
                 : blocked
-                  ? "Unavailable"
-                  : hasConflicts
+                  ? overriding
                     ? "Book anyway"
-                    : willAutoConfirm
-                      ? "Confirm booking"
-                      : "Submit request"}
+                    : "Time taken"
+                  : willAutoConfirm
+                    ? "Confirm booking"
+                    : "Submit request"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => router.back()}>
+            <Button type="button" variant="outline" className="min-h-11" onClick={() => router.back()}>
               Cancel
             </Button>
           </div>

@@ -1,0 +1,305 @@
+{
+  "r-bk-crv": {
+    "checkedBy": "",
+    "cost": null,
+    "createdAt": "2026-11-16T14:05:00Z",
+    "createdBy": null,
+    "date": "2026-11-18",
+    "description": "Test workshop visit 1.",
+    "files": [],
+    "kind": "Workshop inspection (bumper to bumper)",
+    "nextDate": "",
+    "nextKm": null,
+    "odometer": null,
+    "provider": "Motech",
+    "ref": "",
+    "status": "booked",
+    "updatedAt": "2026-11-16T14:05:00Z",
+    "vehicleId": "crv",
+    "warrantyUntil": "",
+    "work": []
+  },
+  "r-bk-kombi": {
+    "checkedBy": "",
+    "cost": null,
+    "createdAt": "2026-11-16T14:05:00Z",
+    "createdBy": null,
+    "date": "2026-11-19",
+    "description": "Test workshop visit 2.",
+    "files": [],
+    "kind": "Workshop inspection (bumper to bumper)",
+    "nextDate": "",
+    "nextKm": null,
+    "odometer": null,
+    "provider": "Motech",
+    "ref": "",
+    "status": "booked",
+    "updatedAt": "2026-11-16T14:05:00Z",
+    "vehicleId": "kombi",
+    "warrantyUntil": "",
+    "work": []
+  },
+  "r-bk-kph": {
+    "checkedBy": "",
+    "cost": null,
+    "createdAt": "2026-11-16T14:05:00Z",
+    "createdBy": null,
+    "date": "2026-11-19",
+    "description": "Test workshop visit 3.",
+    "files": [],
+    "kind": "Workshop inspection (bumper to bumper)",
+    "nextDate": "",
+    "nextKm": null,
+    "odometer": null,
+    "provider": "Motech",
+    "ref": "",
+    "status": "booked",
+    "updatedAt": "2026-11-16T14:05:00Z",
+    "vehicleId": "h1-3",
+    "warrantyUntil": "",
+    "work": []
+  },
+  "r-bk-kvs": {
+    "checkedBy": "",
+    "cost": null,
+    "createdAt": "2026-11-16T14:05:00Z",
+    "createdBy": null,
+    "date": "2026-11-23",
+    "description": "Test workshop visit 4.",
+    "files": [],
+    "kind": "Workshop inspection (bumper to bumper)",
+    "nextDate": "",
+    "nextKm": null,
+    "odometer": null,
+    "provider": "Motech",
+    "ref": "",
+    "status": "booked",
+    "updatedAt": "2026-11-16T17:00:00Z",
+    "vehicleId": "h1-1",
+    "warrantyUntil": "",
+    "work": []
+  },
+  "r-sac-1": {
+    "checkedBy": "",
+    "cost": 600.0,
+    "createdAt": "2026-11-16T17:00:00Z",
+    "createdBy": null,
+    "date": "2026-10-16",
+    "description": "Test workshop visit 5.",
+    "files": [
+      {
+        "id": "56d4100116c53353b3c6ece384418ba2",
+        "name": "Test report.pdf",
+        "type": "application/pdf"
+      }
+    ],
+    "kind": "Body repair",
+    "nextDate": "",
+    "nextKm": null,
+    "odometer": null,
+    "provider": "Sparkling Auto Care Centre",
+    "ref": "REF-005",
+    "source": "test",
+    "status": "done",
+    "updatedAt": "2026-11-16T17:00:00Z",
+    "vehicleId": "h1-1",
+    "warrantyUntil": "",
+    "work": [
+      {
+        "chk": "",
+        "cost": 100.0,
+        "d": "Test work item 1"
+      },
+      {
+        "chk": "",
+        "cost": 200.0,
+        "d": "Test work item 2"
+      },
+      {
+        "chk": "",
+        "cost": 300.0,
+        "d": "Test work item 3"
+      }
+    ]
+  },
+  "r-wbc-almera": {
+    "cost": null,
+    "createdAt": "2026-11-16T13:50:00Z",
+    "createdBy": null,
+    "date": "2026-03-23",
+    "description": "Test workshop visit 6.",
+    "files": [
+      {
+        "id": "4f9a53f05f8a019a99f4b74521f39ce6",
+        "name": "Test report.pdf",
+        "type": "application/pdf"
+      },
+      {
+        "id": "f44d33e03da9008f8836ce7e97e841af",
+        "name": "Test photo 2",
+        "type": "image/jpeg"
+      },
+      {
+        "id": "e396786073cc0dd30a814fa5fc652a4d",
+        "name": "Test photo 3",
+        "type": "image/jpeg"
+      },
+      {
+        "id": "13415342a4aa01e1731f27c7c4cb1ec0",
+        "name": "Test photo 4",
+        "type": "image/jpeg"
+      }
+    ],
+    "kind": "Resale evaluation",
+    "nextDate": "",
+    "nextKm": null,
+    "odometer": 131153,
+    "provider": "WeBuyCars",
+    "ref": "REF-006",
+    "status": "done",
+    "updatedAt": "2026-11-16T13:50:00Z",
+    "vehicleId": "almera"
+  },
+  "r-wbc-jyd": {
+    "cost": null,
+    "createdAt": "2026-11-16T13:50:00Z",
+    "createdBy": null,
+    "date": "2026-03-23",
+    "description": "Test workshop visit 7.",
+    "files": [
+      {
+        "id": "ff0fefb6b763d189ec40dc0512e03f29",
+        "name": "Test report.pdf",
+        "type": "application/pdf"
+      },
+      {
+        "id": "a772b91121019a2716409cb08fcc6342",
+        "name": "Test photo 2",
+        "type": "image/jpeg"
+      },
+      {
+        "id": "a3489a14bb7c1bd3ffeac87ef5eb9ee3",
+        "name": "Test photo 3",
+        "type": "image/jpeg"
+      },
+      {
+        "id": "d9e9f7db920bf44d81b9ca0d446d0449",
+        "name": "Test photo 4",
+        "type": "image/jpeg"
+      }
+    ],
+    "kind": "Resale evaluation",
+    "nextDate": "",
+    "nextKm": null,
+    "odometer": 224920,
+    "provider": "WeBuyCars",
+    "ref": "REF-007",
+    "status": "done",
+    "updatedAt": "2026-11-16T13:50:00Z",
+    "vehicleId": "h1-2"
+  },
+  "r-wbc-kombi": {
+    "cost": null,
+    "createdAt": "2026-11-16T13:50:00Z",
+    "createdBy": null,
+    "date": "2026-03-20",
+    "description": "Test workshop visit 8.",
+    "files": [
+      {
+        "id": "0c97734238ab75811bcd732e85e43d42",
+        "name": "Test report.pdf",
+        "type": "application/pdf"
+      },
+      {
+        "id": "8b07ebe5e24a26f3b789e8a683146ba7",
+        "name": "Test photo 2",
+        "type": "image/jpeg"
+      },
+      {
+        "id": "4c14fb1d71ad553b5b5a5c5fe3562051",
+        "name": "Test photo 3",
+        "type": "image/jpeg"
+      }
+    ],
+    "kind": "Resale evaluation",
+    "nextDate": "",
+    "nextKm": null,
+    "odometer": 297872,
+    "provider": "WeBuyCars",
+    "ref": "REF-008",
+    "status": "done",
+    "updatedAt": "2026-11-16T13:50:00Z",
+    "vehicleId": "kombi"
+  },
+  "r-wbc-kph": {
+    "cost": null,
+    "createdAt": "2026-11-16T13:50:00Z",
+    "createdBy": null,
+    "date": "2026-03-23",
+    "description": "Test workshop visit 9.",
+    "files": [
+      {
+        "id": "0a2e773012bd83018fede1e1a012912f",
+        "name": "Test report.pdf",
+        "type": "application/pdf"
+      },
+      {
+        "id": "11260354494c24c170fce47f8679c440",
+        "name": "Test photo 2",
+        "type": "image/jpeg"
+      },
+      {
+        "id": "b86bb73d46e442e6da3fdc15307e94f8",
+        "name": "Test photo 3",
+        "type": "image/jpeg"
+      }
+    ],
+    "kind": "Resale evaluation",
+    "nextDate": "",
+    "nextKm": null,
+    "odometer": 258811,
+    "provider": "WeBuyCars",
+    "ref": "REF-009",
+    "status": "done",
+    "updatedAt": "2026-11-16T13:50:00Z",
+    "vehicleId": "h1-3"
+  },
+  "r-wbc-kvs": {
+    "cost": null,
+    "createdAt": "2026-11-16T13:50:00Z",
+    "createdBy": null,
+    "date": "2026-03-23",
+    "description": "Test workshop visit 10.",
+    "files": [
+      {
+        "id": "6a9f30d116beb9b73226dba6c52749f3",
+        "name": "Test report.pdf",
+        "type": "application/pdf"
+      },
+      {
+        "id": "fb85e952431347f5055c26827cacfda2",
+        "name": "Test photo 2",
+        "type": "image/jpeg"
+      },
+      {
+        "id": "419e1b19c0385046c9c9d3dd87c10f2b",
+        "name": "Test photo 3",
+        "type": "image/jpeg"
+      },
+      {
+        "id": "72fd90c0e6d5b04f7d9de63e2dc23cb5",
+        "name": "Test photo 4",
+        "type": "image/jpeg"
+      }
+    ],
+    "kind": "Resale evaluation",
+    "nextDate": "",
+    "nextKm": null,
+    "odometer": 229526,
+    "provider": "WeBuyCars",
+    "ref": "REF-010",
+    "status": "done",
+    "updatedAt": "2026-11-16T13:50:00Z",
+    "vehicleId": "h1-1"
+  }
+}

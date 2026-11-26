@@ -1,38 +1,65 @@
+import { CircleAlert, CircleCheck, Clock, CloudOff, Info, type LucideIcon } from "lucide-react-native";
 import { useEffect, type ReactNode } from "react";
-import { Platform, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
+import { Pressable } from "./Pressable";
 
 import { announce, announcement } from "@/lib/a11y/announce";
-
 import { bannerStyle, type BannerTone } from "@/theme/styles";
+import { touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-import { useRegisterNeedsYouBand } from "./Screen";
 import { Text } from "./Text";
 
 export type BannerProps = {
   tone?: BannerTone;
-  /** Short mono caps line, e.g. "NEEDS YOU". */
+  /** Optional bold first line. */
   title?: string;
   children?: ReactNode;
+  /** Inline text action ("Try again"). */
+  actionLabel?: string;
+  onAction?: () => void;
+  /** The inline action is running ("Send now"): a spinner, and it can't be pressed twice. */
+  actionBusy?: boolean;
+  /** Any other action (e.g. a Button), shown under the message. */
   action?: ReactNode;
+  /** Replace the tone's icon; `null` for none. */
+  icon?: LucideIcon | null;
   testID?: string;
 };
 
+const TONE_ICON: Record<BannerTone, LucideIcon | null> = {
+  info: Info,
+  offline: CloudOff,
+  error: CircleAlert,
+  danger: CircleAlert,
+  queued: Clock,
+  positive: CircleCheck,
+};
+
+// The label's line is 18pt at normal size; hitSlop above and below makes 44pt.
+const ACTION_LINE = 18;
+const ACTION_HIT_SLOP = { top: (touch.floor - ACTION_LINE) / 2, bottom: (touch.floor - ACTION_LINE) / 2, left: 8, right: 8 };
+
+const isAlert = (tone: BannerTone) => tone === "error" || tone === "danger";
+
 /**
- * Status band. tone="needsYou" is the yellow "needs you" band: at most ONE
- * per screen, black text on yellow, and only when real data drives it.
- * tone="danger" is announced to screen readers as it appears (live region on
- * Android, an announcement on iOS).
+ * Calm status line with a full 1px border and a leading icon: info, offline
+ * ("Offline. Showing what was saved at 08:42."), error (danger border,
+ * announced) and queued ("Saved on this phone, not yet sent"). Errors should
+ * say what to do and offer Try again (actionLabel + onAction).
+ * The yellow band is NeedsYouBand, not a Banner tone.
  */
-export function Banner({ tone = "info", title, children, action, testID }: BannerProps) {
+export function Banner({ tone = "info", title, children, actionLabel, onAction, actionBusy = false, action, icon, testID }: BannerProps) {
   const { colors } = useTheme();
-  useRegisterNeedsYouBand(tone === "needsYou");
   const s = bannerStyle(tone, colors);
-  const role = tone === "danger" ? "alert" : "summary";
-  const live = tone === "danger" ? "assertive" : "polite";
-  // VoiceOver ignores Android's live regions: speak danger banners on iOS as
+  const alert = isAlert(tone);
+  const role = alert ? "alert" : "summary";
+  const live = alert ? "assertive" : "polite";
+  const Icon = icon === undefined ? TONE_ICON[tone] : icon;
+  const inlineAction = actionLabel && onAction ? { label: actionLabel, onPress: onAction } : null;
+  // VoiceOver ignores Android's live regions: speak error banners on iOS as
   // they appear or change (string content only).
-  const spoken = tone === "danger" ? announcement(title, typeof children === "string" ? children : undefined) : "";
+  const spoken = alert ? announcement(title, typeof children === "string" ? children : undefined) : "";
   useEffect(() => {
     if (Platform.OS === "ios") announce(spoken);
   }, [spoken]);
@@ -40,31 +67,63 @@ export function Banner({ tone = "info", title, children, action, testID }: Banne
   const message = (
     <>
       {title ? (
-        <Text variant="label" tone={s.text}>
+        <Text variant="sectionTitle" tone={s.text}>
           {title}
         </Text>
       ) : null}
-      {typeof children === "string" ? <Text tone={s.text}>{children}</Text> : children}
+      {typeof children === "string" ? (
+        <Text variant="caption" tone={s.text}>
+          {children}
+        </Text>
+      ) : (
+        children
+      )}
     </>
   );
   return (
-    <View
-      testID={testID}
-      style={s.container}
-      // Read as one unit. With a button inside, the message is the unit (so it
-      // keeps its alert role and live region) and the button stays reachable.
-      accessible={!action}
-      accessibilityRole={action ? undefined : role}
-      accessibilityLiveRegion={action ? undefined : live}
-    >
-      {action ? (
-        <View accessible accessibilityRole={role} accessibilityLiveRegion={live} style={{ gap: 4 }}>
-          {message}
+    <View testID={testID} style={{ ...s.container, flexWrap: "wrap" }}>
+      {Icon ? (
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ paddingTop: 1 }}>
+          <Icon size={18} color={s.iconColor} />
         </View>
-      ) : (
-        message
-      )}
-      {action ? <View style={{ marginTop: 8, alignSelf: "flex-start" }}>{action}</View> : null}
+      ) : null}
+      {/* The message is read as one unit (keeping its alert role and live
+          region); any action stays separately reachable. */}
+      <View
+        accessible
+        accessibilityRole={role}
+        accessibilityLiveRegion={live}
+        style={{ flex: 1, minWidth: 160, gap: 2, alignSelf: "center" }}
+      >
+        {message}
+      </View>
+      {inlineAction ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={inlineAction.label}
+          accessibilityState={{ busy: actionBusy, disabled: actionBusy }}
+          disabled={actionBusy}
+          onPress={inlineAction.onPress}
+          // The 44pt target comes from hitSlop, not from the box: a 44pt box
+          // with negative margins spilled over the bottom border once the
+          // action wrapped under the text (QA pass 2, large text).
+          hitSlop={ACTION_HIT_SLOP}
+          style={({ pressed }) => ({
+            paddingHorizontal: 4,
+            justifyContent: "center",
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          {actionBusy ? (
+            <ActivityIndicator testID="banner-action-busy" color={colors.text} />
+          ) : (
+            <Text variant="label" tone="default" style={{ textDecorationLine: "underline" }}>
+              {inlineAction.label}
+            </Text>
+          )}
+        </Pressable>
+      ) : null}
+      {action ? <View style={{ flexBasis: "100%", alignItems: "flex-start" }}>{action}</View> : null}
     </View>
   );
 }

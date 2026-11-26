@@ -46,10 +46,10 @@ export function Metric({
   return (
     <div>
       <p className="mono-label mb-1">{label}</p>
-      <p className="numeral text-[28px]">
+      <p className="numeral text-[32px]">
         {value === null ? "—" : value}
         {value !== null && suffix ? (
-          <span className="text-[0.9rem] text-[color:var(--text-tertiary)]">{suffix}</span>
+          <span className="text-base text-[color:var(--text-tertiary)]">{suffix}</span>
         ) : null}
         {accent && <span className="ml-2 inline-block h-[3px] w-4 align-middle bg-yellow" />}
       </p>
@@ -63,23 +63,13 @@ export function Metric({
 // roster — without saying so, the bars read as a wrong headcount.
 export function WidgetCaption({ children }: { children: React.ReactNode }) {
   return (
-    <p
-      style={{
-        padding: "0.5rem 1.5rem",
-        borderBottom: "1px solid var(--rule)",
-        fontSize: "10px",
-        letterSpacing: "0.05em",
-        color: "var(--text-tertiary)",
-      }}
-    >
-      {children}
-    </p>
+    <p className="border-b border-rule px-6 py-2 text-sm text-[color:var(--text-secondary)]">{children}</p>
   );
 }
 
 export function WidgetEmpty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-6 py-8 text-center text-xs tracking-[0.05em] text-[color:var(--text-tertiary)]">
+    <p className="px-6 py-8 text-center text-sm text-[color:var(--text-secondary)]">
       {children}
     </p>
   );

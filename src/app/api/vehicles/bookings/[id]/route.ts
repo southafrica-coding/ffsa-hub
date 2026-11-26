@@ -1,4 +1,6 @@
 import { after, NextResponse } from "next/server";
+import { blockEnd } from "@/lib/vehicles/hold";
+import { driverEmail } from "@/lib/vehicles/return-day";
 import { refreshVehicleRequestAlerts } from "@/lib/vehicles/slack-alerts";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -26,6 +28,7 @@ type DriverInput = {
   id?: string | null;
   name?: string;
   phone?: string;
+  email?: string;
   has_sa_license?: boolean;
   is_first_time?: boolean;
 };
@@ -213,19 +216,39 @@ export async function PATCH(
     vehicleIds = (body.vehicle_ids ?? []).filter(
       (v): v is string => typeof v === "string"
     );
+  }
+
+  // Overlap hard-block: the vehicles being assigned, or, when only the dates (or the
+  // purpose, which can add a hold) change, the vehicles already on the booking — a
+  // dates-only edit used to skip this (Jack's review of #712).
+  const assignedIds = ((booking.assignments ?? []) as { vehicle: { id: string } | null }[])
+    .map((a) => a.vehicle?.id)
+    .filter((v): v is string => !!v);
+  const effPurpose = ((update.purpose as string | undefined) ?? booking.purpose) as string;
+  const windowChanged =
+    effCheckout !== booking.checkout_date || effReturn !== booking.return_date || effPurpose !== booking.purpose;
+  const toCheck = vehicleIds ?? (windowChanged ? assignedIds : []);
+  if (toCheck.length > 0) {
     const overlapping = await getOverlappingAssignments(
       createAdminClient(),
       effCheckout,
-      effReturn,
+      // An International Team booking needs its vehicles through its hold too.
+      blockEnd({
+        purpose: effPurpose,
+        return_date: effReturn,
+        hold_released_at: (booking as { hold_released_at?: string | null }).hold_released_at,
+      }),
       id
     );
     const unavailable = new Set(overlapping.map((a) => a.vehicle_id));
-    const clash = vehicleIds.filter((vid) => unavailable.has(vid));
+    const clash = toCheck.filter((vid) => unavailable.has(vid));
     if (clash.length > 0) {
       return NextResponse.json(
         {
           error:
-            "One or more of those vehicles is already booked for an overlapping period.",
+            vehicleIds !== null
+              ? "One or more of those vehicles is already booked, in the workshop, or held after an international team for those dates."
+              : "The vehicle on this booking is already booked, in the workshop, or held after an international team on the new dates. Change the dates or the vehicle.",
           clashingVehicleIds: clash,
           blocked: true,
         },
@@ -276,6 +299,7 @@ export async function PATCH(
         user_id: typeof d.user_id === "string" && d.user_id ? d.user_id : null,
         name: nn(d.name),
         phone: nn(d.phone),
+        email: driverEmail(d.email),
         has_sa_license: !!d.has_sa_license,
         is_first_time: !!d.is_first_time,
         driving_test_status: d.is_first_time ? "pending" : "not_required",

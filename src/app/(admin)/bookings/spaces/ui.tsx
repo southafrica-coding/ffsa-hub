@@ -11,7 +11,7 @@ const TONE: Record<string, string> = {
   approved: "border-grass text-grass-text",
   pending: "border-amber-border text-amber",
   denied: "border-destructive text-destructive",
-  cancelled: "border-rule-strong text-[#55524A]",
+  cancelled: "border-rule-strong text-[color:var(--text-muted)]",
 };
 
 export function StatusPill({

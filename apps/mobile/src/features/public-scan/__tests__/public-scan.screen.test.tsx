@@ -4,7 +4,7 @@ import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import * as WebBrowser from "expo-web-browser";
 import type { ReactElement } from "react";
-import { Linking } from "react-native";
+import { Linking, StyleSheet } from "react-native";
 
 import { queueKey } from "@/features/tickets/offline-queue";
 import { auditTappables } from "@/lib/a11y/testing";
@@ -20,18 +20,9 @@ const DEAD = "This scanning link is no longer active. Ask the event organiser fo
 
 let mockPermission: { granted: boolean; canAskAgain: boolean } | null = { granted: true, canAskAgain: true };
 const mockCamera: { props: { onBarcodeScanned?: (r: { data: string; type: string }) => void } | null } = { props: null };
-const mockRouter = { canGoBack: jest.fn(() => false), replace: jest.fn() };
-const mockHeaders: Record<string, unknown>[] = [];
+const mockRouter = { canGoBack: jest.fn(() => false), replace: jest.fn(), back: jest.fn() };
 
-jest.mock("expo-router", () => ({
-  Stack: {
-    Screen: ({ options }: { options?: Record<string, unknown> }) => {
-      if (options) mockHeaders.push(options);
-      return null;
-    },
-  },
-  useRouter: () => mockRouter,
-}));
+jest.mock("expo-router", () => ({ useRouter: () => mockRouter, useNavigation: () => ({ setOptions: jest.fn(), getParent: () => undefined }) }));
 jest.mock("expo-network", () => ({ useNetworkState: () => ({ isConnected: true, isInternetReachable: true }) }));
 jest.mock("expo-keep-awake", () => ({ useKeepAwake: jest.fn() }));
 jest.mock("expo-haptics", () => ({
@@ -102,7 +93,6 @@ beforeEach(async () => {
   jest.clearAllMocks();
   mockPermission = { granted: true, canAskAgain: true };
   mockCamera.props = null;
-  mockHeaders.length = 0;
   calls.length = 0;
   mockRouter.canGoBack.mockReturnValue(false);
   serve();
@@ -131,6 +121,8 @@ describe("Volunteer door: opening the link", () => {
     expect(await screen.findByText("This scanning link isn't active")).toBeTruthy();
     expect(screen.getByText(/replaced, switched off, or the event has passed/)).toBeTruthy();
 
+    expect(screen.getByRole("header", { name: "This scanning link isn't active" })).toBeTruthy();
+    expect(screen.getByText("Opens in browser")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Open on the website" }));
     expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(`https://hub.example.test/scan/${TOKEN}`, expect.anything());
 
@@ -144,6 +136,7 @@ describe("Volunteer door: opening the link", () => {
     serve({ [`GET ${DOOR}?stats=1`]: offline, [`GET ${DOOR}/event`]: offline });
     await render(screenFor());
     expect(await screen.findByTestId("error-state")).toHaveTextContent(/You're offline\. Connect to Wi-Fi or mobile data/);
+    expect(screen.getByRole("alert", { name: /Couldn't open the door scanner/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open on the website" })).toBeTruthy();
     serve();
     await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
@@ -166,11 +159,29 @@ describe("Volunteer door: opening the link", () => {
   it("opened from a link with nothing behind it: Done goes Home (or sign-in)", async () => {
     await render(screenFor());
     await screen.findByLabelText("12 of 40 checked in");
-    const withDone = mockHeaders.find((o) => typeof o.headerLeft === "function");
-    expect(withDone?.title).toBe("Door scanner");
-    await render((withDone!.headerLeft as () => ReactElement)());
-    await fireEvent.press(screen.getByRole("button", { name: "Done" }));
+    // Its own header: the "Door scanner" title and Done, no native bar.
+    expect(screen.getByRole("header", { name: "Door scanner" })).toBeTruthy();
+    const done = screen.getByRole("button", { name: "Done" });
+    expect(done.props.accessibilityHint).toBe("Leaves the door scanner");
+    expect(StyleSheet.flatten(done.props.style).minHeight).toBeGreaterThanOrEqual(44);
+    await fireEvent.press(done);
     expect(mockRouter.replace).toHaveBeenCalledWith("/");
+    expect(mockRouter.back).not.toHaveBeenCalled();
+  });
+
+  it("opened over the app: Done goes back to where they were", async () => {
+    mockRouter.canGoBack.mockReturnValue(true);
+    await render(screenFor());
+    await fireEvent.press(await screen.findByRole("button", { name: "Done" }));
+    expect(mockRouter.back).toHaveBeenCalled();
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+  });
+
+  it("Done is offered on every state, so nobody is stuck on a dead link", async () => {
+    await render(screenFor("not-a-link"));
+    expect(screen.getByRole("button", { name: "Done" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open on the website" })).toBeNull();
   });
 });
 
@@ -183,6 +194,9 @@ describe("Volunteer door: who is scanning", () => {
     await fireEvent.changeText(screen.getByLabelText("First name"), "  Sample Person 258 ");
     await fireEvent.press(screen.getByRole("button", { name: "Start scanning" }));
     expect(await screen.findByText("Scanning as Sample Person 258")).toBeTruthy();
+    // Same door as staff, under the volunteer title.
+    expect(screen.getByRole("header", { name: "Door scanner" })).toBeTruthy();
+    expect(screen.queryByRole("header", { name: "Door" })).toBeNull();
     await waitFor(async () => expect(await AsyncStorage.getItem(SCANNER_NAME_KEY)).toBe("Sample Person 258"));
     expect(auditTappables(screen.container as never)).toEqual([]);
   });

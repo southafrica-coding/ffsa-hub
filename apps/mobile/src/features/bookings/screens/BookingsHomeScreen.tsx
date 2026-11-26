@@ -1,21 +1,21 @@
 import { useRouter } from "expo-router";
-import { Inbox, Plus } from "lucide-react-native";
-import { useCallback, useMemo } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { Check, Inbox, Plus } from "lucide-react-native";
+import { useCallback, useMemo, type ReactNode } from "react";
+import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, Masthead, Screen } from "@/components";
+import { type BackAction, Bleed, Button, EmptyState, FadeIn, LargeTitleScrollView, ListGroup, ListRow, LoadFailed, NeedsYouBand, SectionTitle, SkeletonList, StaleNote } from "@/components";
 import { formatSavedAt } from "@/features/finance/cache";
-import { ErrorState, SectionBar, Skeleton, StaleNote } from "@/features/finance/components/ui";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { ListRow, StateMessage, useMe } from "@/features/shell";
+import { useMe } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { bookingsAccess } from "../access";
 import { loadErrorMessage } from "../api";
-import { BookingRow } from "../components/ui";
 import { QueueList } from "../components/QueueList";
+import { BookingRow } from "../components/ui";
 import { loadMine, loadPending } from "../data";
 import { groupBookings, spaceItem, todayISO, vehicleItem, type BookingItem } from "../logic";
 import { useBookingsOutbox } from "../outbox/provider";
@@ -42,9 +42,10 @@ export async function loadHomeData(userId: string, access: ReturnType<typeof boo
   };
 }
 
-// Bookings home: my requests grouped Waiting / Upcoming / Past, a "new
-// request" button, and (for approvers) the one yellow band when something
-// is waiting for them. The last good list is kept on the phone.
+// Bookings home (frames 7.1, 13.2): my requests in stacked sections
+// (Waiting / Upcoming / Past), a "New request" button, and for approvers the
+// one yellow band when something is waiting for them plus the "Waiting for
+// you" row. The last good list is kept on the phone.
 export default function BookingsHomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -69,94 +70,100 @@ export default function BookingsHomeScreen() {
   });
 
   const canRequest = access.spaces.request || access.vehicles.request;
+  // Bookings is reached from Home (it isn't a tab), so its first screen goes back to Home.
+  const back: BackAction = { label: strings.common.home, onPress: () => router.navigate("/") };
 
   function openItem(i: BookingItem) {
     router.push({ pathname: i.kind === "space" ? "/bookings/space/[id]" : "/bookings/vehicle/[id]", params: { id: i.id } });
   }
 
+  const page = (children: ReactNode, refreshable = false) => (
+    <LargeTitleScrollView
+      back={back}
+      eyebrow={s.context}
+      title={s.title}
+      gap={0}
+      refreshControl={refreshable ? <RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} /> : undefined}
+    >
+      {children}
+    </LargeTitleScrollView>
+  );
+
   if (me.status === "loading") {
-    return (
-      <Screen edges={[]}>
-        <Masthead context={s.context} title={s.title} />
-        <Skeleton label={s.loading} />
-      </Screen>
+    return page(
+      <Bleed>
+        <SkeletonList label={s.loading} count={4} inset={false} />
+      </Bleed>,
     );
   }
   if (me.status === "error" && !me.me) {
-    return (
-      <Screen edges={[]}>
-        <Masthead context={s.context} title={s.title} />
-        <ErrorState title={s.title} message={me.error ?? strings.common.generic} onRetry={() => void me.refresh()} />
-      </Screen>
+    return page(
+      <Bleed>
+        <LoadFailed title={s.errorTitle} message={me.error ?? strings.common.generic} onRetry={() => void me.refresh()} />
+      </Bleed>,
     );
   }
   if (!access.any) {
-    return (
-      <Screen edges={[]}>
-        <Masthead context={s.context} title={s.title} />
-        <StateMessage testID="no-access" title={s.noAccessTitle} body={s.noAccessBody} />
-      </Screen>
+    return page(
+      <Bleed>
+        <EmptyState testID="no-access" title={s.noAccessTitle} body={s.noAccessBody} />
+      </Bleed>,
     );
   }
 
   const groups = state.status === "ready" ? groupBookings(state.data.items, todayISO()) : null;
   const pendingCount = state.status === "ready" ? state.data.pendingCount : null;
 
-  return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
-      >
-        <Masthead context={s.context} title={s.title} />
-
+  return page(
+    <>
+      <Bleed style={{ gap: space.md }}>
         {/* The one yellow band: only for approvers, only when requests really wait. */}
         {pendingCount ? (
-          <Banner
-            tone="needsYou"
-            title={s.needsYouTitle}
+          <NeedsYouBand
+            eyebrow={s.needsYouTitle}
+            text={s.needsYou(pendingCount)}
+            actionLabel={s.review}
+            onAction={() => router.push("/bookings/approvals")}
             testID="needs-you"
-            action={<Button label={s.review} variant="primary" onPress={() => router.push("/bookings/approvals")} />}
-          >
-            {s.needsYou(pendingCount)}
-          </Banner>
+          />
         ) : null}
 
         {canRequest ? (
           <Button
             label={s.newRequest}
             accessibilityHint={s.newRequestHint}
-            icon={<Plus size={18} color={colors.onInverse} />}
+            icon={<Plus size={20} color={colors.onPrimary} />}
             onPress={() => router.push("/bookings/new")}
             testID="new-request"
           />
         ) : null}
 
         {approver ? (
-          <ListRow icon={Inbox} title={s.approvalsRow} subtitle={s.approvalsRowSub(pendingCount)} onPress={() => router.push("/bookings/approvals")} testID="approvals-row" />
+          <ListGroup inset={false}>
+            <ListRow icon={Check} title={s.approvalsRow} subtitle={s.approvalsRowSub(pendingCount)} onPress={() => router.push("/bookings/approvals")} testID="approvals-row" />
+          </ListGroup>
         ) : null}
 
         {myQueue.length > 0 ? <QueueList items={myQueue} outbox={outbox} online={online} /> : null}
 
-        {state.status === "loading" ? <Skeleton label={s.loading} /> : null}
-        {state.status === "error" ? <ErrorState title={s.title} message={state.message} onRetry={retry} /> : null}
+        {state.status === "loading" ? <SkeletonList label={s.loading} count={4} inset={false} /> : null}
+        {state.status === "error" ? <LoadFailed title={s.errorTitle} message={state.message} onRetry={retry} /> : null}
         {state.status === "ready" && state.refreshError && state.staleSince !== null ? (
           <StaleNote message={online ? strings.common.refreshFailed(formatSavedAt(state.staleSince)) : strings.common.offline} onRetry={retry} />
         ) : null}
 
-        {groups && state.status === "ready" && state.data.items.length === 0 ? (
-          <StateMessage testID="empty" icon={Inbox} title={s.emptyTitle} body={s.empty} />
-        ) : null}
+        {groups && state.status === "ready" && state.data.items.length === 0 ? <EmptyState testID="empty" icon={Inbox} title={s.emptyTitle} body={s.empty} /> : null}
+      </Bleed>
 
-        {groups ? (
-          <>
-            <Group title={s.sections.waiting} items={groups.waiting} onOpen={openItem} />
-            <Group title={s.sections.upcoming} items={groups.upcoming} onOpen={openItem} />
-            <Group title={s.sections.past} items={groups.past.slice(0, PAST_LIMIT)} onOpen={openItem} />
-          </>
-        ) : null}
-      </ScrollView>
-    </Screen>
+      {groups ? (
+        <FadeIn>
+          <Group title={s.sections.waiting} items={groups.waiting} onOpen={openItem} />
+          <Group title={s.sections.upcoming} items={groups.upcoming} onOpen={openItem} />
+          <Group title={s.sections.past} items={groups.past.slice(0, PAST_LIMIT)} onOpen={openItem} />
+        </FadeIn>
+      ) : null}
+    </>,
+    true,
   );
 }
 
@@ -164,10 +171,14 @@ function Group({ title, items, onOpen }: { title: string; items: BookingItem[]; 
   if (items.length === 0) return null;
   return (
     <View>
-      <SectionBar title={title} meta={String(items.length)} />
-      {items.map((i) => (
-        <BookingRow key={`${i.kind}-${i.id}`} item={i} onPress={() => onOpen(i)} />
-      ))}
+      <SectionTitle title={title} meta={String(items.length)} />
+      <Bleed>
+        <ListGroup inset={false}>
+          {items.map((i) => (
+            <BookingRow key={`${i.kind}-${i.id}`} item={i} onPress={() => onOpen(i)} />
+          ))}
+        </ListGroup>
+      </Bleed>
     </View>
   );
 }

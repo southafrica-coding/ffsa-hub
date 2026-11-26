@@ -7,24 +7,26 @@ import {
   getSeriesById,
   getSeriesOccurrences,
   getVenueApproval,
-  getVenueBookingsBetween,
   insertBookings,
   deleteBookings,
   cancelBookings,
+  updateBookingsByIds,
   updateSeries,
   updateSeriesOccurrences,
 } from "@/services/bookings";
 import { callerLeadsBookingMinistry } from "@/lib/auth/check-ministry-access";
 import { reconcileSeries } from "@/lib/bookings/series-reconcile";
-import { findConflicts, type BookingWindow } from "@/lib/bookings/conflicts";
 import {
-  describeConflict,
-  blockLead,
-  type Conflict,
-  type ExistingRow,
-} from "@/lib/bookings/conflict-messages";
+  canOverrideClash,
+  clashErrorResponse,
+  clashResponse,
+  findVenueClashes,
+  parseOverride,
+  serverError,
+  todaySAST,
+  type ClashCandidate,
+} from "@/lib/bookings/clash-guard";
 import { weeklyOccurrenceDates } from "@/lib/bookings/recurrence";
-import { todayISO } from "@/lib/bookings/dates";
 
 // Details every occurrence of a series shares. Changing one of these pushes it
 // onto the future occurrences that still carry the old value.
@@ -163,48 +165,77 @@ export async function PATCH(
   };
 
   // ── Plan ──
-  const today = todayISO();
+  const today = todaySAST();
   const { data: occRaw, error: occLoadErr } = await getSeriesOccurrences(supabase, id);
   if (occLoadErr) {
-    return NextResponse.json({ error: occLoadErr.message }, { status: 500 });
+    return serverError("load series dates", occLoadErr, "Could not load the series.");
   }
   const occurrences = (occRaw ?? []) as Array<
     Record<string, unknown> & { id: string; booking_date: string; status: string }
   >;
   const plan = reconcileSeries(occurrences, today, weekday, seriesStart, seriesEnd, intervalWeeks);
 
-  // ── Clash scan over every future date the series will occupy ──
-  const futureDates = [...plan.add, ...plan.keep.map((o) => o.booking_date)].sort();
-  const conflicts: Conflict[] = [];
-  if (futureDates.length > 0) {
-    const { data: existingRaw } = await getVenueBookingsBetween(
-      supabase,
-      targetVenueId,
-      futureDates[0],
-      futureDates[futureDates.length - 1]
-    );
-    // Our own occurrences aren't clashes with ourselves.
-    const existing = ((existingRaw ?? []) as ExistingRow[]).filter(
-      (row) => row.series_id !== id
-    );
-    for (const date of futureDates) {
-      const candidate: BookingWindow = {
-        id: "",
-        venue_id: targetVenueId,
-        booking_date: date,
-        end_date: null,
-        status: "pending",
-        ...times,
-      };
-      for (const hit of findConflicts(candidate, existing)) {
-        conflicts.push(describeConflict(date, hit as ExistingRow));
-      }
+  // ── What each kept future occurrence changes to. A detail is pushed onto an
+  //    occurrence only while it still holds the series' OLD value — one that
+  //    someone moved to its own time keeps it. Occurrences that take the same
+  //    change are written together, so a move lands in one write per group
+  //    (never venue first, then times, through a half-moved state). ──
+  const changeGroups = new Map<string, { patch: Record<string, unknown>; ids: string[] }>();
+  const movedKept: Array<ClashCandidate & { venue_id: string }> = [];
+  for (const occ of plan.keep) {
+    if (occ.status === "cancelled" || occ.status === "denied") continue;
+    const patch: Record<string, unknown> = {};
+    for (const key of Object.keys(detailPatch)) {
+      if (sameValue(occ[key], series[key])) patch[key] = detailPatch[key];
+    }
+    const keys = Object.keys(patch).sort();
+    if (keys.length === 0) continue;
+    const signature = keys.join(",");
+    const group = changeGroups.get(signature) ?? { patch, ids: [] };
+    group.ids.push(occ.id);
+    changeGroups.set(signature, group);
+    // Only a move needs a clash check: renaming a series that already overlaps
+    // something must still work.
+    if (keys.some((key) => SLOT_FIELDS.has(key))) {
+      const after = { ...occ, ...patch } as Record<string, unknown>;
+      movedKept.push({
+        id: occ.id,
+        venue_id: after.venue_id as string,
+        booking_date: occ.booking_date,
+        end_date: (after.end_date as string | null) ?? null,
+        setup_time: (after.setup_time as string | null) ?? null,
+        start_time: (after.start_time as string | null) ?? null,
+        end_time: (after.end_time as string | null) ?? null,
+        setdown_time: (after.setdown_time as string | null) ?? null,
+      });
     }
   }
 
-  // On an auto-confirm space there's no manager to catch a clash, so it's a
-  // hard block. On approval-required spaces it stays a warning.
-  const blocked = willAutoConfirm && conflicts.length > 0;
+  // ── Clash check: every new date, and every kept date that moves ──
+  // Refused on every space (the database refuses it too, migration 403); a
+  // space manager can book over it with a reason. Our own occurrences aren't
+  // clashes with ourselves.
+  const byVenue = new Map<string, ClashCandidate[]>();
+  for (const date of plan.add) {
+    byVenue.set(targetVenueId, [
+      ...(byVenue.get(targetVenueId) ?? []),
+      { booking_date: date, end_date: null, ...times },
+    ]);
+  }
+  for (const { venue_id, ...candidate } of movedKept) {
+    byVenue.set(venue_id, [...(byVenue.get(venue_id) ?? []), candidate]);
+  }
+  const findClashes = async () =>
+    (
+      await Promise.all(
+        [...byVenue].map(([venueId, list]) =>
+          findVenueClashes(supabase, venueId, list, { excludeSeriesId: id })
+        )
+      )
+    ).flat();
+  const conflicts = byVenue.size > 0 ? await findClashes() : [];
+  const blocked = conflicts.length > 0;
+  const canOverride = canOverrideClash(access);
 
   const planSummary = {
     add: plan.add,
@@ -219,16 +250,19 @@ export async function PATCH(
       plan: planSummary,
       conflicts,
       blocked,
+      canOverride,
       autoConfirm: willAutoConfirm,
     });
   }
 
-  if (blocked) {
-    return NextResponse.json(
-      { error: blockLead(conflicts), conflicts, blocked: true },
-      { status: 409 }
-    );
+  const override = parseOverride(body, access);
+  if ("response" in override) return override.response;
+  if (blocked && !override.reason) {
+    return clashResponse(conflicts, venue.name, canOverride);
   }
+  const overrideFields = override.reason ? { clash_override_reason: override.reason } : {};
+  const refused = (err: { code?: string; message?: string } | null) =>
+    clashErrorResponse(err, { recheck: findClashes, venueName: venue.name, canOverride });
 
   const scheduleChanged =
     weekday !== series.weekday ||
@@ -257,7 +291,7 @@ export async function PATCH(
     seriesPatch
   );
   if (updErr) {
-    return NextResponse.json({ error: updErr.message }, { status: 500 });
+    return serverError("update series", updErr, "Could not update the series.");
   }
   // RLS filters a forbidden update away silently rather than erroring.
   if (!updatedSeries) {
@@ -296,6 +330,7 @@ export async function PATCH(
       end_date: null,
       status,
       ...decision,
+      ...overrideFields,
       requested_by: newest?.requested_by ?? user.id,
       requester_name: newest?.requester_name ?? null,
     }));
@@ -303,30 +338,28 @@ export async function PATCH(
     if (insErr) {
       // Put the schedule back — nothing else has been touched yet.
       await updateSeries(supabase, id, {
+        ...Object.fromEntries(Object.keys(detailPatch).map((key) => [key, series[key]])),
         weekday: series.weekday,
         series_start: series.series_start,
         series_end: series.series_end,
+        interval_weeks: series.interval_weeks ?? 1,
       });
-      return NextResponse.json({ error: insErr.message }, { status: 500 });
+      return (
+        (await refused(insErr)) ??
+        serverError("add series dates", insErr, "Could not update the series.")
+      );
     }
   }
 
-  // Push each changed detail onto the future occurrences that still hold the
-  // series' OLD value — one that someone moved to its own time keeps it.
-  for (const key of Object.keys(detailPatch)) {
-    const { error } = await updateSeriesOccurrences(
-      supabase,
-      id,
-      { [key]: detailPatch[key] },
-      false,
-      {
-        afterDate: today,
-        skipClosed: true,
-        matchField: { key, value: series[key] },
-      }
-    );
+  // Push the changed details onto the kept future occurrences, one write per
+  // group that takes the same change (worked out above).
+  for (const { patch, ids } of changeGroups.values()) {
+    const { error } = await updateBookingsByIds(supabase, ids, { ...patch, ...overrideFields });
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return (
+        (await refused(error)) ??
+        serverError("move series dates", error, "Could not update the series.")
+      );
     }
   }
 
@@ -360,7 +393,7 @@ export async function PATCH(
     const ids = plan.remove.map((o) => o.id);
     const { data: deleted, error: delErr } = await deleteBookings(supabase, ids);
     if (delErr) {
-      return NextResponse.json({ error: delErr.message }, { status: 500 });
+      return serverError("remove series dates", delErr, "Could not update the series.");
     }
     const removedIds = new Set(((deleted ?? []) as { id: string }[]).map((r) => r.id));
     const survivors = ids.filter((rowId) => !removedIds.has(rowId));

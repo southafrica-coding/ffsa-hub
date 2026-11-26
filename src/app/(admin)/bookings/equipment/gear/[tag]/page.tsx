@@ -134,7 +134,9 @@ export default async function UnitPage({ params }: { params: Promise<{ tag: stri
   const storefront = !product
     ? "—"
     : product.is_listed
-      ? `Listed at ${rands(product.price_day_cents ?? 0)} a day.`
+      ? !product.can_leave_building
+        ? `On the store as Not for hire (shown at ${rands(product.price_day_cents ?? 0)} a day).`
+        : `Listed at ${rands(product.price_day_cents ?? 0)} a day.`
       : product.price_day_cents == null
         ? "Not listed. The product has no hire price."
         : !product.can_leave_building

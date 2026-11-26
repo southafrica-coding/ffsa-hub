@@ -1,6 +1,7 @@
-// Booking clash detection. Shared by the API (warn at create time) and the
-// calendar / list views (flag overlapping bookings). Per the locked scope a
-// clash is a WARNING, never a hard block.
+// Booking clash detection. Shared by the API (refuse a clashing write, see
+// clash-guard.ts) and the calendar / list views (flag overlapping bookings).
+// The database enforces the same rule (migration 403, venue_booking_window());
+// keep the two in step.
 
 export type BookingWindow = {
   id: string;

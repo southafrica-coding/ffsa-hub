@@ -1,0 +1,828 @@
+/* The house church map (boards M3a desktop, M3b phone). Top-down: Missio,
+   coaches as portrait tiles, the open coach's houses on a terracotta path,
+   the open house's people underneath it. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ── Needs you (signal chips) ───────────── */
+
+.signals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.signalsLabel {
+  display: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2, #5b574d);
+  letter-spacing: 0.02em;
+  margin-right: 6px;
+}
+
+.signals .sg {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 14px 0 8px;
+  border-radius: 999px;
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, #ddd7c8);
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--ink, #1c1b17);
+  transition: background-color 0.16s ease;
+}
+
+.signals .sg:hover {
+  background: var(--page, #f3f0e8);
+}
+
+.signals .sg:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 3px;
+}
+
+.signals .sgOn,
+.signals .sgOn:hover {
+  background: var(--frame, #1d2520);
+  border-color: var(--frame, #1d2520);
+  color: var(--frame-ink, #f3efe4);
+}
+
+.sgn {
+  min-width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--terra-soft, #f6e4d9);
+  color: var(--terra-ink, #8e3d1f);
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.sgOn .sgn {
+  background: var(--terra, #b4532e);
+  color: #ffffff;
+}
+
+/* ── the map surface ────────────────────── */
+
+.map {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  padding: 16px 12px 20px;
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: var(--radius-lg, 20px);
+  background:
+    radial-gradient(circle at 1px 1px, #ddd7c8 1px, transparent 0) 0 0 / 20px 20px,
+    #f7f4ec;
+}
+
+.rootRow {
+  display: flex;
+  justify-content: center;
+}
+
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 22px 8px;
+  border-radius: 999px;
+  background: var(--frame, #1d2520);
+  color: var(--frame-ink, #f3efe4);
+  box-shadow: 0 6px 18px rgba(28, 27, 23, 0.18);
+}
+
+.wordmark {
+  display: block;
+  height: 15px;
+  width: auto;
+}
+
+.rootMeta {
+  font-size: 11px;
+  color: #c9cfc6;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.stem {
+  display: block;
+  width: 2px;
+  height: 16px;
+  margin: 0 auto;
+  background: var(--rule-strong, #cfc8b6);
+}
+
+.stemLit {
+  background: var(--terra, #b4532e);
+}
+
+/* ── coaches: portrait tiles ────────────── */
+
+.coaches {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.coaches li {
+  min-width: 0;
+}
+
+.coaches .coach {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  height: 100%;
+  min-height: 112px;
+  padding: 12px 6px 10px;
+  border-radius: var(--radius-md, 14px);
+  background: var(--panel, #fbf9f4);
+  border: 1px solid #e3ddce;
+  color: var(--ink, #1c1b17);
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
+  transition:
+    box-shadow 0.16s ease,
+    opacity 0.16s ease,
+    transform 0.12s ease;
+}
+
+.coaches .coach:hover {
+  box-shadow: 0 6px 18px rgba(28, 27, 23, 0.1);
+}
+
+.coaches .coach:active {
+  transform: scale(0.98);
+}
+
+.coaches .coach:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.coaches .coachOn {
+  background: var(--frame, #1d2520);
+  border-color: var(--frame, #1d2520);
+  color: var(--frame-ink, #f3efe4);
+  box-shadow: 0 10px 26px rgba(29, 37, 32, 0.28);
+}
+
+.coaches .coachNone {
+  border: 2px dashed var(--gold, #b98a2e);
+  background: #fbf6ec;
+}
+
+.cav {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  flex: none;
+  background: var(--subtle, #eeeadf);
+  color: var(--ink-2, #5b574d);
+  box-shadow:
+    0 0 0 3px var(--panel, #fbf9f4),
+    0 0 0 4px var(--rule, #ddd7c8);
+}
+
+.coachOn .cav {
+  box-shadow:
+    0 0 0 3px var(--frame, #1d2520),
+    0 0 0 5px var(--terra-on-frame, #d7774f);
+}
+
+.coachNone .cav {
+  box-shadow: none;
+}
+
+.hitn {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  background: var(--terra, #b4532e);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px var(--panel, #fbf9f4);
+}
+
+.coachName {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.coachMeta {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2, #5b574d);
+}
+
+.coachOn .coachMeta {
+  color: #c9cfc6;
+}
+
+.coachPeople {
+  display: none;
+}
+
+.dim {
+  opacity: 0.38;
+}
+
+/* ── the open coach's houses ────────────── */
+
+.drop {
+  position: relative;
+  display: block;
+  height: 22px;
+}
+
+.drop::before {
+  content: "";
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 0;
+  width: 2px;
+  height: 22px;
+  background: var(--terra, #b4532e);
+}
+
+.joint {
+  position: absolute;
+  left: calc(50% - 5px);
+  top: 17px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--terra, #b4532e);
+  box-shadow: 0 0 0 3px #f7f4ec;
+}
+
+.houses {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 0 20px;
+  list-style: none;
+}
+
+.houses::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 28px;
+  width: 2px;
+  background: var(--terra, #b4532e);
+}
+
+.houseItem {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.houseItem::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 24px;
+  width: 15px;
+  height: 2px;
+  background: var(--terra, #b4532e);
+}
+
+.houses .house {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 14px);
+  background: var(--panel, #fbf9f4);
+  border: 1px solid #e3ddce;
+  box-shadow: 0 1px 2px rgba(28, 27, 23, 0.05);
+  color: var(--ink, #1c1b17);
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif !important;
+  transition:
+    box-shadow 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.houses .house:hover {
+  box-shadow: 0 6px 18px rgba(28, 27, 23, 0.1);
+}
+
+.houses .house:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.houses .houseOn {
+  background: #ffffff;
+  border-color: var(--terra, #b4532e);
+  box-shadow: 0 0 0 2px var(--terra, #b4532e);
+}
+
+.houses .houseHit {
+  border-color: var(--ink, #1c1b17);
+  box-shadow:
+    inset 0 0 0 1px var(--ink, #1c1b17),
+    0 6px 18px rgba(28, 27, 23, 0.12);
+}
+
+.houseTop {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.houseName {
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-weight: 560;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.houseDay {
+  font-family: var(--font-missio-mono), "Roboto Mono", monospace;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--ink-2, #5b574d);
+}
+
+.houseSize {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--ink-2, #5b574d);
+  white-space: nowrap;
+}
+
+.houseSize b {
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-weight: 560;
+  font-size: 18px;
+  color: var(--ink, #1c1b17);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.houseFoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  min-height: 22px;
+  min-width: 0;
+}
+
+.houseLead {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink-2, #5b574d);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badgeReady {
+  background: var(--olive-soft, #e3eadf);
+  color: var(--olive-ink, #3f5940);
+}
+
+.badgeWarn {
+  background: var(--gold-soft, #f4ead2);
+  color: var(--gold-ink, #7a5a17);
+}
+
+.hint {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--ink-2, #5b574d);
+}
+
+/* ── the open house: its people (M3b, 2) ── */
+
+.tray {
+  position: relative;
+  padding: 16px;
+  border-radius: var(--radius-md, 14px);
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--terra, #b4532e);
+  box-shadow: 0 6px 18px rgba(28, 27, 23, 0.1);
+  min-width: 0;
+}
+
+.tray::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 28px;
+  width: 12px;
+  height: 12px;
+  background: var(--panel, #fbf9f4);
+  border-left: 1px solid var(--terra, #b4532e);
+  border-top: 1px solid var(--terra, #b4532e);
+  transform: rotate(45deg);
+}
+
+.trayHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.trayTitle {
+  flex: 1;
+  min-width: 0;
+}
+
+.tray .trayTitle h2 {
+  margin: 0;
+  font-family: var(--font-missio-display), Fraunces, Georgia, serif;
+  font-weight: 560;
+  font-size: 20px;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+
+.trayLine {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--ink-2, #5b574d);
+}
+
+/* This house's public weekly form, chosen already. Quiet, under the line. */
+.trayFeedback {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--link, #2f5d50);
+  text-decoration: none;
+}
+
+.trayFeedback::after {
+  content: " →";
+  white-space: pre;
+}
+
+.trayFeedback:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.trayFeedback:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.open {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 9px;
+  background: var(--terra, #b4532e);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.open:hover {
+  background: #9e4626;
+  color: #ffffff;
+}
+
+.open:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.trayCols {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.tray h3 {
+  margin: 0 0 8px;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2, #5b574d);
+}
+
+.trayEmpty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--gold-ink, #7a5a17);
+  font-weight: 600;
+}
+
+.people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.people li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.person {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 4px 14px 4px 6px;
+  border-radius: 999px;
+  background: var(--subtle, #eeeadf);
+  color: var(--ink, #1c1b17);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+a.person:hover {
+  background: #e5e0d2;
+}
+
+a.person:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.personLead,
+a.personLead:hover {
+  background: var(--frame, #1d2520);
+  color: var(--frame-ink, #f3efe4);
+}
+
+.personName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.face {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--panel, #fbf9f4);
+  color: var(--ink-2, #5b574d);
+}
+
+.personLead .face {
+  background: #f6e4d9;
+  color: #8e3d1f;
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--subtle, #eeeadf);
+  color: var(--link, #2f5d50);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── desktop (M3a) ─────────────────────── */
+
+@media (min-width: 768px) {
+  .signalsLabel {
+    display: inline;
+  }
+
+  .signals .sg {
+    height: 40px;
+    padding: 0 14px 0 6px;
+  }
+
+  .map {
+    padding: 32px 24px 24px;
+    border-radius: var(--radius-lg, 20px);
+    background-size: 22px 22px, auto;
+  }
+
+  .wordmark {
+    height: 20px;
+  }
+
+  .rootMeta {
+    font-size: 12px;
+  }
+
+  .root {
+    padding: 14px 28px 12px;
+    gap: 6px;
+  }
+
+  .stem {
+    height: 28px;
+  }
+
+  .coaches {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px 20px;
+  }
+
+  .coaches li {
+    width: 168px;
+  }
+
+  .coaches .coach {
+    min-height: 140px;
+    padding: 16px 10px 14px;
+  }
+
+  .cav {
+    width: 52px;
+    height: 52px;
+    font-size: 17px;
+  }
+
+  .coachName {
+    font-size: 15px;
+    line-height: 19px;
+  }
+
+  .coachMeta {
+    font-size: 13px;
+  }
+
+  .coachPeople {
+    display: inline;
+  }
+
+  .drop,
+  .drop::before {
+    height: 28px;
+  }
+
+  .joint {
+    top: 23px;
+  }
+
+  .houses {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+    padding: 0;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .houses::before,
+  .houseItem::before {
+    display: none;
+  }
+
+  .houseItemOpen {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
+    gap: 14px;
+  }
+
+  .houseItemOpen .tray {
+    grid-column: 1 / -1;
+  }
+
+  .trayCols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 24px;
+  }
+
+  .tray {
+    padding: 20px 24px;
+  }
+
+  .tray .trayTitle h2 {
+    font-size: 22px;
+    line-height: 28px;
+  }
+}

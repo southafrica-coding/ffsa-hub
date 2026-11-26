@@ -220,7 +220,7 @@ export function Planner({
             </SelectContent>
           </Select>
         )}
-        <span className="ml-auto font-mono text-[11px] text-[#7C786C]">{saving > 0 ? "Saving…" : canEdit ? "Saved" : "View only"}</span>
+        <span className="ml-auto font-mono text-[11px] text-[color:var(--text-tertiary)]">{saving > 0 ? "Saving…" : canEdit ? "Saved" : "View only"}</span>
       </div>
 
       {/* The pot */}
@@ -229,7 +229,7 @@ export function Planner({
           <div>
             <div className="mono-label mb-1">{cat?.name ?? "Category"} — available</div>
             <span className="numeral text-[30px] leading-none">{zar(p.available)}</span>
-            <div className="mt-1.5 font-mono text-[11px] text-[#55524A]">
+            <div className="mt-1.5 font-mono text-[11px] text-[color:var(--text-muted)]">
               budget {zar(p.budget)} · spent so far {zar(p.spent)}
             </div>
           </div>
@@ -241,7 +241,7 @@ export function Planner({
             >
               {p.stillToPlan < 0 ? `−${zar(-p.stillToPlan)}` : zar(p.stillToPlan)}
             </span>
-            <div className="mt-1.5 font-mono text-[11px] text-[#55524A]">
+            <div className="mt-1.5 font-mono text-[11px] text-[color:var(--text-muted)]">
               {p.stillToPlan < 0
                 ? "planned more than is available — trim some days"
                 : `planned from today on: ${zar(p.committed)}`}
@@ -269,24 +269,24 @@ export function Planner({
             <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 bg-bone px-4 py-2.5">
               <span className="font-medium">
                 Week {i + 1}
-                <span className="ml-2 font-mono text-[11px] font-normal text-[#7C786C]">
+                <span className="ml-2 font-mono text-[11px] font-normal text-[color:var(--text-tertiary)]">
                   {shortDay(w.start)} – {shortDay(w.end)}
                 </span>
               </span>
               <span className="flex items-center gap-4 font-mono text-[12px] tabular-nums">
                 <span>
-                  <span className="text-[#7C786C]">Planned </span>
+                  <span className="text-[color:var(--text-tertiary)]">Planned </span>
                   {zar(w.planned)}
                 </span>
                 <span>
-                  <span className="text-[#7C786C]">Spent </span>
+                  <span className="text-[color:var(--text-tertiary)]">Spent </span>
                   {zar(w.spent)}
                 </span>
                 {canEdit && w.end >= today && (
                   <button
                     type="button"
                     onClick={() => clearWeek(w.days)}
-                    className="flex items-center gap-1 text-[#7C786C] hover:text-destructive"
+                    className="flex items-center gap-1 text-[color:var(--text-tertiary)] hover:text-destructive"
                     title="Clear this week's plan from today on"
                   >
                     <Eraser className="h-3.5 w-3.5" /> Clear
@@ -305,15 +305,15 @@ export function Planner({
                 <div
                   key={d.date}
                   className={`grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1.5 border-t border-rule px-4 py-2 sm:grid-cols-[120px_120px_1fr_210px_28px] ${
-                    isToday ? "bg-[#FBFAF6]" : ""
+                    isToday ? "bg-[var(--surface-hover)]" : ""
                   } ${outside ? "opacity-60" : ""}`}
                 >
-                  <div className={`text-sm ${isToday ? "font-medium" : past ? "text-[#7C786C]" : ""}`}>
+                  <div className={`text-sm ${isToday ? "font-medium" : past ? "text-[color:var(--text-tertiary)]" : ""}`}>
                     {dayName(d.date)}
                     {isToday && <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.1em]">today</span>}
                   </div>
                   <div className="relative">
-                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 font-mono text-[12px] text-[#7C786C]">R</span>
+                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 font-mono text-[12px] text-[color:var(--text-tertiary)]">R</span>
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -340,7 +340,7 @@ export function Planner({
                   <div className="col-span-2 whitespace-nowrap font-mono text-[12px] tabular-nums sm:col-span-1 sm:text-right">
                     {d.spent > 0 ? (
                       <>
-                        <span className="text-[#7C786C]">spent </span>
+                        <span className="text-[color:var(--text-tertiary)]">spent </span>
                         {zar(d.spent)}
                         {d.planned > 0 && (past || isToday) && (
                           <span
@@ -352,7 +352,7 @@ export function Planner({
                         )}
                       </>
                     ) : past ? (
-                      <span className="text-[#9A968B]">nothing spent</span>
+                      <span className="text-[color:var(--text-quiet)]">nothing spent</span>
                     ) : null}
                   </div>
                   <div className="hidden sm:block">
@@ -360,7 +360,7 @@ export function Planner({
                       <button
                         type="button"
                         onClick={() => copyToRestOfWeek(d.date, w.days)}
-                        className="text-[#9A968B] hover:text-ink"
+                        className="text-[color:var(--text-quiet)] hover:text-ink"
                         title="Same amount for the rest of this week"
                         aria-label={`Same amount for the rest of the week after ${dayName(d.date)}`}
                       >

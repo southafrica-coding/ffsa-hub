@@ -22,6 +22,9 @@ import {
   Target,
   Megaphone,
   UserCheck,
+  Car,
+  ClipboardList,
+  ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 
@@ -77,12 +80,49 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     requiredRoles: ["super_admin", "admin", "events_admin"],
   },
   {
+    // Hub Forms: forms with no event, plus a list of every event form.
+    // Same rule as /api/forms/[id] for forms with no event: admins, and
+    // comms_admin via sidebar-access.ts. Event forms stay on their event.
+    id: "forms",
+    label: "Forms",
+    href: "/forms",
+    icon: ClipboardList,
+    description: "Build forms, route answers, share links and read responses",
+    requiredRoles: ["super_admin", "admin", "comms_admin"],
+  },
+  {
     id: "bookings",
     label: "Bookings",
     href: "/bookings",
     icon: Building2,
     description: "Space bookings, vehicle reservations and equipment hire",
     requiredRoles: ["super_admin", "admin"], // others via bookings.* permissions
+  },
+  {
+    // Vehicle inspections, km and workshop visits (vehicles-module/HUB-PLAN.md).
+    // Shown to admins and to anyone with a fleet.* permission (the Vehicle
+    // Coordinator role), not to everyone who can book a vehicle.
+    id: "fleet",
+    label: "Fleet",
+    href: "/bookings/vehicles/fleet",
+    icon: Car,
+    description: "Vehicle inspections, km readings and workshop visits",
+    requiredRoles: ["super_admin", "admin"], // others via fleet.* permissions
+  },
+  {
+    // The Hub Store's staff side: products, PDF uploads, orders, fulfilment.
+    // Run by the Media team. Admins see it; anyone else needs store.manage
+    // or store.view (migration 412, module 'store').
+    // TODO(services): when Departments/Services lands, register this as
+    // service_key "store", owned("store", "media"), and move the nav entry
+    // into the Services panel instead of a second ownership model here.
+    // Buyers never get this: they have no users row or roles.
+    id: "store",
+    label: "Store",
+    href: "/store/admin",
+    icon: ShoppingBag,
+    description: "Products, reviews and merch, orders and fulfilment",
+    requiredRoles: ["super_admin", "admin"], // others via store.manage / store.view
   },
   {
     id: "schools",

@@ -270,7 +270,7 @@ export function BudgetLines({
         <div className="sm:text-right">
           <div className="mono-label mb-1">Budget</div>
           <div className="numeral text-[30px] leading-none">{zar(grandTotal)}</div>
-          <div className="mt-1.5 font-mono text-[11px] text-[#55524A]">
+          <div className="mt-1.5 font-mono text-[11px] text-[color:var(--text-muted)]">
             {teamSize > 0 && `${zar(grandTotal / teamSize)} per person · `}
             {followers === 0
               ? "no lines follow the team size"
@@ -337,15 +337,15 @@ export function BudgetLines({
                 <h4 className="font-medium">{category.name}</h4>
                 <div className="flex gap-4 font-mono text-[12px] tabular-nums">
                   <span>
-                    <span className="text-[#7C786C]">Planned </span>
+                    <span className="text-[color:var(--text-tertiary)]">Planned </span>
                     {zar(planned)}
                   </span>
                   <span>
-                    <span className="text-[#7C786C]">Spent </span>
+                    <span className="text-[color:var(--text-tertiary)]">Spent </span>
                     {zar(spent)}
                   </span>
                   <span className={left < 0 ? "text-destructive font-bold" : "text-grass-text"}>
-                    <span className="text-[#7C786C] font-normal">Left </span>
+                    <span className="text-[color:var(--text-tertiary)] font-normal">Left </span>
                     {zar(left)}
                   </span>
                 </div>
@@ -412,7 +412,7 @@ export function BudgetLines({
                     setEditingId(null);
                     setAddingIn(category.id);
                   }}
-                  className="block w-full border-t border-rule px-4 py-2 text-left font-mono text-[11px] uppercase tracking-[0.1em] text-[#7C786C] hover:bg-bone hover:text-ink"
+                  className="block w-full border-t border-rule px-4 py-2 text-left font-mono text-[11px] uppercase tracking-[0.1em] text-[color:var(--text-tertiary)] hover:bg-bone hover:text-ink"
                 >
                   + Add a line to {category.name}
                 </button>
@@ -426,15 +426,15 @@ export function BudgetLines({
           <span className="font-medium">Whole budget</span>
           <div className="flex gap-4 font-mono text-[13px] font-bold tabular-nums">
             <span>
-              <span className="font-normal text-[#7C786C]">Planned </span>
+              <span className="font-normal text-[color:var(--text-tertiary)]">Planned </span>
               {zar(grandTotal)}
             </span>
             <span>
-              <span className="font-normal text-[#7C786C]">Spent </span>
+              <span className="font-normal text-[color:var(--text-tertiary)]">Spent </span>
               {zar(totalSpent)}
             </span>
             <span className={grandTotal - totalSpent < 0 ? "text-destructive" : "text-grass-text"}>
-              <span className="font-normal text-[#7C786C]">Left </span>
+              <span className="font-normal text-[color:var(--text-tertiary)]">Left </span>
               {zar(grandTotal - totalSpent)}
             </span>
           </div>
@@ -469,14 +469,14 @@ function LineRow({
     <div className="group flex items-start gap-3 border-t border-rule px-4 py-2.5">
       <div className="min-w-0 flex-1">
         <div className="text-sm">{line.description}</div>
-        <div className="mt-0.5 font-mono text-[11px] text-[#55524A]">
+        <div className="mt-0.5 font-mono text-[11px] text-[color:var(--text-muted)]">
           {unpriced ? (
             <span className="text-amber">Not priced yet</span>
           ) : (
             <>
               {zarShort(Number(line.amount_zar))} × {num(line.frequency)} × {people}{" "}
               {people === 1 ? "person" : "people"}
-              {line.uses_team_size && <span className="text-[#7C786C]"> (whole team)</span>}
+              {line.uses_team_size && <span className="text-[color:var(--text-tertiary)]"> (whole team)</span>}
             </>
           )}
         </div>
@@ -531,7 +531,7 @@ function LineEditor({
 
   return (
     <form
-      className="space-y-3 bg-[#FBFAF6] px-4 py-3"
+      className="space-y-3 bg-[var(--surface-hover)] px-4 py-3"
       onSubmit={(e) => {
         e.preventDefault();
         onSave(d);
@@ -618,7 +618,7 @@ function LineEditor({
             )}
           </div>
         </Field>
-        <span className="hidden pb-2 font-mono text-[#7C786C] sm:block">=</span>
+        <span className="hidden pb-2 font-mono text-[color:var(--text-tertiary)] sm:block">=</span>
         <Field label="Total">
           <div className="flex h-9 items-center justify-end font-mono font-bold tabular-nums">{zar(total)}</div>
         </Field>
@@ -642,12 +642,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     // A div, not a <label>: a label wrapping a Radix Select re-opens it on
     // every click. The inputs carry their own aria-labels instead.
     <div className="block min-w-0">
-      <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.1em] text-[#55524A]">{label}</span>
+      <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.1em] text-[color:var(--text-muted)]">{label}</span>
       {children}
     </div>
   );
 }
 
 function Times() {
-  return <span className="hidden pb-2 font-mono text-[#7C786C] sm:block">×</span>;
+  return <span className="hidden pb-2 font-mono text-[color:var(--text-tertiary)] sm:block">×</span>;
 }

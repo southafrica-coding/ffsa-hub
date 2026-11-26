@@ -7,7 +7,7 @@ import type { ReactElement } from "react";
 import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
 import { colors } from "@/theme/tokens";
 import { themeFor } from "@/theme/use-theme";
 
@@ -23,6 +23,7 @@ jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
 jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "signedIn", session: { user: { id: "user-1" } } }) }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../api", () => ({ ...jest.requireActual("../api"), getMinistries: jest.fn(), getMinistry: jest.fn() }));
 let mockScheme: "light" | "dark" = "light";
 jest.mock("@/theme/use-theme", () => ({ ...jest.requireActual("@/theme/use-theme"), useTheme: () => jest.requireActual("@/theme/use-theme").themeFor(mockScheme) }));
@@ -78,13 +79,43 @@ describe("Ministry detail", () => {
     expect(audit()).toEqual([]);
   });
 
-  it("dark mode: rows use the dark theme's rule colour (no hard-coded colours)", async () => {
+  it("dark mode: the team list uses the dark theme's colours (no hard-coded colours)", async () => {
     mockScheme = "dark";
     expect(themeFor("dark").colors.rule).toBe(colors.dark.rule);
     one.mockResolvedValue(detail({ canManage: false }));
     await show(<MinistryDetailScreen id={MEDIA} />);
-    const row = await screen.findByTestId("member-__none__-m2");
-    expect(StyleSheet.flatten(row.props.style).borderBottomColor).toBe(colors.dark.rule);
+    const group = StyleSheet.flatten((await screen.findByTestId("group-__none__")).props.style);
+    expect(group.borderColor).toBe(colors.dark.rule);
+    expect(group.backgroundColor).toBe(colors.dark.raised);
+    expect(screen.getByTestId("member-__none__-m2")).toBeTruthy();
     expect(audit()).toEqual([]);
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("largest text: nothing important is capped or clipped", () => {
+  it("Ministries list", async () => {
+    const dims = atLargestText();
+    list.mockResolvedValue(ministryList({ scope: "all", canCreate: true, ministries: [ministry()] }));
+    await show(<MinistriesListScreen />);
+    await screen.findByRole("button", { name: /^Media/ });
+    // Deliberate clamp: the row's caption (people count · description) is 2 lines; the row's label reads it all.
+    expect(largeTextProblems(screen.container as never, ["4 people · Cameras and sound"])).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
+  });
+
+  it("Ministry team", async () => {
+    const dims = atLargestText();
+    one.mockResolvedValue(detail({ subcategories: [{ id: CAMS, name: "Cameras" }], roster: [member({ membershipId: "m2", name: "Bo Dube", status: "pending", categoryIds: [CAMS] })] }));
+    await show(<MinistryDetailScreen id={MEDIA} />);
+    expect(await screen.findByRole("header", { name: "Cameras, 1 person" })).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
   });
 });

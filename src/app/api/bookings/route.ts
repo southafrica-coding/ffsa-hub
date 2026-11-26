@@ -6,23 +6,25 @@ import { getAuthedUser } from "@/lib/api-auth";
 import {
   getBookingAccess,
   getVenueApproval,
-  getVenueBookingsBetween,
   insertBooking,
   insertBookings,
   insertSeries,
   deleteSeries,
 } from "@/services/bookings";
 import { weeklyOccurrenceDates } from "@/lib/bookings/recurrence";
-import { findConflicts, type BookingWindow } from "@/lib/bookings/conflicts";
 import {
-  describeConflict,
-  blockLead,
-  type Conflict,
-  type ExistingRow,
-} from "@/lib/bookings/conflict-messages";
+  canOverrideClash,
+  clashErrorResponse,
+  clashResponse,
+  findVenueClashes,
+  parseOverride,
+  serverError,
+} from "@/lib/bookings/clash-guard";
 
 type CreateBody = {
   dryRun?: boolean;
+  /** A space manager booking over a clash: { reason }. */
+  override?: { reason?: string } | null;
   venue_id?: string;
   ministry_id?: string | null;
   title?: string;
@@ -129,51 +131,28 @@ export async function POST(request: Request) {
     occurrences = [{ booking_date: bookingDate, end_date: endDate }];
   }
 
-  // ── Conflict scan over the window touched by this request ──
-  const allDates = occurrences
-    .flatMap((o) => [o.booking_date, o.end_date ?? o.booking_date])
-    .sort();
-  const rangeFrom = allDates[0];
-  const rangeTo = allDates[allDates.length - 1];
-
-  const { data: existingRaw } = await getVenueBookingsBetween(
-    supabase,
-    venueId,
-    rangeFrom,
-    rangeTo
-  );
-  const existing = (existingRaw ?? []) as ExistingRow[];
-
-  const conflicts: Conflict[] = [];
-  for (const occ of occurrences) {
-    const candidate: BookingWindow = {
-      id: "",
-      venue_id: venueId,
-      booking_date: occ.booking_date,
-      end_date: occ.end_date,
-      status: "pending",
-      ...times,
-    };
-    for (const c of findConflicts(candidate, existing)) {
-      conflicts.push(describeConflict(occ.booking_date, c as ExistingRow));
-    }
-  }
-
-  // On an auto-confirm space there's no manager to catch a clash, so a clash is
-  // a HARD BLOCK (no silent double-booking). On approval-required spaces a clash
-  // stays a warning — the manager reviews it in the queue.
-  const blocked = willAutoConfirm && conflicts.length > 0;
+  // ── Clash check over every date this request would hold ──
+  // A clash is refused on every space, approval-required or not (the database
+  // refuses it too, migration 403). Only a space manager can book over one,
+  // with a reason.
+  const canOverride = canOverrideClash(access);
+  const candidates = occurrences.map((o) => ({ ...o, ...times }));
+  const findClashes = () => findVenueClashes(supabase, venueId, candidates);
+  const conflicts = await findClashes();
+  const blocked = conflicts.length > 0;
 
   if (body.dryRun) {
-    return NextResponse.json({ ok: true, conflicts, autoConfirm: willAutoConfirm, blocked });
+    return NextResponse.json({ ok: true, conflicts, autoConfirm: willAutoConfirm, blocked, canOverride });
   }
 
-  if (blocked) {
-    return NextResponse.json(
-      { error: blockLead(conflicts), conflicts, blocked: true },
-      { status: 409 }
-    );
+  const override = parseOverride(body, access);
+  if ("response" in override) return override.response;
+  if (blocked && !override.reason) {
+    return clashResponse(conflicts, venue.name, canOverride);
   }
+  const overrideFields = override.reason ? { clash_override_reason: override.reason } : {};
+  const refused = (err: { code?: string; message?: string } | null) =>
+    clashErrorResponse(err, { recheck: findClashes, venueName: venue.name, canOverride });
 
   // ── Persist ──
   let requesterName = nn(body.requester_name);
@@ -220,10 +199,7 @@ export async function POST(request: Request) {
     });
 
     if (seriesErr || !series) {
-      return NextResponse.json(
-        { error: seriesErr?.message ?? "Failed to create series" },
-        { status: 500 }
-      );
+      return serverError("create series", seriesErr, "Could not create the booking.");
     }
 
     const rows = occurrences.map((o) => ({
@@ -233,6 +209,7 @@ export async function POST(request: Request) {
       end_date: null,
       status,
       ...decision,
+      ...overrideFields,
       requested_by: user.id,
       requester_name: requesterName,
     }));
@@ -241,7 +218,10 @@ export async function POST(request: Request) {
     if (occErr) {
       // Best-effort cleanup so we don't leave an empty series behind.
       await deleteSeries(supabase, series.id);
-      return NextResponse.json({ error: occErr.message }, { status: 500 });
+      return (
+        (await refused(occErr)) ??
+        serverError("create series dates", occErr, "Could not create the booking.")
+      );
     }
 
     after(syncBookingAlerts); // prayer-room DM alerts (Auditorium over devo sets)
@@ -264,15 +244,15 @@ export async function POST(request: Request) {
     end_date: occurrences[0].end_date,
     status,
     ...decision,
+    ...overrideFields,
     requested_by: user.id,
     requester_name: requesterName,
   });
 
   if (bookingErr || !booking) {
-    return NextResponse.json(
-      { error: bookingErr?.message ?? "Failed to create booking" },
-      { status: 500 }
-    );
+    const mapped = await refused(bookingErr);
+    if (mapped) return mapped;
+    return serverError("create booking", bookingErr, "Could not create the booking.");
   }
 
   after(syncBookingAlerts); // prayer-room DM alerts (Auditorium over devo sets)

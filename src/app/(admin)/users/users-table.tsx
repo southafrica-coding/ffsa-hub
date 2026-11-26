@@ -215,7 +215,7 @@ const STAGE_STYLES: Record<
     className: "",
     style: {
       borderColor: "#FFF4D9",
-      color: "#0A0A0A",
+      color: "var(--text-primary)",
       background: "var(--yellow-dim)",
     },
   },

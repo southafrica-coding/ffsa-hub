@@ -10,11 +10,11 @@ It is an **independent app**: its own `package.json`, lockfile, `node_modules`, 
 
 - Sign-in (email + password), session restored on launch.
 - **Bottom tab bar**: Home · Finance · Prayer · Tickets · Me.
-- **Home**: the "needs you" feed (`GET /api/notifications`, the same items as the web dashboard), one yellow band when something is unread, grouped list (Needs you / Earlier), mark read, pull-to-refresh, offline copy, shortcuts.
+- **Home**: the "needs you" feed (`GET /api/notifications`, the same items as the web dashboard), one yellow band when something is unread, grouped list (Needs you / Earlier), mark read, pull-to-refresh, offline copy, shortcuts (redesigned in R2: `LargeTitleScrollView`, the band and skeleton in `src/features/home/ui.tsx`, shortcuts as a kit `ListGroup`).
 - **Finance** (my finance, receipt capture, offline outbox), **Prayer** (week, set sheet, practice, my sets) and **Tickets** (my tickets, staff door check-in).
 - **Bookings** (spaces, vehicles, approvals, collect/return photos) and **My Schools** (enrolments, attendance, read-only): not tabs, opened from Home's shortcuts.
 - **Me**: name, email, roles; edit name and phone; notification settings; **Appearance** (Match phone / Light / Dark); **Documents** (household, driver's licence, passport photo, health insurance, and the staff CV for staff: `src/features/me/screens/`); a "More on the website" link and the privacy policy; app version; sign out (this phone only).
-- The design tokens and a small component kit (`Button`, `Text`, `Screen`, `TextField`, `Banner` incl. the yellow "needs you" band, `Divider`, `Masthead`).
+- The design tokens and the component kit in `src/components` (redesign R1: `LargeTitle`, `NeedsYouBand`, `ListGroup`/`ListRow`, `SectionHeader`, `StatusChip`, `Button`, `Banner`, `TextField`, `SegmentedControl`, `Sheet`, `PhotoSlot`, `EmptyState`, `Skeleton`, `MoneyText`, `WebHint`, `Toggle`, plus `Text`, `Screen`, `Divider`). See `docs/redesign-kit.md`.
 - Final app icon and splash (Option 1, "Signature": black FF mark on `#FFB801`).
 
 Planning docs (plan, feature inventory, API surface, permissions, design tokens, store accounts) are in [`docs/`](docs/); decisions are at the end of [`docs/plan.md`](docs/plan.md).
@@ -47,7 +47,7 @@ Only the shell edits `app/(app)/_layout.tsx` (the tab bar). The bar matches a ro
 
 These gates are **for the interface only**. Hiding a button protects nothing: the API and Supabase RLS decide, and the app must handle a `403` gracefully (show a "not available on your account" state).
 
-Also exported for any slice: `SectionBar` (black section header), `BarAction`, `ListRow` (56dp row, push / opens-in-browser variants), `StateMessage` (empty / no-access), `SkeletonRows` (static loading placeholder, no motion).
+Screens are built from the component kit in `src/components` (rows, section titles, bands, sheets, load states, form controls): see `docs/redesign.md` for the kit and how to build a screen in the redesign style.
 
 **Strings** live in one file per feature (`src/features/<feature>/strings.ts`) so translation can come later.
 
@@ -144,7 +144,7 @@ assets/                  icon, adaptive icon, splash, favicon, notification icon
 
 ### Design tokens
 
-`src/theme/tokens.ts` is the single source of truth; `tailwind.config.ts` and the component kit both read it. Light follows the web; **dark is new** (see Appearance below). Corner radius is one token (`radius.default`, currently 2) until Jack chooses. Touch targets are 48dp minimum, labels never go below 11, and all text follows the OS font-size setting.
+`src/theme/tokens.ts` is the single source of truth; `tailwind.config.ts` and the component kit both read it. Light follows the web; **dark is new** (see Appearance below). Corners are 6pt on controls (`radius.control`) and 8pt on cards, sheets and the band (`radius.card`). Touch targets are 48dp (44 is the floor), nothing goes below 11pt, and all text follows the OS font-size setting (only the big display sizes are capped).
 
 Use the kit or NativeWind classes (`className="gap-4"`, `bg-surface dark:bg-surface-dark`). Tailwind's default colours and radii are removed on purpose, so off-brand classes don't exist.
 
@@ -197,4 +197,4 @@ Built with the **Expo push service** (one server call reaches Apple APNs and Goo
 - Deep links: `scheme: ffsahub` and `applinks:www.ffsahub.com` are declared, but the app doesn't handle any links yet. "Forgot password?" opens the website in the browser.
 - Push notifications are built (see "Push notifications" above) but stay off until Jack does the setup marked **needs Jack**. No biometrics yet.
 - The web is light-only, so pages opened in the in-app browser stay light in dark mode.
-- The web's tertiary grey (`#7C786C`) is 4.4:1 on white, just under WCAG AA for body text, so the app only uses it for large text and decoration.
+- The app's tertiary grey is `#6B675D` (5.6:1 on white) since the redesign, so it is safe for body-size captions. (The web's `#7C786C` was 4.4:1.)

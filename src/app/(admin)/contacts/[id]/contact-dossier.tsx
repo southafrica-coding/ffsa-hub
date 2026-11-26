@@ -367,7 +367,7 @@ function Stat({ n, label, icon }: { n: number; label: string; icon: ReactNode })
       style={{
         borderColor: active ? GOLD : undefined,
         background: active ? "var(--yellow-dim)" : undefined,
-        color: active ? undefined : "#45423B",
+        color: active ? undefined : "var(--text-secondary)",
       }}
     >
       <span style={{ color: active ? GOLD : "inherit" }}>{icon}</span>

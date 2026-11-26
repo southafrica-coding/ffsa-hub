@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Roboto, Roboto_Condensed, Roboto_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { NO_FLASH_SCRIPT } from "@/lib/theme/no-flash-script";
 import "./globals.css";
 
 const roboto = Roboto({
@@ -47,7 +48,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${roboto.variable} ${robotoCondensed.variable} ${robotoMono.variable}`}>
+    // suppressHydrationWarning: the script below adds the `dark` class to
+    // <html> before React hydrates, so the server and client class lists
+    // legitimately differ on this one element.
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${roboto.variable} ${robotoCondensed.variable} ${robotoMono.variable}`}
+    >
+      <head>
+        {/* Light / Dark, applied before first paint on every page. */}
+        <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
+      </head>
       <body className={roboto.className}>
         {children}
         <Toaster />

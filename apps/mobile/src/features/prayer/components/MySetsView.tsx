@@ -1,8 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { Lock } from "lucide-react-native";
+import { useState } from "react";
 import { View } from "react-native";
 
-import { Banner, Button, Text } from "@/components";
-import { ListRow, SectionBar, SkeletonRows, StateMessage, openWebPage } from "@/features/shell";
+import { Button, EmptyState, FadeIn, ListGroup, ListRow, NeedsYouBand, SectionHeader, SkeletonList, Text } from "@/components";
+import { openWebPage } from "@/features/shell";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { respondToInvite, type Invite } from "../api";
@@ -23,14 +25,23 @@ import {
 } from "../logic";
 import { strings } from "../strings";
 
-import { Frame } from "./Frame";
+import { Frame, type PrayerNav } from "./Frame";
 import { SetSheet } from "./SetSheet";
 import { ActionNotice, ErrorState } from "./ui";
 
+/** An empty section's one calm line. */
+function Quiet({ children }: { children: string }) {
+  return (
+    <Text variant="caption" tone="secondary">
+      {children}
+    </Text>
+  );
+}
+
 /**
- * My commitments (the web's "My sets" tab, frame 11b's "Mine"): invitations
- * waiting on an answer, the sets I set up, and the sets I'm serving in. The
- * yellow band here is the invitations, the one thing waiting on this person.
+ * My commitments (frame 4.7): invitations waiting on an answer, the sets I'm
+ * serving in, the sets I set up, then what's on the website. The yellow band
+ * here is the invitations, the one thing waiting on this person.
  */
 export function MySetsView({
   nav,
@@ -38,7 +49,7 @@ export function MySetsView({
   access,
   now,
 }: {
-  nav: ReactNode;
+  nav: PrayerNav;
   userId: string | null;
   access: PrayerAccess;
   now: () => Date;
@@ -82,32 +93,34 @@ export function MySetsView({
 
   const more = (
     <View>
-      <SectionBar label={strings.mine.more} />
-      <ListRow title={strings.mine.join} trailing="web" onPress={() => openWebPage("/prayer-room", colors)} testID="join-on-web" />
-      {access.showEvaluatorTools ? (
-        <ListRow
-          title={strings.mine.evaluator}
-          trailing="web"
-          onPress={() => openWebPage("/prayer-room", colors)}
-          testID="evaluator-tools"
-        />
-      ) : null}
+      <SectionHeader title={strings.mine.more} inset={false} tight />
+      <ListGroup inset={false}>
+        <ListRow title={strings.mine.join} trailing="web" onPress={() => openWebPage("/prayer-room", colors)} testID="join-on-web" />
+        {access.showEvaluatorTools ? (
+          <ListRow
+            title={strings.mine.evaluator}
+            trailing="web"
+            onPress={() => openWebPage("/prayer-room", colors)}
+            testID="evaluator-tools"
+          />
+        ) : null}
+      </ListGroup>
     </View>
   );
 
   if (state.status === "loading") {
     return (
-      <Frame context={strings.segments.mine} nav={nav}>
-        <SkeletonRows count={4} label={strings.mine.loading} />
+      <Frame nav={nav}>
+        <SkeletonList count={4} label={strings.mine.loading} inset={false} />
       </Frame>
     );
   }
 
   if (state.status === "error") {
     return (
-      <Frame context={strings.segments.mine} nav={nav} onRefresh={retry}>
+      <Frame nav={nav} onRefresh={retry}>
         {isForbidden(state.error) ? (
-          <StateMessage title={strings.errors.forbiddenTitle} body={strings.errors.forbiddenBody} testID="forbidden" />
+          <EmptyState icon={Lock} title={strings.errors.forbiddenTitle} body={strings.errors.forbiddenBody} testID="forbidden" />
         ) : (
           <ErrorState message={friendlyError(state.error)} onRetry={retry} />
         )}
@@ -121,94 +134,107 @@ export function MySetsView({
   const serving = roster.filter((r) => r.set && r.set.set_date >= today && r.set.status !== "cancelled");
 
   return (
-    <Frame context={strings.segments.mine} nav={nav} onRefresh={reload} refreshing={refreshing}>
+    <Frame nav={nav} onRefresh={reload} refreshing={refreshing}>
       {invites.length > 0 ? (
-        <Banner tone="needsYou" testID="invites-band">
-          {strings.mine.invitationsBand(invites.length)}
-        </Banner>
+        <NeedsYouBand testID="invites-band" eyebrow={strings.mine.needsYou} text={strings.mine.invitationsBand(invites.length)} />
       ) : null}
       <ActionNotice result={result} />
 
-      <View>
-        <SectionBar label={strings.mine.invitations} />
-        {invites.length === 0 ? <Text tone="secondary" style={{ paddingVertical: 12 }}>{strings.mine.noInvitations}</Text> : null}
-        {invites.map((inv) => {
-          const label = seatLabel(inv, seatTypes);
-          const s = inv.set;
-          return (
-            <View key={inv.id} testID={`invite-${inv.id}`} style={{ paddingVertical: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: colors.rule }}>
-              <View
-                accessible
-                accessibilityLabel={
-                  s
-                    ? `${label} on ${setTitle(s)}, ${spokenDate(s.set_date)}, ${spokenTimeRange(s.start_time, s.end_time)}${s.owner ? `, from ${fullName(s.owner)}` : ""}`
-                    : label
-                }
-              >
-                <Text variant="bodyStrong">{s ? strings.mine.roleOn(label, setTitle(s)) : label}</Text>
-                {s ? (
-                  <Text variant="caption" tone="secondary">
-                    {dayLabel(s.set_date)} · {timeRange(s.start_time, s.end_time)}
-                    {s.owner ? ` · ${fullName(s.owner)}` : ""}
-                  </Text>
-                ) : null}
-              </View>
-              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-                <Button
-                  label={strings.set.accept}
-                  onPress={() => respond(inv, "accept")}
-                  loading={busy === inv.id}
-                  disabled={!!busy}
-                  accessibilityLabel={`${strings.set.accept} ${label}`}
-                />
-                <Button
-                  label={strings.set.decline}
-                  variant="secondary"
-                  onPress={() => respond(inv, "decline")}
-                  disabled={!!busy}
-                  accessibilityLabel={`${strings.set.decline} ${label}`}
-                />
-              </View>
-            </View>
-          );
-        })}
-      </View>
+      <FadeIn style={{ gap: space.md }}>
+        <View>
+          <SectionHeader title={strings.mine.invitations} inset={false} tight />
+          {invites.length === 0 ? (
+            <Quiet>{strings.mine.noInvitations}</Quiet>
+          ) : (
+            <ListGroup inset={false}>
+              {invites.map((inv) => {
+                const label = seatLabel(inv, seatTypes);
+                const s = inv.set;
+                return (
+                  <View key={inv.id} testID={`invite-${inv.id}`} style={{ paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.sm }}>
+                    <View
+                      accessible
+                      accessibilityLabel={
+                        s
+                          ? `${label} on ${setTitle(s)}, ${spokenDate(s.set_date)}, ${spokenTimeRange(s.start_time, s.end_time)}${s.owner ? `, from ${fullName(s.owner)}` : ""}`
+                          : label
+                      }
+                    >
+                      <Text variant="rowTitle">{s ? strings.mine.roleOn(label, setTitle(s)) : label}</Text>
+                      {s ? (
+                        <Text variant="caption" tone="secondary">
+                          {dayLabel(s.set_date)} · {timeRange(s.start_time, s.end_time)}
+                          {s.owner ? ` · ${fullName(s.owner)}` : ""}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
+                      <Button
+                        label={strings.set.accept}
+                        size="small"
+                        onPress={() => respond(inv, "accept")}
+                        loading={busy === inv.id}
+                        disabled={!!busy}
+                        accessibilityLabel={`${strings.set.accept} ${label}`}
+                      />
+                      <Button
+                        label={strings.set.decline}
+                        variant="secondary"
+                        size="small"
+                        onPress={() => respond(inv, "decline")}
+                        disabled={!!busy}
+                        accessibilityLabel={`${strings.set.decline} ${label}`}
+                      />
+                    </View>
+                  </View>
+                );
+              })}
+            </ListGroup>
+          )}
+        </View>
 
-      <View>
-        <SectionBar label={strings.mine.serving} />
-        {serving.length === 0 ? <Text tone="secondary" style={{ paddingVertical: 12 }}>{strings.mine.noServing}</Text> : null}
-        {serving.map((r) => (
-          <ListRow
-            key={r.id}
-            testID={`serving-${r.id}`}
-            title={strings.mine.roleOn(seatLabel(r, seatTypes), setTitle(r.set!))}
-            subtitle={`${dayLabel(r.set!.set_date)} · ${timeRange(r.set!.start_time, r.set!.end_time)}`}
-            accessibilityHint={strings.set.openHint}
-            onPress={() => setOpenId(r.set!.id)}
-          />
-        ))}
-      </View>
+        <View>
+          <SectionHeader title={strings.mine.serving} inset={false} tight />
+          {serving.length === 0 ? (
+            <Quiet>{strings.mine.noServing}</Quiet>
+          ) : (
+            <ListGroup inset={false}>
+              {serving.map((r) => (
+                <ListRow
+                  key={r.id}
+                  testID={`serving-${r.id}`}
+                  title={strings.mine.roleOn(seatLabel(r, seatTypes), setTitle(r.set!))}
+                  subtitle={`${dayLabel(r.set!.set_date)} · ${timeRange(r.set!.start_time, r.set!.end_time)}`}
+                  accessibilityHint={strings.set.openHint}
+                  onPress={() => setOpenId(r.set!.id)}
+                />
+              ))}
+            </ListGroup>
+          )}
+        </View>
 
-      <View>
-        <SectionBar label={strings.mine.leading} />
-        {leading.length === 0 ? <Text tone="secondary" style={{ paddingVertical: 12 }}>{strings.mine.noLeading}</Text> : null}
-        {leading.map((s) => (
-          <ListRow
-            key={s.id}
-            testID={`leading-${s.id}`}
-            title={setTitle(s)}
-            subtitle={`${dayLabel(s.set_date)} · ${timeRange(s.start_time, s.end_time)}${s.series_id ? ` · ${strings.set.repeats}` : ""}`}
-            accessibilityHint={strings.set.openHint}
-            onPress={() => setOpenId(s.id)}
-          />
-        ))}
-      </View>
+        <View>
+          <SectionHeader title={strings.mine.leading} inset={false} tight />
+          {leading.length === 0 ? (
+            <Quiet>{strings.mine.noLeading}</Quiet>
+          ) : (
+            <ListGroup inset={false}>
+              {leading.map((s) => (
+                <ListRow
+                  key={s.id}
+                  testID={`leading-${s.id}`}
+                  title={setTitle(s)}
+                  subtitle={`${dayLabel(s.set_date)} · ${timeRange(s.start_time, s.end_time)}${s.series_id ? ` · ${strings.set.repeats}` : ""}`}
+                  accessibilityHint={strings.set.openHint}
+                  onPress={() => setOpenId(s.id)}
+                />
+              ))}
+            </ListGroup>
+          )}
+        </View>
+      </FadeIn>
 
       {more}
-
-      <Text variant="caption" tone="secondary">
-        {strings.mine.calendarLater}
-      </Text>
 
       <SetSheet
         setId={openId}

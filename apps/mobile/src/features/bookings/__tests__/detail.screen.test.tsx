@@ -13,6 +13,7 @@ import SpaceDetailScreen from "../screens/SpaceDetailScreen";
 import VehicleDetailScreen, { checkState } from "../screens/VehicleDetailScreen";
 import { strings } from "../strings";
 import { spaceBooking, vehicleBooking } from "../__fixtures__/fixtures";
+import { newFormItem } from "../outbox/state";
 import { fakeOutbox, inSafeArea, perm, type FakeOutbox } from "../__fixtures__/screen-mocks";
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn() };
@@ -29,6 +30,7 @@ jest.mock("@react-native-community/datetimepicker", () => ({ __esModule: true, d
 let mockMeState: MeState;
 jest.mock("@/features/shell", () => ({ ...jest.requireActual("@/features/shell"), useMe: () => mockMeState }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../data", () => ({ ...jest.requireActual("../data"), loadSpaceBooking: jest.fn(), loadVehicleBooking: jest.fn() }));
 jest.mock("../client", () => ({ bookingsFetch: jest.fn() }));
 jest.mock("../capture", () => ({
@@ -322,5 +324,122 @@ describe("Collection / return check", () => {
     expect(photoSections("collection", { washed: true, fuelFull: true })).toEqual(["license", "damage_photo"]);
     expect(photoSections("return", { washed: true, fuelFull: true })).toEqual(["carwash_receipt", "fuel_gauge", "damage_photo"]);
     expect(attachedCounts([{ id: "a", kind: "fuel_gauge" }, { id: "b", kind: "fuel_gauge" }], new Set(["b"]))).toEqual({ fuel_gauge: 1 });
+  });
+});
+
+describe("Detail screens: the redesign (7.4, 7.11, 7.13, 7.14)", () => {
+  const approved = () => ({
+    booking: vehicleBooking({
+      status: "approved",
+      assignments: [
+        { vehicle: { id: "veh1", name: "Quantum", registration_plate: "CA 123" } },
+        { vehicle: { id: "veh2", name: "Polo", registration_plate: null } },
+      ],
+      drivers: [{ id: "d1", user_id: "p1", name: "Sam Driver" }],
+    }),
+    inspections: [],
+  });
+
+  it("space: the status chip, a pushed header back to Bookings, and the weekly-series line", async () => {
+    spaceLoad.mockResolvedValue(spaceBooking({ status: "approved", series_id: "ser1", setup_time: "17:30:00" }));
+    await render(inSafeArea(<SpaceDetailScreen id="sb1" />));
+    expect(await screen.findByRole("header", { name: "Youth night" })).toBeTruthy();
+    expect(screen.getByTestId("status-approved")).toBeTruthy();
+    expect(screen.getByText(strings.detail.repeats)).toBeTruthy();
+    expect(screen.getByLabelText("Set-up: 17:30")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Bookings" }));
+    expect(mockRouter.replace).toHaveBeenCalledWith("/bookings");
+  });
+
+  it("space approver: says it's checking for clashes before the answer comes", async () => {
+    signedInAs(["bookings.view", "bookings.approve"]);
+    spaceLoad.mockResolvedValue(spaceBooking({ requested_by: "someone-else" }));
+    fetchMock.mockImplementation(() => new Promise(() => {}));
+    await render(inSafeArea(<SpaceDetailScreen id="sb1" />));
+    expect(await screen.findByText(strings.detail.clashChecking)).toBeTruthy();
+    expect(screen.getByRole("header", { name: strings.detail.decisionTitle })).toBeTruthy();
+    expect(screen.getByRole("button", { name: strings.detail.approve })).toBeTruthy();
+    expect(screen.getByRole("button", { name: strings.detail.decline })).toBeTruthy();
+  });
+
+  it("vehicle manager (7.4): the licence re-check line and 'Assign vehicles on the website'", async () => {
+    signedInAs(["vehicles.view", "vehicles.manage"]);
+    vehicleLoad.mockResolvedValue({ booking: vehicleBooking({ requested_by: "someone-else", drivers: [] }), inspections: [] });
+    await render(inSafeArea(<VehicleDetailScreen id="vb1" />));
+    expect(await screen.findByText(strings.decision.licenceHint)).toBeTruthy();
+    expect(screen.getByRole("link", { name: new RegExp(strings.detail.assignOnWeb) })).toBeTruthy();
+    expect(screen.getByText(strings.detail.noDrivers)).toBeTruthy();
+    expect(screen.getByRole("header", { name: `${strings.detail.drivers}, 0` })).toBeTruthy();
+    // Managers can cancel any booking.
+    expect(screen.getByTestId("cancel")).toBeTruthy();
+  });
+
+  it("vehicle (7.14): a collection saved on this phone says so, hides its button and lists the unsent item", async () => {
+    vehicleLoad.mockResolvedValue(approved());
+    mockOutbox = fakeOutbox([newFormItem({ userId: "user-1", bookingId: "vb1", bookingName: "Airport run", inspectionKind: "collection" }, {} as never, 1, "f1")]);
+    await render(inSafeArea(<VehicleDetailScreen id="vb1" />));
+    expect(await screen.findByText(strings.detail.checkQueued)).toBeTruthy();
+    expect(screen.queryByTestId("record-collection")).toBeNull();
+    expect(screen.getByTestId("record-return")).toBeTruthy();
+    expect(screen.getByText(strings.detail.checkNotRecorded)).toBeTruthy();
+    expect(screen.getByRole("header", { name: strings.queue.title })).toBeTruthy();
+    expect(screen.getByText(`${strings.queue.form("collection")} · Airport run`)).toBeTruthy();
+    expect(screen.getByRole("link", { name: new RegExp(strings.detail.agreement) })).toBeTruthy();
+  });
+
+  it("vehicle: cancel asks 'Keep it' / 'Yes, cancel' first", async () => {
+    const alert = jest.spyOn(Alert, "alert").mockImplementationOnce(() => {});
+    vehicleLoad.mockResolvedValue(approved());
+    await render(inSafeArea(<VehicleDetailScreen id="vb1" />));
+    await fireEvent.press(await screen.findByTestId("cancel"));
+    const buttons = alert.mock.calls[0][2] as { text: string }[];
+    expect(buttons.map((b) => b.text)).toEqual([strings.detail.keep, strings.detail.cancelYes]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("collection (7.5, 7.12): vehicle chips when more than one is assigned, all 17 damage panels and the inventory", async () => {
+    vehicleLoad.mockResolvedValue(approved());
+    await render(inSafeArea(<InspectionScreen bookingId="vb1" kind="collection" />));
+    expect(await screen.findByRole("radio", { name: "Quantum: CA 123" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Polo" })).toBeTruthy();
+    expect(screen.getByRole("header", { name: strings.inspection.damage })).toBeTruthy();
+    expect(screen.getByText(strings.inspection.damageHint)).toBeTruthy();
+    expect(screen.getByRole("header", { name: strings.inspection.inventory })).toBeTruthy();
+    // 17 panels + the inventory + the one declaration.
+    expect(screen.getAllByRole("checkbox").length).toBeGreaterThanOrEqual(17 + 1);
+    expect(screen.getByTestId("photos-license")).toBeTruthy();
+    expect(screen.getByTestId("photos-damage_photo")).toBeTruthy();
+    expect(screen.getAllByText(strings.inspection.noPhotos)).toHaveLength(2);
+    expect(screen.getByRole("link", { name: new RegExp(strings.inspection.terms) })).toBeTruthy();
+    expect(screen.queryByTestId("truthful")).toBeNull();
+    expect(screen.getByRole("button", { name: strings.inspection.submit("collection") })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Airport run" }));
+    expect(mockRouter.back).toHaveBeenCalled();
+  });
+
+  it("return (7.13): returned-on date, the three condition ticks and both return declarations; no damage panels", async () => {
+    vehicleLoad.mockResolvedValue({ ...approved(), inspections: [{ id: "i", kind: "collection", mileage: 1, performed_at: "2026-11-10", damage_panels: [] }] });
+    await render(inSafeArea(<InspectionScreen bookingId="vb1" kind="return" />));
+    expect(await screen.findByRole("header", { name: strings.inspection.condition })).toBeTruthy();
+    expect(screen.getByRole("button", { name: new RegExp(`^${strings.inspection.checkinDate}: `) })).toBeTruthy();
+    expect(screen.queryByTestId("damage-panels")).toBeNull();
+    expect(screen.getByTestId("truthful")).toBeTruthy();
+    expect(screen.getByTestId("permission")).toBeTruthy();
+    expect(screen.getByTestId("agree")).toBeTruthy();
+    // The fuel-gauge section appears only once its box is ticked.
+    expect(screen.queryByTestId("photos-fuel_gauge")).toBeNull();
+    await fireEvent.press(screen.getByTestId("fuel"));
+    expect(screen.getByTestId("photos-fuel_gauge")).toBeTruthy();
+    expect(screen.getByRole("button", { name: strings.inspection.submit("return") })).toBeTruthy();
+  });
+
+  it("a licence photo is queued under its own section the moment it's taken", async () => {
+    vehicleLoad.mockResolvedValue(approved());
+    mockOutbox.onProcess = (items) => items; // nothing leaves the phone
+    await render(inSafeArea(<InspectionScreen bookingId="vb1" kind="collection" />));
+    await screen.findByTestId("mileage");
+    await fireEvent.press(screen.getByRole("button", { name: `${strings.inspection.takePhoto}: ${strings.inspection.photos.license}` }));
+    await waitFor(() => expect(mockOutbox.add).toHaveBeenCalledTimes(1));
+    expect(mockOutbox.add.mock.calls[0][0]).toMatchObject({ kind: "photo", photoKind: "license" });
   });
 });

@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
-import { Banner, Button, Text } from "@/components";
-import { hairline, touch } from "@/theme/tokens";
+import { Banner, Button, Sheet, Text, selectionHaptic } from "@/components";
+import { fontFamily, hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { bookStation, cancelPracticeBooking, type PracticeBooking, type PracticeWeek } from "../api";
@@ -20,12 +21,13 @@ import {
 } from "../practice-logic";
 import { strings } from "../strings";
 
-import { ActionNotice, LabelRow, Sheet } from "./ui";
+import { ActionNotice, LabelRow } from "./ui";
 
 /**
- * Booking a station (web frame 36b) for yourself: pick a free station, 30 or
- * 60 minutes, book. Your own bookings in the row can be cancelled here too.
- * A full band, or a vocal group with other singers, is booked on the website.
+ * Booking a station (frame 4.5) for yourself: pick a free station from the
+ * two-column grid, 30 or 60 minutes, book. Your own bookings in the row can
+ * be cancelled here too. A full band, or a vocal group with other singers, is
+ * booked on the website.
  */
 export function PracticeSheet({
   week,
@@ -139,7 +141,9 @@ function Body({
         <Banner tone="info" title={strings.practice.band(b.band_name ?? "")}>
           {strings.practice.bandRoom}
         </Banner>
-        <Text tone="secondary">{timeRange(b.start_time, b.end_time)}</Text>
+        <Text variant="caption" tone="secondary">
+          {timeRange(b.start_time, b.end_time)}
+        </Text>
         {stations.map((s) => {
           const on = b.people.filter((p) => p.station_id === s.id);
           return (
@@ -147,18 +151,20 @@ function Body({
               key={s.id}
               accessible
               accessibilityLabel={strings.a11y.bandStation(s.label, on.length ? on.map((p) => p.full_name).join(", ") : strings.practice.nobody)}
-              style={{ flexDirection: "row", gap: 12, paddingVertical: 8, borderBottomWidth: hairline, borderBottomColor: colors.rule }}
+              style={{ flexDirection: "row", gap: space.md, paddingVertical: space.sm, borderBottomWidth: hairline, borderBottomColor: colors.rule }}
             >
-              <Text variant="label" tone="secondary" style={{ minWidth: 104, maxWidth: "45%", flexShrink: 1 }}>
+              <Text variant="label" style={{ minWidth: 96, maxWidth: "45%", flexShrink: 1, paddingTop: 2 }}>
                 {s.label}
               </Text>
-              <Text style={{ flex: 1 }}>{on.length ? on.map((p) => p.full_name).join(", ") : strings.practice.nobody}</Text>
+              <Text variant={on.length ? "sectionTitle" : "caption"} tone={on.length ? "default" : "secondary"} style={{ flex: 1 }}>
+                {on.length ? on.map((p) => p.full_name).join(", ") : strings.practice.nobody}
+              </Text>
             </View>
           );
         })}
         <ActionNotice result={result} />
         {canCancel(b, userId, week) ? (
-          <Button label={strings.practice.cancelBooking} variant="destructive" onPress={() => cancel(b)} loading={busy === b.id} />
+          <Button label={strings.practice.cancelBooking} variant="danger" onPress={() => cancel(b)} loading={busy === b.id} />
         ) : null}
       </>
     );
@@ -167,83 +173,89 @@ function Body({
   return (
     <>
       <LabelRow label={strings.practice.pickStation} right={strings.practice.takenCount(row.byStation.size, stations.length)} />
+      {/* Two columns (frame 4.5); a cell grows with its text. */}
       <View accessibilityRole="radiogroup" style={{ gap: 6 }}>
-        {stations.map((s) => {
-          const b = row.byStation.get(s.id);
-          if (b) {
-            const mine = isMine(b, userId);
-            const who = mine ? strings.set.you : bookingNames(b);
-            return (
-              <View
-                key={s.id}
-                testID={`station-${s.id}`}
-                accessible={!canCancel(b, userId, week)}
-                accessibilityLabel={strings.practice.stationA11y(s.label, strings.practice.taken(who))}
-                style={{
-                  minHeight: touch.minTarget,
-                  padding: 10,
-                  gap: 6,
-                  backgroundColor: colors.surface,
-                  borderWidth: mine ? 2 : hairline,
-                  borderColor: mine ? colors.text : colors.rule,
-                }}
-              >
-                <Text variant="label" tone="secondary">
-                  {s.label}
-                </Text>
-                <Text variant={mine ? "bodyStrong" : "body"} tone={mine ? "default" : "secondary"}>
-                  {strings.practice.taken(who)}
-                  {b.end_time > hhmm(start + slot) ? strings.practice.until(b.end_time) : ""}
-                </Text>
-                {canCancel(b, userId, week) ? (
-                  <View style={{ flexDirection: "row" }}>
-                    <Button
-                      label={strings.practice.cancelBooking}
-                      variant="destructive"
-                      onPress={() => cancel(b)}
-                      loading={busy === b.id}
-                      disabled={!!busy}
-                      accessibilityLabel={`${strings.practice.cancelBooking}: ${s.label}`}
-                    />
+        {pairs(stations).map((pair) => (
+          <View key={pair[0].id} style={{ flexDirection: "row", alignItems: "stretch", gap: 6 }}>
+            {pair.map((s) => {
+              const b = row.byStation.get(s.id);
+              if (b) {
+                const mine = isMine(b, userId);
+                const who = mine ? strings.set.you : bookingNames(b);
+                return (
+                  <View
+                    key={s.id}
+                    testID={`station-${s.id}`}
+                    accessible={!canCancel(b, userId, week)}
+                    accessibilityLabel={strings.practice.stationA11y(s.label, strings.practice.taken(who))}
+                    style={{
+                      ...cell,
+                      gap: mine ? 6 : 2,
+                      backgroundColor: colors.surface,
+                      borderWidth: mine ? 2 : hairline,
+                      borderColor: mine ? colors.text : colors.rule,
+                    }}
+                  >
+                    <Text variant="label">{s.label}</Text>
+                    <Text variant="caption" tone={mine ? "default" : "secondary"} style={mine ? { fontFamily: fontFamily.bodySemibold } : undefined}>
+                      {strings.practice.taken(who)}
+                      {b.end_time > hhmm(start + slot) ? strings.practice.until(b.end_time) : ""}
+                    </Text>
+                    {canCancel(b, userId, week) ? (
+                      <View style={{ flexDirection: "row" }}>
+                        <Button
+                          label={strings.practice.cancelBooking}
+                          variant="danger"
+                          size="small"
+                          onPress={() => cancel(b)}
+                          loading={busy === b.id}
+                          disabled={!!busy}
+                          accessibilityLabel={`${strings.practice.cancelBooking}: ${s.label}`}
+                        />
+                      </View>
+                    ) : null}
                   </View>
-                ) : null}
-              </View>
-            );
-          }
-          const on = s.id === stationId;
-          return (
-            <Pressable
-              key={s.id}
-              testID={`station-${s.id}`}
-              accessibilityRole="radio"
-              accessibilityLabel={strings.practice.stationA11y(s.label, strings.practice.open)}
-              accessibilityState={{ checked: on }}
-              onPress={() => setStationId(s.id)}
-              style={({ pressed }) => ({
-                minHeight: touch.minTarget,
-                padding: 10,
-                gap: 2,
-                justifyContent: "center",
-                backgroundColor: on ? colors.inverse : pressed ? colors.surface : colors.bg,
-                borderWidth: on ? 2 : hairline,
-                borderColor: colors.text,
-              })}
-            >
-              <Text variant="label" tone={on ? "onInverse" : "default"}>
-                {s.label}
-              </Text>
-              <Text tone={on ? "onInverse" : "positive"}>
-                {on ? (s.id === week.me.defaultStationId ? strings.practice.yourInstrument : strings.practice.picked) : strings.practice.open}
-              </Text>
-            </Pressable>
-          );
-        })}
+                );
+              }
+              const on = s.id === stationId;
+              return (
+                <Pressable
+                  key={s.id}
+                  testID={`station-${s.id}`}
+                  accessibilityRole="radio"
+                  accessibilityLabel={strings.practice.stationA11y(s.label, strings.practice.open)}
+                  accessibilityState={{ checked: on }}
+                  onPress={() => {
+                    if (!on) selectionHaptic();
+                    setStationId(s.id);
+                  }}
+                  style={({ pressed }) => ({
+                    ...cell,
+                    gap: 2,
+                    justifyContent: "center",
+                    backgroundColor: on ? colors.inverse : pressed ? colors.surface : colors.raised,
+                    borderWidth: on ? 2 : hairline,
+                    borderColor: on ? colors.inverse : colors.text,
+                  })}
+                >
+                  <Text variant="label" tone={on ? "onInverse" : "default"}>
+                    {s.label}
+                  </Text>
+                  <Text variant="caption" tone={on ? "onInverse" : "positive"}>
+                    {on ? (s.id === week.me.defaultStationId ? strings.practice.yourInstrument : strings.practice.picked) : strings.practice.open}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            {pair.length === 1 ? <View style={{ flex: 1 }} /> : null}
+          </View>
+        ))}
       </View>
 
       {station ? (
-        <View style={{ gap: 6 }}>
+        <View style={{ gap: space.xs }}>
           <LabelRow label={strings.practice.howLong} />
-          <View accessibilityRole="radiogroup" style={{ flexDirection: "row", gap: 8 }}>
+          <View accessibilityRole="radiogroup" style={{ flexDirection: "row", gap: space.sm }}>
             {[slot, 2 * slot].map((m) => {
               const disabled = m > slot && !longer.ok;
               const on = length === m;
@@ -255,19 +267,23 @@ function Body({
                   accessibilityLabel={strings.practice.minutes(m)}
                   accessibilityState={{ checked: on, disabled }}
                   disabled={disabled}
-                  onPress={() => setMinutes(m)}
+                  onPress={() => {
+                    if (!on) selectionHaptic();
+                    setMinutes(m);
+                  }}
                   style={{
                     flex: 1,
-                    minHeight: touch.minTarget,
+                    minHeight: touch.floor,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: on ? colors.inverse : colors.bg,
+                    borderRadius: radius.control,
+                    // Not on offer: a quiet filled block, like a disabled button.
+                    backgroundColor: disabled ? colors.surface : on ? colors.inverse : colors.raised,
                     borderWidth: hairline,
-                    borderColor: disabled ? colors.rule : colors.text,
-                    opacity: disabled ? 0.45 : 1,
+                    borderColor: disabled ? colors.rule : on ? colors.inverse : colors.text,
                   }}
                 >
-                  <Text variant="label" tone={on ? "onInverse" : "default"}>
+                  <Text variant="sectionTitle" tone={disabled ? "tertiary" : on ? "onInverse" : "default"}>
                     {strings.practice.minutes(m)}
                   </Text>
                 </Pressable>
@@ -281,15 +297,17 @@ function Body({
           ) : null}
         </View>
       ) : (
-        <Text tone="secondary">{strings.practice.everyStationTaken}</Text>
+        <Text variant="caption" tone="secondary">
+          {strings.practice.everyStationTaken}
+        </Text>
       )}
 
       <ActionNotice result={result} />
 
       {station ? (
-        <View style={{ gap: 6 }}>
+        <View style={{ gap: space.sm }}>
           {blocked ? (
-            <Text tone="secondary" testID="blocked-reason">
+            <Text variant="caption" tone="secondary" testID="blocked-reason">
               {blocked}
             </Text>
           ) : null}
@@ -309,4 +327,20 @@ function Body({
       </Text>
     </>
   );
+}
+
+/** A station's cell in the two-column grid: 48pt at least, grows with its text. */
+const cell = {
+  flex: 1,
+  minWidth: 0,
+  minHeight: touch.minTarget,
+  paddingVertical: 6,
+  paddingHorizontal: 10,
+  borderRadius: radius.control,
+} as const;
+
+function pairs<T>(items: T[]): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += 2) out.push(items.slice(i, i + 2));
+  return out;
 }

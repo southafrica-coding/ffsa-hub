@@ -8,7 +8,6 @@ import { View } from "react-native";
 
 import { Banner, Button, Text, TextField } from "@/components";
 import { DateTimeField } from "@/features/bookings/components/DateTimeField";
-import { SectionBar } from "@/features/shell";
 import { announce } from "@/lib/a11y";
 import { ApiError } from "@/lib/api";
 
@@ -88,6 +87,7 @@ export function LicenceScreen() {
 
   return (
     <DocScreen
+      title={s.title}
       refreshing={load.refreshing}
       onRefresh={() => {
         setDraft(null);
@@ -101,13 +101,12 @@ export function LicenceScreen() {
         <>
           {/* A problem to fix, not a task: red, never the yellow band. */}
           {expired ? (
-            <Banner tone="danger" title={s.expiredTitle}>
+            <Banner tone="error" title={s.expiredTitle}>
               {s.expired(formatDate(licence.licence_expiry_date))}
             </Banner>
           ) : null}
 
           <View style={{ gap: 16 }}>
-            <SectionBar label={s.title} />
             <TextField
               label={s.number}
               value={form.number}
@@ -119,12 +118,14 @@ export function LicenceScreen() {
               autoComplete="off"
               importantForAutofill="no"
             />
-            <DateTimeField mode="date" label={s.expiry} value={form.expiry} onChange={(v) => set("expiry", v)} testID="licence-expiry" />
-            {errors.expiry ? (
-              <Text tone="danger" accessibilityRole="alert">
-                {errors.expiry}
-              </Text>
-            ) : null}
+            <View style={{ gap: 6 }}>
+              <DateTimeField mode="date" label={s.expiry} value={form.expiry} onChange={(v) => set("expiry", v)} testID="licence-expiry" />
+              {errors.expiry ? (
+                <Text variant="caption" tone="danger" accessibilityRole="alert">
+                  {errors.expiry}
+                </Text>
+              ) : null}
+            </View>
             <OptionField label={s.country} value={form.country} options={COUNTRY_CHOICES} onChange={(v) => set("country", v)} searchable />
             <TextField
               label={s.code}
@@ -135,7 +136,7 @@ export function LicenceScreen() {
               autoCorrect={false}
             />
             {saveError ? (
-              <Banner tone="danger" title={s.saveError}>
+              <Banner tone="error" title={s.saveError}>
                 {saveError}
               </Banner>
             ) : null}
@@ -143,7 +144,6 @@ export function LicenceScreen() {
           </View>
 
           <View style={{ gap: 12 }}>
-            <SectionBar label={s.fileLabel} />
             <DocFile
               kind="licence"
               label={s.fileLabel}
@@ -153,7 +153,9 @@ export function LicenceScreen() {
                 load.setData((l) => ({ ...l, has_file: next.hasFile, licence_file_name: next.fileName, signed_url: next.signedUrl }))
               }
             />
-            <Intro>{d.privacyVehicles}</Intro>
+            <Text variant="caption" tone="secondary">
+              {d.privacyVehicles}
+            </Text>
           </View>
 
           <ReadField

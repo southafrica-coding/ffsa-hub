@@ -24,6 +24,8 @@ export const strings = {
   },
   list: {
     context: "Training & education",
+    // The eyebrow's count: words, not a bare number, and none at all for 0.
+    count: (n: number) => (n === 1 ? "1 school" : `${n} schools`),
     title: "My Schools",
     loading: "Loading your schools",
     errorTitle: "Couldn't load your schools",

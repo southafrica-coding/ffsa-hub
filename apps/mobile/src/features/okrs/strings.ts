@@ -17,6 +17,7 @@ export const strings = {
     forbidden: "This isn't available on your account.",
     refreshFailed: (when: string) => `Couldn't refresh. Showing what was saved at ${when}.`,
     lastUpdated: (when: string) => `Last updated ${when}`,
+    checkinsNeedSignal: "Check-ins need a signal.",
   },
   // Same words as the website (src/lib/okrs/progress.ts STATUS_LABELS).
   status: {

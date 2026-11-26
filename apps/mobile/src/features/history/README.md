@@ -18,3 +18,5 @@ Unlike the web (which renders whatever reads succeeded), any failed read is an e
 **Files.** A document's `file_url` opens in the in-app browser (`openWebPage`), only when it is an `http(s)` URL or a website path; nothing is downloaded into the app.
 
 **Not here.** The Records Library admin pages and the match queue stay on the website.
+
+**Look (redesign, frames 9.1–9.4).** The screen draws its own header with the kit's `LargeTitleScrollView` (back to Home; the stack has `headerShown: false`). Each section is a counted heading over a kit `ListGroup`; the record opens in the shared kit `Sheet`. The few pieces the kit doesn't have yet are shared with My Schools (`features/schools/components/parts.tsx`). Payments keep the imported currency text with cents (`formatAmount`: "ZAR 12,450.00"), not the app's `formatMoney`.

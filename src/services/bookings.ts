@@ -57,6 +57,10 @@ export type Booking = {
   setdown_time: string | null;
   status: BookingStatusValue;
   decision_note: string | null;
+  /** Set by the database (migration 403) when a manager booked over a clash. */
+  clash_override_reason?: string | null;
+  clash_override_by?: string | null;
+  clash_override_at?: string | null;
   requested_by: string | null;
   requester_name: string | null;
   decided_by: string | null;
@@ -133,11 +137,11 @@ export async function createVenue(supabase: Client, data: Partial<Venue>) {
   return supabase.from("venues").insert(data).select().single();
 }
 
-/** Just a venue's approval setting — used by the create-booking route. */
+/** A venue's approval setting and name — used by the booking write routes. */
 export async function getVenueApproval(supabase: Client, id: string) {
   return supabase
     .from("venues")
-    .select("requires_approval")
+    .select("requires_approval,name")
     .eq("id", id)
     .single();
 }
@@ -380,6 +384,19 @@ export async function updateBooking(
     .single();
 }
 
+/** Update several bookings by id in one write — the series editor groups the
+ *  occurrences that take the same change. */
+export async function updateBookingsByIds(
+  supabase: Client,
+  ids: string[],
+  data: Record<string, unknown>
+) {
+  return supabase
+    .from("venue_bookings")
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .in("id", ids);
+}
+
 export async function insertSeries(supabase: Client, row: Record<string, unknown>) {
   return supabase.from("booking_series").insert(row).select().single();
 }
@@ -412,6 +429,8 @@ export async function updateSeriesOccurrences(
     skipClosed?: boolean;
     /** Only occurrences after this ISO date — used to leave the past alone. */
     afterDate?: string;
+    /** Only occurrences on or after this ISO date. */
+    fromDate?: string;
     /** Only occurrences that still hold a given value, so per-occurrence
      *  overrides survive a series-wide change. */
     matchField?: { key: string; value: unknown };
@@ -426,6 +445,7 @@ export async function updateSeriesOccurrences(
   if (opts.skipClosed) query = query.not("status", "in", "(cancelled,denied)");
   if (opts.excludeId) query = query.neq("id", opts.excludeId);
   if (opts.afterDate) query = query.gt("booking_date", opts.afterDate);
+  if (opts.fromDate) query = query.gte("booking_date", opts.fromDate);
   if (opts.matchField) {
     const { key, value } = opts.matchField;
     query = value === null ? query.is(key, null) : query.eq(key, value);

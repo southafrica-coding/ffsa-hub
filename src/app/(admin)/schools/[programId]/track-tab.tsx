@@ -136,7 +136,7 @@ export function TrackTab({
           <div key={s.code} className="border-r border-rule px-5 py-4 last:border-r-0">
             <div className="mono-label">{s.code}</div>
             <div className="numeral mt-1 text-[44px] leading-none">{s.expected}</div>
-            <div className="mt-1.5 font-mono text-[10px] tracking-[0.08em] text-[#55524A]">
+            <div className="mt-1.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-muted)]">
               {s.accepted} ACCEPTED · {s.expected - s.accepted} APPLYING
             </div>
           </div>
@@ -144,7 +144,7 @@ export function TrackTab({
         <div className="border-r border-rule bg-bone px-5 py-4 last:border-r-0">
           <div className="mono-label">Whole programme</div>
           <div className="numeral mt-1 text-[44px] leading-none">{summary.whole}</div>
-          <div className="mt-1.5 font-mono text-[10px] tracking-[0.08em] text-[#55524A]">
+          <div className="mt-1.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-muted)]">
             {summary.unknown} STILL UNKNOWN
           </div>
         </div>
@@ -166,7 +166,7 @@ export function TrackTab({
           type="button"
           disabled={busy !== null || summary.notEmailed === 0}
           onClick={() => openPreview("send")}
-          className="border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] disabled:opacity-40"
+          className="border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[var(--ink-bg-hover)] disabled:opacity-40"
         >
           {busy === "send" ? "Loading…" : `Email the ${summary.notEmailed} not asked`}
         </button>
@@ -248,7 +248,7 @@ export function TrackTab({
                   ? "Nobody to email."
                   : `${preview.count} ${preview.count === 1 ? "person" : "people"} will get one email each asking whether they're doing the whole programme or which sections. They answer from a personal link, and their answer lands on this tab.`}
               </p>
-              <ul className="mt-3 divide-y divide-[#E7E4D9] border-y border-[#E7E4D9]">
+              <ul className="mt-3 divide-y divide-bone-3 border-y border-bone-3">
                 {preview.recipients.map((r) => (
                   <li key={r.email} className="flex items-baseline justify-between gap-3 py-1.5 text-[13px]">
                     <span className="truncate font-semibold text-ink">{r.name}</span>
@@ -265,7 +265,7 @@ export function TrackTab({
                 type="button"
                 disabled={busy === "sending" || preview.count === 0}
                 onClick={confirmSend}
-                className="bg-ink px-3.5 py-2 font-mono text-[9.5px] font-bold tracking-[0.12em] text-white hover:bg-[#262622] disabled:opacity-50"
+                className="bg-ink px-3.5 py-2 font-mono text-[9.5px] font-bold tracking-[0.12em] text-white hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
               >
                 {busy === "sending" ? "SENDING…" : `SEND ${preview.count} EMAIL${preview.count === 1 ? "" : "S"}`}
               </button>

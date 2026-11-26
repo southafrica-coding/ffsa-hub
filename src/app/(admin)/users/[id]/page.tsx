@@ -36,6 +36,7 @@ import {
 } from "@/lib/users/profile-fields";
 import { listActiveMinistries } from "@/services/ministries";
 import { adminDepartmentOptions } from "@/lib/users/department-options";
+import { AdminHouseholdPanel } from "./household-panel";
 import { UserHeader } from "./user-header";
 import { UserTabs } from "./user-tabs";
 import { EditProfileDialog } from "./edit-profile-dialog";
@@ -339,6 +340,8 @@ export default async function UserProfilePage({
           />
         </section>
       )}
+
+      {isAdmin && <AdminHouseholdPanel userId={id} />}
 
       {isAdmin && (
         <section>

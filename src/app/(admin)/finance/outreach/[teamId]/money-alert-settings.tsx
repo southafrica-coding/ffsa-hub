@@ -90,7 +90,7 @@ export function MoneyAlertSettings({
       </div>
 
       <div className="max-w-md">
-        <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.1em] text-[#55524A]">School leader</span>
+        <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.1em] text-[color:var(--text-muted)]">School leader</span>
         <div className="flex items-center gap-2">
           <div className="flex-1">
             <SearchableSelect
@@ -115,14 +115,14 @@ export function MoneyAlertSettings({
 
       <div className="flex flex-wrap items-end gap-4">
         <label className="block">
-          <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.1em] text-[#55524A]">Running low at</span>
+          <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.1em] text-[color:var(--text-muted)]">Running low at</span>
           <div className="flex items-center gap-1.5">
             <Input type="number" min={0} max={100} value={low} onChange={(e) => setLow(e.target.value)} className="h-9 w-20 text-right font-mono" />
             <span className="text-sm">% left</span>
           </div>
         </label>
         <label className="block">
-          <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.1em] text-[#55524A]">Urgent at</span>
+          <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.1em] text-[color:var(--text-muted)]">Urgent at</span>
           <div className="flex items-center gap-1.5">
             <Input type="number" min={0} max={100} value={critical} onChange={(e) => setCritical(e.target.value)} className="h-9 w-20 text-right font-mono" />
             <span className="text-sm">% left</span>

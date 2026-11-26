@@ -23,6 +23,7 @@ import {
   checkAltVenue,
   bookAltVenue,
   syncAltBookings,
+  altBookingRefusedNotice,
   altBookingIdsFor,
   releaseAltBookings,
   setBookingTitle,
@@ -352,11 +353,12 @@ export async function PUT(request: Request) {
       scope === "all" ? undefined : todayISO()
     );
     if (result.error) return NextResponse.json({ error: result.error.message }, { status: 403 });
-    await syncAltBookings(createAdminClient(), {
+    const synced = await syncAltBookings(createAdminClient(), {
       seriesId: series_id,
       fromDate: scope === "all" ? undefined : todayISO(),
     });
-    return NextResponse.json(result.data);
+    const altBookingNotice = altBookingRefusedNotice(synced.refused);
+    return NextResponse.json(altBookingNotice ? { ...result.data, altBookingNotice } : result.data);
   }
 
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
@@ -429,15 +431,18 @@ export async function PUT(request: Request) {
           userId: user.id,
           ownerId: s.owner_id ?? user.id,
         });
-        if (booked.error) return NextResponse.json({ error: booked.error }, { status: 500 });
+        if (booked.error) {
+          return NextResponse.json({ error: booked.error }, { status: booked.clash ? 409 : 500 });
+        }
       }
     }
   }
 
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 403 });
   // Retimed, renamed or cancelled → the alternate-space booking follows.
-  if (action !== "complete") await syncAltBookings(createAdminClient(), { setId: id });
-  return NextResponse.json(result.data);
+  const synced = action !== "complete" ? await syncAltBookings(createAdminClient(), { setId: id }) : { refused: 0 };
+  const altBookingNotice = altBookingRefusedNotice(synced.refused);
+  return NextResponse.json(altBookingNotice ? { ...result.data, altBookingNotice } : result.data);
 }
 
 // DELETE — remove a set (RLS: owner or staff).

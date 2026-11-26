@@ -6,6 +6,8 @@ import { ProfileCompletionGate } from "@/components/profile-completion-gate";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { BackButton } from "@/components/back-button";
 import { AssistantMount } from "@/components/assistant/assistant-mount";
+import { ThemeSync } from "@/lib/theme/theme-sync";
+import type { ColorScheme } from "@/lib/theme";
 
 /** One shell for the staff admin and the personal portal. */
 export async function HubShell({
@@ -14,6 +16,7 @@ export async function HubShell({
   permittedModules,
   menuLoadFailed,
   initials,
+  colorScheme = null,
   departments = [],
   roleNames,
   staffSignals,
@@ -25,6 +28,8 @@ export async function HubShell({
   permittedModules?: Set<string>;
   menuLoadFailed?: boolean;
   initials?: string;
+  /** Saved Light / Dark setting (users.color_scheme). Null follows the device. */
+  colorScheme?: ColorScheme | null;
   /** Empty until the department API is wired. A non-empty list shows the tab and group. */
   departments?: { id: string; label: string; href: string }[];
   /** Every role name, including scoped ones. Falls back to the unscoped list. */
@@ -45,6 +50,7 @@ export async function HubShell({
     : shellVariantForRoles(roleNames ?? userRoles, { departments, staffSignals });
   return (
     <div className="flex h-screen overflow-hidden bg-bg text-ink">
+      <ThemeSync scheme={colorScheme} />
       <AdminSidebar
         userRoles={userRoles}
         permittedModules={permittedModules}

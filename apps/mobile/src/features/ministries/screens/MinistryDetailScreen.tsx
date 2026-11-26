@@ -1,18 +1,17 @@
 import * as Haptics from "expo-haptics";
-import { Settings2, UsersRound } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { Clock, Pencil, UsersRound } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { Alert, RefreshControl, ScrollView, View } from "react-native";
+import { Alert, RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, Masthead, Screen, Text } from "@/components";
-import { ErrorState, SectionBar, Skeleton, Tag } from "@/features/finance/components/ui";
+import { Banner, Bleed, Button, EmptyState, FadeIn, Freshness, LargeTitleScrollView, ListGroup, ListRow, LoadError, NeedsYouBand, SectionTitle, SkeletonList, StatusChip, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { Freshness } from "@/features/schools/components/ui";
-import { ListRow, StateMessage, openWebPage } from "@/features/shell";
+import { openWebPage } from "@/features/shell";
 import { announce } from "@/lib/a11y";
 import { apiFetch } from "@/lib/api-client";
-import { hairline, touch } from "@/theme/tokens";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { approveMember, getMinistry, isForbidden, loadErrorMessage, type MinistryDetail, type RosterMember } from "../api";
@@ -28,6 +27,7 @@ const s = strings.detail;
 // The page's one yellow band is "people are waiting for you to approve
 // them", shown only to those who can approve.
 export default function MinistryDetailScreen({ id }: { id: string }) {
+  const router = useRouter();
   const { colors } = useTheme();
   const { session } = useSession();
   const userId = session?.user?.id ?? null;
@@ -82,44 +82,57 @@ export default function MinistryDetailScreen({ id }: { id: string }) {
     [approve, data],
   );
 
-  return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
-      >
-        <Masthead context={data ? detailContext(data.ministry) : strings.list.context} title={data ? data.ministry.name : strings.list.title} />
+  // Whether anything sits between the title and the description (it sets the spacing).
+  const topNotes = (state.status === "ready" && state.staleSince !== null) || actionError !== null || pending.length > 0;
 
-        {state.status === "loading" ? <Skeleton label={s.loading} /> : null}
+  return (
+    <LargeTitleScrollView
+      back={{ label: strings.list.title, onPress: () => router.back() }}
+      eyebrow={data ? detailContext(data.ministry) : strings.list.context}
+      title={data ? data.ministry.name : strings.list.title}
+      gap={0}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
+    >
+      <Bleed style={{ gap: space.md }}>
+        {state.status === "loading" ? <SkeletonList label={s.loading} count={5} inset={false} /> : null}
         {forbidden ? (
-          <StateMessage testID="forbidden" icon={UsersRound} title={strings.gate.title} body={strings.common.forbidden} />
+          <EmptyState testID="forbidden" icon={UsersRound} title={strings.gate.title} body={strings.common.forbidden} />
         ) : state.status === "error" ? (
-          <ErrorState title={s.errorTitle} message={state.message} onRetry={retry} />
+          <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
         ) : null}
         <Freshness state={state} onRetry={retry} />
-        {actionError ? <Banner tone="danger">{actionError}</Banner> : null}
+        {actionError ? <Banner tone="error">{actionError}</Banner> : null}
 
+        {/* The one yellow band. It has no button: Approve sits on the person's own row. */}
         {pending.length > 0 ? (
-          <Banner tone="needsYou" title={s.needsYouTitle} testID="needs-you">
-            {pending.length === 1 ? s.needsYouOne(pending[0].name) : s.needsYouMany(pending.length)}
-          </Banner>
+          <NeedsYouBand
+            eyebrow={s.needsYouTitle}
+            text={pending.length === 1 ? s.needsYouOne(pending[0].name) : s.needsYouMany(pending.length)}
+            testID="needs-you"
+          />
         ) : null}
+      </Bleed>
 
-        {data ? (
-          <>
-            {data.ministry.description ? <Text tone="secondary">{data.ministry.description}</Text> : null}
-            {!data.canManage ? (
-              <Text variant="caption" tone="secondary" testID="read-only">
-                {s.readOnly}
-              </Text>
-            ) : null}
+      {data ? (
+        <FadeIn>
+          {data.ministry.description ? (
+            <Text tone="secondary" style={{ marginTop: topNotes ? space.lg : 0 }}>
+              {data.ministry.description}
+            </Text>
+          ) : null}
+          {!data.canManage ? (
+            <Text variant="caption" tone="secondary" testID="read-only" style={{ marginTop: space.sm }}>
+              {s.readOnly}
+            </Text>
+          ) : null}
 
-            <Team detail={data} approving={approving} onApprove={confirmApprove} />
+          <Team detail={data} approving={approving} onApprove={confirmApprove} />
 
-            {data.canManage ? (
-              <View>
+          {data.canManage ? (
+            <Bleed style={{ marginTop: space.xl }}>
+              <ListGroup inset={false}>
                 <ListRow
-                  icon={Settings2}
+                  icon={Pencil}
                   title={s.manageWeb}
                   subtitle={s.manageWebSub}
                   trailing="web"
@@ -127,12 +140,12 @@ export default function MinistryDetailScreen({ id }: { id: string }) {
                   onPress={() => void openWebPage(`/ministry/${data.ministry.id}`, colors)}
                   testID="manage-web"
                 />
-              </View>
-            ) : null}
-          </>
-        ) : null}
-      </ScrollView>
-    </Screen>
+              </ListGroup>
+            </Bleed>
+          ) : null}
+        </FadeIn>
+      ) : null}
+    </LargeTitleScrollView>
   );
 }
 
@@ -148,35 +161,39 @@ function Team({
   const groups = rosterGroups(detail);
   return (
     <View>
-      <SectionBar title={s.team} meta={String(detail.roster.length)} />
+      <SectionTitle title={s.team} meta={detail.roster.length} tight />
       {detail.roster.length === 0 ? (
-        <Text tone="secondary" style={{ paddingVertical: 16 }} testID="empty-team">
+        <Text tone="secondary" style={{ paddingVertical: space.sm }} testID="empty-team">
           {s.emptyTeam}
         </Text>
       ) : (
-        groups.map((g) => (
-          <View key={g.key} style={{ marginTop: g.label ? 12 : 0 }}>
+        groups.map((g, i) => (
+          <View key={g.key} style={{ marginTop: g.label && i > 0 ? space.lg : 0 }}>
             {g.label ? (
-              <Text variant="label" tone="secondary" accessibilityRole="header" accessibilityLabel={s.groupA11y(g.label, g.rows.length)} style={{ paddingVertical: 6 }}>
+              <Text variant="label" accessibilityRole="header" accessibilityLabel={s.groupA11y(g.label, g.rows.length)} style={{ paddingBottom: 6 }}>
                 {`${g.label} (${g.rows.length})`}
               </Text>
             ) : null}
             {g.rows.length === 0 ? (
-              <Text tone="secondary" style={{ paddingVertical: 8 }}>
+              <Text tone="secondary" style={{ paddingVertical: space.sm }}>
                 {s.emptyGroup}
               </Text>
             ) : (
-              g.rows.map((r) => (
-                <MemberRow
-                  key={`${g.key}:${r.membershipId}`}
-                  member={r}
-                  groupKey={g.key}
-                  canApprove={detail.canManage && r.status === "pending"}
-                  approving={approving === r.membershipId}
-                  busy={approving !== null}
-                  onApprove={() => onApprove(r)}
-                />
-              ))
+              <Bleed>
+                <ListGroup inset={false} testID={`group-${g.key}`}>
+                  {g.rows.map((r) => (
+                    <MemberRow
+                      key={`${g.key}:${r.membershipId}`}
+                      member={r}
+                      groupKey={g.key}
+                      canApprove={detail.canManage && r.status === "pending"}
+                      approving={approving === r.membershipId}
+                      busy={approving !== null}
+                      onApprove={() => onApprove(r)}
+                    />
+                  ))}
+                </ListGroup>
+              </Bleed>
             )}
           </View>
         ))
@@ -200,28 +217,30 @@ function MemberRow({
   busy: boolean;
   onApprove: () => void;
 }) {
-  const { colors } = useTheme();
   const badges = memberBadges(r, groupKey);
   return (
     <View
-      style={{ minHeight: touch.minTarget, paddingVertical: 12, borderBottomWidth: hairline, borderBottomColor: colors.rule, gap: 8 }}
+      style={{ minHeight: 56, justifyContent: "center", paddingVertical: space.md, paddingLeft: space.lg, paddingRight: space.md, gap: space.md }}
       testID={`member-${groupKey}-${r.membershipId}`}
     >
       {/* One stop for the screen reader: name, role words, email. */}
-      <View accessible accessibilityLabel={memberA11yLabel(r, groupKey)} style={{ gap: 4 }}>
-        <Text variant="bodyStrong">{r.name}</Text>
+      <View accessible accessibilityLabel={memberA11yLabel(r, groupKey)} style={{ gap: 2 }}>
+        <Text variant="rowTitle">{r.name}</Text>
         {r.email ? (
-          <Text variant="caption" tone="secondary" numberOfLines={1}>
+          <Text variant="caption" tone="secondary">
             {r.email}
           </Text>
         ) : null}
         {badges.length > 0 ? (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-            {badges.map((b) => (
-              <Tag key={b} tone={b === strings.detail.pending ? "attention" : "default"}>
-                {b}
-              </Tag>
-            ))}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            {badges.map((b) =>
+              b === strings.detail.pending ? (
+                <StatusChip key={b} label={b} variant="attention" icon={Clock} />
+              ) : (
+                // A role is the word itself; only the waiting state carries an icon.
+                <StatusChip key={b} label={b} variant="neutral" icon={null} />
+              ),
+            )}
           </View>
         ) : null}
       </View>
@@ -230,12 +249,14 @@ function MemberRow({
           <Button
             label={s.approve}
             variant="secondary"
+            size="small"
             loading={approving}
             disabled={busy}
             accessibilityLabel={s.approveA11y(r.name)}
             accessibilityHint={s.approveHint}
             onPress={onApprove}
             testID={`approve-${r.membershipId}`}
+            style={{ paddingHorizontal: space.xl }}
           />
         </View>
       ) : null}

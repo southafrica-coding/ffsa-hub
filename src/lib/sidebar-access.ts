@@ -217,6 +217,10 @@ const loadSidebarAccess = cache(async (
         // Rent a Vehicle and Equipment hire live under the Bookings hub — their
         // permissions must light up the single "Bookings" sidebar item.
         if (perm?.module === "vehicles" || perm?.module === "equipment") result.permittedModules.add("bookings");
+        // One way into Fleet (Gideon, 24 Nov 2026): Rent a Vehicle no longer has its own
+        // Fleet button, so a vehicle manager without Fleet access gets the sidebar's
+        // Fleet entry, which lands them on Fleet → Settings (the bookable vehicle list).
+        if (perm?.key === "vehicles.manage") result.permittedModules.add("fleet");
       }
 
       // Also count modules reachable through assigned roles' bundles.
@@ -227,7 +231,12 @@ const loadSidebarAccess = cache(async (
         if (perm.key === "schools.manage") result.permittedModules.add("users");
         if (perm.module === "vehicles" || perm.module === "equipment") result.permittedModules.add("bookings");
         if (row.role_id && staffRoleIds.has(row.role_id)) result.staffSignals.staffRoleBundle = true;
+        if (perm.key === "vehicles.manage") result.permittedModules.add("fleet");
       }
+
+      // Forms has no permission module of its own: an unscoped comms_admin
+      // manages Hub forms (canManageHubForms), so the role lights it.
+      if (result.userRoles.includes("comms_admin")) result.permittedModules.add("forms");
 
       if (schoolsAccess === "all" || schoolsAccess.length > 0) result.permittedModules.add("schools");
       if (staffSeat.length > 0) result.permittedModules.add("schools");

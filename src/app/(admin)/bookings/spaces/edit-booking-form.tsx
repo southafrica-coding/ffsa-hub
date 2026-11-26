@@ -17,6 +17,11 @@ import {
 } from "@/components/ui/select";
 import type { Booking, Venue, Ministry } from "@/services/bookings";
 import { SectionBar } from "@/components/ffsa";
+import { ClashPanel, overrideBody, type ClashConflict } from "./clash-panel";
+
+// The scope choices are sentences, not field labels: body text, not the
+// global mono label style (which would set them in wrapped all-caps).
+const SCOPE_TEXT = "!font-sans text-xs !font-normal normal-case !tracking-normal";
 
 function timeVal(t: string | null): string {
   if (!t) return "";
@@ -39,6 +44,12 @@ export function EditBookingForm({
   // For a weekly series, default to editing every date — that's almost always
   // what people mean when they change a meeting's name, venue or time.
   const [applyToSeries, setApplyToSeries] = useState(true);
+  // Set when the save was refused because the space is taken at the new time.
+  const [conflicts, setConflicts] = useState<ClashConflict[]>([]);
+  const [canOverride, setCanOverride] = useState(false);
+  const [overriding, setOverriding] = useState(false);
+  const [reason, setReason] = useState("");
+  const blocked = conflicts.length > 0;
 
   const [form, setForm] = useState({
     venue_id: booking.venue_id,
@@ -57,6 +68,13 @@ export function EditBookingForm({
   function update(field: keyof typeof form, value: string) {
     setForm((p) => ({ ...p, [field]: value }));
     if (error) setError(null);
+    clearClash();
+  }
+
+  function clearClash() {
+    setConflicts([]);
+    setOverriding(false);
+    setReason("");
   }
 
   async function submit(e: React.FormEvent) {
@@ -77,6 +95,7 @@ export function EditBookingForm({
       setError("The end date must be on or after the start date.");
       return;
     }
+    if (blocked && !(overriding && reason.trim())) return;
     setLoading(true);
     setError(null);
 
@@ -96,11 +115,20 @@ export function EditBookingForm({
         setup_time: form.setup_time || null,
         setdown_time: form.setdown_time || null,
         applyToSeries: booking.series_id ? applyToSeries : false,
+        ...(blocked ? overrideBody(overriding, reason) : {}),
       }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError(json.error ?? "Could not save changes.");
+      if (res.status === 409 && json.blocked) {
+        // The space is taken at the new time: show who has it, not an error.
+        setConflicts(json.conflicts ?? []);
+        setCanOverride(!!json.canOverride);
+        setOverriding(false);
+        setReason("");
+      } else {
+        setError(json.error ?? "Could not save changes.");
+      }
       setLoading(false);
       return;
     }
@@ -140,14 +168,17 @@ export function EditBookingForm({
                     name="edit-scope"
                     className="mt-0.5"
                     checked={applyToSeries}
-                    onChange={() => setApplyToSeries(true)}
+                    onChange={() => {
+                      setApplyToSeries(true);
+                      clearClash();
+                    }}
                   />
-                  <span>
+                  <span className={SCOPE_TEXT}>
                     <span className="text-[color:var(--text-primary)]">
                       All dates in this series
                     </span>{" "}
                     — name, description, venue, ministry, point person and times update on
-                    every occurrence.
+                    every date from today on. Dates that have passed stay as they were.
                   </span>
                 </label>
                 <label className="flex items-start gap-2 text-xs text-[color:var(--text-secondary)]">
@@ -156,9 +187,12 @@ export function EditBookingForm({
                     name="edit-scope"
                     className="mt-0.5"
                     checked={!applyToSeries}
-                    onChange={() => setApplyToSeries(false)}
+                    onChange={() => {
+                      setApplyToSeries(false);
+                      clearClash();
+                    }}
                   />
-                  <span>
+                  <span className={SCOPE_TEXT}>
                     <span className="text-[color:var(--text-primary)]">This date only</span> —
                     leave the rest of the series as it is.
                   </span>
@@ -287,15 +321,37 @@ export function EditBookingForm({
             </div>
           </div>
 
+          {blocked && (
+            <ClashPanel
+              conflicts={conflicts}
+              venueName={venues.find((v) => v.id === form.venue_id)?.name}
+              canOverride={canOverride}
+              overriding={overriding}
+              onOverridingChange={setOverriding}
+              reason={reason}
+              onReasonChange={setReason}
+            />
+          )}
+          {blocked && !overriding && (
+            <p className="text-xs text-[color:var(--text-secondary)]">
+              Change the date, time or space above and save again. Back-to-back is fine.
+            </p>
+          )}
+
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <div className="flex gap-3 pt-1">
-            <Button type="submit" disabled={loading}>
-              {loading ? "Saving…" : "Save changes"}
+          <div className="flex flex-wrap gap-3 pt-1">
+            <Button
+              type="submit"
+              className="min-h-11"
+              disabled={loading || (blocked && !(overriding && reason.trim()))}
+            >
+              {loading ? "Saving…" : blocked ? (overriding ? "Book anyway" : "Time taken") : "Save changes"}
             </Button>
             <Button
               type="button"
               variant="outline"
+              className="min-h-11"
               onClick={() => router.push(`/bookings/spaces/${booking.id}`)}
             >
               Cancel

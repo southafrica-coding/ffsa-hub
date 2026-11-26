@@ -1,172 +1,40 @@
-// Small building blocks for the Prayer Room screens. They live with the slice
-// (not the shared kit) so parallel branches don't edit src/components; the
-// Sheet mirrors Finance's (worth promoting into the kit once a third needs it).
+// Small building blocks for the Prayer Room screens: the week stepper, the
+// curated-band chip, a day header that reads its date in full, and the
+// result of the last action.
 
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
-import { useEffect, type ReactNode } from "react";
-import { Modal, Platform, Pressable, ScrollView, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
 import { Banner, Button, Text } from "@/components";
-import { announce, useReduceMotion } from "@/lib/a11y";
-import { hairline, palette, touch } from "@/theme/tokens";
+import { useAnnounceOnIOS } from "@/lib/a11y";
+import { fontFamily, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
+import { dayLabel, spokenDate } from "../logic";
 import { strings } from "../strings";
 
-// Shared with the rest of the app (src/lib/a11y); re-exported for old imports.
-export { useReduceMotion };
-
-// ── Bottom sheet ────────────────────────────────────────────────────────────
+// ── Curated band chip ───────────────────────────────────────────────────────
 
 /**
- * Slides up from the bottom (no slide when reduce-motion is on), closes on
- * the scrim, the Close button or the system back gesture, and keeps
- * screen-reader focus inside while open.
+ * MORNING / NOON / NIGHT: the curated band a set sits in. A heavier outline
+ * and tracked capitals, as the band is named on the wall; the word carries it.
  */
-export function Sheet({
-  visible,
-  title,
-  onClose,
-  children,
-  footer,
-  testID,
-}: {
-  visible: boolean;
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-  footer?: ReactNode;
-  testID?: string;
-}) {
+export function BandChip({ label }: { label: string }) {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
-  const reduceMotion = useReduceMotion();
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType={reduceMotion ? "none" : "slide"}
-      onRequestClose={onClose}
-      statusBarTranslucent
+    <View
+      style={{
+        minHeight: 24,
+        paddingHorizontal: space.sm,
+        borderRadius: radius.control,
+        borderWidth: 1.5,
+        borderColor: colors.text,
+        alignSelf: "flex-start",
+        justifyContent: "center",
+      }}
     >
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable
-          // The scrim is ink in both colour schemes. Hidden from screen
-          // readers: the Close button and the back gesture do the same job.
-          accessibilityRole="button"
-          accessibilityLabel={strings.set.close}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          onPress={onClose}
-          style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: palette.ink, opacity: 0.45 }}
-        />
-        <View
-          testID={testID}
-          accessibilityViewIsModal
-          style={{
-            maxHeight: "88%",
-            backgroundColor: colors.bg,
-            borderTopWidth: 2,
-            borderTopColor: colors.text,
-            paddingBottom: insets.bottom + 8,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-              paddingLeft: 20,
-              paddingRight: 8,
-              paddingVertical: 4,
-              borderBottomWidth: hairline,
-              borderBottomColor: colors.rule,
-            }}
-          >
-            <Text variant="label" tone="secondary" style={{ flexShrink: 1 }} accessibilityRole="header">
-              {title}
-            </Text>
-            <Button label={strings.set.close} variant="ghost" onPress={onClose} />
-          </View>
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16 }}>{children}</ScrollView>
-          {footer ? (
-            <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 8, borderTopWidth: hairline, borderTopColor: colors.rule }}>
-              {footer}
-            </View>
-          ) : null}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-// ── Segmented control (the web's module tab strip) ──────────────────────────
-
-export function Segments<K extends string>({
-  items,
-  active,
-  onChange,
-}: {
-  items: { key: K; label: string }[];
-  active: K;
-  onChange: (key: K) => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View accessibilityRole="tablist" style={{ flexDirection: "row", borderWidth: hairline, borderColor: colors.text }}>
-      {items.map((item, i) => {
-        const on = item.key === active;
-        return (
-          <Pressable
-            key={item.key}
-            testID={`segment-${item.key}`}
-            accessibilityRole="tab"
-            accessibilityLabel={item.label}
-            accessibilityHint={strings.segments.a11yHint(i + 1, items.length)}
-            accessibilityState={{ selected: on }}
-            onPress={() => onChange(item.key)}
-            style={({ pressed }) => ({
-              flex: 1,
-              minHeight: touch.minTarget,
-              paddingHorizontal: 4,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: on ? colors.inverse : pressed ? colors.surface : "transparent",
-              borderLeftWidth: i === 0 ? 0 : hairline,
-              borderLeftColor: colors.text,
-            })}
-          >
-            <Text variant="label" tone={on ? "onInverse" : "default"} style={{ textAlign: "center" }}>
-              {item.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-// ── Chips: status in words (never colour alone) ─────────────────────────────
-
-export type ChipTone = "outline" | "ink" | "band";
-
-/** A mono caps tag. "band" is the drawer's black chip with yellow letters. */
-export function Chip({ label, tone = "outline", testID }: { label: string; tone?: ChipTone; testID?: string }) {
-  const { colors, scheme } = useTheme();
-  const box =
-    tone === "outline"
-      ? { backgroundColor: "transparent", borderColor: colors.ruleStrong }
-      : { backgroundColor: colors.inverse, borderColor: colors.inverse };
-  return (
-    <View testID={testID} style={{ paddingHorizontal: 6, paddingVertical: 2, borderWidth: hairline, ...box }}>
-      <Text
-        variant="label"
-        tone={tone === "outline" ? "secondary" : "onInverse"}
-        // Yellow on ink is ~11:1; on the dark scheme the chip inverts to bone.
-        style={tone === "band" ? { color: scheme === "dark" ? colors.onInverse : colors.accent } : undefined}
-      >
+      <Text style={{ fontFamily: fontFamily.bodyBold, fontSize: 11, lineHeight: 16, letterSpacing: 0.9, textTransform: "uppercase" }}>
         {label}
       </Text>
     </View>
@@ -175,19 +43,20 @@ export function Chip({ label, tone = "outline", testID }: { label: string; tone?
 
 // ── Week stepper ────────────────────────────────────────────────────────────
 
-export function WeekNav({
-  label,
-  onPrev,
-  onNext,
-  onToday,
-  isThisWeek,
-}: {
+export type WeekNavProps = {
+  /** "16–20 Nov · This week" or "23–27 Nov 2026". */
   label: string;
+  /** What a screen reader says for the label. */
+  spokenLabel: string;
+  /** "9 sets · 6 seats open" (the week view only). */
+  summary?: string;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
   isThisWeek: boolean;
-}) {
+};
+
+export function WeekNav({ label, spokenLabel, summary, onPrev, onNext, onToday, isThisWeek }: WeekNavProps) {
   const { colors } = useTheme();
   const arrow = (dir: "prev" | "next") => (
     <Pressable
@@ -197,12 +66,11 @@ export function WeekNav({
       onPress={dir === "prev" ? onPrev : onNext}
       hitSlop={4}
       style={({ pressed }) => ({
-        minWidth: touch.minTarget,
-        minHeight: touch.minTarget,
+        width: touch.floor,
+        minHeight: touch.floor,
         alignItems: "center",
         justifyContent: "center",
-        borderWidth: hairline,
-        borderColor: colors.text,
+        borderRadius: radius.control,
         backgroundColor: pressed ? colors.surfaceStrong : "transparent",
       })}
     >
@@ -212,23 +80,50 @@ export function WeekNav({
     </Pressable>
   );
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: space.xs, marginHorizontal: -space.sm }}>
       {arrow("prev")}
-      <View style={{ flex: 1, minWidth: 120 }} accessible accessibilityLabel={strings.week.weekOf(label)}>
-        <Text variant="label" style={{ textAlign: "center" }}>
+      <View
+        accessible
+        accessibilityLabel={summary ? `${spokenLabel}. ${summary}` : spokenLabel}
+        style={{ flex: 1, minWidth: 0, alignItems: "center" }}
+      >
+        <Text variant="sectionTitle" style={{ textAlign: "center" }}>
           {label}
         </Text>
+        {summary ? (
+          <Text variant="caption" tone="secondary" style={{ textAlign: "center" }}>
+            {summary}
+          </Text>
+        ) : null}
       </View>
-      {arrow("next")}
       {!isThisWeek ? (
         <Button
           label={strings.week.today}
-          variant="ghost"
+          variant="secondary"
+          size="small"
           onPress={onToday}
           accessibilityHint={strings.week.todayHint}
           testID="week-today"
+          style={{ paddingHorizontal: 10 }}
         />
       ) : null}
+      {arrow("next")}
+    </View>
+  );
+}
+
+// ── Day header ──────────────────────────────────────────────────────────────
+
+/** "Wed 18 Nov" as a section title; read aloud as "Wednesday 18 November". */
+export function DayHeader({ date }: { date: string }) {
+  return (
+    <View
+      accessible
+      accessibilityRole="header"
+      accessibilityLabel={spokenDate(date)}
+      style={{ paddingTop: space.xs, paddingBottom: space.sm }}
+    >
+      <Text variant="sectionTitle">{dayLabel(date)}</Text>
     </View>
   );
 }
@@ -236,50 +131,36 @@ export function WeekNav({
 // ── Error with a retry ──────────────────────────────────────────────────────
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
-  // Danger banners announce themselves on iOS (src/components/Banner.tsx).
+  // Error banners announce themselves on iOS (src/components/Banner.tsx).
   return (
-    <Banner
-      tone="danger"
-      title={strings.errors.title}
-      testID="error-state"
-      action={<Button label={strings.errors.retry} variant="secondary" onPress={onRetry} />}
-    >
+    <Banner tone="error" title={strings.errors.title} testID="error-state" actionLabel={strings.errors.retry} onAction={onRetry}>
       {message}
     </Banner>
   );
 }
 
-/**
- * VoiceOver ignores Android's live regions, so a positive result speaks its
- * message on iOS as it appears (Android's Banner live region already does).
- */
-function useAnnounceOnIOS(message: string | null | undefined) {
-  useEffect(() => {
-    if (Platform.OS === "ios") announce(message);
-  }, [message]);
-}
-
 /** The result of the last action, announced to screen readers as it appears. */
 export function ActionNotice({ result }: { result: { ok: boolean; message: string } | null }) {
-  // Danger banners announce themselves on iOS; the positive result is spoken here.
+  // Error banners announce themselves on iOS; the positive result is spoken
+  // here (Android's Banner live region already reads it).
   useAnnounceOnIOS(result?.ok ? result.message : null);
   if (!result) return null;
   return (
-    <Banner tone={result.ok ? "positive" : "danger"} testID={result.ok ? "action-ok" : "action-error"}>
+    <Banner tone={result.ok ? "positive" : "error"} testID={result.ok ? "action-ok" : "action-error"}>
       {result.message}
     </Banner>
   );
 }
 
-/** Mono caps label line with an optional right-hand note. */
+/** Sentence-case label line with an optional right-hand note. */
 export function LabelRow({ label, right }: { label: string; right?: string }) {
   return (
-    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-      <Text variant="label" tone="secondary" accessibilityRole="header">
+    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: space.sm, flexWrap: "wrap" }}>
+      <Text variant="label" accessibilityRole="header">
         {label}
       </Text>
       {right ? (
-        <Text variant="label" tone="attention">
+        <Text variant="caption" tone="secondary">
           {right}
         </Text>
       ) : null}

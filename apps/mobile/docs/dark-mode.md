@@ -24,7 +24,17 @@ needs a look on a real device (see the checklist at the end).
   root view background** (`expo-system-ui`) to `colors.bg`, so keyboard, rotation and screen
   transitions never show white behind a dark screen. The status bar follows the scheme.
 
-## Palette changes (dark only, light unchanged)
+## Redesign (R1 foundation, 18 Nov 2026)
+
+The iPhone redesign changed the light scheme and one dark value (design-spec §2, full list in
+`docs/redesign-kit.md`): dark `textTertiary` is now `#C7C3B5` (same as secondary, 11.2:1), and
+two dark-specific roles were added: primary buttons and switches "on" are **yellow with black**
+(`primary` / `onPrimary`), and a focused text field draws a **yellow** 2px ring (`focus`). Sheets
+and fields use `raised` (the dark surface `#161614`); the selected segment uses `segmentOn`
+(`#2A2924`); the sheet scrim is darker in dark (66% black). `bone` `#C5C2AE` is text on black
+only. Every other dark token below is unchanged.
+
+## Palette changes (dark only, batch 2)
 
 | Token | Was | Now | Why |
 |---|---|---|---|
@@ -52,10 +62,9 @@ Status: **fixed** (in this branch) · **ok** (already honours the theme, checked
 | Android navigation bar | Edge-to-edge (SDK 58): the bar is transparent over our bg; button colour comes from the DayNight theme, which the Appearance override switches. | None in code. Needs a device check; if the buttons are wrong, add `expo-navigation-bar` and set its style from the scheme. | follow-up (device) |
 | Sign-in | Wordmark already swaps black/white PNGs by scheme; tick uses accent. | — | ok |
 | Kit: `TextField` | Outline (`ruleStrong`) 1.98:1 in dark; placeholder 4.49:1. | Dark token values above. | fixed |
-| Kit: `Button`, `Banner`, `Masthead`, `Text`, `Divider`, `Screen` | All colours from tokens; yellow band is yellow with ink text and ink border in both schemes (tested). | — | ok |
+| Kit: `Button`, `Banner`, `LargeTitle`, `Text`, `Divider`, `Screen` and the redesign kit | All colours from tokens; the yellow band is yellow with ink text in both schemes (no border since the redesign); primary buttons are yellow/black in dark; every kit component is snapshotted in light and dark (`src/components/__tests__/gallery.test.tsx`). | — | ok |
 | Kit: `Button` loading spinner | `ActivityIndicator` uses the button's text colour. | — | ok |
 | Shell: `TabBar` | Tint, pressed fill, yellow active tick and badge (inverse) all from tokens; tick is decoration, the selected state is also in the role/label. | — | ok |
-| Shell: `SectionBar`, `ListRow`, `StateMessage`, `SkeletonRows` | Tokens. In dark the black section bar inverts to bone with ink text (13:1+), so it still reads as a bar on a black page. | — | ok |
 | Shell: in-app browser (`openWebPage`) | Toolbar/controls colours come from the `colors` the caller passes. Bookings passed none, so the browser opened light in dark mode. | Bookings' six calls now pass `colors`. | fixed |
 | Home: feed, `NotificationRow` | Tokens. | — | ok |
 | Home: pull-to-refresh (`app/(app)/index.tsx`) | Android spinner disc defaults to white; with a light arrow in dark it is low contrast. | Batch 3 follow-ups: spreads `refreshControlColors(colors)` onto its `RefreshControl` (My Schools list, enrolment and attendance too). | fixed |
@@ -66,7 +75,7 @@ Status: **fixed** (in this branch) · **ok** (already honours the theme, checked
 | Tickets: list pull-to-refresh | White Android disc. | `refreshControlColors()`. | fixed |
 | Tickets: ticket QR | Must stay dark-on-light with a quiet zone or scanners fail. Already a white card with an ink border, ink modules, `quietZone` 8 + 16 padding, in both schemes. | — | kept |
 | Tickets: door scanner | Camera overlay is fixed ink/white (always over a live camera picture). | — | kept |
-| Tickets: verdict card, guest search spinner | Tokens; accent verdict uses ink text/border on yellow. | — | ok |
+| Tickets: verdict card, guest search spinner | Tokens; the checked-in verdict is the `positive` fill with `onPositive` (white in light, ink in dark); the others are outlines on `raised`. | — | ok |
 | Prayer: week / day / set sheet / practice / my sets | Tokens; curated band chip inverts in dark (comment in code); dashed "needs a lead" border uses text colour. | — | ok |
 | Prayer: pull-to-refresh | White Android disc. | `refreshControlColors()`. | fixed |
 | Prayer: bottom sheet | Same as finance's sheet. | — | ok |

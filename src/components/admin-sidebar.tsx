@@ -5,7 +5,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Building2, ChevronDown, LogOut, Menu, PanelLeft, RefreshCw, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { ThemeQuickSwitch } from "@/components/theme-switch";
+import { OrgSwitcherMount } from "@/components/missio/org-switcher-mount";
 import { Logo } from "@/components/ffsa/logo";
 import { buildShellNav, flattenShellNav, type ShellLink, type ShellNav } from "@/components/shell-nav";
 
@@ -206,6 +208,7 @@ function SidebarBody({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={cn("flex items-center", collapsed ? "flex-col gap-1 px-1 pt-2" : "gap-1 pr-2")}>
+        <OrgSwitcherMount compact />
         <Link href="/home" aria-label="FFSA Hub" onClick={onNavigate} className="shrink-0">
           <Logo surface="black" kind="mark" height={24} />
         </Link>
@@ -290,6 +293,7 @@ function SidebarBody({
                 {item.label}
               </Link>
             ))}
+            <ThemeQuickSwitch className="border-t border-border px-2 py-2" />
             <SignOutForm className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-ui hover:bg-bg-subtle">
               <LogOut className="h-4 w-4" aria-hidden />
               Sign out
@@ -347,6 +351,20 @@ export function AdminSidebar({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Tailwind `md` is 768px — the same query as `md:hidden` / `hidden md:flex`.
+  // Crossing it shows the desktop sidebar, so a phone drawer must not stay open.
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(min-width: 768px)");
+    const closeOnDesktop = () => {
+      if (query.matches) setMobileOpen(false);
+    };
+    closeOnDesktop();
+    if (typeof query.addEventListener !== "function") return;
+    query.addEventListener("change", closeOnDesktop);
+    return () => query.removeEventListener("change", closeOnDesktop);
+  }, []);
+
   function toggleGroup(id: string) {
     setGroupsOpen((current) => {
       return { ...current, [id]: current[id] === false };
@@ -374,12 +392,13 @@ export function AdminSidebar({
   };
 
   return (
-    <>
+    <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
       <aside
         data-shell-panel
         data-shell-sidebar
         className={cn(
-          "hidden h-screen shrink-0 flex-col bg-brand-black text-bg transition-[width] duration-200 ease-out md:flex",
+          // theme-light: the sidebar is black in both modes.
+          "theme-light hidden h-screen shrink-0 flex-col bg-brand-black text-bg transition-[width] duration-200 ease-out md:flex",
           collapsed ? "w-14" : "w-60"
         )}
       >
@@ -397,23 +416,26 @@ export function AdminSidebar({
         </div>
       </aside>
 
-      <div className="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between bg-brand-black px-2 md:hidden">
-        <Link href="/home" aria-label="FFSA Hub" className="shrink-0">
-          <Logo surface="black" kind="wordmark" height={24} />
-        </Link>
-        <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" className="flex h-11 w-11 items-center justify-center text-bg">
-          <Menu className="h-5 w-5" aria-hidden />
-        </button>
+      <div data-shell-topbar className="theme-light fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between bg-brand-black px-2 md:hidden">
+        <span className="flex min-w-0 items-center gap-2">
+          <OrgSwitcherMount compact />
+          <Link href="/home" aria-label="FFSA Hub" className="shrink-0">
+            <Logo surface="black" kind="wordmark" height={24} />
+          </Link>
+        </span>
+        <SheetTrigger asChild>
+          <button type="button" aria-label="Open menu" className="flex h-11 w-11 items-center justify-center text-bg">
+            <Menu className="h-5 w-5" aria-hidden />
+          </button>
+        </SheetTrigger>
       </div>
 
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" data-shell-panel data-shell-sidebar className="w-[280px] border-r border-brand-black bg-brand-black p-0 text-bg">
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <SidebarBody {...bodyProps} collapsed={false} onNavigate={() => setMobileOpen(false)} />
-        </SheetContent>
-      </Sheet>
+      <SheetContent side="left" data-shell-panel data-shell-sidebar aria-describedby={undefined} className="theme-light w-[280px] border-r border-brand-black bg-brand-black p-0 text-bg">
+        <SheetTitle className="sr-only">Navigation</SheetTitle>
+        <SidebarBody {...bodyProps} collapsed={false} onNavigate={() => setMobileOpen(false)} />
+      </SheetContent>
 
       <CommandMenu open={searchOpen} onClose={() => setSearchOpen(false)} items={items} />
-    </>
+    </Sheet>
   );
 }

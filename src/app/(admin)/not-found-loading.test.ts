@@ -18,6 +18,9 @@ const INDEX_ROUTES = [
   "src/app/(admin)/events/(index)",
   "src/app/(admin)/okrs/(index)",
   "src/app/(admin)/prayer-room/(index)",
+  "src/app/(admin)/schools/(index)",
+  "src/app/(admin)/forms/(index)",
+  "src/app/(admin)/bookings/vehicles/fleet/(index)",
 ];
 
 function relative(file: string): string {

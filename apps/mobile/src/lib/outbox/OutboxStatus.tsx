@@ -45,7 +45,7 @@ export function OutboxItemStatus({ item, online, now: given }: Props) {
           alignSelf: "flex-start",
         }}
       >
-        <Text variant="label" tone={needsYou ? "danger" : "secondary"}>
+        <Text variant="monoLabel" tone={needsYou ? "danger" : "secondary"}>
           {stateLabel(state)}
         </Text>
       </View>
@@ -66,7 +66,7 @@ export function OutboxSummary({ items, testID = "outbox-summary" }: { items: Pic
   const text = summaryText(items);
   if (!text) return null;
   return (
-    <Text variant="label" tone="secondary" testID={testID} accessibilityLiveRegion="polite">
+    <Text variant="monoLabel" tone="secondary" testID={testID} accessibilityLiveRegion="polite">
       {text}
     </Text>
   );

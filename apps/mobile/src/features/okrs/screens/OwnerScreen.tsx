@@ -1,18 +1,18 @@
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Masthead, Screen, Text } from "@/components";
-import { ErrorState, Row, SectionBar, Skeleton } from "@/features/finance/components/ui";
+import { type BackAction, Banner, Bleed, EmptyState, FadeIn, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, PushedPage, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { timeAgo } from "@/features/home/feed-logic";
-import { ListRow, StateMessage, openWebPage } from "@/features/shell";
+import { openWebPage } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
+import { hairline, radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { okrsApi } from "../client";
-import { Bar, CycleSwitcher, Freshness, Kpi, KpiStrip, StatusTag } from "../components/ui";
+import { Bar, CycleSwitcher, Figure, FigureStrip, StatusTag, Freshness } from "../components/ui";
 import { cacheName, isNotFound, loadErrorMessage, statusLabel, webPath } from "../logic";
 import { strings } from "../strings";
 import type { KeyResult, Objective, OwnerPage } from "../types";
@@ -43,53 +43,89 @@ export default function OwnerScreen({ ownerId, cycle }: { ownerId: string; cycle
     errorMessage,
   });
 
-  const data = state.status === "ready" ? state.data : null;
+  const back: BackAction = { label: strings.wall.title, onPress: () => router.back() };
+
+  if (state.status === "loading") {
+    return (
+      <PushedPage back={back}>
+        <Bleed>
+          <SkeletonList label={s.loading} count={5} inset={false} />
+        </Bleed>
+      </PushedPage>
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <PushedPage back={back}>
+        <Bleed>
+          {state.message === s.notFound ? (
+            <EmptyState
+              testID="not-found"
+              title={s.notFoundTitle}
+              body={s.notFound}
+              actionLabel={strings.common.allGroups}
+              onAction={() => router.navigate("/okrs")}
+            />
+          ) : (
+            <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
+          )}
+        </Bleed>
+      </PushedPage>
+    );
+  }
+
+  const data = state.data;
   // Looked up from the latest data, so a saved check-in shows its new status.
-  const open = data ? findKeyResult(data.objectives, openKrId) : null;
+  const open = findKeyResult(data.objectives, openKrId);
 
   return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
+    <>
+      <LargeTitleScrollView
+        back={back}
+        eyebrow={`${s.context(data.owner.kind === "team")} · ${data.cycle.name}`}
+        title={data.owner.name}
+        gap={0}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
       >
-        {state.status === "loading" ? <Skeleton label={s.loading} /> : null}
-        {state.status === "error" ? (
-          state.message === s.notFound ? (
-            <StateMessage testID="not-found" title={s.notFoundTitle} body={s.notFound} actionLabel={strings.common.allGroups} onAction={() => router.navigate("/okrs")} />
-          ) : (
-            <ErrorState title={s.errorTitle} message={state.message} onRetry={retry} />
-          )
+        {state.staleSince !== null ? (
+          <Bleed style={{ marginBottom: space.md }}>
+            <Freshness state={state} onRetry={retry} checkinsNote={data.canEdit} />
+          </Bleed>
         ) : null}
 
-        {data ? (
-          <>
-            <Masthead context={`${s.context(data.owner.kind === "team")} · ${data.cycle.name}`} title={data.owner.name} />
-            <Freshness state={state} onRetry={retry} />
-
+        <FadeIn>
+          <Bleed>
             <CycleSwitcher cycles={data.cycles} active={data.cycle} onChange={(slug) => router.setParams({ cycle: slug })} />
+          </Bleed>
 
-            <KpiStrip>
-              <Kpi label={s.kpiObjectives} value={data.totals.objectives} />
-              <Kpi label={s.kpiKeyResults} value={data.totals.keyResults} />
-              <Kpi label={s.kpiComplete} value={data.totals.complete} />
-              <Kpi label={s.kpiStuck} value={data.totals.stuck} tone={data.totals.stuck > 0 ? "danger" : "default"} testID="kpi-stuck" />
-            </KpiStrip>
+          <View style={{ marginTop: space.lg }}>
+            <FigureStrip four>
+              <Figure label={s.kpiObjectives} value={data.totals.objectives} />
+              <Figure label={s.kpiKeyResults} value={data.totals.keyResults} />
+              <Figure label={s.kpiComplete} value={data.totals.complete} />
+              <Figure label={s.kpiStuck} value={data.totals.stuck} tone={data.totals.stuck > 0 ? "danger" : "default"} testID="kpi-stuck" />
+            </FigureStrip>
+          </View>
 
-            {/* Calm, not an alarm: who can change this, in a sentence. */}
+          {/* Calm, not an alarm: who can change this, in a sentence. */}
+          <Bleed style={{ marginTop: space.lg }}>
             <Banner tone="info" testID="access-note">
               {data.canEdit ? s.canEdit : data.readOnly === "closed" ? s.closed : s.readAccess}
             </Banner>
+          </Bleed>
 
-            {data.objectives.length === 0 ? (
-              <Text tone="secondary" testID="empty">
-                {data.canEdit ? s.emptyEditable : s.emptyReadOnly}
-              </Text>
-            ) : (
-              data.objectives.map((o) => <ObjectiveBlock key={o.id} objective={o} canEdit={data.canEdit} onOpen={setOpenKrId} />)
-            )}
+          {data.objectives.length === 0 ? (
+            <Text tone="secondary" testID="empty" style={{ marginTop: space.lg }}>
+              {data.canEdit ? s.emptyEditable : s.emptyReadOnly}
+            </Text>
+          ) : (
+            data.objectives.map((o) => <ObjectiveBlock key={o.id} objective={o} canEdit={data.canEdit} onOpen={setOpenKrId} />)
+          )}
+        </FadeIn>
 
-            {data.canEdit ? (
+        {data.canEdit ? (
+          <Bleed style={{ marginTop: space.xl }}>
+            <ListGroup inset={false}>
               <ListRow
                 title={s.editOnWeb}
                 trailing="web"
@@ -97,12 +133,12 @@ export default function OwnerScreen({ ownerId, cycle }: { ownerId: string; cycle
                 onPress={() => void openWebPage(webPath(ownerId, data.cycle.slug), colors)}
                 testID="edit-on-web"
               />
-            ) : null}
-          </>
+            </ListGroup>
+          </Bleed>
         ) : null}
-      </ScrollView>
+      </LargeTitleScrollView>
 
-      {data && open ? (
+      {open ? (
         <KeyResultSheet
           key={open.kr.id}
           keyResult={open.kr}
@@ -114,7 +150,7 @@ export default function OwnerScreen({ ownerId, cycle }: { ownerId: string; cycle
           onEditOnWeb={() => void openWebPage(webPath(ownerId, data.cycle.slug), colors)}
         />
       ) : null}
-    </Screen>
+    </>
   );
 }
 
@@ -131,24 +167,38 @@ function ObjectiveBlock({ objective: o, canEdit, onOpen }: { objective: Objectiv
   const { colors } = useTheme();
   return (
     <View testID={`objective-${o.id}`}>
-      <SectionBar title={`${o.position}. ${o.title}`} meta={s.keyResultsMeta(o.keyResults.length)} />
+      <SectionTitle title={`${o.position}. ${o.title}`} meta={s.keyResultsMeta(o.keyResults.length)} />
       {o.description || o.timeline || o.notes ? (
-        <View style={{ backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 10, gap: 6 }}>
-          {o.description ? <Text tone="secondary">{o.description}</Text> : null}
-          {o.timeline ? (
-            <Text variant="label" tone="secondary">
-              {o.timeline}
-            </Text>
-          ) : null}
-          {o.notes ? <Text>{o.notes}</Text> : null}
-        </View>
+        <Bleed style={{ marginBottom: space.sm }}>
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderWidth: hairline,
+              borderColor: colors.rule,
+              borderRadius: radius.card,
+              paddingHorizontal: space.md,
+              paddingVertical: 10,
+              gap: space.xs,
+            }}
+          >
+            {o.description ? <Text tone="secondary">{o.description}</Text> : null}
+            {o.timeline ? <Text variant="label">{o.timeline}</Text> : null}
+            {o.notes ? <Text>{o.notes}</Text> : null}
+          </View>
+        </Bleed>
       ) : null}
       {o.keyResults.length === 0 ? (
-        <Text tone="secondary" style={{ paddingVertical: 12 }}>
+        <Text tone="secondary" style={{ paddingVertical: space.sm }}>
           {s.noKeyResults}
         </Text>
       ) : (
-        o.keyResults.map((kr) => <KeyResultRow key={kr.id} kr={kr} canEdit={canEdit} onPress={() => onOpen(kr.id)} />)
+        <Bleed>
+          <ListGroup inset={false}>
+            {o.keyResults.map((kr) => (
+              <KeyResultRow key={kr.id} kr={kr} canEdit={canEdit} onPress={() => onOpen(kr.id)} />
+            ))}
+          </ListGroup>
+        </Bleed>
       )}
     </View>
   );
@@ -168,19 +218,17 @@ function KeyResultRow({ kr, canEdit, onPress }: { kr: KeyResult; canEdit: boolea
     .filter(Boolean)
     .join(". ");
   return (
-    <Row onPress={onPress} accessibilityLabel={a11y} accessibilityHint={s.krHint(canEdit)} testID={`kr-${kr.id}`}>
+    <GroupRow onPress={onPress} accessibilityLabel={a11y} accessibilityHint={s.krHint(canEdit)} testID={`kr-${kr.id}`}>
       <Text>
-        {kr.label ? (
-          <Text variant="label" tone="secondary">
-            {`${kr.label}  `}
-          </Text>
-        ) : null}
+        {kr.label ? <Text variant="label">{`${kr.label}  `}</Text> : null}
         {kr.description}
       </Text>
-      <StatusTag status={kr.status} testID={`kr-status-${kr.id}`} />
+      <View style={{ marginTop: space.xs }}>
+        <StatusTag status={kr.status} testID={`kr-status-${kr.id}`} />
+      </View>
       {/* No ratio, no bar: prose key results get no track at all. */}
       {kr.progressPct !== null ? (
-        <View style={{ gap: 4 }}>
+        <View style={{ gap: space.xs, marginTop: space.xs }}>
           <Bar pct={kr.progressPct} testID={`kr-bar-${kr.id}`} />
           {kr.caption ? (
             <Text variant="caption" tone="secondary">
@@ -192,6 +240,6 @@ function KeyResultRow({ kr, canEdit, onPress }: { kr: KeyResult; canEdit: boolea
       <Text variant="caption" tone="secondary">
         {meta}
       </Text>
-    </Row>
+    </GroupRow>
   );
 }

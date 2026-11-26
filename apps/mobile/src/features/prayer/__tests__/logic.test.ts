@@ -179,10 +179,12 @@ describe("the week as a run of days", () => {
     expect(blockoutWhen(blockouts[1])).toBe("all day");
   });
 
-  it("summarises the week for the masthead", () => {
+  it("summarises the week for the line under the week label", () => {
     expect(weekSummary(sets)).toEqual({ sets: 3, open: 5, seats: 10 });
-    expect(strings.week.context("1–7 Nov 2026", 0, 0, 0)).toBe("1–7 Nov 2026 · nothing booked");
-    expect(strings.week.context("1–7 Nov 2026", 2, 0, 3)).toBe("1–7 Nov 2026 · 2 sets · every seat filled");
+    expect(strings.week.summary(0, 0, 0)).toBe("nothing booked");
+    expect(strings.week.summary(2, 0, 3)).toBe("2 sets · every seat filled");
+    expect(strings.week.summary(1, 2, 3)).toBe("1 set · 2 seats open");
+    expect(strings.week.summary(2, 0, 0)).toBe("2 sets · no lineup yet");
   });
 });
 

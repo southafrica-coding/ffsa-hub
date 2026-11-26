@@ -2,12 +2,10 @@ import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 
-import { Button, Text, TextField } from "@/components";
-import { Sheet } from "@/features/finance/components/Sheet";
-import { Chips } from "@/features/finance/components/ui";
+import { Button, ChoiceChips, FieldError, ListGroup, ListRow, Sheet, Text, TextField } from "@/components";
 import { timeAgo } from "@/features/home/feed-logic";
-import { ListRow } from "@/features/shell";
 import { announce } from "@/lib/a11y";
+import { hairline, radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { okrsApi } from "../client";
@@ -101,16 +99,17 @@ export function KeyResultSheet({
   }
 
   const ago = kr.lastCheckinAt ? timeAgo(kr.lastCheckinAt) : null;
+  const valueError = error === strings.errors.valueNotNumber;
 
   return (
     <Sheet visible title={kr.label || k.sheetTitle} onClose={onClose}>
-      <View style={{ gap: 16, paddingBottom: 8 }}>
-        <View style={{ gap: 8 }}>
-          <Text variant="label" tone="secondary">
-            {objectiveTitle}
-          </Text>
-          <Text>{kr.description}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+      <View style={{ gap: space.lg, paddingBottom: space.sm }}>
+        <View style={{ gap: space.sm }}>
+          <View style={{ gap: space.xs }}>
+            <Text variant="label">{objectiveTitle}</Text>
+            <Text>{kr.description}</Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm }}>
             <StatusTag status={kr.status} testID="sheet-status" />
             <Text variant="caption" tone="secondary">
               {ago ? strings.owner.updated(ago) : strings.owner.neverUpdated}
@@ -140,17 +139,31 @@ export function KeyResultSheet({
         </View>
 
         {canEdit ? (
-          <View testID="checkin-form" style={{ gap: 12, padding: 12, backgroundColor: colors.surface }}>
-            <Text variant="label" accessibilityRole="header">
+          <View
+            testID="checkin-form"
+            style={{
+              gap: space.md,
+              padding: space.md,
+              backgroundColor: colors.surface,
+              borderWidth: hairline,
+              borderColor: colors.rule,
+              borderRadius: radius.card,
+            }}
+          >
+            <Text variant="sectionTitle" accessibilityRole="header">
               {k.newCheckin}
             </Text>
-            <Chips label={k.statusLabel} options={STATUS_OPTIONS} value={status} onChange={setStatus} disabled={busy} />
+            <ChoiceChips label={k.statusLabel} options={STATUS_OPTIONS} value={status} onChange={setStatus} disabled={busy} />
             {kr.hasMetric ? (
               <TextField
                 label={k.valueLabel(kr.metricUnit)}
                 hint={k.valueHint(kr.currentValue)}
+                error={valueError ? error : null}
                 value={value}
-                onChangeText={setValue}
+                onChangeText={(t) => {
+                  setValue(t);
+                  if (valueError) setError(null);
+                }}
                 keyboardType="decimal-pad"
                 placeholder={kr.currentValue !== null ? String(kr.currentValue) : undefined}
                 editable={!busy}
@@ -166,10 +179,11 @@ export function KeyResultSheet({
               editable={!busy}
               testID="checkin-comment"
             />
-            {error ? (
-              <Text tone="danger" accessibilityRole="alert" accessibilityLiveRegion="assertive" testID="form-error">
-                {error}
-              </Text>
+            {/* A bad figure is said on its field; anything else (the save failed) above the button. */}
+            {error && !valueError ? (
+              <View testID="form-error">
+                <FieldError>{error}</FieldError>
+              </View>
             ) : null}
             <Button label={k.save} variant="primary" loading={busy} onPress={() => void save()} testID="checkin-save" />
           </View>
@@ -179,16 +193,20 @@ export function KeyResultSheet({
           </Text>
         )}
 
-        <View style={{ gap: 6 }}>
-          <Text variant="label" tone="secondary" accessibilityRole="header">
+        <View style={{ gap: space.xs }}>
+          <Text variant="label" accessibilityRole="header">
             {k.notes}
           </Text>
           <Text tone={kr.notes ? "default" : "secondary"}>{kr.notes || k.noNotes}</Text>
-          {canEdit ? <ListRow title={k.editNotesOnWeb} trailing="web" onPress={onEditOnWeb} testID="notes-on-web" /> : null}
+          {canEdit ? (
+            <ListGroup inset={false} style={{ marginTop: space.sm }}>
+              <ListRow title={k.editNotesOnWeb} trailing="web" onPress={onEditOnWeb} testID="notes-on-web" />
+            </ListGroup>
+          ) : null}
         </View>
 
-        <View style={{ gap: 8 }}>
-          <Text variant="label" tone="secondary" accessibilityRole="header">
+        <View style={{ gap: space.sm }}>
+          <Text variant="label" accessibilityRole="header">
             {k.history}
           </Text>
           {history.status === "loading" ? (
@@ -198,7 +216,7 @@ export function KeyResultSheet({
           ) : history.status === "error" ? (
             <View style={{ gap: 8, alignItems: "flex-start" }}>
               <Text tone="secondary">{k.historyError}</Text>
-              <Button label={strings.common.tryAgain} variant="secondary" onPress={() => {
+              <Button label={strings.common.tryAgain} variant="secondary" size="small" onPress={() => {
                   setHistory({ status: "loading" });
                   void loadHistory();
                 }}
@@ -232,9 +250,9 @@ function CheckinItem({ checkin: c }: { checkin: Checkin }) {
       accessible
       accessibilityLabel={[statusLabel(c.status), meta, c.comment].filter(Boolean).join(". ")}
       testID={`checkin-${c.id}`}
-      style={{ borderLeftWidth: 2, borderLeftColor: colors.ruleStrong, paddingLeft: 10, gap: 4, paddingVertical: 2 }}
+      style={{ borderLeftWidth: 2, borderLeftColor: colors.ruleStrong, paddingLeft: 10, gap: space.xs, paddingVertical: 2 }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm }}>
         <StatusTag status={c.status} />
         <Text variant="caption" tone="secondary">
           {meta}

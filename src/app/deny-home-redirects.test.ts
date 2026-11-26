@@ -4,7 +4,11 @@ import { describe, expect, it } from "vitest";
 // Page-local denials. The condition stays; only the target is /home.
 // middleware.ts and require-permission.ts are owned by other drafts.
 const DENIALS: Array<[file: string, line: string]> = [
-  ["src/app/(admin)/schools/page.tsx", 'if (!access.open) redirect("/home");'],
+  // Visa-only staff (main's visas.* grant) go to their visas; everyone else to /home.
+  [
+    "src/app/(admin)/schools/(index)/page.tsx",
+    'if (!access.open) redirect(visaAccess.open ? "/schools/visas" : "/home");',
+  ],
   [
     "src/app/(admin)/schools/[programId]/page.tsx",
     'if (!ltProgram) redirect("/home");',

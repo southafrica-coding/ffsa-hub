@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { HeartHandshake, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 
 type Slot = { id: string; role: string; status: string };
 type PrayerSet = {
@@ -76,43 +76,21 @@ export function PrayerWeekCard() {
 
   return (
     <div style={shell}>
-      <div
-        className="flex items-center justify-between"
-        style={{ padding: "0.85rem 1.5rem", borderBottom: "1px solid var(--rule)" }}
-      >
-        <div className="flex items-center gap-2.5">
-          <HeartHandshake className="h-4 w-4" style={{ color: "hsl(265 60% 70%)" }} />
-          <span
-            style={{
-              fontFamily: "var(--font-condensed)", fontWeight: 900,
-              fontSize: "1.1rem",
-              letterSpacing: "0.06em",
-              color: "var(--text-primary)",
-            }}
-          >
-            Prayer room · This week
-          </span>
-        </div>
-        <Link
-          href="/prayer-room"
-          className="flex items-center gap-1 transition-opacity hover:opacity-80"
-          style={{ fontSize: 9, letterSpacing: "0.18em", fontWeight: 700, textTransform: "uppercase", color: "var(--text-tertiary)" }}
-        >
+      <div className="section-bar">
+        <span className="section-bar-title">Prayer room this week</span>
+        <Link href="/prayer-room" className="section-bar-meta flex items-center gap-1 hover:text-white">
           Open
           <ArrowUpRight className="h-3 w-3" />
         </Link>
       </div>
 
       {sets === null ? (
-        <div style={{ padding: "1.1rem 1.5rem" }}>
-          <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Loading this week’s schedule…</p>
+        <div className="px-6 py-4">
+          <p className="text-[13px] text-[color:var(--text-tertiary)]">Loading this week’s schedule…</p>
         </div>
       ) : !hasAny ? (
-        <div className="flex flex-col items-center justify-center gap-1.5 text-center" style={{ padding: "2rem 1.5rem" }}>
-          <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>No prayer sets scheduled this week</p>
-          <Link href="/prayer-room" style={{ fontSize: 12, color: "hsl(265 60% 72%)" }}>
-            Open the Prayer room →
-          </Link>
+        <div className="flex flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+          <p className="text-sm font-medium text-[color:var(--text-primary)]">No prayer sets scheduled this week.</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7" style={{ gap: 1, background: "var(--surface-2)" }}>
@@ -193,7 +171,7 @@ export function PrayerWeekCard() {
 
 const shell: React.CSSProperties = {
   background: "var(--surface-1)",
-  border: "1px solid var(--rule)",
-  borderRadius: 14,
+  border: "1px solid var(--ink)",
+  borderRadius: 0,
   overflow: "hidden",
 };

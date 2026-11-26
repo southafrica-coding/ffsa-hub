@@ -4,7 +4,7 @@
 
 import { View } from "react-native";
 
-import { SectionBar } from "@/features/shell";
+import { Text } from "@/components";
 
 import { DocFile } from "../components/DocFile";
 import { DocScreen, Intro, LoadGate, useLoad } from "../components/docs-ui";
@@ -21,13 +21,12 @@ export function PassportScreen() {
   const p = load.data;
 
   return (
-    <DocScreen refreshing={load.refreshing} onRefresh={load.refresh}>
+    <DocScreen title={s.title} refreshing={load.refreshing} onRefresh={load.refresh}>
       <Intro>{s.intro}</Intro>
       <LoadGate load={load} loadingLabel={s.loading} errorTitle={s.loadErrorTitle} />
 
       {p ? (
         <View style={{ gap: 12 }}>
-          <SectionBar label={s.fileLabel} />
           <DocFile
             kind="passport-photo"
             label={s.fileLabel}
@@ -44,8 +43,14 @@ export function PassportScreen() {
               }))
             }
           />
-          <Intro>{s.tip}</Intro>
-          <Intro>{d.privacyVehicles}</Intro>
+          <View style={{ gap: 8 }}>
+            <Text variant="caption" tone="secondary">
+              {s.tip}
+            </Text>
+            <Text variant="caption" tone="secondary">
+              {d.privacyVehicles}
+            </Text>
+          </View>
         </View>
       ) : null}
     </DocScreen>

@@ -7,7 +7,7 @@ import type { ReactElement } from "react";
 import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
 import { colors } from "@/theme/tokens";
 import { themeFor } from "@/theme/use-theme";
 
@@ -23,6 +23,7 @@ jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
 jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "signedIn", session: { user: { id: "user-1" } } }) }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../api", () => ({ ...jest.requireActual("../api"), getSchools: jest.fn(), getSchool: jest.fn() }));
 let mockScheme: "light" | "dark" = "light";
 jest.mock("@/theme/use-theme", () => ({ ...jest.requireActual("@/theme/use-theme"), useTheme: () => jest.requireActual("@/theme/use-theme").themeFor(mockScheme) }));
@@ -43,7 +44,7 @@ describe("Schools list", () => {
   it("success: header, each row a named button with a hint, counts in words", async () => {
     list.mockResolvedValue(schoolList());
     await show(<SchoolsListScreen />);
-    expect(await screen.findByRole("header", { name: `${strings.list.title}, 2` })).toBeTruthy();
+    expect(await screen.findByRole("header", { name: strings.list.title })).toBeTruthy();
     const row = screen.getByRole("button", { name: "Leadership Track 2026. 3 students. 1 yes, 1 no, 1 undecided" });
     expect(row.props.accessibilityHint).toBe(strings.list.rowHint);
     expect(screen.getByRole("button", { name: "Leadership Track 2025. Archived. 1 student. 0 yes, 0 no, 1 undecided" })).toBeTruthy();
@@ -63,7 +64,8 @@ describe("School detail", () => {
     one.mockResolvedValue(detail());
     await show(<SchoolDetailScreen programId={LT_2026} />);
     expect(await screen.findByLabelText("Ben Cole. ben@example.org. Staff. Accepted: no. Note: Not this year. Decided 2 Oct 2026 by Lee Team")).toBeTruthy();
-    expect(screen.getByRole("header", { name: `${strings.detail.students}, 1 yes · 1 no · 1 undecided` })).toBeTruthy();
+    expect(screen.getByRole("header", { name: "Leadership Track 2026" })).toBeTruthy();
+    expect(screen.getByRole("header", { name: "Students · 3" })).toBeTruthy();
     const makeStaff = screen.getByRole("button", { name: "Make Ann Bell staff" });
     expect(makeStaff.props.accessibilityHint).toBe(strings.detail.makeStaffHint);
     expect(screen.getByRole("link", { name: /^Open this school on the website\. Opens in browser/ })).toBeTruthy();
@@ -75,18 +77,57 @@ describe("School detail", () => {
     await show(<SchoolDetailScreen programId={LT_2026} />);
     await fireEvent.press(await screen.findByRole("button", { name: "Decide on Cara Lee" }));
     expect(screen.getByRole("header", { name: strings.sheet.acceptedLabel })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: "Yes" })).toBeTruthy();
+    // Nothing is chosen until the person chooses.
+    expect(screen.getByRole("radio", { name: "Yes", checked: false })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "No", checked: false })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("radio", { name: "Yes" }));
+    expect(screen.getByRole("radio", { name: "Yes", checked: true })).toBeTruthy();
+    // Chosen is the yellow underline and the bold label, not colour alone.
+    const chosen = StyleSheet.flatten(screen.getByTestId("choice-yes").props.style);
+    expect(chosen.borderBottomWidth).toBe(2);
+    expect(chosen.borderBottomColor).toBe(colors.light.accent);
+    expect(chosen.minHeight).toBeGreaterThanOrEqual(44);
     expect(screen.getByLabelText(strings.sheet.noteLabelOptional)).toBeTruthy();
     expect(audit()).toEqual([]);
   });
 
-  it("dark mode: rows use the dark theme's rule colour (no hard-coded colours)", async () => {
+  it("dark mode: the list uses the dark theme's colours (no hard-coded colours)", async () => {
     mockScheme = "dark";
     expect(themeFor("dark").colors.rule).toBe(colors.dark.rule);
     one.mockResolvedValue(detail());
     await show(<SchoolDetailScreen programId={LT_2026} />);
-    const row = await screen.findByTestId("student-e1");
-    expect(StyleSheet.flatten(row.props.style).borderBottomColor).toBe(colors.dark.rule);
+    const group = StyleSheet.flatten((await screen.findByTestId("students")).props.style);
+    expect(group.borderColor).toBe(colors.dark.rule);
+    expect(group.backgroundColor).toBe(colors.dark.raised);
+    expect(StyleSheet.flatten(screen.getByTestId("needs-you").props.style).backgroundColor).toBe(colors.dark.accent);
     expect(audit()).toEqual([]);
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("largest text: nothing important is capped or clipped", () => {
+  it("Staff decisions list", async () => {
+    const dims = atLargestText();
+    list.mockResolvedValue(schoolList());
+    await show(<SchoolsListScreen />);
+    expect(await screen.findByRole("header", { name: strings.list.title })).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
+  });
+
+  it("School students", async () => {
+    const dims = atLargestText();
+    one.mockResolvedValue(detail());
+    await show(<SchoolDetailScreen programId={LT_2026} />);
+    expect(await screen.findByRole("header", { name: "Leadership Track 2026" })).toBeTruthy();
+    // Deliberate clamp: a decision note shows 3 lines; the row's spoken label carries the whole note.
+    expect(largeTextProblems(screen.container as never, ["Note: Not this year"])).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
   });
 });

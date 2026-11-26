@@ -1,13 +1,14 @@
-import { Stack, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
+import { Lock } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 
-import { Banner, Button, Masthead, Text, TextField } from "@/components";
+import { Banner, Button, EmptyState, SkeletonList, Text, TextField, WebHint } from "@/components";
 import { openWebPage } from "@/features/shell/web";
-import { EmptyState, SkeletonRows } from "@/features/tickets/components/StateViews";
+import { Heading } from "@/features/tickets/components/ListHeader";
 import { TicketsScreen } from "@/features/tickets/components/TicketsScreen";
 import { DoorScreen } from "@/features/tickets/screens/DoorScreen";
-import { hairline } from "@/theme/tokens";
+import { hairline, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { doorKey, parseScanToken, volunteerDoorClient, webScanPath, type PublicFetch } from "../api";
@@ -55,69 +56,57 @@ export function PublicScanScreen({ token: raw, fetcher = livePublicFetch }: Prop
     [fetcher, token, name],
   );
 
-  // Opened straight from a link there is nothing to go back to: offer Done,
-  // which lands on Home (or sign-in, for someone without an account).
-  const header = (
-    <Stack.Screen
-      options={{
-        title: strings.title,
-        headerLeft: router.canGoBack()
-          ? undefined
-          : () => (
-              <Button
-                label={strings.done}
-                variant="ghost"
-                accessibilityHint={strings.doneHint}
-                onPress={() => router.replace("/")}
-              />
-            ),
-      }}
+  // The door stands outside the tabs: Done leaves it. Opened straight from a
+  // link there is nothing to go back to, so it lands on Home (or sign-in, for
+  // someone without an account).
+  const done = (
+    <Button
+      label={strings.done}
+      variant="ghost"
+      size="small"
+      accessibilityHint={strings.doneHint}
+      onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
     />
   );
+  const page = { title: strings.title, navLeft: done, bottomInset: true };
 
   const openWeb = token ? () => void openWebPage(webScanPath(token), colors) : undefined;
   const webButton = openWeb ? (
-    <Button label={strings.openWeb} variant="ghost" accessibilityHint={strings.openWebHint} onPress={openWeb} />
+    <View style={{ alignItems: "center", gap: space.xs }}>
+      <Button label={strings.openWeb} variant="text" accessibilityHint={strings.openWebHint} onPress={openWeb} />
+      <WebHint />
+    </View>
   ) : null;
 
   if (link.status === "loading" || (link.status === "ready" && name === undefined)) {
     return (
-      <TicketsScreen>
-        {header}
-        <Masthead context={strings.context} title={strings.title} />
-        <SkeletonRows rows={2} label={strings.loading} />
+      <TicketsScreen {...page} eyebrow={strings.context}>
+        <SkeletonList inset={false} count={2} label={strings.loading} />
       </TicketsScreen>
     );
   }
 
   if (link.status === "dead") {
+    const gone = link.reason === "gone";
     return (
-      <TicketsScreen>
-        {header}
-        <Masthead context={strings.context} title={strings.title} />
-        <EmptyState title={strings.deadTitle} body={link.reason === "bad_link" ? strings.badLinkBody : strings.deadBody}>
-          {link.reason === "gone" ? (
-            <View style={{ gap: 8, paddingTop: 8 }}>
-              <Button label={strings.retry} variant="secondary" onPress={() => void link.retry()} />
-              {webButton}
-            </View>
-          ) : null}
-        </EmptyState>
+      <TicketsScreen {...page} eyebrow={strings.context}>
+        <EmptyState
+          icon={Lock}
+          title={strings.deadTitle}
+          body={gone ? strings.deadBody : strings.badLinkBody}
+          actionLabel={gone ? strings.retry : undefined}
+          onAction={gone ? () => void link.retry() : undefined}
+          testID="empty-state"
+        />
+        {gone ? webButton : null}
       </TicketsScreen>
     );
   }
 
   if (link.status === "error") {
     return (
-      <TicketsScreen onRefresh={() => void link.retry()}>
-        {header}
-        <Masthead context={strings.context} title={strings.title} />
-        <Banner
-          tone="danger"
-          title={strings.errorTitle}
-          testID="error-state"
-          action={<Button label={strings.retry} variant="secondary" onPress={() => void link.retry()} />}
-        >
+      <TicketsScreen {...page} eyebrow={strings.context} onRefresh={() => void link.retry()}>
+        <Banner tone="error" title={strings.errorTitle} testID="error-state" actionLabel={strings.retry} onAction={() => void link.retry()}>
           {link.message}
         </Banner>
         {webButton}
@@ -129,9 +118,7 @@ export function PublicScanScreen({ token: raw, fetcher = livePublicFetch }: Prop
 
   if (!name || !door) {
     return (
-      <TicketsScreen>
-        {header}
-        <Masthead context={eventTitle} title={strings.title} />
+      <TicketsScreen {...page} eyebrow={eventTitle} keyboard>
         <NameForm
           onSave={(value) => {
             setName(value);
@@ -143,42 +130,42 @@ export function PublicScanScreen({ token: raw, fetcher = livePublicFetch }: Prop
   }
 
   return (
-    <>
-      {header}
-      <DoorScreen
-        eventId={key}
-        eventTitle={eventTitle}
-        door={door}
-        queueOwner={queueOwner}
-        intro={
-          <View
-            testID="scanning-as"
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              paddingVertical: 4,
-              borderBottomWidth: hairline,
-              borderBottomColor: colors.rule,
+    <DoorScreen
+      eventId={key}
+      eventTitle={eventTitle}
+      title={strings.title}
+      navLeft={done}
+      door={door}
+      queueOwner={queueOwner}
+      intro={
+        <View
+          testID="scanning-as"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: space.md,
+            paddingBottom: space.xs,
+            borderBottomWidth: hairline,
+            borderBottomColor: colors.rule,
+          }}
+        >
+          <Text tone="secondary" style={{ flexShrink: 1 }}>
+            {strings.scanningAs(name)}
+          </Text>
+          <Button
+            label={strings.notYou}
+            variant="text"
+            size="small"
+            accessibilityHint={strings.notYouHint}
+            onPress={() => {
+              setName(null);
+              void clearScannerName();
             }}
-          >
-            <Text tone="secondary" style={{ flexShrink: 1 }}>
-              {strings.scanningAs(name)}
-            </Text>
-            <Button
-              label={strings.notYou}
-              variant="ghost"
-              accessibilityHint={strings.notYouHint}
-              onPress={() => {
-                setName(null);
-                void clearScannerName();
-              }}
-            />
-          </View>
-        }
-      />
-    </>
+          />
+        </View>
+      }
+    />
   );
 }
 
@@ -189,9 +176,11 @@ function NameForm({ onSave }: { onSave: (name: string) => void }) {
     if (value) onSave(value);
   };
   return (
-    <View style={{ gap: 12 }}>
-      <Text variant="title">{strings.nameTitle}</Text>
-      <Text tone="secondary">{strings.nameBody}</Text>
+    <View style={{ gap: space.lg }}>
+      <View style={{ gap: space.sm }}>
+        <Heading>{strings.nameTitle}</Heading>
+        <Text tone="secondary">{strings.nameBody}</Text>
+      </View>
       <TextField
         label={strings.nameField}
         value={draft}

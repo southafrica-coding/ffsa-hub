@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
-import { Alert, Linking } from "react-native";
+import { Alert, BackHandler, Linking } from "react-native";
 
 import { ApiError } from "@/lib/api";
 
@@ -17,7 +17,10 @@ const mockCamera: { props: { onBarcodeScanned?: (r: { data: string; type: string
   props: null,
 };
 
-jest.mock("expo-router", () => ({ Stack: { Screen: () => null } }));
+// The door's stack screen and the screen holding its stack (swipe-back).
+const mockParentNav = { setOptions: jest.fn(), getParent: () => undefined };
+const mockNav = { setOptions: jest.fn(), getParent: () => mockParentNav };
+jest.mock("expo-router", () => ({ Stack: { Screen: () => null }, useNavigation: () => mockNav }));
 jest.mock("expo-network", () => ({ useNetworkState: () => mockNet }));
 jest.mock("expo-keep-awake", () => ({ useKeepAwake: jest.fn() }));
 jest.mock("expo-haptics", () => ({
@@ -72,11 +75,35 @@ describe("Door", () => {
     expect(screen.getByText("Send Night")).toBeTruthy();
   });
 
+  it("page: its own header with a way back, the tally, then scan, code and name", async () => {
+    const onBack = jest.fn();
+    await render(<DoorScreen eventId="e1" eventTitle="Send Night" door={makeDoor()} back={{ label: "Check-in", onPress: onBack }} />);
+    expect(screen.getByRole("header", { name: "Door" })).toBeTruthy();
+    expect(await screen.findByText("of 40 expected")).toBeTruthy();
+    expect(screen.getByText("12")).toBeTruthy();
+    expect(screen.getByPlaceholderText("e.g. AbCdEfGhIjK")).toBeTruthy();
+    expect(screen.getByText("Type at least two letters")).toBeTruthy();
+    // Nothing queued, nothing wrong: no banners.
+    for (const id of ["offline-banner", "queue-banner", "rejected-banner", "failed-banner", "verdict"]) {
+      expect(screen.queryByTestId(id)).toBeNull();
+    }
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Check-in" }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("tally unavailable: a dash and plain words, not a wrong number", async () => {
+    const door = makeDoor({ stats: jest.fn(async () => Promise.reject(new ApiError("http", "Server error", 500))) });
+    await render(<DoorScreen eventId="e1" door={door} />);
+    expect(await screen.findByText("Count unavailable")).toBeTruthy();
+    expect(screen.getByText("–")).toBeTruthy();
+  });
+
   it("checked in: big confirmation, haptic, Undo reverses it", async () => {
     const door = makeDoor();
     await render(<DoorScreen eventId="e1" door={door} />);
     await typeCode("AbCdEfGhIjK");
     expect(await screen.findByTestId("verdict-title")).toHaveTextContent("Checked in");
+    expect(screen.getByTestId("verdict-icon-check", { includeHiddenElements: true })).toBeTruthy();
     expect(screen.getByText("Sample Person 922 · General")).toBeTruthy();
     expect(door.checkIn).toHaveBeenCalledWith("AbCdEfGhIjK");
     expect(Haptics.notificationAsync).toHaveBeenCalledWith("success");
@@ -144,6 +171,12 @@ describe("Door", () => {
 
     await typeCode("AbCdEfGhIjK");
     expect(await screen.findByTestId("verdict-title")).toHaveTextContent("Saved, not yet confirmed");
+    expect(screen.getByTestId("verdict-icon-clock", { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByTestId("verdict").props.style).toMatchObject({ borderStyle: "dashed" });
+    // Said by the tally (it can't update) and by the offline banner.
+    expect(screen.getAllByText("No connection")).toHaveLength(2);
+    // Offline there is nothing to send to yet.
+    expect(screen.queryByRole("button", { name: "Send now" })).toBeNull();
     // Only the tally's label says "Checked in"; no verdict claims it.
     expect(screen.getAllByText("Checked in")).toHaveLength(1);
     expect(screen.getByTestId("queue-banner")).toHaveTextContent(/1 scan not yet confirmed/);
@@ -229,6 +262,17 @@ describe("Door", () => {
     await fireEvent.press(await screen.findByRole("button", { name: "Check in Sample Person 922" }, { timeout: 2000 }));
     expect(door.checkIn).toHaveBeenCalledWith("GuestCode9");
     expect(screen.getByLabelText(/^Sample Person 923\. General\. In at \d\d:\d\d$/)).toBeTruthy();
+    // The count is on the page too (hidden from screen readers: it was announced).
+    expect(screen.getByText("2 guests found", { includeHiddenElements: true })).toBeTruthy();
+    // Undo isn't offered from the name list itself, only on the result card.
+    expect(screen.queryByRole("button", { name: "Check in Sample Person 923" })).toBeNull();
+  });
+
+  it("name search offline: says it needs a connection, and the field is off", async () => {
+    mockNet = { isConnected: false, isInternetReachable: false };
+    await render(<DoorScreen eventId="e1" door={makeDoor()} />);
+    expect(screen.getByText("Name search needs a connection. Scanning still works offline.")).toBeTruthy();
+    expect(screen.getByLabelText("Guest name").props.editable).toBe(false);
   });
 
   it("name search: empty result", async () => {
@@ -249,11 +293,17 @@ describe("Door", () => {
       await render(<DoorScreen eventId="e1" door={door} />);
       await fireEvent.press(screen.getByRole("button", { name: "Scan tickets" }));
       expect(screen.getByTestId("camera")).toBeTruthy();
+      // Full screen: only Close and the torch over the camera, no page behind it.
+      expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual(["Close scanner", "Turn torch on"]);
+      expect(screen.queryByRole("header", { name: "Door" })).toBeNull();
+      expect(screen.getByText("Point the camera at the ticket's QR code")).toBeTruthy();
+      expect(screen.getByTestId("scanner-reticle", { includeHiddenElements: true })).toBeTruthy();
 
       await act(async () => {
         mockCamera.props!.onBarcodeScanned!({ data: "AbCdEfGhIjK", type: "qr" });
       });
       expect(await screen.findByTestId("verdict-title")).toHaveTextContent("Checked in");
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
       // Paused while the result is up.
       expect(mockCamera.props!.onBarcodeScanned).toBeUndefined();
 
@@ -273,11 +323,53 @@ describe("Door", () => {
       expect(screen.getByRole("button", { name: "Turn torch off" })).toBeTruthy();
     });
 
+    it("Android back closes the camera, not the door", async () => {
+      let onBack: Parameters<typeof BackHandler.addEventListener>[1] | undefined;
+      const add = jest.spyOn(BackHandler, "addEventListener").mockImplementation((_e, fn) => {
+        onBack = fn;
+        return { remove: () => (onBack = undefined) };
+      });
+      try {
+        await render(<DoorScreen eventId="e1" door={makeDoor()} />);
+        await fireEvent.press(screen.getByRole("button", { name: "Scan tickets" }));
+        expect(screen.getByTestId("camera")).toBeTruthy();
+        let handled: boolean | null | undefined;
+        await act(async () => {
+          handled = onBack?.({} as never);
+        });
+        expect(handled).toBe(true);
+        expect(screen.queryByTestId("camera")).toBeNull();
+        expect(screen.getByRole("button", { name: "Scan tickets" })).toBeTruthy();
+        // Back on the door page, the system back works as normal again.
+        expect(onBack).toBeUndefined();
+      } finally {
+        add.mockRestore();
+      }
+    });
+
+    it("iOS swipe-back is off while the camera is open, so Close is the only way out", async () => {
+      await render(<DoorScreen eventId="e1" door={makeDoor()} />);
+      expect(mockNav.setOptions).not.toHaveBeenCalled();
+      await fireEvent.press(screen.getByRole("button", { name: "Scan tickets" }));
+      expect(screen.getByTestId("camera")).toBeTruthy();
+      // This screen and the one holding its stack (the volunteer door is the first route of /scan).
+      expect(mockNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
+      expect(mockParentNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
+
+      await fireEvent.press(screen.getByRole("button", { name: "Close scanner" }));
+      expect(screen.queryByTestId("camera")).toBeNull();
+      expect(mockNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true });
+      expect(mockParentNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true });
+    });
+
     it("asks just in time, with a reason", async () => {
       mockPermission = { granted: false, canAskAgain: true };
       await render(<DoorScreen eventId="e1" door={makeDoor()} />);
       await fireEvent.press(screen.getByRole("button", { name: "Scan tickets" }));
-      expect(screen.getByText("Use the camera to scan tickets")).toBeTruthy();
+      expect(screen.getByRole("header", { name: "Use the camera to scan tickets" })).toBeTruthy();
+      expect(screen.getByText(/only while this screen is open.*Nothing is recorded/)).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Type a code" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Close scanner" })).toBeTruthy();
       await fireEvent.press(screen.getByRole("button", { name: "Allow camera" }));
       expect(mockRequestPermission).toHaveBeenCalled();
     });

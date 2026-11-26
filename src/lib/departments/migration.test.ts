@@ -19,9 +19,9 @@ const rollback = readFileSync(
   path.join(ROOT, "supabase/rollbacks/318_321_departments_rollback.sql"),
   "utf8"
 );
-const doors = sql("326_service_catalogue_doors.sql");
+const doors = sql("415_service_catalogue_doors.sql");
 const doorsRollback = readFileSync(
-  path.join(ROOT, "supabase/rollbacks/326_service_catalogue_doors_rollback.sql"),
+  path.join(ROOT, "supabase/rollbacks/415_service_catalogue_doors_rollback.sql"),
   "utf8"
 );
 const all = [homes, services, rocks, budgets].join("\n");
@@ -155,7 +155,7 @@ describe("departments migrations 318–321", () => {
     expect(rollback).toMatch(/DROP FUNCTION IF EXISTS public\.dept_is_ministry_member\(uuid, boolean\)/);
   });
 
-  it("keeps 319's brand kit and gear doors, and corrects them in 326", () => {
+  it("keeps 319's brand kit and gear doors, and corrects them in 415", () => {
     expect(services).toMatch(/'brand_kit',\s*NULL,\s*'use'/);
     expect(services).toContain("'/bookings/equipment'");
     expect(doors).toMatch(/DELETE FROM public\.service_owners/);

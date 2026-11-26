@@ -73,7 +73,7 @@ export default async function MinistryPage() {
         sections.map((section) => (
         <div key={section.type}>
           {sections.length > 1 && (
-            <div className="mono-label border-b border-rule bg-[#F7F5EE] px-5 py-2 md:px-8">
+            <div className="mono-label border-b border-rule bg-[var(--surface-hover)] px-5 py-2 md:px-8">
               {section.label}
             </div>
           )}
@@ -84,7 +84,7 @@ export default async function MinistryPage() {
               <li key={m.id} className="border-b border-rule">
                 <Link
                   href={`/ministry/${m.id}`}
-                  className="flex min-h-[48px] items-center justify-between gap-4 px-5 py-3.5 hover:bg-[#F7F5EE] md:px-8"
+                  className="flex min-h-[48px] items-center justify-between gap-4 px-5 py-3.5 hover:bg-[var(--surface-hover)] md:px-8"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2.5">

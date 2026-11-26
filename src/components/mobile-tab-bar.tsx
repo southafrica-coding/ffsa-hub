@@ -32,7 +32,8 @@ export function MobileTabBar({
       aria-label="Primary"
       data-shell-tabbar
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 grid border-t border-white/15 bg-brand-black md:hidden",
+        // theme-light: the tab bar is black in both modes.
+        "theme-light fixed inset-x-0 bottom-0 z-50 grid border-t border-white/15 bg-brand-black md:hidden",
         tabs.length === 4 ? "grid-cols-4" : "grid-cols-3"
       )}
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}

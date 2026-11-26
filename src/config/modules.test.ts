@@ -89,3 +89,16 @@ describe("placeholder pages are hidden from navigation", () => {
     expect(visible).not.toContain("teams");
   });
 });
+
+describe("Forms (Hub Forms, F2)", () => {
+  it("shows for admins and for comms_admin via the permitted set, not for events_admin", () => {
+    expect(ids(getAccessibleModules(ADMIN_MODULES, ["admin"]))).toContain("forms");
+    expect(ids(getAccessibleModules(ADMIN_MODULES, ["comms_admin"], new Set(["forms"])))).toContain("forms");
+    expect(ids(getAccessibleModules(ADMIN_MODULES, ["events_admin"], new Set(["events"])))).not.toContain("forms");
+    const forms = ADMIN_MODULES.find((m) => m.id === "forms");
+    expect(forms?.href).toBe("/forms");
+    // Sits right after Events in the menu.
+    const order = ids(ADMIN_MODULES);
+    expect(order.indexOf("forms")).toBe(order.indexOf("events") + 1);
+  });
+});

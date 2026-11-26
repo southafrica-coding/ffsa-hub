@@ -6,7 +6,7 @@ import { render, screen } from "@testing-library/react-native";
 import type { ReactElement } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { auditTappables } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems } from "@/lib/a11y/testing";
 
 import { ENROLMENT_ID, enrolmentData, programme, record, schoolsList } from "../__fixtures__/fixtures";
 import { DataError, loadAttendance, loadEnrolment, loadSchools } from "../data";
@@ -21,6 +21,7 @@ jest.mock("@/lib/supabase", () => ({ supabase: {} }));
 jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "signedIn", session: { user: { id: "user-1" } } }) }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../data", () => ({ ...jest.requireActual("../data"), loadSchools: jest.fn(), loadEnrolment: jest.fn(), loadAttendance: jest.fn() }));
 
 const schools = loadSchools as jest.Mock;
@@ -111,5 +112,32 @@ describe("My Attendance", () => {
 
   it("withBreakdown leaves the summary alone when there is no breakdown", () => {
     expect(strings.a11y.withBreakdown("Present at 1 of 1 session, 100 percent", "")).toBe("Present at 1 of 1 session, 100 percent");
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("largest text: nothing is capped or clipped", () => {
+  it("My Schools", async () => {
+    const dims = atLargestText();
+    schools.mockResolvedValue(schoolsList({ openProgrammes: [programme({ id: "p9", name: "SBS" })] }));
+    await show(<SchoolsListScreen />);
+    expect(await screen.findByRole("header", { name: strings.list.title })).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
+  });
+
+  it("Enrolment", async () => {
+    const dims = atLargestText();
+    detail.mockResolvedValue(enrolmentData({ grades: [{ course_id: "c1", letter_grade: "A" }] }));
+    await show(<EnrolmentScreen id={ENROLMENT_ID} />);
+    expect(await screen.findByLabelText(`${strings.detail.status}: Active`)).toBeTruthy();
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expect(audit()).toEqual([]);
+    dims.mockRestore();
   });
 });

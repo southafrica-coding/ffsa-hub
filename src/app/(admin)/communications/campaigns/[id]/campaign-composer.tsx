@@ -1638,7 +1638,7 @@ function BlockDragGhost({
   return (
     <div className="pointer-events-none w-[300px] max-w-[80vw] rotate-1 overflow-hidden rounded-md border-2 border-sky-500 bg-white opacity-95 shadow-xl">
       <div
-        className="ff-email-content px-3 py-1"
+        className="ff-email-content theme-light px-3 py-1"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>

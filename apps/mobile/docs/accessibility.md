@@ -41,61 +41,55 @@ Status: **Pass** (already right, checked) · **Fixed** (changed in this branch) 
 `src/theme/__tests__/contrast.test.ts` checks every text/background and UI-part/background pair the
 app paints, in light and dark. Ratios (rounded down):
 
+Updated for the iPhone redesign tokens (R1 foundation, 18 Nov 2026, `docs/redesign-kit.md`).
+
 | Pair | Light | Dark | Needs |
 |---|---|---|---|
-| text on bg | 19.79 | 17.66 | 4.5 |
-| text on surface (bone panels, sheets) | 17.66 | 16.16 | 4.5 |
+| text on bg | 19.80 | 17.66 | 4.5 |
+| text on surface (list groups, banners; light surface is now `#FBFAF7`) | 18.97 | 16.17 | 4.5 |
 | text on surfaceStrong (pressed fills) | 15.55 | 13.00 | 4.5 |
-| textSecondary on bg / surface | 10.02 / 8.94 | 11.22 / 10.26 | 4.5 |
-| textSecondary on surfaceStrong | 7.87 | 8.25 | 4.5 |
-| **textQuiet (placeholders) on bg** | **2.95 (held for Jack; 4.72 proposed)** | 5.08 | 4.5 |
-| danger on bg / surface | 6.57 / 5.86 | 6.67 / 6.11 | 4.5 |
-| positiveText on bg / surface | 6.90 / 6.15 | 9.93 / 9.08 | 4.5 |
-| attention on bg / surface | 5.37 / 4.79 | 8.81 / 8.07 | 4.5 |
-| ink on the yellow band | 11.41 | 11.41 | 4.5 |
-| onInverse on inverse (primary button, section bar, badge) | 19.79 | 17.66 | 4.5 |
-| textTertiary on bg (large text / disabled only) | 4.41 | 6.69 | 3 |
-| **ruleStrong on bg (field, chip, radio outlines; switch track off)** | **1.76 (held for Jack; 3.55 proposed)** | 3.51 | 3 |
-| **ruleStrong on surface** | **1.57 (held for Jack; 3.16 proposed)** | 3.21 | 3 |
-| danger / positive / attentionBorder rules on bg | 6.57 / 4.91 / 3.24 | 6.67 / 7.78 / 6.10 | 3 |
-| textSecondary icons (inactive tabs, chevrons) on bg | 10.02 | 11.22 | 3 |
+| textSecondary on bg / surface | 7.80 / 7.47 | 11.22 / 10.27 | 4.5 |
+| textSecondary on surfaceStrong | 6.13 | 8.26 | 4.5 |
+| textTertiary on bg / surface (now body-size safe) | 5.64 / 5.40 | 11.22 / 10.27 | 4.5 |
+| textQuiet (placeholders) on bg | 5.64 | 5.09 | 4.5 |
+| danger on bg / surface | 4.83 / 4.63 | 6.68 / 6.11 | 4.5 |
+| positiveText on bg / surface | 4.91 / 4.71 | 9.93 / 9.09 | 4.5 |
+| attention on bg / surface | 5.38 / 5.15 | 8.82 / 8.07 | 4.5 |
+| ink on the yellow band | 11.42 | 11.42 | 4.5 |
+| onPrimary on primary (ink/white light, black/yellow dark) | 19.80 | 11.42 | 4.5 |
+| onInverse on inverse (ink chips, badges, section bars) | 19.80 | 17.66 | 4.5 |
+| onPositive on positive (green verdict) / onDanger on danger (danger fill) | 4.91 / 4.83 | 7.79 / 6.68 | 4.5 |
+| ruleStrong on bg (field, chip, radio outlines; switch track off) | 3.46 | 3.51 | 3 |
+| ruleStrong on surface | 3.31 | 3.21 | 3 |
+| focus ring on a field (blue light, yellow dark) | 9.59 | 10.45 | 3 |
+| danger / positive / attentionBorder rules on bg | 4.83 / 4.91 / 3.24 | 6.68 / 7.79 / 6.10 | 3 |
+| textSecondary icons (inactive tabs) on bg | 7.80 | 11.22 | 3 |
+| bone (`#C5C2AE`) on ink: scanner captions only | 11.03 | 11.03 | 4.5 |
 
 Exempt by WCAG and listed in the test so the exemption is explicit: hairline `rule` separators
-(decoration), the yellow masthead and tab ticks on a white page (decoration; the selected tab is
-also bold text and has the selected state), and `textTertiary` on disabled rows.
+(decoration), the yellow title and tab ticks and the selected segment's yellow underline
+(decoration; the state is also bold text and the selected role).
 
-### Token change (light scheme only): HELD FOR JACK, not applied
+### Light-scheme outline and placeholder: resolved by the redesign
 
-> **Held for Jack:** these two light-mode colour changes are a brand decision, so they are **not
-> applied** in this PR. `src/theme/tokens.ts` still uses the web palette values, and
-> `contrast.test.ts` checks the three light pairs as known gaps (below the bar) and that the
-> proposed values would pass. Apply them only once Jack approves.
-
-Two light values fail. The proposal is to change them **in the app's light scheme only**. The shared `palette`
-(which mirrors the web) and the dark scheme would be untouched.
-
-| Token (light) | Current (kept) | Proposed | Why |
-|---|---|---|---|
-| `ruleStrong` | `#C7C3B5` (1.76:1 on white) | `#8C887B` (3.55:1 white, 3.16:1 bone) | Text-field, chip and radio outlines and the off switch track were nearly invisible. WCAG 1.4.11 asks 3:1 for the parts that show where a control is. Dark mode already made the same change in batch 2. |
-| `textQuiet` | `#9A9689` (2.95:1 on white) | `#77736A` (4.72:1) | Placeholder text ("e.g. R001", "0.00") was too faint to read. WCAG 1.4.3. |
-
-Effect if approved: field and chip outlines are a mid grey instead of a pale beige, and
-placeholders are darker. In light, `textQuiet` would be a touch darker than `textTertiary` (4.41:1);
-tertiary is only used for disabled rows, which WCAG exempts. Until Jack decides, the app keeps the web look and accepts these failures.
+The two light-mode failures held for Jack on 3 Nov (`ruleStrong` #C7C3B5 at 1.76:1, `textQuiet`
+#9A9689 at 2.95:1) are closed by the redesign's decided values (design-spec §2): `ruleStrong`
+`#8E8A7C` (3.46:1 on white) and `textQuiet` `#6B675D` (5.64:1). `contrast.test.ts` no longer
+carries any known gaps.
 
 ## Component kit and shell (fixed once, every screen benefits)
 
 | Component | Check | Status | Notes |
 |---|---|---|---|
 | `Text` | Headers | Pass | display and title variants get the header role. |
-| `Text` | Dynamic Type | Pass | `allowFontScaling` on all text; display 1.4x, title 1.6x, label 2x caps, body uncapped. Labels never under 11. |
+| `Text` | Dynamic Type | Pass | `allowFontScaling` on all text; only display sizes are capped (pageTitle/display 1.4x, hero 1.3x, kpi 1.6x, title 1.6x, monoLabel 2x); body, captions, labels and row titles are uncapped. Nothing under 11. |
 | `Button` | Role, name, state | Pass | button role, label, disabled + busy state. |
-| `Button` | Touch target | Pass | minHeight/minWidth 48 + hitSlop 4. |
+| `Button` | Touch target | Pass | minHeight 50 (44 for size="small" and text buttons) + hitSlop 4. |
 | `Button` | Decorative icons | Fixed | Icon and loading spinner were read out as extra elements; now hidden (the busy state says it). |
 | `TextField` | Name | Fixed | The visible label was a separate stop before the input, so VoiceOver read the label twice. The visual label is now hidden; the input carries it (`accessibilityLabel` + `accessibilityLabelledBy`). |
 | `TextField` | Errors | Pass | The error is the input's hint and an alert live region (announced as it appears). |
 | `TextField` | Show/hide password | Fixed | Already labelled; eye icon now hidden, hint added. 48 x 48. |
-| `TextField` | Outline and placeholder contrast | Fixed | Light token change above. |
+| `TextField` | Outline and placeholder contrast | Fixed | Redesign token values above. |
 | `Banner` | Role | Pass | danger = alert (assertive), others summary (polite); read as one unit. |
 | `Banner` | With an action (e.g. Try again) | Fixed | The whole band became non-accessible so the button stayed reachable, which also dropped the alert role and live region: the error was neither findable as an alert nor announced. The message is now its own alert/live-region element beside the button. |
 | `Banner` | Announced on iOS | Fixed | VoiceOver ignores live regions, so danger banners were silent on iPhone. They now `announce()` title + message on iOS when they appear or change (string content). Features that announced their own errors were changed so nothing is spoken twice. |
@@ -122,15 +116,15 @@ Each area was audited screen by screen. Shared finance building blocks (`Row`, `
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Pass | Rows are `button`/`link` with one label: "Unread. Title. Body. 2h ago. Opens in browser". Band's Open says which item ("Open: …"); Mark all read says how many. Shortcuts are kit `ListRow`s (subtitle in hint). |
-| Headers | Pass | Masthead greeting, section bars (Needs you (n) / Earlier / Shortcuts), empty and no-access titles. |
-| Touch targets | Pass | Rows 64dp min; BarAction 40dp + 4dp slop; ListRow 56dp. |
-| Dynamic Type (2.0) | Pass | No fixed text heights; body caption capped at 3 lines visually but the full body is in the row's label. |
+| Headers | Pass | `LargeTitle` greeting, section headers (Needs you (n) / Earlier / Shortcuts), empty and no-access titles. |
+| Touch targets | Pass | Feed rows 60pt min; Mark all read and the band's Open 44pt; shortcut rows 56pt. |
+| Dynamic Type (2.0) | Pass | No fixed text heights; rows grow and nothing is clipped (the 3-line cap on the body is gone). The greeting is capped at 1.4×. |
 | Contrast | Pass | Tokens only (refresh colours are the follow-ups slice's line). |
 | Status not colour alone | Pass | Unread = bold title + filled icon box + the word "Unread" in the label. |
-| Reading order | Pass | Masthead → offline/stale notice → band → list → shortcuts. |
+| Reading order | Pass | Title → offline/stale notice → band → list → shortcuts. The band reads as one element ("Needs you. 3 things need you. <title>"), then its Open button. |
 | Focus | Pass | No sheets; navigation hands focus to the next screen's header. |
-| Announcements / live regions | Pass | Danger/offline banners are kit live regions. |
-| Reduce motion | n/a | Nothing animates. |
+| Announcements / live regions | Pass | Danger/offline banners are kit live regions. The loading skeleton is one `progressbar` ("Loading your notifications"). |
+| Reduce motion | Pass | The skeleton pulse is static and the collapsing title appears without a fade under Reduce Motion (kit). |
 | Images / camera | n/a | — |
 | Decorative icons | Fixed | Notification kind icon box was `importantForAccessibility="no"` only; now also hidden on iOS. |
 
@@ -221,19 +215,19 @@ Each area was audited screen by screen. Shared finance building blocks (`Row`, `
 
 Tests: `src/features/tickets/__tests__/a11y.test.tsx` (17 tests: roles, names, headers, states, `auditTappables` on loading / empty / error / success / permission-denied, scanner states).
 
-### My tickets (`app/(app)/tickets/index.tsx` → `MyTicketsScreen`, `TicketRow`, `SectionBar`, `StateViews`)
+### My tickets (`app/(app)/tickets/index.tsx` → `MyTicketsScreen`, `TicketRow`, `ListHeader`, the kit's `ListGroup` / `EmptyState` / `SkeletonList`)
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Pass | Rows are buttons whose label reads title, time, place, holder, status; hint "Opens the ticket…". Past toggle has `expanded` state. Registration rows (not tappable) are one grouped text. |
 | Headers | Fixed | Masthead and section bars were already headers. The empty state was grouped, so its title lost the header role. It's no longer grouped. |
-| Touch targets | Pass | Rows have minHeight 48 and are full width. Kit buttons are 48. |
-| Dynamic Type (2.0) | Fixed | The date box was a fixed `width: 48` and would clip at large sizes. Now `minWidth: 48`. Titles clamp to 2 lines and the place to 1 line, and the full text stays in the row label. |
+| Touch targets | Pass | Rows have minHeight 56 and are full width. Kit buttons are 50 (44 small). |
+| Dynamic Type (2.0) | Fixed | The date box was a fixed `width: 48` and would clip at large sizes. Now `minWidth: 48`. Redesign: nothing clamps any more, titles and places wrap and the row grows. |
 | Contrast | Pass | Tokens only. |
-| Status not colour alone | Pass | `StatusTag` uses an icon and words (Ready to scan / Checked in / Cancelled). |
-| Reading order | Pass | Masthead → check-in button → banners → list. |
+| Status not colour alone | Pass | `StatusTag` is the kit `StatusChip`: an icon and words (Ready to scan / Checked in / Cancelled / Confirmed / Pending / Waitlisted). |
+| Reading order | Pass | Title → check-in button → banners → list → Get tickets (a `link`, "Opens in browser"). |
 | Focus | Pass | Native stack push. The screen reader starts at the header. |
 | Announcements / live regions | Pass | Error banner is an alert. Offline/stale info banner is a polite live region. |
-| Reduce motion | n/a | Static skeleton, no animation. |
+| Reduce motion | Pass | Kit skeleton: a soft pulse, static under Reduce Motion. The title collapse appears without fading. |
 | Images / QR / camera | n/a | |
 | Decorative icons | Pass | Status icon, chevron and date box are hidden. |
 
@@ -241,11 +235,11 @@ Tests: `src/features/tickets/__tests__/a11y.test.tsx` (17 tests: roles, names, h
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Pass | Detail pairs are read as "When: …". Waiver button has a hint and shows busy while loading. |
-| Headers | Pass | Event title (title variant). |
+| Headers | Pass | Event title (the hero `LargeTitle`); back button reads "Back to My tickets". |
 | Touch targets | Pass | Kit buttons. |
 | Dynamic Type (2.0) | Pass | QR is sized from the window width. The code text wraps if needed. |
 | Contrast | Pass | QR is always ink on white with a quiet zone (needed for scanners). |
-| Status not colour alone | Fixed | A cancelled ticket's QR was only dimmed (opacity 0.25). Its label now starts "Cancelled ticket, it won't scan". The danger banner also says it. |
+| Status not colour alone | Fixed | A cancelled ticket's QR was only dimmed (now opacity 0.18). Its label starts "Cancelled ticket, it won't scan". The error banner and the status chip also say it. |
 | Reading order | Pass | Title, status, "Show this at the door", QR, details, waiver. |
 | Focus | Pass | |
 | Announcements / live regions | Pass | Waiver error is an alert. |
@@ -272,12 +266,12 @@ Tests: `src/features/tickets/__tests__/a11y.test.tsx` (17 tests: roles, names, h
 ### Door (`check-in/[eventId].tsx` → `DoorScreen`, `DoorStats`, `GuestSearch`, `VerdictCard`)
 | Check | Status | Notes |
 |---|---|---|
-| Labels, roles, state | Pass | Tally is one `summary` ("12 of 40 checked in"). Scan button has a hint. Code and name fields are labelled. Guest "Check in" buttons are named "Check in <name>". Queue "Send now" shows busy. |
+| Labels, roles, state | Pass | Tally is one `summary` ("12 of 40 checked in"). Scan button has a hint. Code and name fields are labelled. Guest "Check in" buttons are named "Check in <name>". Queue "Send now", "Clear" and "Try again" are the banners' inline actions (44pt). |
 | Headers | Pass | "Type a code" and "Find by name" are headers. |
 | Touch targets | Pass | Scan button 64. Verdict buttons minHeight 48, minWidth 96. |
 | Dynamic Type (2.0) | Pass | Numeral capped at 1.4× by the kit. The rest wraps. |
-| Contrast | Pass | Verdict looks: ink/bone, yellow/ink, bone/ink, white/ink, all from tokens. Yellow carries ink text only. |
-| Status not colour alone | Pass | Each verdict has its own icon and a title in words. "Saved, not yet confirmed" is dashed and spelled out. Checked-in guests show a check icon and "In at 18:04". |
+| Contrast | Pass | Verdict looks (redesign, mockup 5.13), all from tokens: checked in = `positive` fill with `onPositive` label (white on green 4.9:1 in light, ink on green in dark); already in = `attention` outline; don't admit = `danger` outline; saved offline = dashed ink outline; needs attention = ink outline. Outlined cards keep `text` on `raised`. |
+| Status not colour alone | Pass | Each verdict has its own icon (check / repeat / X / clock / alert), shape (fill / heavy outline / dashed) and a title in words. "Saved, not yet confirmed" is dashed and spelled out. Checked-in guests show a check icon and "In at 18:04". |
 | Reading order | Pass | Tally, banners, verdict, scan, code, search. |
 | Focus | Follow-up | Focus isn't moved to the verdict after a typed-code check-in. It relies on the announcement (device check). |
 | Announcements / live regions | Fixed | Verdicts are announced (by `use-door`) and the card is an `alert`. Fixed: guest-search results are now announced ("1 guest found" / "No guests match that name."). The search spinner said "Find by name" and now says "Searching for guests". A checked-in guest's status was read twice; it's now once, and says "Checked in" even with no time. |
@@ -290,7 +284,7 @@ Tests: `src/features/tickets/__tests__/a11y.test.tsx` (17 tests: roles, names, h
 |---|---|---|
 | Labels, roles, state | Fixed | Close and torch are named buttons. Their icons are now hidden. The torch label flips on/off. The permission-loading view was an empty, unlabelled view. It is now a `progressbar` "Starting the camera". |
 | Headers | Pass | Permission screens' titles. |
-| Touch targets | Pass | 56×56 with an 8dp hitSlop. |
+| Touch targets | Pass | 48×48 with an 8dp hitSlop. |
 | Dynamic Type (2.0) | Pass | Overlay message wraps. |
 | Contrast | Pass (kept) | Fixed ink/white chrome over a live picture: 19.8:1. Pressed fill is `textSecondary` with a white icon: 10:1. |
 | Status not colour alone | Pass | Verdict overlay as on the door. |
@@ -571,12 +565,12 @@ the visible text's `accessibilityLiveRegion`, so each platform hears it once.
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Pass | Fields labelled by the kit `TextField`; show/hide password button; "Sign in" button reports busy/disabled; "Forgot password?" is a link that says it opens the browser. |
-| Headers | Pass | "Sign in" is a header (display text). |
+| Headers | Pass | "Sign in" is a header (`LargeTitle hero`). |
 | Touch targets | Pass | Fields and button 48dp; forgot-password link `minHeight` 48. |
-| Dynamic Type (2.0) | Pass | Body text unlimited, display capped at 1.4; no fixed text heights. Wordmark is an image (fixed 220×26, fine). |
+| Dynamic Type (2.0) | Pass | Body text unlimited, hero title capped at 1.3; no fixed text heights. Wordmark is an image (fixed 220×26, fine). |
 | Contrast | Pass | Tokens only (see contrast test). |
 | Status not colour alone | Pass | Errors are words in a danger banner / under the field. |
-| Reading order | Pass | Wordmark, heading, intro, banner, fields, error, button, link. |
+| Reading order | Pass | Wordmark, eyebrow, heading, intro, banner, fields, error, cooldown, button, link. |
 | Focus | Pass | Email "next" moves to password. Focus isn't moved to the error; it is announced instead. |
 | Announcements / live regions | Fixed | The first field error is announced (`announce()`). A failed sign-in is a danger `Banner`, which now announces itself on iOS too (kit fix). Cooldown text is a polite live region. |
 | Reduce motion | n/a | No motion. |
@@ -586,13 +580,13 @@ the visible text's `accessibilityLiveRegion`, so each platform hears it once.
 ### Me (`app/(app)/me/index.tsx`)
 | Check | Status | Notes |
 |---|---|---|
-| Labels, roles, state | Pass | Rows via shell `ListRow` (button / link with "Opens in browser"); disabled deletion row reports disabled; sign-out has a hint ("this phone only"). |
-| Headers | Pass | Masthead name; section bars Profile / Settings / About. |
+| Labels, roles, state | Pass | Rows via the kit `ListRow` in inset groups (button / link with "Opens in browser"); sign-out has a hint ("this phone only") and the same words visibly under the button (hidden from screen readers so they aren't read twice). |
+| Headers | Pass | `LargeTitle` name (the one caps moment); section headers Profile / Documents / Settings / About. |
 | Touch targets | Pass | Rows 56dp, button 48dp. |
 | Dynamic Type (2.0) | Pass | No fixed heights. |
 | Contrast | Pass | Tokens. |
 | Status not colour alone | Pass | — |
-| Reading order | Fixed | Email and Roles now read as one "Email: …" / "Roles: …" element instead of label then value separately. |
+| Reading order | Fixed | Email and Roles now read as one "Email: …" / "Roles: …" element instead of label then value separately (roles are word-only quiet chips; the group reads them as one list). |
 | Focus | Pass | Native stack handles focus on push/back. |
 | Announcements / live regions | Fixed | Load error is a danger `Banner` with Try again: kit fix keeps its alert role and speaks it on iOS. |
 | Reduce motion | n/a | — |
@@ -603,7 +597,7 @@ the visible text's `accessibilityLiveRegion`, so each platform hears it once.
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Pass | Three labelled fields; phone hint is the field hint; Save reports busy. |
-| Headers | Pass | Native header title "Edit profile". |
+| Headers | Pass | The screen's name in the 44pt bar is the header; back button reads "Back to Me" (`MePage`). |
 | Touch targets | Pass | 48dp. |
 | Dynamic Type (2.0) | Pass | — |
 | Contrast | Pass | Placeholder colour fixed in tokens (light `textQuiet`). |
@@ -618,28 +612,28 @@ the visible text's `accessibilityLiveRegion`, so each platform hears it once.
 ### Notification settings (`app/(app)/me/notifications.tsx`)
 | Check | Status | Notes |
 |---|---|---|
-| Labels, roles, state | Pass | Each `Switch`: role switch, label = group name, hint = description, `checked` + `busy`. |
-| Headers | Pass | Native header; empty / no-access titles are headers. |
+| Labels, roles, state | Pass | Each kit `Toggle`: role switch, label = group name, hint = description, `checked` + `busy` (`SwitchRow`). |
+| Headers | Pass | "Notifications" in the bar; Push notifications / What to notify me about / Slack messages section headers; empty / no-access titles are headers. |
 | Touch targets | Pass | Row 64dp; native switch. |
 | Dynamic Type (2.0) | Pass | Row has `minHeight` only. |
 | Contrast | Pass | Light outline/track (`ruleStrong`) now 3.55:1. Switch colour lines belong to the follow-ups slice. |
 | Status not colour alone | Pass | "On" / "Off" in words beside each switch. |
-| Reading order | Pass | The row text is also readable on its own (a little repetition with the switch; acceptable). |
+| Reading order | Pass | The row text is hidden from screen readers: the switch says the name, the description (hint) and the state once. |
 | Focus | Pass | — |
 | Announcements / live regions | Fixed | A failed save (switch flips back) is a danger `Banner`, which now speaks on iOS (kit). |
 | Reduce motion | n/a | — |
 | Images | n/a | — |
-| Decorative icons | Pass | Empty-state icon hidden (kit `StateMessage`). |
+| Decorative icons | Pass | Empty-state icon hidden (kit `EmptyState`). |
 
 ### Appearance (`app/(app)/me/appearance.tsx`, `src/features/appearance/AppearanceScreen.tsx`)
 | Check | Status | Notes |
 |---|---|---|
 | Labels, roles, state | Fixed | Radio group + radios with `checked`. The hint was "Double tap to use this look" / "Selected" (repeats what the platform says, and hid each option's description); it is now the description. |
-| Headers | Pass | Native header "Appearance". |
+| Headers | Pass | "Appearance" in the bar is the header (`MePage`). |
 | Touch targets | Pass | Rows 56dp. |
 | Dynamic Type (2.0) | Pass | — |
 | Contrast | Pass | Unchecked radio ring now 3.55:1 in light (token fix). |
-| Status not colour alone | Pass | Square mark + "Selected" word + radio state. |
+| Status not colour alone | Pass | Filled ring vs thin ring (a shape, ink in light / yellow in dark) + the radio's checked state. |
 | Reading order | Pass | — |
 | Focus | Pass | — |
 | Announcements / live regions | Fixed | Save failure is a danger `Banner`, which now speaks on iOS (kit). |
@@ -753,3 +747,31 @@ the kit too.
 7. Switch Control / Voice Control (or Android Switch Access): every control reachable, receipt
    zoom buttons work.
 8. Smart Invert (iOS): ticket QR and receipt photos are not inverted.
+
+## R4 polish and QA (19 Nov 2026)
+
+The table rows above that name `Masthead`, shell `SectionBar` / `StateMessage` /
+`SkeletonRows` are history: those pieces are deleted. Their replacements are
+the kit's `LargeTitle` / `LargeTitleScrollView` (title is the header),
+`SectionTitle` / `SectionHeader` (header, read with its count), `EmptyState`
+(title is a header, icon hidden) and `SkeletonList` (one labelled progressbar,
+static under Reduce Motion).
+
+- **Dynamic Type:** `largeTextProblems()` (`src/lib/a11y/testing.ts`) checks a
+  rendered screen for text that ignores the OS size, is capped below 1.2×, or
+  is clamped to a number of lines. Key screens render at the largest
+  accessibility size (fontScale 3.1, 360pt wide) in their a11y tests. The
+  deliberate clamps (History rows, the Ministries caption, a Staff decisions
+  note, the receipt viewer title) are named in those tests; the full text is
+  one tap away and VoiceOver reads it whole.
+- **Contrast:** `tokens.test.ts` adds the kit's fill/label pairs (positive,
+  danger, primary, inverse, accent), text on raised rows and sheets, the
+  selected segment, the focus ring and outlines (3:1), and bone on ink.
+- **Reduce Motion:** header collapse (nav title appears without fading),
+  skeletons (static), button press (no scale), content fade (skipped via
+  Reanimated's `ReduceMotion.System`), re-tap scroll to top (no animation),
+  zoomable receipt (no easing).
+- **New spoken labels:** set sheet subtitle ("Wednesday 18 November, 8 to
+  9:30 am"), the Home band's "Open: {title}", "Mark all N as read", Send now's
+  busy state, the schools band's "Apply on the website" hint.
+

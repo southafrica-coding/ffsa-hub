@@ -1,17 +1,13 @@
 import { useRouter } from "expo-router";
-import { ChevronRight } from "lucide-react-native";
+import { Lock, ScanLine } from "lucide-react-native";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Pressable, View } from "react-native";
 
-import { Masthead, Text } from "@/components";
+import { Banner, EmptyState, ListGroup, ListRow, SkeletonList, Text } from "@/components";
 import { useMe } from "@/features/shell";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
-import { hairline, touch } from "@/theme/tokens";
-import { useTheme } from "@/theme/use-theme";
 
 import { getCheckInEvents, type CheckInEvent } from "../api";
-import { EmptyState, ErrorState, SkeletonRows } from "../components/StateViews";
 import { TicketsScreen } from "../components/TicketsScreen";
 import { formatEventWhen } from "../dates";
 import { isSignedOutError } from "../hooks";
@@ -26,7 +22,6 @@ type Load =
 
 export function CheckInEventsScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
   const me = useMe();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [refreshing, setRefreshing] = useState(false);
@@ -62,67 +57,64 @@ export function CheckInEventsScreen() {
 
   let body: ReactNode;
   if (denied) {
-    body = <EmptyState title={strings.checkIn.deniedTitle} body={strings.checkIn.deniedBody} />;
+    body = <EmptyState icon={Lock} title={strings.checkIn.deniedTitle} body={strings.checkIn.deniedBody} testID="empty-state" />;
   } else if (load.state === "loading") {
-    body = <SkeletonRows label={strings.checkIn.listLoading} />;
+    body = <SkeletonList inset={false} label={strings.checkIn.listLoading} />;
   } else if (load.state === "error") {
     body = (
-      <ErrorState
+      <Banner
+        tone="error"
         title={strings.checkIn.listErrorTitle}
-        message={load.message}
-        onRetry={() => {
+        testID="error-state"
+        actionLabel={strings.myTickets.retry}
+        onAction={() => {
           setLoad({ state: "loading" });
           void fetchEvents();
         }}
-      />
+      >
+        {load.message}
+      </Banner>
     );
   } else if (load.state === "ready" && load.events.length === 0) {
-    body = <EmptyState title={strings.checkIn.listEmptyTitle} body={strings.checkIn.listEmptyBody} />;
+    body = <EmptyState icon={ScanLine} title={strings.checkIn.listEmptyTitle} body={strings.checkIn.listEmptyBody} testID="empty-state" />;
   } else if (load.state === "ready") {
+    // No counts here: the tally lives on the Door page.
     body = (
-      <View>
+      <ListGroup inset={false}>
         {load.events.map((e) => {
           const when = formatEventWhen(e);
           const where = e.location ?? strings.ticket.locationTbc;
           return (
-            <Pressable
+            <ListRow
               key={e.id}
               testID={`event-${e.id}`}
-              accessibilityRole="button"
+              icon={ScanLine}
+              title={e.title}
               accessibilityLabel={`${e.title}. ${when}. ${where}`}
               accessibilityHint={strings.checkIn.openEventHint}
               onPress={() => router.push({ pathname: "/tickets/check-in/[eventId]", params: { eventId: e.id, title: e.title } })}
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 12,
-                minHeight: touch.minTarget + 16,
-                paddingVertical: 12,
-                borderBottomWidth: hairline,
-                borderBottomColor: colors.rule,
-                backgroundColor: pressed ? colors.surface : "transparent",
-              })}
             >
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text variant="bodyStrong">{e.title}</Text>
-                <Text variant="caption" tone="secondary">
-                  {when}
-                </Text>
-                <Text variant="caption" tone="secondary">
-                  {where}
-                </Text>
-              </View>
-              <ChevronRight size={20} color={colors.textSecondary} accessibilityElementsHidden importantForAccessibility="no" />
-            </Pressable>
+              <Text variant="caption" tone="secondary">
+                {when}
+              </Text>
+              <Text variant="caption" tone="secondary">
+                {where}
+              </Text>
+            </ListRow>
           );
         })}
-      </View>
+      </ListGroup>
     );
   }
 
   return (
-    <TicketsScreen onRefresh={denied ? undefined : () => void refresh()} refreshing={refreshing}>
-      <Masthead context={strings.checkIn.context} title={strings.checkIn.listTitle} />
+    <TicketsScreen
+      eyebrow={strings.checkIn.context}
+      title={strings.checkIn.listTitle}
+      back={{ label: strings.myTickets.title, onPress: () => (router.canGoBack() ? router.back() : router.replace("/tickets")) }}
+      onRefresh={denied ? undefined : () => void refresh()}
+      refreshing={refreshing}
+    >
       {body}
     </TicketsScreen>
   );

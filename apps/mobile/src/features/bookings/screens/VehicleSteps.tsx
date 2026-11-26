@@ -4,21 +4,21 @@
 // licence status shown per driver is a hint: the API re-reads every
 // driver's licence at submit and again at approval.
 
-import { UserPlus, X } from "lucide-react-native";
+import { Plus, Search, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
-import { Button, Text, TextField } from "@/components";
-import { Sheet } from "@/features/finance/components/Sheet";
-import { Chips, Row } from "@/features/finance/components/ui";
-import { ListRow, openWebPage } from "@/features/shell";
-import { touch } from "@/theme/tokens";
+import { Banner, Bleed, Button, ChoiceChips, ListGroup, ListRow, Sheet, Text, TextField, Toggle } from "@/components";
+import { openWebPage } from "@/features/shell";
+import { useAnnounceOnIOS } from "@/lib/a11y";
+import { hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { checkVehicles } from "../api";
 import { bookingsFetch } from "../client";
 import { DateTimeField } from "../components/DateTimeField";
-import { CheckRow, Field, useAnnounceOnIOS } from "../components/ui";
+import { CheckRow, Field, FieldList, HintLine, Panel } from "../components/ui";
 import {
   dateRangeLabel,
   dayCount,
@@ -65,7 +65,7 @@ export function VehicleWhen({ f, set }: { f: VehicleForm; set: (p: Partial<Vehic
   const w = strings.when;
   const valid = !vehicleWhenError(f);
   return (
-    <View style={{ gap: 16 }}>
+    <View style={{ gap: space.lg }}>
       <Text tone="secondary">{strings.details.vehicleNote}</Text>
       <DateTimeField
         mode="date"
@@ -76,7 +76,11 @@ export function VehicleWhen({ f, set }: { f: VehicleForm; set: (p: Partial<Vehic
         testID="checkout"
       />
       <DateTimeField mode="date" label={w.return} value={f.returnDate} onChange={(v) => set({ returnDate: v })} minimumDate={f.checkout || todayISO()} testID="return" />
-      {valid ? <Text tone="secondary">{w.days(dayCount(f.checkout, f.returnDate))}</Text> : null}
+      {valid ? (
+        <Text variant="caption" tone="secondary">
+          {w.days(dayCount(f.checkout, f.returnDate))}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -86,44 +90,51 @@ export function VehicleChoice({ fleet, f, set, check }: { fleet: Vehicle[]; f: V
   useAnnounceOnIOS(check.status === "error" ? v.checkFailed : null);
   if (fleet.length === 0) return <Text tone="secondary">{v.noFleet}</Text>;
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: space.md }}>
       <Text tone="secondary">{v.optional}</Text>
       {check.status === "checking" ? (
-        <Text tone="secondary" accessibilityLiveRegion="polite">
+        <Text variant="caption" tone="secondary" accessibilityLiveRegion="polite">
           {strings.when.checking}
         </Text>
       ) : null}
       {check.status === "error" ? (
-        <Text tone="danger" accessibilityLiveRegion="polite">
-          {v.checkFailed}
-        </Text>
+        <View accessibilityLiveRegion="polite">
+          <HintLine tone="warn">{v.checkFailed}</HintLine>
+        </View>
       ) : null}
-      {fleet.map((car) => {
-        const taken = check.unavailable.includes(car.id);
-        const chosen = f.vehicleIds.includes(car.id);
-        const detail = [car.make_model, car.registration_plate, car.seats ? v.seats(car.seats) : null].filter(Boolean).join(" · ");
-        // A taken vehicle can still be un-ticked, never ticked.
-        const disabled = taken && !chosen;
-        return (
-          <View key={car.id} style={{ opacity: disabled ? 0.55 : 1 }}>
-            <CheckRow
-              testID={`vehicle-${car.id}`}
-              label={car.name}
-              hint={[detail, check.status === "done" ? (taken ? v.taken : v.free) : null].filter(Boolean).join(" · ")}
-              checked={chosen}
-              unavailable={disabled}
-              onChange={(on) => {
-                if (disabled) return;
-                set({ vehicleIds: on ? [...f.vehicleIds, car.id] : f.vehicleIds.filter((id) => id !== car.id) });
-              }}
-            />
-          </View>
-        );
-      })}
+      <Bleed>
+        <Panel>
+          {fleet.map((car) => {
+            const taken = check.unavailable.includes(car.id);
+            const chosen = f.vehicleIds.includes(car.id);
+            const detail = [car.make_model, car.registration_plate, car.seats ? v.seats(car.seats) : null].filter(Boolean).join(" · ");
+            // A taken vehicle can still be un-ticked, never ticked.
+            const disabled = taken && !chosen;
+            return (
+              <View key={car.id} style={{ opacity: disabled ? 0.55 : 1 }}>
+                <CheckRow
+                  testID={`vehicle-${car.id}`}
+                  label={car.name}
+                  hint={[detail, check.status === "done" ? (taken ? v.taken : v.free) : null].filter(Boolean).join(" · ")}
+                  checked={chosen}
+                  unavailable={disabled}
+                  onChange={(on) => {
+                    if (disabled) return;
+                    set({ vehicleIds: on ? [...f.vehicleIds, car.id] : f.vehicleIds.filter((id) => id !== car.id) });
+                  }}
+                />
+              </View>
+            );
+          })}
+        </Panel>
+      </Bleed>
     </View>
   );
 }
 
+// 7.9: each driver with a licence hint (icon + words) and the first-time
+// switch; then add me, add someone from FFSA Hub (a search sheet), or add an
+// outside driver on the website.
 export function VehicleDrivers({
   people,
   peopleState,
@@ -157,93 +168,154 @@ export function VehicleDrivers({
   }
 
   return (
-    <View style={{ gap: 12 }}>
+    <View style={{ gap: space.md }}>
       <Text tone="secondary">{dr.intro}</Text>
       {peopleState === "loading" ? (
-        <Text tone="secondary" accessibilityRole="progressbar" accessibilityLabel={dr.loading}>
+        <Text variant="caption" tone="secondary" accessibilityRole="progressbar" accessibilityLabel={dr.loading}>
           {dr.loading}
         </Text>
       ) : null}
       {peopleState === "error" ? (
-        <View style={{ gap: 8 }}>
-          <Text tone="danger" accessibilityRole="alert" accessibilityLiveRegion="polite">
+        <Bleed>
+          <Banner tone="error" actionLabel={strings.common.tryAgain} onAction={onRetryPeople}>
             {dr.loadFailed}
+          </Banner>
+        </Bleed>
+      ) : null}
+
+      {f.drivers.length > 0 ? (
+        <Bleed>
+          <ListGroup inset={false}>
+            {f.drivers.map((d) => {
+              const p = byId.get(d.userId);
+              const st = p ? licenceStatus(p, f.returnDate || null) : null;
+              return (
+                <View key={d.userId} style={{ paddingLeft: space.lg, paddingRight: space.xs, paddingVertical: space.sm, gap: space.xs }} testID={`driver-${d.userId}`}>
+                  <View style={{ flexDirection: "row", alignItems: "flex-start", gap: space.sm }}>
+                    <View style={{ flex: 1, gap: 2, paddingTop: 10 }}>
+                      <Text variant="rowTitle">{d.name}</Text>
+                      {st ? <HintLine tone={st.tone}>{st.label}</HintLine> : null}
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={dr.remove(d.name)}
+                      onPress={() => set({ drivers: f.drivers.filter((x) => x.userId !== d.userId) })}
+                      style={({ pressed }) => ({
+                        width: touch.floor,
+                        height: touch.floor,
+                        borderRadius: radius.control,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: pressed ? colors.surfaceStrong : "transparent",
+                      })}
+                    >
+                      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                        <X size={18} color={colors.text} />
+                      </View>
+                    </Pressable>
+                  </View>
+                  <View style={{ minHeight: touch.floor, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, paddingRight: space.sm }}>
+                    {/* The switch carries these words itself. */}
+                    <Text variant="caption" style={{ flex: 1 }} accessibilityElementsHidden importantForAccessibility="no">
+                      {dr.firstTime}
+                    </Text>
+                    <Toggle
+                      value={d.isFirstTime}
+                      accessibilityLabel={`${d.name}. ${dr.firstTime}`}
+                      accessibilityHint={dr.firstTimeHint}
+                      onValueChange={(on) => set({ drivers: f.drivers.map((x) => (x.userId === d.userId ? { ...x, isFirstTime: on } : x)) })}
+                    />
+                  </View>
+                </View>
+              );
+            })}
+          </ListGroup>
+        </Bleed>
+      ) : null}
+
+      {peopleState === "ready" && me && !chosen.has(me.id) ? (
+        <Button label={dr.addMe} variant="secondary" icon={<Plus size={20} color={colors.text} />} onPress={() => add(me)} testID="add-me" />
+      ) : null}
+      {peopleState === "ready" ? (
+        <View style={{ gap: 6 }}>
+          {/* The button below says these words itself. */}
+          <Text variant="label" accessibilityElementsHidden importantForAccessibility="no">
+            {dr.addPerson}
           </Text>
-          <Button label={strings.common.tryAgain} variant="secondary" onPress={onRetryPeople} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={dr.addPerson}
+            accessibilityHint={dr.searchHint}
+            onPress={() => setOpen(true)}
+            testID="add-driver"
+            style={({ pressed }) => ({
+              minHeight: touch.minTarget,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: space.sm,
+              paddingHorizontal: space.md,
+              paddingVertical: space.sm,
+              borderRadius: radius.control,
+              borderWidth: hairline,
+              borderColor: colors.ruleStrong,
+              backgroundColor: pressed ? colors.surface : colors.raised,
+            })}
+          >
+            <Text tone="quiet" style={{ flex: 1 }}>
+              {dr.search}
+            </Text>
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Search size={18} color={colors.textTertiary} />
+            </View>
+          </Pressable>
         </View>
       ) : null}
-
-      {f.drivers.map((d) => {
-        const p = byId.get(d.userId);
-        const st = p ? licenceStatus(p, f.returnDate || null) : null;
-        return (
-          <View key={d.userId} style={{ gap: 4, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.rule }} testID={`driver-${d.userId}`}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text variant="bodyStrong" style={{ flex: 1 }}>
-                {d.name}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={dr.remove(d.name)}
-                onPress={() => set({ drivers: f.drivers.filter((x) => x.userId !== d.userId) })}
-                style={{ minWidth: touch.minTarget, minHeight: touch.minTarget, alignItems: "center", justifyContent: "center" }}
-              >
-                <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                  <X size={20} color={colors.text} />
-                </View>
-              </Pressable>
-            </View>
-            {st ? (
-              <Text variant="caption" tone={st.tone === "ok" ? "positive" : st.tone === "warn" ? "attention" : "danger"}>
-                {st.label}
-              </Text>
-            ) : null}
-            <CheckRow
-              label={dr.firstTime}
-              hint={dr.firstTimeHint}
-              checked={d.isFirstTime}
-              onChange={(on) => set({ drivers: f.drivers.map((x) => (x.userId === d.userId ? { ...x, isFirstTime: on } : x)) })}
-            />
-          </View>
-        );
-      })}
-
-      {peopleState === "ready" && me && !chosen.has(me.id) ? <Button label={dr.addMe} variant="secondary" onPress={() => add(me)} testID="add-me" /> : null}
-      {peopleState === "ready" ? (
-        <Button label={dr.addPerson} variant="secondary" icon={<UserPlus size={18} color={colors.text} />} onPress={() => setOpen(true)} testID="add-driver" />
-      ) : null}
-      <ListRow title={dr.outsiderLink} subtitle={dr.outsider} trailing="web" onPress={() => void openWebPage("/bookings/vehicles/new", colors)} />
+      <Bleed>
+        <ListGroup inset={false}>
+          <ListRow title={dr.outsiderLink} subtitle={dr.outsider} trailing="web" onPress={() => void openWebPage("/bookings/vehicles/new", colors)} />
+        </ListGroup>
+      </Bleed>
 
       <Sheet visible={open} title={dr.addPerson} onClose={() => setOpen(false)}>
-        <View style={{ gap: 8 }}>
-          <TextField label={dr.search} hint={dr.searchHint} value={q} onChangeText={setQ} autoCorrect={false} testID="driver-search" />
-          {matches.length === 0 ? <Text tone="secondary">{dr.noMatches}</Text> : null}
-          {matches.map((p) => {
-            const st = licenceStatus(p, f.returnDate || null);
-            const already = chosen.has(p.id);
-            return (
-              <Row
-                key={p.id}
-                onPress={
-                  already
-                    ? undefined
-                    : () => {
-                        add(p);
-                        setOpen(false);
-                        setQ("");
-                      }
-                }
-                accessibilityLabel={`${p.name}. ${already ? dr.already : st.label}`}
-                testID={`person-${p.id}`}
-              >
-                <Text variant="bodyStrong">{p.name}</Text>
-                <Text variant="caption" tone={already ? "secondary" : st.tone === "ok" ? "positive" : st.tone === "warn" ? "attention" : "danger"}>
-                  {already ? dr.already : st.label}
-                </Text>
-              </Row>
-            );
-          })}
-        </View>
+        <TextField label={dr.search} hint={dr.searchHint} value={q} onChangeText={setQ} autoCorrect={false} testID="driver-search" />
+        {matches.length === 0 ? (
+          <Text tone="secondary">{dr.noMatches}</Text>
+        ) : (
+          <ListGroup inset={false}>
+            {matches.map((p) => {
+              const st = licenceStatus(p, f.returnDate || null);
+              const already = chosen.has(p.id);
+              return (
+                <ListRow
+                  key={p.id}
+                  title={p.name}
+                  trailing="none"
+                  disabled={already}
+                  onPress={
+                    already
+                      ? undefined
+                      : () => {
+                          add(p);
+                          setOpen(false);
+                          setQ("");
+                        }
+                  }
+                  accessibilityLabel={`${p.name}. ${already ? dr.already : st.label}`}
+                  testID={`person-${p.id}`}
+                >
+                  {already ? (
+                    <Text variant="caption" tone="secondary">
+                      {dr.already}
+                    </Text>
+                  ) : (
+                    <HintLine tone={st.tone}>{st.label}</HintLine>
+                  )}
+                </ListRow>
+              );
+            })}
+          </ListGroup>
+        )}
       </Sheet>
     </View>
   );
@@ -252,11 +324,11 @@ export function VehicleDrivers({
 export function VehicleDetails({ f, set }: { f: VehicleForm; set: (p: Partial<VehicleForm>) => void }) {
   const d = strings.details;
   return (
-    <View style={{ gap: 16 }}>
+    <View style={{ gap: space.lg }}>
       <TextField label={d.bookingName} value={f.bookingName} onChangeText={(v) => set({ bookingName: v })} placeholder={d.bookingNamePlaceholder} testID="booking-name" />
       <TextField label={d.vPointPerson} hint={d.vPointPersonHint} value={f.pointPerson} onChangeText={(v) => set({ pointPerson: v })} testID="point-person" />
       <TextField label={d.destination} value={f.destination} onChangeText={(v) => set({ destination: v })} placeholder={d.destinationPlaceholder} testID="destination" />
-      <Chips<Purpose> label={d.purpose} options={PURPOSE_OPTIONS.map((p) => ({ value: p.value, label: p.label }))} value={f.purpose} onChange={(v) => set({ purpose: v })} />
+      <ChoiceChips<Purpose> label={d.purpose} options={PURPOSE_OPTIONS.map((p) => ({ value: p.value, label: p.label }))} value={f.purpose} onChange={(v) => set({ purpose: v })} />
       {f.purpose === "other" ? <TextField label={d.purposeNote} value={f.purposeNote} onChangeText={(v) => set({ purposeNote: v })} testID="purpose-note" /> : null}
       <TextField label={d.numPeople} value={f.numPeople} onChangeText={(v) => set({ numPeople: v.replace(/[^\d]/g, "") })} keyboardType="number-pad" />
       <TextField label={d.requesterName} value={f.requesterName} onChangeText={(v) => set({ requesterName: v })} />
@@ -272,20 +344,23 @@ export function VehicleReview({ fleet, f }: { fleet: Vehicle[]; f: VehicleForm }
   const r = strings.review;
   const names = f.vehicleIds.map((id) => fleet.find((v) => v.id === id)?.name).filter(Boolean).join(", ");
   return (
-    <View style={{ gap: 4 }}>
-      <Field label={strings.details.bookingName} value={f.bookingName} />
-      <Field label={r.when} value={`${dateRangeLabel(f.checkout, f.returnDate)} · ${strings.detail.days(dayCount(f.checkout, f.returnDate))}`} />
-      <Field label={strings.detail.vehicles} value={names || strings.vehicle.optional} />
-      <Field label={strings.detail.drivers} value={f.drivers.map((d) => d.name).join(", ")} />
-      <Field label={strings.detail.purpose} value={f.purpose === "other" ? f.purposeNote : purposeLabel(f.purpose)} />
-      <Field label={strings.detail.destination} value={f.destination} />
-      <Field label={strings.detail.pointPerson} value={f.pointPerson} />
-      <Field label={strings.detail.requestedBy} value={f.requesterName || null} />
-      <Field label={strings.detail.whatsapp} value={f.requesterPhone || null} />
-      <Field label={strings.detail.people} value={f.numPeople || null} />
-      <Field label={strings.detail.notes} value={f.notes || null} />
-      <Text tone="secondary">{strings.details.vehicleNote}</Text>
+    <View style={{ gap: space.lg }}>
+      <FieldList>
+        <Field label={strings.details.bookingName} value={f.bookingName} />
+        <Field label={r.when} value={`${dateRangeLabel(f.checkout, f.returnDate)} · ${strings.detail.days(dayCount(f.checkout, f.returnDate))}`} />
+        <Field label={strings.detail.vehicles} value={names || strings.vehicle.optional} />
+        <Field label={strings.detail.drivers} value={f.drivers.map((d) => d.name).join(", ")} />
+        <Field label={strings.detail.purpose} value={f.purpose === "other" ? f.purposeNote : purposeLabel(f.purpose)} />
+        <Field label={strings.detail.destination} value={f.destination} />
+        <Field label={strings.detail.pointPerson} value={f.pointPerson} />
+        <Field label={strings.detail.requestedBy} value={f.requesterName || null} />
+        <Field label={strings.detail.whatsapp} value={f.requesterPhone || null} />
+        <Field label={strings.detail.people} value={f.numPeople || null} />
+        <Field label={strings.detail.notes} value={f.notes || null} />
+      </FieldList>
+      <Text variant="caption" tone="secondary">
+        {strings.details.vehicleNote}
+      </Text>
     </View>
   );
 }
-

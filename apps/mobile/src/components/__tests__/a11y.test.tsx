@@ -2,32 +2,34 @@ import { render, screen } from "@testing-library/react-native";
 import { Settings } from "lucide-react-native";
 import { StyleSheet, View } from "react-native";
 
-import { ListRow, SectionBar, SkeletonRows, StateMessage, BarAction } from "@/features/shell/ui";
 import { auditTappables, tappableSizes } from "@/lib/a11y/testing";
+import { touch } from "@/theme/tokens";
 
-import { Banner, Button, Masthead, Screen, Text, TextField } from "..";
+import { Banner, Button, EmptyState, NeedsYouBand, LargeTitle, ListGroup, ListRow, Screen, SectionHeader, SkeletonList, Text, TextField } from "..";
 
 const flatten = (s: unknown) => (StyleSheet.flatten(s as never) ?? {}) as Record<string, unknown>;
 
 describe("kit accessibility", () => {
-  it("every tappable in the kit has a role and a name, and is at least 48dp", async () => {
+  it("every tappable in the kit has a role and a name, and is at least 44pt (the spec's floor)", async () => {
     await render(
       <Screen>
-        <Masthead context="FFSA Hub · Finance" title="Finance" />
-        <SectionBar label="Teams" right={<BarAction label="See all" onPress={() => {}} />} />
+        <LargeTitle eyebrow="FFSA Hub · Finance" title="Finance" back={{ label: "Home", onPress: () => {} }} />
+        <SectionHeader title="Teams" actionLabel="See all" onAction={() => {}} />
         <Button label="Save" onPress={() => {}} />
         <Button label="Retry" variant="ghost" icon={<Settings size={16} />} onPress={() => {}} />
         <TextField label="Password" value="x" onChangeText={() => {}} secure />
-        <ListRow title="Appearance" subtitle="Match phone" icon={Settings} onPress={() => {}} />
-        <ListRow title="Open the website" trailing="web" onPress={() => {}} />
-        <StateMessage title="Couldn't load" body="Check your connection." actionLabel="Try again" onAction={() => {}} />
+        <ListGroup>
+          <ListRow title="Appearance" subtitle="Match phone" icon={Settings} onPress={() => {}} />
+          <ListRow title="Open the website" trailing="web" onPress={() => {}} />
+        </ListGroup>
+        <EmptyState title="Couldn't load" body="Check your connection." actionLabel="Try again" onAction={() => {}} />
       </Screen>,
     );
     expect(auditTappables(screen.container as never)).toEqual([]);
     for (const t of tappableSizes(screen.container as never, flatten)) {
       const slop = typeof t.hitSlop === "number" ? t.hitSlop * 2 : 0;
       const h = Math.max(Number(t.minHeight ?? 0), Number(t.height ?? 0)) + slop;
-      expect({ name: t.name, ok: h >= 48 }).toEqual({ name: t.name, ok: true });
+      expect({ name: t.name, ok: h >= touch.floor }).toEqual({ name: t.name, ok: true });
     }
   });
 
@@ -62,8 +64,8 @@ describe("kit accessibility", () => {
 
   it("web rows say they open in the browser", async () => {
     await render(<ListRow title="Website" trailing="web" onPress={() => {}} />);
-    const row = screen.getByRole("link", { name: "Website. Opens in browser" });
-    expect(row.props.accessibilityHint).toMatch(/browser/);
+    // The cue is part of the name, so it's heard first, before any hint.
+    expect(screen.getByRole("link", { name: "Website. Opens in browser" })).toBeTruthy();
   });
 
   it("disabled rows say so", async () => {
@@ -71,13 +73,13 @@ describe("kit accessibility", () => {
     expect(screen.getByRole("button", { name: "Finance" })).toBeDisabled();
   });
 
-  it("headings: masthead title, section bar and state titles are headers", async () => {
+  it("headings: page title, section title and state titles are headers", async () => {
     await render(
       <Screen>
-        <Masthead context="Hub" title="Tickets" />
-        <SectionBar label="Upcoming" />
-        <StateMessage title="No tickets yet" icon={Settings} />
-        <Text variant="title">Section</Text>
+        <LargeTitle eyebrow="Hub" title="Tickets" />
+        <SectionHeader title="Upcoming" />
+        <EmptyState title="No tickets yet" icon={Settings} />
+        <Text variant="pageTitle">Section</Text>
       </Screen>,
     );
     for (const name of ["Tickets", "Upcoming", "No tickets yet", "Section"]) {
@@ -86,16 +88,14 @@ describe("kit accessibility", () => {
   });
 
   it("skeletons are one labelled progress element", async () => {
-    await render(<SkeletonRows label="Loading your teams" />);
+    await render(<SkeletonList label="Loading your teams" />);
     expect(screen.getByRole("progressbar", { name: "Loading your teams" })).toBeTruthy();
   });
 
   it("banners: danger is an alert; needs-you is a summary read as one unit", async () => {
     await render(
       <Screen>
-        <Banner tone="needsYou" title="Needs you">
-          2 receipts are missing
-        </Banner>
+        <NeedsYouBand eyebrow="Needs you" text="2 receipts are missing" />
       </Screen>,
     );
     const band = screen.getByRole("summary");

@@ -31,6 +31,11 @@ export const BROADCAST_MODULES = {
     description:
       "Block-outs and devo set relocations that affect the whole roster.",
   },
+  training: {
+    label: "Training",
+    description:
+      "Your Monday briefing and care flags for students you lead or walk with.",
+  },
 } as const;
 
 export type BroadcastModule = keyof typeof BROADCAST_MODULES;
@@ -44,6 +49,10 @@ export type BroadcastType = {
   description: string;
 };
 
+// The two Training entries are NOT broadcasts: they are DMs scoped to the
+// people involved (src/lib/training/briefing.ts, care-notify.ts), never sent
+// with sendBroadcast. They're listed so the per-module mute on /profile
+// shows a Training switch, which both of them honour.
 export const BROADCAST_TYPES: BroadcastType[] = [
   {
     key: "prayer_room_blockout",
@@ -51,6 +60,18 @@ export const BROADCAST_TYPES: BroadcastType[] = [
     label: "Prayer room block-out",
     description:
       "A manager has blocked out a time and devo sets have had to move.",
+  },
+  {
+    key: "training_briefing",
+    module: "training",
+    label: "Monday Training briefing",
+    description: "Mondays 07:30: what needs you this week in Training.",
+  },
+  {
+    key: "training_needs_care",
+    module: "training",
+    label: "A student needs care",
+    description: "When a student you lead or walk with is flagged on a check-in.",
   },
 ];
 

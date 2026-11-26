@@ -190,7 +190,7 @@ export function TicketingSettings({
                 <button
                   type="button"
                   onClick={copyLink}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-ink text-white text-xs hover:bg-[#262622] shrink-0"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] shrink-0"
                 >
                   {copied ? (
                     <>
@@ -246,7 +246,7 @@ export function TicketingSettings({
             type="button"
             onClick={save}
             disabled={busy || !dirty}
-            className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
+            className="px-3 py-1 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:bg-[color:var(--surface-4)]"
           >
             {busy ? "Saving…" : "Save"}
           </button>

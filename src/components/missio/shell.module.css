@@ -1,0 +1,1069 @@
+.shell {
+  --display: var(--font-missio-display), Fraunces, Georgia, serif;
+  --body: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  display: flex;
+  min-height: 100vh;
+  height: 100vh;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.shell h1,
+.shell h2,
+.denied h1 {
+  font-family: var(--display);
+  font-weight: 560;
+  text-transform: none;
+  letter-spacing: -0.4px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.shell h1 {
+  font-size: 32px;
+  margin: 2px 0 0;
+}
+
+.shell h2 {
+  font-size: 22px;
+  margin: 0;
+}
+
+.shell a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.shell a:hover {
+  color: inherit;
+}
+
+/* FFSA's global button and label rules are mono, uppercase and wide-tracked.
+   Missio uses Archivo in sentence case. */
+.shell button,
+.shell [role="button"] {
+  font-family: var(--body) !important;
+  font-weight: 600 !important;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.shell label {
+  font-family: var(--body) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--sub) !important;
+}
+
+.side {
+  width: 248px;
+  flex: none;
+  background: var(--side);
+  color: var(--side-ink);
+  display: flex;
+  flex-direction: column;
+  padding: 14px 12px 12px;
+  color-scheme: dark;
+}
+
+.orgStatic {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 8px;
+  font-weight: 600;
+}
+
+.shell .orgBack,
+.drawer .orgBack {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 8px;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--side-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.shell .orgBack:hover,
+.drawer .orgBack:hover,
+.shell .orgBack:focus-visible,
+.drawer .orgBack:focus-visible {
+  color: var(--side-ink);
+}
+
+.shell .orgBack:focus-visible,
+.drawer .orgBack:focus-visible {
+  outline: 2px solid var(--side-ink);
+  outline-offset: 2px;
+}
+
+.nav {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.navLink,
+.soon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: #dcd8cc;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.navLink svg,
+.soon svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  opacity: 0.9;
+}
+
+/* "Later" group heading in the menu (boards M1c, M11a). */
+.sgroup {
+  padding: 18px 12px 6px;
+  color: var(--side-sub, #a8b0a6);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.foot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #2f3a33;
+}
+
+/* Desktop org block (board M11a): tile, "Missio", "Switch org". */
+.sideOrg {
+  margin-bottom: 18px;
+}
+
+.sideOrg [data-org-switcher] > button {
+  height: 52px;
+  gap: 10px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: rgba(243, 239, 228, 0.06);
+  box-shadow: inset 0 0 0 1px #2f3a33;
+  font-family: var(--body);
+}
+
+.sideOrg [data-org-switcher] > button > span:first-child {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.sideOrg [data-org-switcher-lines] {
+  display: flex;
+  flex-direction: column;
+  line-height: 18px;
+}
+
+.sideOrg [data-org-switcher-lines] > span:first-child {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sideOrg [data-org-switcher-sub] {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--side-sub, #a8b0a6);
+}
+
+.navLink:hover {
+  background: var(--side-hover);
+  color: var(--side-ink);
+}
+
+/* Current section (board M1c): a faint lift of the frame and a terracotta
+   edge, not a filled block. */
+.navOn {
+  background: rgba(243, 239, 228, 0.09);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.navOn::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--terra-on-frame, #d7774f);
+}
+
+.navOn:hover {
+  background: rgba(243, 239, 228, 0.12);
+  color: #ffffff;
+}
+
+.soon {
+  color: var(--side-sub, #a8b0a6);
+  cursor: default;
+}
+
+.soonTag {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid #3a453d;
+  border-radius: 5px;
+  color: var(--side-sub, #a8b0a6);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 16px;
+}
+
+.me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--side-ink);
+  color: var(--side);
+  font-size: 11px;
+  font-weight: 700;
+  flex: none;
+}
+
+.who {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.role {
+  font-size: 12px;
+  color: var(--side-sub);
+  line-height: 16px;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--page);
+}
+
+/* The top bar is the phone's (board M11a). The desktop board has none:
+   the sidebar carries the org and the page starts with its own heading. */
+.top {
+  display: none;
+}
+
+.crumb b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 28px 40px 40px;
+  overflow: auto;
+}
+
+/* Phone tab bar. Hidden until the phone breakpoint below. */
+.tabBar {
+  display: none;
+}
+
+.lede {
+  color: var(--sub);
+  font-size: 15px;
+  margin: 4px 0 0;
+  max-width: 640px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 16px;
+  display: block;
+}
+
+.card:hover {
+  border-color: #cfc8b6;
+}
+
+.cardTitle {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: #8e3d1f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 12px;
+}
+
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 10.5rem;
+}
+
+.field input,
+.field select {
+  box-sizing: border-box;
+  height: 36px;
+  border: 1px solid #ddd7c8 !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  color: #1c1b17 !important;
+  font-family: var(--body), Archivo, system-ui, sans-serif !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  line-height: 22px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  padding: 0 10px !important;
+}
+
+.primary,
+.ghost,
+.textButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary,
+.dialog .primary:hover,
+.dialog .primary:focus,
+.dialog .primary:focus-visible {
+  background: var(--accent, #b4532e);
+  border: 1px solid var(--accent, #b4532e);
+  color: var(--accent-ink, #fff8ee);
+}
+
+.primary:disabled,
+.ghost:disabled,
+.textButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ghost,
+.textButton,
+.dialog .ghost:hover,
+.dialog .ghost:focus,
+.dialog .ghost:focus-visible,
+.dialog .textButton:hover,
+.dialog .textButton:focus,
+.dialog .textButton:focus-visible {
+  background: var(--panel, #fbf9f4);
+  border: 1px solid var(--rule, #ddd7c8);
+  color: var(--ink, #1c1b17);
+}
+
+.dialog .primary:focus-visible,
+.dialog .ghost:focus-visible,
+.dialog .textButton:focus-visible {
+  outline: 2px solid var(--ink, #1c1b17);
+  outline-offset: 2px;
+}
+
+/* The dialog is portaled outside the shell. The hub button rule forces the
+   mono face and weight, so these two need the same flag to use the body face. */
+.dialog button,
+.dialog button:hover,
+.dialog button:focus,
+.dialog button:focus-visible {
+  font-family: var(--body), Archivo, system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+  border-radius: 6px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table th {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--quiet);
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--subtle);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-family: var(--body);
+}
+
+.table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: middle;
+  font-size: 15px;
+  line-height: 21px;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.table tbody tr:hover td {
+  background: #f7f4ec;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.campus {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.joined {
+  color: var(--quiet);
+  font-weight: 500;
+}
+
+.muted .joined {
+  margin-left: 6px;
+}
+
+.muted .joined:first-child {
+  margin-left: 0;
+}
+
+.muted {
+  color: var(--sub);
+}
+
+.state {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--sub);
+}
+
+.pagerActions {
+  display: flex;
+  gap: 8px;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 27, 23, 0.28);
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 91;
+  width: min(520px, calc(100% - 32px));
+  max-height: min(92vh, 100%);
+  overflow: auto;
+  background: var(--panel, #fbf9f4);
+  color: var(--ink, #1c1b17);
+  border: 1px solid var(--rule, #ddd7c8);
+  border-radius: 10px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+  padding: 18px 18px 16px;
+  font-family: var(--body), Archivo, system-ui, sans-serif;
+}
+
+.dialog h2,
+.dialogTitle,
+.dialogTitle:focus {
+  font-family: var(--display), Fraunces, Georgia, serif;
+  font-weight: 560;
+  font-size: 22px;
+  letter-spacing: -0.3px;
+  text-transform: none;
+  line-height: 1.25;
+  color: var(--ink, #1c1b17);
+  margin: 0 0 8px;
+}
+
+.help {
+  color: var(--sub);
+  margin: 6px 0 14px;
+}
+
+.fields {
+  display: grid;
+  gap: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dateReadout {
+  font-family: var(--body), Archivo, system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink, #1c1b17);
+}
+
+.field input,
+.field select {
+  height: 34px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+  padding: 0 10px;
+}
+
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.alert {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--warn-soft, #f5e8cf);
+  color: var(--warn, #94631a);
+  font-size: 14px;
+}
+
+.info {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--accent-soft, #f6e4d9);
+  color: var(--ink, #1c1b17);
+  border: 1px solid var(--accent, #b4532e);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.success {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 14px;
+}
+
+.match {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.matchBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.matchName {
+  font-weight: 600;
+}
+
+.masked {
+  color: var(--quiet);
+  font-size: 13px;
+}
+
+.note {
+  color: var(--warn);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.denied {
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--body);
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+}
+
+.deniedCard {
+  width: min(480px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 28px 24px;
+}
+
+.deniedCard p {
+  color: var(--sub);
+  margin: 8px 0 0;
+}
+
+.back {
+  display: inline-flex;
+  margin-top: 16px;
+  font-weight: 600;
+  color: var(--accent-text, #8e3d1f);
+}
+
+.markInactive {
+  margin-right: auto;
+  background: transparent;
+  border: 0;
+  color: var(--warn);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.markInactive:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sideSlot {
+  display: flex;
+  flex: none;
+}
+
+.menuButton {
+  display: none;
+}
+
+.drawer {
+  width: min(312px, calc(100% - 48px)) !important;
+  max-width: min(312px, calc(100% - 48px)) !important;
+  padding: 0 !important;
+  padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  gap: 0 !important;
+  border: 0 !important;
+  background: var(--side, #1d2520) !important;
+  color: var(--side-ink, #f3efe4) !important;
+  box-shadow: none !important;
+  /* The sheet's slide-in translate parks the panel a few pixels off the
+     left edge while it runs, which eats this sidebar's inset. */
+  animation: none !important;
+  transform: none !important;
+}
+
+.drawer > button {
+  top: 12px !important;
+  right: 12px !important;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: #f3efe4 !important;
+  opacity: 1 !important;
+}
+
+/* Radix focuses the close button when the menu opens; only show a ring for keyboard focus. */
+.drawer > button:focus:not(:focus-visible) {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.drawer > button:focus-visible {
+  outline: 2px solid #f3efe4 !important;
+  outline-offset: -2px;
+}
+
+.sideDrawer {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 12px 12px 28px;
+}
+
+/* Phone menu (boards M1c, M11a): wordmark, then the org switch, then the menu. */
+.drawerHead {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  margin-bottom: 10px;
+  padding-right: 44px;
+}
+
+.wordmark {
+  height: 18px;
+  width: auto;
+  margin-left: 8px;
+}
+
+.drawerOrg {
+  margin-bottom: 12px;
+}
+
+.orgSeg {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(243, 239, 228, 0.06);
+}
+
+.drawer .orgSegItem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  height: 44px;
+  border-radius: 9px;
+  color: var(--side-sub, #a8b0a6);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.drawer a.orgSegItem:hover {
+  background: rgba(243, 239, 228, 0.06);
+  color: var(--side-ink, #f3efe4);
+}
+
+.drawer a.orgSegItem:focus-visible {
+  outline: 2px solid var(--side-ink, #f3efe4);
+  outline-offset: 2px;
+}
+
+.drawer .orgSegOn {
+  background: #f3efe4;
+  color: #1c1b17;
+}
+
+.orgSegOn > span:first-child {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-family: var(--display, Fraunces, serif);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sideDrawer .navLink,
+.sideDrawer .soon {
+  height: 46px;
+}
+
+.sideDrawer .soon {
+  height: 44px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Phones. md in this app is 768px — same cutoff as the FFSA shell. */
+@media (max-width: 767px) {
+  .shell,
+  .main,
+  .content,
+  .top {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* 100vh is taller than the visible page under mobile browser chrome,
+     which would push the tab bar off screen. */
+  .shell {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .shell h1 {
+    font-size: 28px;
+  }
+
+  /* iOS zooms the page when a focused control is under 16px. */
+  .shell input,
+  .shell select,
+  .shell textarea {
+    font-size: 16px !important;
+  }
+
+  /* Board M11a tabs: five even columns, 20px icon over an 11px label. */
+  .tabBar {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    flex: none;
+    border-top: 1px solid var(--rule);
+    background: var(--panel);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .shell .tab {
+    min-width: 0;
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 2px;
+    color: var(--sub);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 14px;
+  }
+
+  .tab svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .tab span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shell .tabOn,
+  .shell .tabOn:hover {
+    color: var(--accent-text, #8e3d1f);
+  }
+
+  .tab:active {
+    background: var(--subtle);
+  }
+
+  .tab:focus-visible {
+    outline: 2px solid var(--link, #2f5d50);
+    outline-offset: -2px;
+  }
+
+  .shell {
+    width: 100%;
+  }
+
+  .sideSlot {
+    display: none;
+  }
+
+  .menuButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ink);
+    flex: none;
+    cursor: pointer;
+  }
+
+  /* The Missio tile is the menu button (board M11a). */
+  .menuButton > span {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-family: var(--display);
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+
+  .menuButton:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  .top {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 56px;
+    gap: 4px;
+    padding: 0 8px 0 6px;
+    min-width: 0;
+    border-bottom: 1px solid var(--rule);
+    background: var(--page);
+    color: var(--ink);
+  }
+
+  .crumb {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .spacer {
+    display: none;
+  }
+
+  /* Phone top bar (board M11a): the tile and the page's name, nothing else. */
+  .crumbOrg {
+    display: none;
+  }
+
+  .crumb b {
+    margin-left: 2px;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 24px;
+  }
+
+  .content {
+    padding: 16px 16px 32px;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar > * {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .filter {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .table {
+    display: none;
+  }
+
+  .row2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* People list: the name opens the profile. */
+
+/* People list: the name opens the person card. Looks like a link. */

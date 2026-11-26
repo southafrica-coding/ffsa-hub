@@ -18,7 +18,9 @@ export type FormFieldType =
   | "checkbox"
   | "yes_no"
   | "outcome"
-  | "consent";
+  | "consent"
+  | "linear_scale" // 1–5 style score; bounds in min/max
+  | "stepper"; // whole-number counter; bounds in min/max
 
 export type FormField = {
   id: string; // local uuid, stable within the schema
@@ -43,7 +45,65 @@ export type FormField = {
    */
   parentFieldId?: string | null;
   showWhenValue?: string | null;
+  /**
+   * Bounds for linear_scale and stepper. A linear_scale defaults to 1–5;
+   * a stepper defaults to 0 with no top. A stepper may use its top as
+   * "more than": e.g. max 6 with maxLabel "More than 5".
+   */
+  min?: number | null;
+  max?: number | null;
+  minLabel?: string | null;
+  maxLabel?: string | null;
+  /**
+   * What happens to the answer after it is saved. Each route fires when
+   * its rule matches (see `routeMatches`). F1 only describes and matches
+   * routes; route-runner.ts runs them after a submission is saved.
+   */
+  routes?: FormRoute[];
 };
+
+// ────────────────────────────────────────────────────────────
+// Routes — where an answer goes once the form is sent
+// ────────────────────────────────────────────────────────────
+
+export const FORM_ROUTE_ACTIONS = [
+  "store", // keep it in form_submissions.raw_data (always true; explicit for clarity)
+  "write_column", // copy into a column of the subject's table; target = column
+  "create_or_update_contact", // upsert a contact; target = contact column
+  "attach", // attach to the subject (house, event, department)
+  "open_followup", // open a follow-up for a pastor or coach; target = queue
+  "care_board", // put a card on the Missio Care board; target = care type
+  "slack", // DM someone; target = who. Off unless HUB_FORMS_SLACK_ENABLED (flags.ts)
+] as const;
+
+export type FormRouteAction = (typeof FORM_ROUTE_ACTIONS)[number];
+
+export const FORM_ROUTE_WHENS = [
+  "always", // whenever the field is visible and answered
+  "equals",
+  "not_equals",
+  "gt",
+  "lt",
+  "includes", // a multi-pick answer contains whenValue
+  "in", // the answer is one of whenValue (a list)
+] as const;
+
+export type FormRouteWhen = (typeof FORM_ROUTE_WHENS)[number];
+
+export type FormRoute = {
+  action: FormRouteAction;
+  target?: string | null;
+  when: FormRouteWhen;
+  /** Scalar for equals/not_equals/gt/lt/includes, a list for `in`. */
+  whenValue?: string | number | Array<string | number> | null;
+};
+
+/** Actions that mean nothing without a target. */
+const ROUTE_ACTIONS_NEEDING_TARGET: FormRouteAction[] = [
+  "write_column",
+  "create_or_update_contact",
+  "slack",
+];
 
 /**
  * Field types whose answer can drive a conditional child. Only choice-style
@@ -108,6 +168,19 @@ export type FormBranding = {
   logoUrl?: string | null;
   accentColor?: string | null; // hex, drives buttons + progress bar
 };
+
+// ────────────────────────────────────────────────────────────
+// Form kinds — mirror the CHECKs on public.forms (migration 390)
+// ────────────────────────────────────────────────────────────
+
+export const FORM_KINDS = ["generic", "event", "department", "missio_weekly_feedback"] as const;
+export type FormKind = (typeof FORM_KINDS)[number];
+
+export const FORM_ACCESS_MODES = ["public", "logged_in", "token"] as const;
+export type FormAccessMode = (typeof FORM_ACCESS_MODES)[number];
+
+export const FORM_SUBJECT_TYPES = ["house", "contact", "department", "event", "none"] as const;
+export type FormSubjectType = (typeof FORM_SUBJECT_TYPES)[number];
 
 export type FormSchema = {
   version: 1;
@@ -255,9 +328,38 @@ export function emptyFormSchema(): FormSchema {
 
 export type ValidationResult = { valid: boolean; errors: Record<string, string> };
 
+/** Default bounds for the numeric field types. */
+export function numericBounds(
+  field: Pick<FormField, "type" | "min" | "max">
+): { min: number; max: number | null } {
+  if (field.type === "linear_scale") {
+    return { min: field.min ?? 1, max: field.max ?? 5 };
+  }
+  return { min: field.min ?? 0, max: field.max ?? null };
+}
+
+/** A whole number from a form answer (number or numeric string), else null. */
+function toWholeNumber(raw: unknown): number | null {
+  const n =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && raw.trim() !== ""
+      ? Number(raw.trim())
+      : NaN;
+  return Number.isInteger(n) ? n : null;
+}
+
 export function validateSubmission(
   schema: FormSchema,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  options: {
+    /**
+     * Every form so far feeds the contact directory, so it must collect an
+     * email or phone. Forms that are not about a contact (the weekly house
+     * feedback) pass false.
+     */
+    requireContactField?: boolean;
+  } = {}
 ): ValidationResult {
   const errors: Record<string, string> = {};
   const fieldsById = buildFieldsById(schema);
@@ -292,14 +394,180 @@ export function validateSubmission(
           errors[k] = "Enter a number";
         }
       }
+      if (field.type === "linear_scale" || field.type === "stepper") {
+        const n = toWholeNumber(raw);
+        const { min, max } = numericBounds(field);
+        if (n == null) {
+          errors[k] = "Enter a whole number";
+        } else if (n < min || (max != null && n > max)) {
+          errors[k] =
+            max != null ? `Pick a number from ${min} to ${max}` : `Enter ${min} or more`;
+        }
+      }
     }
   }
 
   // A form must collect at least one of email / phone for dedup.
   const keys = schema.steps.flatMap((s) => s.fields.map((f) => f.key));
-  if (!keys.includes("email") && !keys.includes("phone")) {
+  if (options.requireContactField !== false && !keys.includes("email") && !keys.includes("phone")) {
     errors._form = "Form must collect an email or phone field";
   }
 
   return { valid: Object.keys(errors).length === 0, errors };
+}
+
+// ────────────────────────────────────────────────────────────
+// Schema checks — used by the builder before a form is saved
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Problems with the form definition itself (not an answer): bad bounds on
+ * a scale or stepper, and route rules that could never run. Keys are
+ * field ids; an empty object means the schema is fine.
+ */
+export function validateFormSchema(schema: FormSchema): Record<string, string> {
+  const errors: Record<string, string> = {};
+  for (const step of schema.steps) {
+    for (const field of step.fields) {
+      const problem = fieldSchemaProblem(field);
+      if (problem) errors[field.id] = problem;
+    }
+  }
+  return errors;
+}
+
+function fieldSchemaProblem(field: FormField): string | null {
+  if (field.type === "linear_scale" || field.type === "stepper") {
+    const { min, max } = numericBounds(field);
+    if (!Number.isInteger(min)) return "The lowest value must be a whole number";
+    if (max != null && !Number.isInteger(max)) return "The highest value must be a whole number";
+    if (max != null && max <= min) return "The highest value must be above the lowest";
+    if (field.type === "linear_scale" && max != null && max - min > 10) {
+      return "A scale can have at most 11 points";
+    }
+  }
+  for (const route of field.routes ?? []) {
+    const problem = routeProblem(route);
+    if (problem) return problem;
+  }
+  return null;
+}
+
+function routeProblem(route: FormRoute): string | null {
+  if (!(FORM_ROUTE_ACTIONS as readonly string[]).includes(route.action)) {
+    return `Unknown route action "${route.action}"`;
+  }
+  if (!(FORM_ROUTE_WHENS as readonly string[]).includes(route.when)) {
+    return `Unknown route rule "${route.when}"`;
+  }
+  if (ROUTE_ACTIONS_NEEDING_TARGET.includes(route.action) && !route.target?.trim()) {
+    return `A ${route.action} route needs a target`;
+  }
+  const v = route.whenValue;
+  switch (route.when) {
+    case "always":
+      return null;
+    case "in":
+      return Array.isArray(v) && v.length > 0 ? null : "An \"in\" rule needs a list of values";
+    case "gt":
+    case "lt":
+      return typeof toNumber(v) === "number" ? null : `A "${route.when}" rule needs a number`;
+    default:
+      return v == null || Array.isArray(v) || String(v) === ""
+        ? `A "${route.when}" rule needs a value`
+        : null;
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Route matching — pure; route-runner.ts acts on it
+// ────────────────────────────────────────────────────────────
+
+function toNumber(raw: unknown): number | null {
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const n = Number(raw.trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function isAnswered(value: unknown): boolean {
+  return !(
+    value == null ||
+    value === "" ||
+    value === false ||
+    (Array.isArray(value) && value.length === 0)
+  );
+}
+
+/** Answers compare as text, so "3" and 3 are the same answer. */
+function sameAnswer(a: unknown, b: unknown): boolean {
+  return a != null && b != null && String(a) === String(b);
+}
+
+/**
+ * Does this route fire for this answer? An unanswered field fires
+ * nothing, not even `always`. Numbers may arrive as numbers or numeric
+ * strings. Multi-pick answers (arrays) match `includes` and `in` by
+ * membership; `equals` on a multi-pick never matches.
+ */
+export function routeMatches(route: FormRoute, value: unknown): boolean {
+  if (!isAnswered(value)) return false;
+  const expected = route.whenValue;
+  switch (route.when) {
+    case "always":
+      return true;
+    case "equals":
+      return !Array.isArray(value) && sameAnswer(value, expected);
+    case "not_equals":
+      return !Array.isArray(value) && expected != null && !sameAnswer(value, expected);
+    case "gt":
+    case "lt": {
+      const n = toNumber(value);
+      const limit = toNumber(expected);
+      if (n == null || limit == null) return false;
+      return route.when === "gt" ? n > limit : n < limit;
+    }
+    case "includes":
+      return Array.isArray(value)
+        ? value.some((v) => sameAnswer(v, expected))
+        : sameAnswer(value, expected);
+    case "in": {
+      if (!Array.isArray(expected)) return false;
+      const answers = Array.isArray(value) ? value : [value];
+      return answers.some((a) => expected.some((e) => sameAnswer(a, e)));
+    }
+    default:
+      return false;
+  }
+}
+
+export type FiredRoute = {
+  field: FormField;
+  route: FormRoute;
+  value: unknown;
+};
+
+/**
+ * Every route that fires for a submission, in schema order. Fields hidden
+ * by `showWhen` fire nothing (their answers are not part of the form).
+ */
+export function firedRoutes(
+  schema: FormSchema,
+  data: Record<string, unknown>
+): FiredRoute[] {
+  const fieldsById = buildFieldsById(schema);
+  const fired: FiredRoute[] = [];
+  for (const step of schema.steps) {
+    for (const field of step.fields) {
+      if (!field.routes?.length) continue;
+      if (!isFieldVisible(field, fieldsById, data)) continue;
+      const value = data[fieldKey(field)];
+      for (const route of field.routes) {
+        if (routeMatches(route, value)) fired.push({ field, route, value });
+      }
+    }
+  }
+  return fired;
 }

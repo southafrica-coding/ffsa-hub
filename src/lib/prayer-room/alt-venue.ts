@@ -11,9 +11,9 @@
 // sets route has already checked the caller may create / edit the set.
 
 import { PRAYER_ROOM_VENUE_SLUG } from "@/services/prayer-room-booking-suggestions";
-import { getVenueBookingsBetween, insertSeries, deleteSeries, cancelBookings } from "@/services/bookings";
-import { findConflicts, type BookingWindow } from "@/lib/bookings/conflicts";
-import { describeConflict, blockLead, type Conflict, type ExistingRow } from "@/lib/bookings/conflict-messages";
+import { insertSeries, deleteSeries, cancelBookings } from "@/services/bookings";
+import { blockLead, type Conflict } from "@/lib/bookings/conflict-messages";
+import { findVenueClashes, isClashError } from "@/lib/bookings/clash-guard";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -45,9 +45,8 @@ export function setBookingTitle(s: { title?: string | null; theme?: string | nul
 }
 
 /**
- * Can the space be held on these dates at these times? A space that confirms
- * instantly has no manager to catch a clash, so a clash blocks — the same rule
- * as POST /api/bookings.
+ * Can the space be held on these dates at these times? A clash blocks on every
+ * space — the same rule as POST /api/bookings, and the database's (403).
  */
 export async function checkAltVenue(
   admin: Client,
@@ -64,32 +63,25 @@ export async function checkAltVenue(
     .maybeSingle();
   if (!venue) return { error: "That space isn't available to book" };
 
-  const sorted = [...dates].sort();
-  const { data: existing } = await getVenueBookingsBetween(admin, venueId, sorted[0], sorted[sorted.length - 1]);
-  const conflicts: Conflict[] = [];
-  for (const d of sorted) {
-    const candidate: BookingWindow = {
-      id: "",
-      venue_id: venueId,
-      booking_date: d,
-      end_date: null,
-      setup_time: null,
-      start_time: startTime,
-      end_time: endTime,
-      setdown_time: null,
-      status: "pending",
-    };
-    for (const c of findConflicts(candidate, (existing ?? []) as ExistingRow[])) {
-      conflicts.push(describeConflict(d, c as ExistingRow));
-    }
-  }
-  const blocked = !venue.requires_approval && conflicts.length > 0;
+  const conflicts = await findVenueClashes(admin, venueId, setCandidates(dates, startTime, endTime));
+  const blocked = conflicts.length > 0;
   return {
     venue,
     conflicts,
     blocked,
-    error: blocked ? `${venue.name}: ${blockLead(conflicts)}` : undefined,
+    error: blocked ? blockLead(conflicts, venue.name) : undefined,
   };
+}
+
+function setCandidates(dates: string[], startTime: string, endTime: string) {
+  return [...dates].sort().map((d) => ({
+    booking_date: d,
+    end_date: null,
+    setup_time: null,
+    start_time: startTime,
+    end_time: endTime,
+    setdown_time: null,
+  }));
 }
 
 async function displayName(admin: Client, userId: string): Promise<string | null> {
@@ -119,7 +111,7 @@ export async function bookAltVenue(
     ownerId: string;
     weekly?: { weekday: number; series_start: string; series_end: string };
   }
-): Promise<{ count: number; pending: boolean; error?: string }> {
+): Promise<{ count: number; pending: boolean; clash?: boolean; error?: string }> {
   const { venue, sets, title, startTime, endTime, userId, ownerId } = input;
   const pending = venue.requires_approval;
 
@@ -178,6 +170,16 @@ export async function bookAltVenue(
     .select("id, booking_date");
   if (error || !rows) {
     if (seriesId) await deleteSeries(admin, seriesId);
+    // Someone took the space between the check and the booking: the database
+    // refused the double-booking. Say who has it, not the database's words.
+    if (isClashError(error)) {
+      const conflicts = await findVenueClashes(
+        admin,
+        venue.id,
+        setCandidates(sets.map((s) => s.set_date), startTime, endTime)
+      );
+      return { count: 0, pending, clash: true, error: blockLead(conflicts, venue.name) };
+    }
     return { count: 0, pending, error: error?.message ?? "Failed to book the space" };
   }
 
@@ -193,12 +195,16 @@ export async function bookAltVenue(
 
 /**
  * Keep the bookings in step after sets were edited: title, date and times
- * follow the set; a cancelled set cancels its booking.
+ * follow the set; a cancelled set cancels its booking. A booking whose new
+ * time is already taken in that space stays where it was (the database
+ * refuses the double-booking); those are counted in `refused` so the caller
+ * can say so.
  */
 export async function syncAltBookings(
   admin: Client,
   filter: { setId?: string; seriesId?: string; fromDate?: string }
-) {
+): Promise<{ refused: number }> {
+  let refused = 0;
   let q = admin
     .from("prayer_room_sets")
     .select("id, title, theme, set_date, start_time, end_time, status, alt_booking_id")
@@ -224,12 +230,22 @@ export async function syncAltBookings(
       updated_at: new Date().toISOString(),
     };
     if (s.status === "cancelled") patch.status = "cancelled";
-    await admin
+    const { error } = await admin
       .from("venue_bookings")
       .update(patch)
       .eq("id", s.alt_booking_id)
       .not("status", "in", "(cancelled,denied)");
+    if (isClashError(error)) refused++;
   }
+  return { refused };
+}
+
+/** What to tell the person when a set moved but its space booking couldn't. */
+export function altBookingRefusedNotice(refused: number): string | null {
+  if (refused === 0) return null;
+  return refused === 1
+    ? "The set moved, but its space booking couldn't follow: that space is already booked at the new time. The booking is still at the old time; change it in Space Bookings, or pick another space."
+    : `The sets moved, but ${refused} of their space bookings couldn't follow: that space is already booked at the new times. Those bookings are still at the old times; change them in Space Bookings, or pick another space.`;
 }
 
 /** The bookings held by these sets — read before the sets are deleted. */

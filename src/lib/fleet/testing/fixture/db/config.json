@@ -1,0 +1,1136 @@
+{
+  "checklist": {
+    "sections": [
+      {
+        "id": "trip",
+        "items": [
+          {
+            "h": "Ask the driver and note anything they mention",
+            "id": "pst-driver",
+            "in": [
+              "post"
+            ],
+            "t": "Driver reports no problems on the trip (noises, warning lights, handling)"
+          },
+          {
+            "h": "",
+            "id": "pst-keys",
+            "in": [
+              "post"
+            ],
+            "t": "Keys, remote and locknut key returned"
+          }
+        ],
+        "name": "Trip & handover"
+      },
+      {
+        "id": "docs",
+        "items": [
+          {
+            "h": "Check the expiry date on the windscreen disc",
+            "id": "doc-disc",
+            "in": [
+              "pre",
+              "monthly"
+            ],
+            "t": "Licence disc valid and displayed"
+          },
+          {
+            "h": "",
+            "id": "doc-papers",
+            "in": [
+              "weekly"
+            ],
+            "t": "Copy of registration papers in the vehicle"
+          },
+          {
+            "h": "",
+            "id": "doc-insure",
+            "in": [
+              "weekly"
+            ],
+            "t": "Insurance and roadside-assistance numbers in the vehicle"
+          },
+          {
+            "h": "",
+            "id": "doc-service",
+            "in": [
+              "monthly",
+              "workshop"
+            ],
+            "t": "Service book or service history up to date"
+          },
+          {
+            "h": "",
+            "id": "doc-keys",
+            "in": [
+              "monthly"
+            ],
+            "t": "Spare key accounted for"
+          },
+          {
+            "h": "Not checked for now: there’s no way to check it yet",
+            "id": "doc-tracker",
+            "in": [],
+            "t": "Tracking unit and immobiliser working"
+          }
+        ],
+        "name": "Documents & compliance"
+      },
+      {
+        "id": "ext",
+        "items": [
+          {
+            "h": "Photograph anything new",
+            "id": "ext-walk",
+            "in": [
+              "pre",
+              "post",
+              "weekly"
+            ],
+            "t": "Walk-around: any new dents, scratches or damage"
+          },
+          {
+            "h": "",
+            "id": "ext-front",
+            "in": [
+              "weekly"
+            ],
+            "t": "Front bumper and grille"
+          },
+          {
+            "h": "",
+            "id": "ext-rear",
+            "in": [
+              "weekly"
+            ],
+            "t": "Rear bumper"
+          },
+          {
+            "h": "",
+            "id": "ext-bonnet",
+            "in": [
+              "weekly"
+            ],
+            "t": "Bonnet"
+          },
+          {
+            "h": "",
+            "id": "ext-left",
+            "in": [
+              "weekly"
+            ],
+            "t": "Left-side panels and doors"
+          },
+          {
+            "h": "",
+            "id": "ext-right",
+            "in": [
+              "weekly"
+            ],
+            "t": "Right-side panels and doors"
+          },
+          {
+            "h": "",
+            "id": "ext-roof",
+            "in": [
+              "weekly"
+            ],
+            "t": "Roof, gutters and roof rack"
+          },
+          {
+            "h": "Vans only",
+            "id": "ext-slide",
+            "in": [
+              "weekly"
+            ],
+            "t": "Sliding door runs, latches and locks"
+          },
+          {
+            "h": "",
+            "id": "ext-tail",
+            "in": [
+              "weekly"
+            ],
+            "t": "Tailgate or boot opens, closes and locks"
+          },
+          {
+            "h": "",
+            "id": "ext-fuelcap",
+            "in": [
+              "weekly"
+            ],
+            "t": "Fuel cap present and closes"
+          },
+          {
+            "h": "",
+            "id": "ext-plates",
+            "in": [
+              "weekly"
+            ],
+            "t": "Number plates secure and readable, front and rear"
+          },
+          {
+            "h": "",
+            "id": "ext-rust",
+            "in": [
+              "monthly"
+            ],
+            "t": "Rust on sills, wheel arches or door bottoms"
+          },
+          {
+            "h": "",
+            "id": "ext-seals",
+            "in": [
+              "monthly"
+            ],
+            "t": "Door rubbers and weather seals"
+          },
+          {
+            "h": "",
+            "id": "ext-towbar",
+            "in": [
+              "monthly"
+            ],
+            "t": "Tow bar and trailer socket (if fitted)"
+          }
+        ],
+        "name": "Body & exterior"
+      },
+      {
+        "id": "glass",
+        "items": [
+          {
+            "h": "A crack in the driver’s line of sight fails a roadworthy test",
+            "id": "gls-wind",
+            "in": [
+              "post",
+              "weekly"
+            ],
+            "t": "Windscreen free of cracks and chips"
+          },
+          {
+            "h": "",
+            "id": "gls-side",
+            "in": [
+              "monthly"
+            ],
+            "t": "Side and rear windows"
+          },
+          {
+            "h": "",
+            "id": "gls-winders",
+            "in": [
+              "monthly"
+            ],
+            "t": "Windows open and close"
+          },
+          {
+            "h": "",
+            "id": "gls-mirrors",
+            "in": [
+              "weekly"
+            ],
+            "t": "Side mirrors secure, glass intact, adjust properly"
+          },
+          {
+            "h": "",
+            "id": "gls-rvm",
+            "in": [
+              "weekly"
+            ],
+            "t": "Rear-view mirror"
+          },
+          {
+            "h": "",
+            "id": "gls-blades",
+            "in": [
+              "weekly"
+            ],
+            "t": "Wiper blades not split or smearing"
+          },
+          {
+            "h": "",
+            "id": "gls-wipers",
+            "in": [
+              "weekly"
+            ],
+            "t": "Wipers work on all speeds"
+          },
+          {
+            "h": "",
+            "id": "gls-washer",
+            "in": [
+              "weekly"
+            ],
+            "t": "Washer jets spray onto the windscreen"
+          }
+        ],
+        "name": "Glass, mirrors & wipers"
+      },
+      {
+        "id": "lights",
+        "items": [
+          {
+            "h": "Headlights, brake lights and indicators",
+            "id": "pre-lights",
+            "in": [
+              "pre",
+              "post"
+            ],
+            "t": "Lights and indicators work"
+          },
+          {
+            "h": "",
+            "id": "lgt-dip",
+            "in": [
+              "weekly"
+            ],
+            "t": "Headlights: dipped"
+          },
+          {
+            "h": "",
+            "id": "lgt-bright",
+            "in": [
+              "weekly"
+            ],
+            "t": "Headlights: bright"
+          },
+          {
+            "h": "",
+            "id": "lgt-park",
+            "in": [
+              "weekly"
+            ],
+            "t": "Park lights and daytime running lights"
+          },
+          {
+            "h": "",
+            "id": "lgt-ind",
+            "in": [
+              "weekly"
+            ],
+            "t": "Indicators: front, side and rear"
+          },
+          {
+            "h": "",
+            "id": "lgt-hazard",
+            "in": [
+              "weekly"
+            ],
+            "t": "Hazard lights"
+          },
+          {
+            "h": "Ask someone to stand behind the vehicle",
+            "id": "lgt-brake",
+            "in": [
+              "weekly"
+            ],
+            "t": "Brake lights, including the high third light"
+          },
+          {
+            "h": "",
+            "id": "lgt-tail",
+            "in": [
+              "weekly"
+            ],
+            "t": "Tail lights"
+          },
+          {
+            "h": "",
+            "id": "lgt-reverse",
+            "in": [
+              "weekly"
+            ],
+            "t": "Reverse lights"
+          },
+          {
+            "h": "",
+            "id": "lgt-plate",
+            "in": [
+              "weekly"
+            ],
+            "t": "Number plate light"
+          },
+          {
+            "h": "",
+            "id": "lgt-fog",
+            "in": [
+              "monthly"
+            ],
+            "t": "Fog lights (if fitted)"
+          },
+          {
+            "h": "",
+            "id": "lgt-lens",
+            "in": [
+              "monthly"
+            ],
+            "t": "Headlight lenses clear, not cracked or yellowed"
+          },
+          {
+            "h": "",
+            "id": "lgt-cabin",
+            "in": [
+              "monthly"
+            ],
+            "t": "Cabin and load-area lights"
+          },
+          {
+            "h": "",
+            "id": "lgt-reflect",
+            "in": [
+              "monthly"
+            ],
+            "t": "Reflectors and reflective tape"
+          }
+        ],
+        "name": "Lights & signals"
+      },
+      {
+        "id": "tyres",
+        "items": [
+          {
+            "h": "",
+            "id": "pre-tyres",
+            "in": [
+              "pre",
+              "post"
+            ],
+            "t": "Tyres look properly inflated, no visible damage"
+          },
+          {
+            "h": "Legal minimum in South Africa is 1.6 mm",
+            "id": "tyr-fl",
+            "in": [
+              "monthly"
+            ],
+            "m": {
+              "f": 1.6,
+              "u": "mm",
+              "w": 3
+            },
+            "t": "Tread depth: front left"
+          },
+          {
+            "h": "",
+            "id": "tyr-fr",
+            "in": [
+              "monthly"
+            ],
+            "m": {
+              "f": 1.6,
+              "u": "mm",
+              "w": 3
+            },
+            "t": "Tread depth: front right"
+          },
+          {
+            "h": "",
+            "id": "tyr-rl",
+            "in": [
+              "monthly"
+            ],
+            "m": {
+              "f": 1.6,
+              "u": "mm",
+              "w": 3
+            },
+            "t": "Tread depth: rear left"
+          },
+          {
+            "h": "",
+            "id": "tyr-rr",
+            "in": [
+              "monthly"
+            ],
+            "m": {
+              "f": 1.6,
+              "u": "mm",
+              "w": 3
+            },
+            "t": "Tread depth: rear right"
+          },
+          {
+            "h": "",
+            "id": "tyr-spare",
+            "in": [
+              "monthly"
+            ],
+            "t": "Spare wheel: tread and pressure"
+          },
+          {
+            "h": "Check when the tyres are cold",
+            "id": "tyr-press",
+            "in": [
+              "weekly"
+            ],
+            "t": "Tyre pressures set to the door-pillar sticker"
+          },
+          {
+            "h": "",
+            "id": "tyr-side",
+            "in": [
+              "post",
+              "weekly"
+            ],
+            "t": "Sidewalls free of cuts, bulges and cracks"
+          },
+          {
+            "h": "Worn edges point to alignment or pressure problems",
+            "id": "tyr-wear",
+            "in": [
+              "weekly"
+            ],
+            "t": "Even wear across each tyre"
+          },
+          {
+            "h": "",
+            "id": "tyr-nuts",
+            "in": [
+              "weekly"
+            ],
+            "t": "All wheel nuts present; locknut key in the vehicle"
+          },
+          {
+            "h": "",
+            "id": "tyr-rims",
+            "in": [
+              "weekly"
+            ],
+            "t": "Rims free of cracks and bends"
+          },
+          {
+            "h": "4-digit date code on the sidewall: 2321 = week 23 of 2021",
+            "id": "tyr-age",
+            "in": [
+              "monthly"
+            ],
+            "t": "Tyres younger than 6 years"
+          }
+        ],
+        "name": "Tyres & wheels"
+      },
+      {
+        "id": "bonnet",
+        "items": [
+          {
+            "h": "Level ground, engine off for a few minutes",
+            "id": "eng-oil",
+            "in": [
+              "post",
+              "weekly"
+            ],
+            "t": "Engine oil level and colour"
+          },
+          {
+            "h": "",
+            "id": "eng-cool",
+            "in": [
+              "post",
+              "weekly"
+            ],
+            "t": "Coolant level (engine cold)"
+          },
+          {
+            "h": "",
+            "id": "eng-brake",
+            "in": [
+              "weekly"
+            ],
+            "t": "Brake fluid level"
+          },
+          {
+            "h": "",
+            "id": "eng-ps",
+            "in": [
+              "monthly"
+            ],
+            "t": "Power steering fluid (if applicable)"
+          },
+          {
+            "h": "",
+            "id": "eng-washer",
+            "in": [
+              "weekly"
+            ],
+            "t": "Windscreen washer fluid"
+          },
+          {
+            "h": "",
+            "id": "eng-atf",
+            "in": [
+              "workshop"
+            ],
+            "t": "Automatic gearbox fluid"
+          },
+          {
+            "h": "",
+            "id": "eng-batt",
+            "in": [
+              "weekly"
+            ],
+            "t": "Battery terminals clean and tight"
+          },
+          {
+            "h": "",
+            "id": "eng-batttest",
+            "in": [
+              "workshop"
+            ],
+            "t": "Battery health test"
+          },
+          {
+            "h": "",
+            "id": "eng-belt",
+            "in": [
+              "monthly"
+            ],
+            "t": "Drive belt: no cracks or squealing"
+          },
+          {
+            "h": "",
+            "id": "eng-hoses",
+            "in": [
+              "monthly"
+            ],
+            "t": "Radiator and heater hoses: no cracks or leaks"
+          },
+          {
+            "h": "",
+            "id": "eng-air",
+            "in": [
+              "workshop"
+            ],
+            "t": "Air filter"
+          },
+          {
+            "h": "Look where the vehicle was parked overnight",
+            "id": "eng-leaks",
+            "in": [
+              "post",
+              "weekly"
+            ],
+            "t": "No oil or fluid leaks in the engine bay or on the ground"
+          },
+          {
+            "h": "Rodents nest in engine bays of parked vehicles",
+            "id": "eng-wires",
+            "in": [
+              "monthly"
+            ],
+            "t": "Wiring not chewed or loose"
+          },
+          {
+            "h": "",
+            "id": "eng-mounts",
+            "in": [
+              "workshop"
+            ],
+            "t": "Engine and gearbox mountings"
+          },
+          {
+            "h": "Check the km of the last replacement",
+            "id": "eng-timing",
+            "in": [
+              "workshop"
+            ],
+            "t": "Timing belt or chain replacement up to date"
+          }
+        ],
+        "name": "Under the bonnet"
+      },
+      {
+        "id": "cabin",
+        "items": [
+          {
+            "h": "",
+            "id": "cab-belts",
+            "in": [
+              "pre",
+              "weekly"
+            ],
+            "t": "Seat belts at every seat: latch, retract, not frayed"
+          },
+          {
+            "h": "",
+            "id": "cab-warn",
+            "in": [
+              "pre",
+              "post",
+              "weekly"
+            ],
+            "t": "Dashboard warning lights go off after start-up"
+          },
+          {
+            "h": "",
+            "id": "cab-horn",
+            "in": [
+              "weekly"
+            ],
+            "t": "Horn"
+          },
+          {
+            "h": "",
+            "id": "cab-seats",
+            "in": [
+              "monthly"
+            ],
+            "t": "Seats secure and adjusters work"
+          },
+          {
+            "h": "",
+            "id": "cab-upholst",
+            "in": [
+              "post",
+              "weekly"
+            ],
+            "t": "Upholstery: tears and stains"
+          },
+          {
+            "h": "",
+            "id": "cab-ac",
+            "in": [
+              "weekly"
+            ],
+            "t": "Aircon blows cold"
+          },
+          {
+            "h": "",
+            "id": "cab-heat",
+            "in": [
+              "monthly"
+            ],
+            "t": "Heater and demister"
+          },
+          {
+            "h": "",
+            "id": "cab-fan",
+            "in": [
+              "monthly"
+            ],
+            "t": "Fan works on all speeds"
+          },
+          {
+            "h": "",
+            "id": "cab-gauges",
+            "in": [
+              "weekly"
+            ],
+            "t": "Speedometer, fuel and temperature gauges"
+          },
+          {
+            "h": "",
+            "id": "cab-locks",
+            "in": [
+              "weekly"
+            ],
+            "t": "Central locking and remote"
+          },
+          {
+            "h": "",
+            "id": "cab-handles",
+            "in": [
+              "monthly"
+            ],
+            "t": "Interior door handles and child locks"
+          },
+          {
+            "h": "",
+            "id": "cab-mats",
+            "in": [
+              "weekly"
+            ],
+            "t": "Floor mats secure and clear of the pedals"
+          },
+          {
+            "h": "",
+            "id": "cab-radio",
+            "in": [
+              "monthly"
+            ],
+            "t": "Radio and infotainment"
+          },
+          {
+            "h": "",
+            "id": "cab-usb",
+            "in": [
+              "monthly"
+            ],
+            "t": "12 V and USB charging points"
+          },
+          {
+            "h": "",
+            "id": "cab-trim",
+            "in": [
+              "monthly"
+            ],
+            "t": "Roof lining, trim and sun visors"
+          },
+          {
+            "h": "",
+            "id": "cab-clean",
+            "in": [
+              "post",
+              "weekly"
+            ],
+            "t": "Clean inside, nothing left behind"
+          }
+        ],
+        "name": "Interior & cabin"
+      },
+      {
+        "id": "safety",
+        "items": [
+          {
+            "h": "",
+            "id": "pre-kit",
+            "in": [
+              "pre",
+              "post"
+            ],
+            "t": "Warning triangle, jack and spare wheel in the vehicle"
+          },
+          {
+            "h": "",
+            "id": "saf-triangle",
+            "in": [
+              "weekly"
+            ],
+            "t": "Warning triangle"
+          },
+          {
+            "h": "",
+            "id": "saf-firstaid",
+            "in": [
+              "monthly"
+            ],
+            "t": "First-aid kit stocked"
+          },
+          {
+            "h": "",
+            "id": "saf-extinguisher",
+            "in": [
+              "monthly"
+            ],
+            "t": "Fire extinguisher present and in date"
+          },
+          {
+            "h": "",
+            "id": "saf-jack",
+            "in": [
+              "monthly"
+            ],
+            "t": "Jack and wheel spanner"
+          },
+          {
+            "h": "",
+            "id": "saf-vest",
+            "in": [
+              "monthly"
+            ],
+            "t": "Reflective vest"
+          },
+          {
+            "h": "",
+            "id": "saf-torch",
+            "in": [
+              "monthly"
+            ],
+            "t": "Torch"
+          },
+          {
+            "h": "",
+            "id": "saf-card",
+            "in": [
+              "monthly"
+            ],
+            "t": "Emergency contact card"
+          }
+        ],
+        "name": "Safety & emergency kit"
+      },
+      {
+        "id": "drive",
+        "items": [
+          {
+            "h": "",
+            "id": "drv-start",
+            "in": [
+              "weekly"
+            ],
+            "t": "Starts easily and idles smoothly"
+          },
+          {
+            "h": "",
+            "id": "drv-noise",
+            "in": [
+              "weekly"
+            ],
+            "t": "No knocking, whining or rattling"
+          },
+          {
+            "h": "",
+            "id": "drv-smoke",
+            "in": [
+              "weekly"
+            ],
+            "t": "No blue, black or white exhaust smoke"
+          },
+          {
+            "h": "Automatic: no jerks, slips or delay moving off in D and R",
+            "id": "drv-gears",
+            "in": [
+              "weekly"
+            ],
+            "t": "Gear changes are smooth"
+          },
+          {
+            "h": "",
+            "id": "drv-pull",
+            "in": [
+              "weekly"
+            ],
+            "t": "Drives straight without pulling"
+          },
+          {
+            "h": "",
+            "id": "drv-steer",
+            "in": [
+              "weekly"
+            ],
+            "t": "Steering wheel straight, no vibration"
+          },
+          {
+            "h": "",
+            "id": "drv-brakes",
+            "in": [
+              "weekly"
+            ],
+            "t": "Brakes stop straight, no grinding or squealing"
+          },
+          {
+            "h": "",
+            "id": "drv-pedal",
+            "in": [
+              "weekly"
+            ],
+            "t": "Brake pedal firm, not spongy"
+          },
+          {
+            "h": "Test it in N (neutral), not P",
+            "id": "drv-hand",
+            "in": [
+              "weekly"
+            ],
+            "t": "Handbrake holds on a slope"
+          },
+          {
+            "h": "",
+            "id": "drv-temp",
+            "in": [
+              "weekly"
+            ],
+            "t": "Temperature gauge stays normal"
+          },
+          {
+            "h": "",
+            "id": "drv-abs",
+            "in": [
+              "weekly"
+            ],
+            "t": "ABS and traction lights stay off"
+          },
+          {
+            "h": "",
+            "id": "drv-cruise",
+            "in": [
+              "monthly"
+            ],
+            "t": "Cruise control (if fitted)"
+          }
+        ],
+        "name": "Road test"
+      },
+      {
+        "id": "work",
+        "items": [
+          {
+            "h": "",
+            "id": "wrk-padf",
+            "in": [
+              "workshop"
+            ],
+            "m": {
+              "f": 2,
+              "u": "mm",
+              "w": 4
+            },
+            "t": "Brake pads: front"
+          },
+          {
+            "h": "",
+            "id": "wrk-padr",
+            "in": [
+              "workshop"
+            ],
+            "m": {
+              "f": 2,
+              "u": "mm",
+              "w": 4
+            },
+            "t": "Brake pads or shoes: rear"
+          },
+          {
+            "h": "",
+            "id": "wrk-discs",
+            "in": [
+              "workshop"
+            ],
+            "t": "Brake discs and drums"
+          },
+          {
+            "h": "",
+            "id": "wrk-lines",
+            "in": [
+              "workshop"
+            ],
+            "t": "Brake lines and hoses"
+          },
+          {
+            "h": "",
+            "id": "wrk-shocks",
+            "in": [
+              "workshop"
+            ],
+            "t": "Shock absorbers"
+          },
+          {
+            "h": "",
+            "id": "wrk-bushes",
+            "in": [
+              "workshop"
+            ],
+            "t": "Suspension bushes and ball joints"
+          },
+          {
+            "h": "",
+            "id": "wrk-tierod",
+            "in": [
+              "workshop"
+            ],
+            "t": "Tie rod ends and steering rack"
+          },
+          {
+            "h": "",
+            "id": "wrk-cv",
+            "in": [
+              "workshop"
+            ],
+            "t": "CV joints and boots"
+          },
+          {
+            "h": "",
+            "id": "wrk-bearings",
+            "in": [
+              "workshop"
+            ],
+            "t": "Wheel bearings"
+          },
+          {
+            "h": "",
+            "id": "wrk-exhaust",
+            "in": [
+              "workshop"
+            ],
+            "t": "Exhaust: leaks, mountings, rust"
+          },
+          {
+            "h": "",
+            "id": "wrk-gbox",
+            "in": [
+              "workshop"
+            ],
+            "t": "Gearbox and diff oil leaks"
+          },
+          {
+            "h": "",
+            "id": "wrk-fuel",
+            "in": [
+              "workshop"
+            ],
+            "t": "Fuel lines and tank"
+          },
+          {
+            "h": "",
+            "id": "wrk-chassis",
+            "in": [
+              "workshop"
+            ],
+            "t": "Chassis: damage or rust"
+          },
+          {
+            "h": "",
+            "id": "wrk-scan",
+            "in": [
+              "workshop"
+            ],
+            "t": "Diagnostic scan: no stored fault codes"
+          },
+          {
+            "h": "",
+            "id": "wrk-align",
+            "in": [
+              "workshop"
+            ],
+            "t": "Wheel alignment"
+          },
+          {
+            "h": "",
+            "id": "wrk-coolant",
+            "in": [
+              "workshop"
+            ],
+            "t": "Coolant strength test"
+          },
+          {
+            "h": "",
+            "id": "wrk-acgas",
+            "in": [
+              "workshop"
+            ],
+            "t": "Aircon gas pressure"
+          }
+        ],
+        "name": "Workshop: underbody, brakes & diagnostics"
+      }
+    ],
+    "updatedAt": "2026-11-17T08:30:00Z"
+  },
+  "notify": {
+    "email": "coordinator@example.org",
+    "slack": true,
+    "updatedAt": "2026-11-16T14:05:00Z"
+  },
+  "schedule": {
+    "assign": {
+      "almera": 4,
+      "crv": 4,
+      "h1-1": 2,
+      "h1-2": 2,
+      "h1-3": 3,
+      "kombi": 3
+    },
+    "days": [
+      2,
+      3,
+      4
+    ],
+    "maxPerDay": 2,
+    "updatedAt": "2026-11-17T10:30:00Z",
+    "weeklyOnly": [
+      "2026-11-16",
+      "2026-11-23"
+    ]
+  }
+}

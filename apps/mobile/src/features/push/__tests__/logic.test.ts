@@ -125,7 +125,7 @@ describe("api helpers", () => {
   });
 
   it("Android channel ids match the server's categories", () => {
-    expect(PUSH_CHANNELS.map((c) => c.id)).toEqual(["booking_requests", "booking_updates"]);
+    expect(PUSH_CHANNELS.map((c) => c.id)).toEqual(["booking_requests", "booking_updates", "training_care", "training_week"]);
   });
 });
 

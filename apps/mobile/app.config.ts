@@ -108,6 +108,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         microphonePermission: false,
       },
     ],
+    // Face ID lock (off unless turned on in Me › Settings). The phone's own
+    // passcode is the fallback; the app has no PIN of its own.
+    [
+      "expo-local-authentication",
+      {
+        faceIDPermission: "FFSA Hub uses Face ID to unlock the app.",
+      },
+    ],
     // Push notifications (Expo push service). Android small icon is the
     // white FF mark; the tint is brand yellow. No custom sounds and no
     // background pushes: notifications are shown by the system only.

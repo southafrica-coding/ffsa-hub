@@ -23,8 +23,11 @@ export function ItemBooking({
   rangeText,
   allFreeFrom,
   variant,
+  forHire = true,
 }: {
   slug: string;
+  /** False: on show only. No quantity, no request, just the reason. */
+  forHire?: boolean;
   product: QuoteProduct;
   settings: QuoteSettings;
   from: string;
@@ -39,6 +42,26 @@ export function ItemBooking({
   const [qty, setQty] = useState(free > 0 ? 1 : 0);
   const q = quote([{ product, quantity: Math.max(qty, 1) }], from, to, "external", settings);
   const total = q.lines[0].lineTotalCents;
+
+  if (!forHire) {
+    const why = "This stays at our base. It's listed so you can see what we have, but it can't be hired.";
+    return variant === "bar" ? (
+      <div className="flex flex-col gap-1.5">
+        <span className="flex h-[46px] items-center justify-center rounded-[6px] bg-[color:var(--hire-surface2)] px-4 text-[15px] font-bold text-[color:var(--hire-dim)]">
+          Not for hire
+        </span>
+        <div className="text-[12px] text-[color:var(--hire-muted)]">{why}</div>
+      </div>
+    ) : (
+      <div className="flex flex-col gap-3 rounded-[8px] border border-[color:var(--hire-line-strong)] bg-[color:var(--hire-surface)] p-[18px]">
+        <span className="text-[15px] font-medium text-[color:var(--hire-ink)]">Not for hire</span>
+        <p className="text-[14px]">{why}</p>
+        <Link href="/hire/helper" className="text-[14px] font-bold text-[color:var(--hire-accent)]">
+          Tell us about your event and we&apos;ll suggest what you can hire →
+        </Link>
+      </div>
+    );
+  }
 
   const stepper = (
     <div className="flex h-[46px] items-center rounded-[6px] border border-[color:var(--hire-line-strong)] md:h-[46px]">

@@ -205,7 +205,7 @@ export default async function MyFinancePage() {
                 <li key={m.id} className="border-b border-rule">
                   <Link
                     href={`/my-finance/outreach/${team.id}`}
-                    className="flex min-h-[48px] items-center justify-between gap-4 px-5 py-3.5 hover:bg-[#F7F5EE] md:px-8"
+                    className="flex min-h-[48px] items-center justify-between gap-4 px-5 py-3.5 hover:bg-[var(--surface-hover)] md:px-8"
                   >
                     <div className="min-w-0">
                       {/* Line one: what it is. */}

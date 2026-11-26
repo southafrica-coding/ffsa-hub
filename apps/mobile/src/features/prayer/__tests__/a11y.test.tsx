@@ -1,6 +1,6 @@
 // Accessibility checks for the Prayer tab (docs/accessibility.md): roles,
-// names and states of the main controls, 48dp targets, and no unnamed
-// tappables in every state. Same mocks as prayer-screen.test.tsx.
+// names and states of the main controls, 44pt targets (the redesign's floor),
+// and no unnamed tappables in every state. Same mocks as prayer-screen.test.tsx.
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fireEvent, render, screen, within } from "@testing-library/react-native";
 import * as Haptics from "expo-haptics";
@@ -11,7 +11,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { MeProvider } from "@/features/shell";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
-import { auditTappables, tappableSizes } from "@/lib/a11y/testing";
+import { auditTappables, largeTextProblems, tappableSizes } from "@/lib/a11y/testing";
+import { touch } from "@/theme/tokens";
 import { makeMe } from "../../../../test/fixtures";
 
 import { prayerFetch } from "../api-client";
@@ -104,12 +105,16 @@ function expectCleanTappables() {
   expect(auditTappables(screen.container as never)).toEqual([]);
 }
 
-/** Every tappable is at least 48dp tall (style or hit slop). */
+/**
+ * Every tappable is at least 44pt tall (style or hit slop): the redesign's
+ * floor (design-spec: tap targets ≥ 44pt; the kit's segmented control and the
+ * band's button are exactly 44).
+ */
 function expectTargets() {
   for (const t of tappableSizes(screen.container as never, flatten)) {
     const slop = typeof t.hitSlop === "number" ? t.hitSlop * 2 : 0;
     const h = Math.max(Number(t.minHeight ?? 0), Number(t.height ?? 0)) + slop;
-    expect({ name: t.name, tall: h >= 48 }).toEqual({ name: t.name, tall: true });
+    expect({ name: t.name, tall: h >= touch.floor }).toEqual({ name: t.name, tall: true });
   }
 }
 
@@ -139,7 +144,7 @@ describe("Prayer a11y: week", () => {
     expectTargets();
   });
 
-  it("success: masthead and days are headers; set rows say time, length, lead and status in words", async () => {
+  it("success: the title and the day are headers; set rows say time, length, lead and status in words", async () => {
     room(WEEK);
     await show();
     await screen.findByText("Night watch");
@@ -148,10 +153,36 @@ describe("Prayer a11y: week", () => {
     const row = screen.getByRole("button", { name: /^Tuesday 7 to 9 pm, Night watch/ });
     expect(row.props.accessibilityLabel).toMatch(/2 hours\. Led by Sample Person 199$/);
     expect(row.props.accessibilityHint).toBe(strings.set.openHint);
-    // The unled set says so in words, not only with a dashed border.
-    expect(screen.getByRole("button", { name: /needs a lead/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: strings.week.previous })).toBeTruthy();
     expect(screen.getByRole("button", { name: strings.week.next })).toBeTruthy();
+    // The week label says which week, that it's this one, and its totals.
+    expect(screen.getByLabelText("Week of 2–6 Nov 2026, this week. 2 sets · 3 seats open")).toBeTruthy();
+    expectCleanTappables();
+    expectTargets();
+  });
+
+  it("the day strip is a tab list: each day says its date, 'today' and its one marker word", async () => {
+    room(WEEK);
+    await show();
+    await screen.findByText("Night watch");
+    const tabs = within(screen.getByTestId("day-strip")).getAllByRole("tab");
+    expect(tabs.map((t) => t.props.accessibilityLabel)).toEqual([
+      "Monday 2 November, No lead",
+      "Tuesday 3 November, today, You",
+      "Wednesday 4 November",
+      "Thursday 5 November, Blocked",
+      "Friday 6 November",
+    ]);
+    expect(tabs.map((t) => t.props.accessibilityState.selected)).toEqual([false, true, false, false, false]);
+    // Today is underlined as well as spoken; the others aren't.
+    expect(flatten(within(tabs[1]).getByText("Tue").props.style).textDecorationLine).toBe("underline");
+    expect(flatten(within(tabs[0]).getByText("Mon").props.style).textDecorationLine).toBe("none");
+    for (const t of tabs) expect(Number(flatten(t.props.style).minHeight)).toBeGreaterThanOrEqual(56);
+
+    await fireEvent.press(tabs[0]);
+    expect(screen.getByRole("header", { name: "Monday 2 November" })).toBeTruthy();
+    // The unled set says so in words, not only with a dashed border.
+    expect(screen.getByRole("button", { name: /needs a lead/ })).toBeTruthy();
     expectCleanTappables();
     expectTargets();
   });
@@ -190,6 +221,7 @@ describe("Prayer a11y: set sheet", () => {
     await fireEvent.press(await screen.findByTestId("set-s1"));
     const sheet = await screen.findByTestId("set-sheet");
     expect(sheet.props.accessibilityViewIsModal).toBe(true);
+    expect(await within(sheet).findByRole("header", { name: strings.set.lineup })).toBeTruthy();
     await within(sheet).findByText("Night watch");
     expect(within(sheet).getByRole("header", { name: "Night watch" })).toBeTruthy();
     expect(within(sheet).getByRole("button", { name: strings.set.close })).toBeTruthy();
@@ -248,5 +280,32 @@ describe("Prayer a11y: practice", () => {
     const time = within(await screen.findByTestId("practice-row-2026-11-04-16:00")).getByText("16:00–16:30");
     expect(flatten(time.props.style)).toMatchObject({ minWidth: 104 });
     expect(flatten(time.props.style).width).toBeUndefined();
+  });
+});
+
+// The largest accessibility text size on a 360pt-wide phone (design-spec §6).
+function atLargestText() {
+  return jest.spyOn(jest.requireActual<typeof import("react-native")>("react-native"), "useWindowDimensions").mockReturnValue({ width: 360, height: 780, scale: 3, fontScale: 3.1 });
+}
+
+describe("Prayer a11y: largest text, nothing important capped or clipped", () => {
+  it("Week", async () => {
+    atLargestText();
+    room(WEEK);
+    await show();
+    await screen.findByText("Night watch");
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expectCleanTappables();
+  });
+
+  it("set sheet", async () => {
+    atLargestText();
+    room(WEEK);
+    await show();
+    await fireEvent.press(await screen.findByTestId("set-s1"));
+    const sheet = await screen.findByTestId("set-sheet");
+    await within(sheet).findByText("Night watch");
+    expect(largeTextProblems(screen.container as never)).toEqual([]);
+    expectCleanTappables();
   });
 });

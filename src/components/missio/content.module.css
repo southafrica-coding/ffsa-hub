@@ -1,0 +1,96 @@
+/* Page content only. The shell, sidebar, top bar, and their breakpoints
+   stay in shell.module.css so the mobile shell can change on its own.
+   Home has its own home.module.css (board M11a). */
+
+.page {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink, #1c1b17);
+}
+
+/* Resting state is fully opaque. The animation is the only thing that
+   starts at opacity 0. If it never runs (no stylesheet animation, a
+   hydration restart that gets cancelled, prefers-reduced-motion), the
+   page stays readable. */
+.reveal {
+  opacity: 1;
+  transform: none;
+  animation: contentIn 0.32s ease both;
+}
+
+@keyframes contentIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.page .title {
+  font-size: 32px;
+  font-weight: 560;
+  line-height: 38px;
+  letter-spacing: -0.01em;
+  margin: 8px 0 0;
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  .page .title {
+    font-size: 28px;
+    line-height: 34px;
+  }
+}
+
+.page .lede {
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+  max-width: 40rem;
+}
+
+.cardError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--bad, #a3261b);
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton span {
+  height: 14px;
+  border-radius: 6px;
+  background: var(--subtle, #eeeadf);
+}
+
+.skeleton span:nth-child(1) {
+  width: 40%;
+  height: 36px;
+}
+
+.skeleton span:nth-child(2) {
+  width: 100%;
+  height: 56px;
+}
+
+.skeleton span:nth-child(3) {
+  width: 60%;
+}

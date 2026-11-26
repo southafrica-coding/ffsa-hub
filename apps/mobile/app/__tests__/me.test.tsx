@@ -62,8 +62,15 @@ describe("Me", () => {
     mockFetch.mockImplementation(apiRoutes({ "/api/me": ME }));
     await render(wrap(<MeScreen />));
     expect(await screen.findByRole("header", { name: "Sample Person" })).toBeTruthy();
-    expect(screen.getByText("sample@example.org")).toBeTruthy();
-    expect(screen.getByText("Staff · Team leader")).toBeTruthy();
+    // In two pieces, so a long address wraps before the "@" (QA pass 2); read as one.
+    expect(screen.getByText("sample")).toBeTruthy();
+    expect(screen.getByText("@example.org")).toBeTruthy();
+    expect(screen.getByLabelText(/sample@example\.org/)).toBeTruthy();
+    expect(screen.getByText("FFSA Hub · Me")).toBeTruthy();
+    // Roles are quiet word-only chips, read together as one line.
+    expect(screen.getByLabelText("Roles: Staff, Team leader")).toBeTruthy();
+    expect(screen.getByText("Staff")).toBeTruthy();
+    expect(screen.getByText("Team leader")).toBeTruthy();
     expect(screen.getByLabelText("App version: 1.2.3")).toBeTruthy();
     expect(screen.getByText("Match phone (now light)")).toBeTruthy();
   });
@@ -145,6 +152,16 @@ describe("Me", () => {
     expect(await AsyncStorage.getItem("ffsa:appearance:v1")).toBe("dark");
   });
 
+  it("sign out is one tap (no confirm) and says in words that it's this phone only", async () => {
+    mockFetch.mockImplementation(apiRoutes({ "/api/me": ME }));
+    await render(wrap(<MeScreen />));
+    const hint = "Signs you out on this phone only. You stay signed in on the website.";
+    expect(await screen.findByText(hint, { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" }).props.accessibilityHint).toBe(hint);
+    await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+    expect(supabase.auth.signOut).toHaveBeenCalledTimes(1);
+  });
+
   it("sign out: this device only, and the saved Home feed is wiped", async () => {
     await AsyncStorage.setItem("ffsa:home-feed:v1:u1", JSON.stringify({ savedAt: "x", items: [] }));
     mockFetch.mockImplementation(apiRoutes({ "/api/me": ME }));
@@ -156,6 +173,22 @@ describe("Me", () => {
 });
 
 describe("Edit profile", () => {
+  it("is a pushed screen: its name in the bar, back to Me, and the phone hint", async () => {
+    mockFetch.mockImplementation(apiRoutes({ "/api/me": makeMe() }));
+    await render(wrap(<EditProfileScreen />));
+    expect(screen.getByRole("header", { name: "Edit profile" })).toBeTruthy();
+    expect(await screen.findByText("Include the country code, for example +27 82 123 4567.")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Me" }));
+    expect(mockRouter.back).toHaveBeenCalled();
+  });
+
+  it("loading: skeleton while the details load", async () => {
+    mockFetch.mockImplementation(apiRoutes({ "/api/me": makeMe() }));
+    mockProfileRow.current = new Promise(() => {}) as never;
+    await render(wrap(<EditProfileScreen />));
+    expect(screen.getByLabelText("Loading your details")).toBeTruthy();
+  });
+
   it("loads the current values, validates, and saves through PUT /api/profile/update", async () => {
     const saved: unknown[] = [];
     mockFetch.mockImplementation(
@@ -241,10 +274,11 @@ describe("Notification settings", () => {
     await render(<NotificationPrefsScreen />);
     const sw = await screen.findByRole("switch", { name: "Prayer Room" });
     expect(sw.props.value).toBe(true);
-    expect(screen.getByText("On")).toBeTruthy();
+    // The words sit beside the switch; the switch itself carries the state for screen readers.
+    expect(screen.getByText("On", { includeHiddenElements: true })).toBeTruthy();
     await fireEvent(sw, "valueChange", false);
     expect(puts).toEqual([{ mutedModules: ["prayer_room"] }]);
-    expect(await screen.findByText("Off")).toBeTruthy();
+    expect(await screen.findByText("Off", { includeHiddenElements: true })).toBeTruthy();
   });
 
   it("a failed save puts the switch back and explains", async () => {

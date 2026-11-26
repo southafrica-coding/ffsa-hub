@@ -410,7 +410,7 @@ export function TicketTypesManager({
                 type="button"
                 onClick={add}
                 disabled={busy}
-                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:bg-[color:var(--surface-4)]"
               >
                 Save tier
               </button>
@@ -521,7 +521,7 @@ function TierQuestionsEditor({
                 type="button"
                 onClick={save}
                 disabled={busy}
-                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[var(--ink-bg-hover)] disabled:bg-[color:var(--surface-4)]"
               >
                 {busy ? "Saving…" : "Save questions"}
               </button>

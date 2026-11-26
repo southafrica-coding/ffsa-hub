@@ -271,7 +271,7 @@ export function KeyResultDialog({
                 Delete key result
               </Button>
             ) : addedCount > 0 ? (
-              <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+              <span className="font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-tertiary)]">
                 {addedCount} added
               </span>
             ) : (

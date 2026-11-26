@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { StatusPill, AssignedVehicles } from "./ui";
 import { FleetCalendar } from "./fleet-calendar";
+import type { BoardOverlay } from "./fleet/calendar/model";
 import { dateRangeLabel } from "@/lib/bookings/dates";
 import {
   purposeLabel,
@@ -47,16 +48,23 @@ export function VehiclesBoard({
   statusFilter,
   pendingCount,
   calendarBookings,
-  month,
+  from,
+  fleetOverlay,
+  fleetPanel,
 }: {
   bookings: VehicleBookingWithRefs[];
   vehicles: Vehicle[];
   access: VehicleAccess;
   statusFilter: string;
   pendingCount: number;
-  /** Every booking overlapping the calendar's month, whatever the filter. */
+  /** Every booking overlapping the calendar’s 30 days, whatever the filter. */
   calendarBookings: VehicleBookingWithRefs[];
-  month?: string;
+  /** First day the calendar shows (YYYY-MM-DD, or an old YYYY-MM link). */
+  from?: string;
+  /** Fleet users: workshop visits, inspection days and clashes on the calendar… */
+  fleetOverlay?: BoardOverlay | null;
+  /** …and Fleet's clashes and "Book a workshop visit" under it. */
+  fleetPanel?: React.ReactNode;
 }) {
 
   return (
@@ -87,7 +95,7 @@ export function VehiclesBoard({
             )}
             {(access.canApprove || access.canManage) && <RequestLinkButton />}
             {access.canManage && (
-              <Link href="/bookings/vehicles/fleet">
+              <Link href="/bookings/vehicles/fleet/settings">
                 <Button size="sm" variant="outline" className="gap-1.5">
                   <Settings2 className="h-4 w-4" />
                   Fleet
@@ -131,10 +139,10 @@ export function VehiclesBoard({
           <Link
             key={f.key}
             href={(() => {
-              // Keep the calendar's month when switching the table filter.
+              // Keep the calendar's dates when switching the table filter.
               const q = new URLSearchParams();
               if (f.key !== "all") q.set("status", f.key);
-              if (month) q.set("month", month);
+              if (from) q.set("from", from);
               const qs = q.toString();
               return `/bookings/vehicles/board${qs ? `?${qs}` : ""}`;
             })()}
@@ -150,13 +158,15 @@ export function VehiclesBoard({
       </div>
 
       <div className="space-y-5 px-5 py-6 md:px-8 md:py-7">
-      {/* Fleet calendar — one row per vehicle, the month left to right. */}
+      {/* Fleet calendar — one row per vehicle, the next 30 days left to right. */}
       <FleetCalendar
         vehicles={vehicles}
         bookings={calendarBookings}
-        month={month}
+        from={from}
         status={statusFilter}
+        overlay={fleetOverlay}
       />
+      {fleetPanel}
 
       {/* Bookings */}
       {bookings.length === 0 ? (

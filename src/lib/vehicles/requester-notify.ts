@@ -23,7 +23,7 @@ import {
   vehicleRequesterUpdateSubject,
   type RequesterUpdateKind,
 } from "@/lib/email/templates/vehicle-requester-update";
-import { dayCount } from "@/services/vehicles";
+import { billableDays } from "@/services/vehicles";
 import { getSlackUserToken, hasAllScopes } from "@/lib/slack/user-tokens";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,7 +127,7 @@ function slackMessage(
   b: Booking,
   opts: { note: string | null; changes: string[]; sender: { name: string | null; slackUserId: string | null } }
 ) {
-  const days = dayCount(b.checkout_date, b.return_date);
+  const days = billableDays(b.checkout_date, b.return_date) // the due-back day isn't counted;
   const when = `${dateRangeLabel(b.checkout_date, b.return_date)} (${days} day${days === 1 ? "" : "s"})`;
   const vehicle = vehicleLabelOf(b);
   const who = opts.sender.slackUserId

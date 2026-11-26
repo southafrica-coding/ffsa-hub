@@ -74,6 +74,13 @@ describe("Appearance screen", () => {
     expect(screen.queryByTestId("appearance-save-failed")).toBeNull();
   });
 
+  it("is a pushed screen named 'Appearance' with a way back to Me", async () => {
+    await render(wrap(<AppearanceScreen />));
+    expect(screen.getByRole("header", { name: "Appearance" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Back to Me" })).toBeTruthy();
+    expect(screen.getByText("Choose how the app looks on this phone.")).toBeTruthy();
+  });
+
   it("choosing Match phone again removes the override", async () => {
     await AsyncStorage.setItem(STORAGE_KEY, "light");
     await render(wrap(<AppearanceScreen />));

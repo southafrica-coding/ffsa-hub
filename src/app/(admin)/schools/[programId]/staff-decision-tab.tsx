@@ -155,7 +155,7 @@ export function StaffDecisionTab({
                       <div className="text-[12px] text-[color:var(--text-secondary)]">{row.email}</div>
                     )}
                     {row.isStaff && (
-                      <div className="mt-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[#3E7F2B]">
+                      <div className="mt-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-grass">
                         Staff
                       </div>
                     )}
@@ -165,8 +165,8 @@ export function StaffDecisionTab({
                       <span
                         className={
                           row.decision.accepted
-                            ? "font-semibold text-[#3E7F2B]"
-                            : "font-semibold text-[#8A6400]"
+                            ? "font-semibold text-grass"
+                            : "font-semibold text-amber"
                         }
                       >
                         {row.decision.accepted ? "Yes" : "No"}

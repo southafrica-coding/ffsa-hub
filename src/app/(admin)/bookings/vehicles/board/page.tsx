@@ -10,7 +10,8 @@ import {
   type Vehicle,
 } from "@/services/vehicles";
 import { VehiclesBoard } from "../vehicles-view";
-import { monthWindow } from "../fleet-calendar";
+import { calendarWindow, WINDOW_DAYS } from "../fleet-calendar";
+import { boardFleet } from "../fleet/calendar/board-fleet";
 
 /**
  * The vehicles team's booking board — every request with its status, dates,
@@ -23,7 +24,7 @@ import { monthWindow } from "../fleet-calendar";
 export default async function VehicleBoardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; month?: string }>;
+  searchParams: Promise<{ status?: string; from?: string; month?: string }>;
 }) {
   const params = await searchParams;
   const supabase = await createClient();
@@ -42,14 +43,17 @@ export default async function VehicleBoardPage({
   }
 
   const status = params.status ?? "all";
-  // The fleet calendar always shows every live booking in its month — the
-  // status filter only narrows the table underneath.
-  const w = monthWindow(params.month);
-  const [bookingsRes, vehiclesRes, pendingCount, calendarRes] = await Promise.all([
+  // The fleet calendar always shows every live booking in its 30 days — the
+  // status filter only narrows the table underneath. Old ?month= links still work.
+  const from = params.from ?? params.month;
+  const w = calendarWindow(from);
+  const [bookingsRes, vehiclesRes, pendingCount, calendarRes, fleet] = await Promise.all([
     getVehicleBookings(supabase, status !== "all" ? { status } : undefined),
     getVehicles(supabase),
     countPendingVehicleBookings(supabase),
     getVehicleBookings(supabase, { from: w.from, to: w.to }),
+    // Fleet's lane and panel (workshop visits, inspection days, clashes): Fleet users only.
+    boardFleet(supabase, user.id, w.from, WINDOW_DAYS),
   ]);
 
   return (
@@ -60,7 +64,9 @@ export default async function VehicleBoardPage({
       statusFilter={status}
       pendingCount={pendingCount}
       calendarBookings={(calendarRes.data ?? []) as VehicleBookingWithRefs[]}
-      month={params.month}
+      from={from}
+      fleetOverlay={fleet?.overlay ?? null}
+      fleetPanel={fleet?.panel ?? null}
     />
   );
 }

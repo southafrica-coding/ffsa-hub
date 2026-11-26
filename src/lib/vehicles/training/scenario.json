@@ -1,0 +1,950 @@
+{
+ "steps": [
+  {
+   "at": "2026-11-29 10:00",
+   "title": "Thandi sends the request",
+   "detail": "Booking A: Nissan Almera + Honda CR-V, picked up Mon 30 Nov, needed until Thu 3 Dec. The form shows it's due back Fri 4 Dec before 12:00, and the Hub blocks that morning for other bookings.",
+   "events": [
+    {
+     "kind": "slack",
+     "to": "Vehicle Coordinator (Pieter)",
+     "text": "New vehicle request — Visiting team: Kruger outreach",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*🚐 New vehicle request — Visiting team: Kruger outreach*\n30 Nov 2026 – 4 Dec 2026 (4 days)\nThandi Mokoena · 6 people · International Team · 📍 Kruger National Park\nthandi@example.org"
+       }
+      },
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*Drivers*\n• ✅ Thandi Mokoena — licence valid to 2030-06-30\n• Sam Taylor — _not a Hub user, check their licence_\n• Lee Chen — _not a Hub user, check their licence_"
+       }
+      },
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*Also free those dates:* 0 vans, 0 cars\n*Assigned:* Nissan Almera, Honda CR-V"
+       }
+      },
+      {
+       "type": "actions",
+       "block_id": "vh:00000000-0000-4000-8000-b00000000001",
+       "elements": [
+        {
+         "type": "multi_static_select",
+         "action_id": "vh_assign",
+         "placeholder": {
+          "type": "plain_text",
+          "text": "Assign vehicle…"
+         },
+         "options": [
+          {
+           "text": {
+            "type": "plain_text",
+            "text": "Nissan Almera"
+           },
+           "value": "00000000-0000-4000-8000-e00000000001"
+          },
+          {
+           "text": {
+            "type": "plain_text",
+            "text": "Honda CR-V"
+           },
+           "value": "00000000-0000-4000-8000-e00000000002"
+          }
+         ],
+         "initial_options": [
+          {
+           "text": {
+            "type": "plain_text",
+            "text": "Nissan Almera"
+           },
+           "value": "00000000-0000-4000-8000-e00000000001"
+          },
+          {
+           "text": {
+            "type": "plain_text",
+            "text": "Honda CR-V"
+           },
+           "value": "00000000-0000-4000-8000-e00000000002"
+          }
+         ]
+        },
+        {
+         "type": "button",
+         "action_id": "vh_approve",
+         "style": "primary",
+         "text": {
+          "type": "plain_text",
+          "text": "Approve"
+         },
+         "value": "00000000-0000-4000-8000-b00000000001"
+        },
+        {
+         "type": "button",
+         "action_id": "vh_deny",
+         "style": "danger",
+         "text": {
+          "type": "plain_text",
+          "text": "Deny"
+         },
+         "value": "00000000-0000-4000-8000-b00000000001"
+        },
+        {
+         "type": "button",
+         "action_id": "vh_open",
+         "text": {
+          "type": "plain_text",
+          "text": "Open in Hub"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001"
+        }
+       ]
+      },
+      {
+       "type": "context",
+       "elements": [
+        {
+         "type": "mrkdwn",
+         "text": "Approving emails the requester, like in the Hub. Approve re-checks every driver's licence."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "slack",
+     "to": "Thandi Mokoena",
+     "text": "📝 Request received — Visiting team: Kruger outreach",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*📝 Request received — Visiting team: Kruger outreach*\n30 Nov 2026 – 4 Dec 2026 (4 days) · 🚐 Nissan Almera (DEMO 1 GP), Honda CR-V (DEMO 2 GP)"
+       }
+      },
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "Thanks — your request is in. The Vehicle Coordinator will confirm it shortly."
+       }
+      },
+      {
+       "type": "actions",
+       "elements": [
+        {
+         "type": "button",
+         "action_id": "vh_open",
+         "text": {
+          "type": "plain_text",
+          "text": "Open in Hub"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "email",
+     "to": "thandi@example.org",
+     "text": "We've received your vehicle request",
+     "subject": "We've received your vehicle request",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>We&#39;ve received your vehicle request</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">We&#39;ve received your vehicle request</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Request Received</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">We've got your request</h1>\n      <p style=\"margin:0 0 15px;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.72;color:#C5C2AE;\">Hi Thandi, thanks &mdash; your request <strong style=\"color:#FFFFFF;font-weight:700;\">Visiting team: Kruger outreach</strong> for 30 Nov 2026 – 4 Dec 2026 is in. The Vehicle Coordinator will confirm it shortly.</p>\n      \n      \n      <p style=\"margin:0 0 15px;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.72;color:#C5C2AE;\"><strong style=\"color:#FFFFFF;font-weight:700;\">Vehicle:</strong> Nissan Almera (DEMO 1 GP), Honda CR-V (DEMO 2 GP)</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">View booking&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    }
+   ]
+  },
+  {
+   "at": "2026-11-29 14:20",
+   "title": "The coordinator taps Approve",
+   "detail": "Approve re-checks every driver's licence first.",
+   "events": [
+    {
+     "kind": "slack",
+     "to": "Thandi Mokoena",
+     "text": "✅ Approved — Visiting team: Kruger outreach",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*✅ Approved — Visiting team: Kruger outreach*\n30 Nov 2026 – 4 Dec 2026 (4 days) · 🚐 Nissan Almera (DEMO 1 GP), Honda CR-V (DEMO 2 GP)"
+       }
+      },
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "Your vehicle booking is confirmed. The coordinator will be in touch about collection."
+       }
+      },
+      {
+       "type": "actions",
+       "elements": [
+        {
+         "type": "button",
+         "action_id": "vh_open",
+         "text": {
+          "type": "plain_text",
+          "text": "Open in Hub"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "email",
+     "to": "thandi@example.org",
+     "text": "Your vehicle request is approved",
+     "subject": "Your vehicle request is approved",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>Your vehicle request is approved</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Your vehicle request has been approved.</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Request Approved</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">Your request is approved</h1>\n        <p style=\"margin:0 0 15px;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.72;color:#C5C2AE;\">Hi Thandi, good news &mdash; your request <strong style=\"color:#FFFFFF;font-weight:700;\">Visiting team: Kruger outreach</strong> for 30 Nov 2026 – 4 Dec 2026 has been approved.</p>\n        <p style=\"margin:0 0 15px;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.72;color:#C5C2AE;\">The Vehicle Coordinator will be in touch about collection, drivers, and anything still outstanding before the keys are handed over.</p>\n        \n      \n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    },
+    {
+     "kind": "slack-update",
+     "to": "Vehicle Coordinator (Pieter)",
+     "text": "✅ Approved — Visiting team: Kruger outreach",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*🚐 Visiting team: Kruger outreach*\n30 Nov 2026 – 4 Dec 2026 (4 days)\nThandi Mokoena · 6 people · International Team · 📍 Kruger National Park\n\n✅ Approved by Pieter Coordinator · Nissan Almera, Honda CR-V"
+       }
+      },
+      {
+       "type": "context",
+       "elements": [
+        {
+         "type": "mrkdwn",
+         "text": "<https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001|Open the booking in the Hub>"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "at": "2026-11-30 06:30",
+   "title": "Pick-up day: instructions go out",
+   "detail": "Thandi booked and drives: one message (Slack + email) with her point-person part and the driver instructions. Sam isn't on the Hub: email. Lee has no email: Thandi's message asks her to pass it on.",
+   "events": [
+    {
+     "kind": "slack",
+     "to": "Thandi Mokoena",
+     "text": "Pick-up today: Nissan Almera and Honda CR-V for Visiting team: Kruger outreach",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "Hi Thandi 👋\n\nYour booking *Visiting team: Kruger outreach* starts today: *Nissan Almera* (DEMO 1 GP) and *Honda CR-V* (DEMO 2 GP). As the person who booked, you’re the point person for the vehicles until they’re back.\n\n*TODAY*\n\n1. *Arrange the pick-up time* with the Vehicle Coordinator (pick-ups are between 07:00 and 17:00): Pieter Coordinator, +27 00 000 0000\n2. *Bring every driver’s driver’s licence.* Only the drivers on the booking may drive.\n3. *At the handover*, walk round the vehicles with the Vehicle Coordinator and photograph anything already damaged before you drive off.\n4. *Make sure every driver has the driver instructions.* We sent them to 2 of 3 drivers. *Lee Chen* has no email on the booking, so please forward them the driver instructions (below).\n\n*WHILE YOU HAVE IT*\n\n• Only the drivers on the booking drive.\n• Anything goes wrong (a warning light, a breakdown, an accident, damage): call the Vehicle Coordinator straight away.\n\n*RETURNING IT*\n\nBring the vehicles back on *Friday, 4 December, before 12:00*: washed inside and out, with a full tank, and with the return checks done. The day before, you’ll get a reminder, with the option to return it earlier.\n\nDriver instructions (the same as the drivers received):\n\n*🇿🇦 DRIVING IN SOUTH AFRICA*\n\n• *We drive on the LEFT side of the road.*\n• *Speed limits.* These are only guidelines; always follow the signs posted next to the road:\n   • *60 km/h* in town (*30–40 km/h* in neighbourhoods)\n   • *80–100 km/h* on the open road\n   • *120 km/h* on national highways\n\n*BEFORE EACH TRIP*\n\n*1. Walk around the vehicle*\nWalk slowly all the way round, about one step away. Crouch down to see the lower parts. Look for dents, scratches, cracked lights or mirrors.\n📸 Photograph anything you notice *before you drive*, close up and once from further back, and send it to the Vehicle Coordinator. Then nobody can blame you for damage that was already there.\n\n*2. Tyres (including the spare)*\n\n• All four should look the same: round, with only a slight bulge at the bottom. If one looks flatter, have it checked before you leave.\n• Look at the sides for cuts, bulges or nails. Turn the steering wheel all the way to see the inside of the front tyres.\n• The correct pressure is usually on a sticker inside the driver’s door frame or the fuel flap. A petrol attendant can check and pump them.\n\n*3. Lights*\nSwitch on the headlights and hazard lights and walk round: every light and indicator should work. For the brake lights, ask someone to watch while you press the brake.\n\n*4. Windscreen, wipers and mirrors*\n\n• No cracks in front of the driver.\n• Wipers clear the glass without smearing. Test with the washer spray.\n• Mirrors are clean, not cracked, and set for you.\n\n*5. Inside the vehicle*"
+       }
+      },
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "• *Warning lights:* when you start the engine, the lights on the dashboard come on for a few seconds and then go off. If any stay on, take a photo and send it to the Vehicle Coordinator before you go. Red = don’t drive. Orange = tell us.\n• *Seat belts:* at every seat, pull the belt quickly (it should lock), let go (it should roll back in), and buckle it (it should hold).\n• *Handbrake:* it should hold the vehicle still on a slope.\n• *Licence disc:* the round paper disc on the windscreen must be there and not expired.\n• Every driver carries their driver’s licence.\n\n*6. Safety kit*\nCheck that the *red warning triangle*, the *jack*, the *wheel spanner* and the *spare wheel* are in the vehicle. You legally need the triangle in South Africa.\n\n*7. Under the bonnet (or ask the petrol attendant)*\nOnly check with the engine off, on level ground. *Never open the radiator cap when the engine is hot.*\n\n• *Oil:* pull out the dipstick (a yellow or orange loop), wipe it, push it back in, pull it out. The level should be between the two marks. Golden-brown is good. Very black means it’s due a service, so tell us. Milky means don’t drive, call the Vehicle Coordinator.\n• *Coolant (“water”):* the see-through plastic tank should be between MIN and MAX.\n• *Leaks:* look at the ground where the vehicle was parked. Drips of oil (black or brown) or coolant (green, pink or orange) mean tell us. Clear water under the front is normal (it’s from the aircon).\n\n*⛽ AT THE PETROL STATION*\n\nIn South Africa an attendant fills the vehicle for you. You stay in the vehicle.\n\n• *Nissan Almera* (DEMO 1 GP) takes *PETROL (unleaded)*. Never put in anything else.\n• *Honda CR-V* (DEMO 2 GP) takes *PETROL (unleaded)*. Never put in anything else.\n• Say “Diesel, full please” or “Unleaded, full please”, or give a Rand amount.\n• Ask: *“Please check the oil, water and tyre pressure.”* They’ll also clean the windscreen if you ask.\n\n*IN AN EMERGENCY*\n\n• Pull over well off the road, switch on the hazard lights, and put the triangle 15–20 m behind the vehicle.\n• Then call the Vehicle Coordinator straight away: Pieter Coordinator, +27 00 000 0000\n\n*RETURNING THE VEHICLE*\n\nBring the vehicles back on *Friday, 4 December, before 12:00*: washed inside and out, with a full tank, and with the return checks done. You’ll get a reminder the day before, and the return checks that morning.\n\nThank you! 🙏\nFFSA Fleet"
+       }
+      },
+      {
+       "type": "actions",
+       "elements": [
+        {
+         "type": "button",
+         "text": {
+          "type": "plain_text",
+          "text": "Booking details"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001",
+         "action_id": "vh_open"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "email",
+     "to": "thandi@example.org",
+     "text": "Pick-up today: Nissan Almera and Honda CR-V for Visiting team: Kruger outreach",
+     "subject": "Pick-up today: Nissan Almera and Honda CR-V for Visiting team: Kruger outreach",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>Pick-up today: Nissan Almera and Honda CR-V for Visiting team: Kruger outreach</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Your vehicle pick-up is today. Here&#39;s what you&#39;re responsible for.</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Pick-up today</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">Pick-up today: Nissan Almera and Honda CR-V for Visiting team: Kruger outreach</h1><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Hi Thandi 👋</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Your booking <strong>Visiting team: Kruger outreach</strong> starts today: <strong>Nissan Almera</strong> (DEMO 1 GP) and <strong>Honda CR-V</strong> (DEMO 2 GP). As the person who booked, you’re the point person for the vehicles until they’re back.</p><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">TODAY</p><ol style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Arrange the pick-up time</strong> with the Vehicle Coordinator (pick-ups are between 07:00 and 17:00): Pieter Coordinator, +27 00 000 0000</li><li style=\"margin:0 0 6px 0;\"><strong>Bring every driver’s driver’s licence.</strong> Only the drivers on the booking may drive.</li><li style=\"margin:0 0 6px 0;\"><strong>At the handover</strong>, walk round the vehicles with the Vehicle Coordinator and photograph anything already damaged before you drive off.</li><li style=\"margin:0 0 6px 0;\"><strong>Make sure every driver has the driver instructions.</strong> We sent them to 2 of 3 drivers. <strong>Lee Chen</strong> has no email on the booking, so please forward them the driver instructions (below).</li></ol><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">WHILE YOU HAVE IT</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">Only the drivers on the booking drive.</li><li style=\"margin:0 0 6px 0;\">Anything goes wrong (a warning light, a breakdown, an accident, damage): call the Vehicle Coordinator straight away.</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">RETURNING IT</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Bring the vehicles back on <strong>Friday, 4 December, before 12:00</strong>: washed inside and out, with a full tank, and with the return checks done. The day before, you’ll get a reminder, with the option to return it earlier.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Driver instructions (the same as the drivers received):</p><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">🇿🇦 DRIVING IN SOUTH AFRICA</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>We drive on the LEFT side of the road.</strong></li><li style=\"margin:0 0 6px 0;\"><strong>Speed limits.</strong> These are only guidelines; always follow the signs posted next to the road:<br/>&nbsp;&nbsp;&nbsp;• <strong>60 km/h</strong> in town (<strong>30–40 km/h</strong> in neighbourhoods)<br/>&nbsp;&nbsp;&nbsp;• <strong>80–100 km/h</strong> on the open road<br/>&nbsp;&nbsp;&nbsp;• <strong>120 km/h</strong> on national highways</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">BEFORE EACH TRIP</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>1. Walk around the vehicle</strong><br/>Walk slowly all the way round, about one step away. Crouch down to see the lower parts. Look for dents, scratches, cracked lights or mirrors.<br/>📸 Photograph anything you notice <strong>before you drive</strong>, close up and once from further back, and send it to the Vehicle Coordinator. Then nobody can blame you for damage that was already there.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>2. Tyres (including the spare)</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">All four should look the same: round, with only a slight bulge at the bottom. If one looks flatter, have it checked before you leave.</li><li style=\"margin:0 0 6px 0;\">Look at the sides for cuts, bulges or nails. Turn the steering wheel all the way to see the inside of the front tyres.</li><li style=\"margin:0 0 6px 0;\">The correct pressure is usually on a sticker inside the driver’s door frame or the fuel flap. A petrol attendant can check and pump them.</li></ul><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>3. Lights</strong><br/>Switch on the headlights and hazard lights and walk round: every light and indicator should work. For the brake lights, ask someone to watch while you press the brake.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>4. Windscreen, wipers and mirrors</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">No cracks in front of the driver.</li><li style=\"margin:0 0 6px 0;\">Wipers clear the glass without smearing. Test with the washer spray.</li><li style=\"margin:0 0 6px 0;\">Mirrors are clean, not cracked, and set for you.</li></ul><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>5. Inside the vehicle</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Warning lights:</strong> when you start the engine, the lights on the dashboard come on for a few seconds and then go off. If any stay on, take a photo and send it to the Vehicle Coordinator before you go. Red = don’t drive. Orange = tell us.</li><li style=\"margin:0 0 6px 0;\"><strong>Seat belts:</strong> at every seat, pull the belt quickly (it should lock), let go (it should roll back in), and buckle it (it should hold).</li><li style=\"margin:0 0 6px 0;\"><strong>Handbrake:</strong> it should hold the vehicle still on a slope.</li><li style=\"margin:0 0 6px 0;\"><strong>Licence disc:</strong> the round paper disc on the windscreen must be there and not expired.</li><li style=\"margin:0 0 6px 0;\">Every driver carries their driver’s licence.</li></ul><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>6. Safety kit</strong><br/>Check that the <strong>red warning triangle</strong>, the <strong>jack</strong>, the <strong>wheel spanner</strong> and the <strong>spare wheel</strong> are in the vehicle. You legally need the triangle in South Africa.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>7. Under the bonnet (or ask the petrol attendant)</strong><br/>Only check with the engine off, on level ground. <strong>Never open the radiator cap when the engine is hot.</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Oil:</strong> pull out the dipstick (a yellow or orange loop), wipe it, push it back in, pull it out. The level should be between the two marks. Golden-brown is good. Very black means it’s due a service, so tell us. Milky means don’t drive, call the Vehicle Coordinator.</li><li style=\"margin:0 0 6px 0;\"><strong>Coolant (“water”):</strong> the see-through plastic tank should be between MIN and MAX.</li><li style=\"margin:0 0 6px 0;\"><strong>Leaks:</strong> look at the ground where the vehicle was parked. Drips of oil (black or brown) or coolant (green, pink or orange) mean tell us. Clear water under the front is normal (it’s from the aircon).</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">⛽ AT THE PETROL STATION</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">In South Africa an attendant fills the vehicle for you. You stay in the vehicle.</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Nissan Almera</strong> (DEMO 1 GP) takes <strong>PETROL (unleaded)</strong>. Never put in anything else.</li><li style=\"margin:0 0 6px 0;\"><strong>Honda CR-V</strong> (DEMO 2 GP) takes <strong>PETROL (unleaded)</strong>. Never put in anything else.</li><li style=\"margin:0 0 6px 0;\">Say “Diesel, full please” or “Unleaded, full please”, or give a Rand amount.</li><li style=\"margin:0 0 6px 0;\">Ask: <strong>“Please check the oil, water and tyre pressure.”</strong> They’ll also clean the windscreen if you ask.</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">IN AN EMERGENCY</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">Pull over well off the road, switch on the hazard lights, and put the triangle 15–20 m behind the vehicle.</li><li style=\"margin:0 0 6px 0;\">Then call the Vehicle Coordinator straight away: Pieter Coordinator, +27 00 000 0000</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">RETURNING THE VEHICLE</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Bring the vehicles back on <strong>Friday, 4 December, before 12:00</strong>: washed inside and out, with a full tank, and with the return checks done. You’ll get a reminder the day before, and the return checks that morning.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Thank you! 🙏<br/>FFSA Fleet</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">Booking details&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    },
+    {
+     "kind": "email",
+     "to": "sam@example.org",
+     "text": "Today you collect Nissan Almera and Honda CR-V: checks before you drive",
+     "subject": "Today you collect Nissan Almera and Honda CR-V: checks before you drive",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>Today you collect Nissan Almera and Honda CR-V: checks before you drive</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Pick-up today. Please do these checks before you drive off.</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Pick-up today</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">Today you collect Nissan Almera and Honda CR-V: checks before you drive</h1><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Hi Sam 👋</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Today you collect <strong>Nissan Almera</strong> (DEMO 1 GP) and <strong>Honda CR-V</strong> (DEMO 2 GP) for <strong>Visiting team: Kruger outreach</strong>. Bring the vehicles back on <strong>Friday, 4 December, before 12:00</strong>: washed inside and out, with a full tank, and with the return checks done.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Please do these quick checks before you drive off, and before each trip while you have them. They’re mostly just looking, take about 5 minutes, and keep you safe. Anything you can’t check yourself, a petrol attendant can do for you (see below).</p><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">🇿🇦 DRIVING IN SOUTH AFRICA</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>We drive on the LEFT side of the road.</strong></li><li style=\"margin:0 0 6px 0;\"><strong>Speed limits.</strong> These are only guidelines; always follow the signs posted next to the road:<br/>&nbsp;&nbsp;&nbsp;• <strong>60 km/h</strong> in town (<strong>30–40 km/h</strong> in neighbourhoods)<br/>&nbsp;&nbsp;&nbsp;• <strong>80–100 km/h</strong> on the open road<br/>&nbsp;&nbsp;&nbsp;• <strong>120 km/h</strong> on national highways</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">BEFORE EACH TRIP</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>1. Walk around the vehicle</strong><br/>Walk slowly all the way round, about one step away. Crouch down to see the lower parts. Look for dents, scratches, cracked lights or mirrors.<br/>📸 Photograph anything you notice <strong>before you drive</strong>, close up and once from further back, and send it to the Vehicle Coordinator. Then nobody can blame you for damage that was already there.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>2. Tyres (including the spare)</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">All four should look the same: round, with only a slight bulge at the bottom. If one looks flatter, have it checked before you leave.</li><li style=\"margin:0 0 6px 0;\">Look at the sides for cuts, bulges or nails. Turn the steering wheel all the way to see the inside of the front tyres.</li><li style=\"margin:0 0 6px 0;\">The correct pressure is usually on a sticker inside the driver’s door frame or the fuel flap. A petrol attendant can check and pump them.</li></ul><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>3. Lights</strong><br/>Switch on the headlights and hazard lights and walk round: every light and indicator should work. For the brake lights, ask someone to watch while you press the brake.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>4. Windscreen, wipers and mirrors</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">No cracks in front of the driver.</li><li style=\"margin:0 0 6px 0;\">Wipers clear the glass without smearing. Test with the washer spray.</li><li style=\"margin:0 0 6px 0;\">Mirrors are clean, not cracked, and set for you.</li></ul><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>5. Inside the vehicle</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Warning lights:</strong> when you start the engine, the lights on the dashboard come on for a few seconds and then go off. If any stay on, take a photo and send it to the Vehicle Coordinator before you go. Red = don’t drive. Orange = tell us.</li><li style=\"margin:0 0 6px 0;\"><strong>Seat belts:</strong> at every seat, pull the belt quickly (it should lock), let go (it should roll back in), and buckle it (it should hold).</li><li style=\"margin:0 0 6px 0;\"><strong>Handbrake:</strong> it should hold the vehicle still on a slope.</li><li style=\"margin:0 0 6px 0;\"><strong>Licence disc:</strong> the round paper disc on the windscreen must be there and not expired.</li><li style=\"margin:0 0 6px 0;\">Every driver carries their driver’s licence.</li></ul><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>6. Safety kit</strong><br/>Check that the <strong>red warning triangle</strong>, the <strong>jack</strong>, the <strong>wheel spanner</strong> and the <strong>spare wheel</strong> are in the vehicle. You legally need the triangle in South Africa.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>7. Under the bonnet (or ask the petrol attendant)</strong><br/>Only check with the engine off, on level ground. <strong>Never open the radiator cap when the engine is hot.</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Oil:</strong> pull out the dipstick (a yellow or orange loop), wipe it, push it back in, pull it out. The level should be between the two marks. Golden-brown is good. Very black means it’s due a service, so tell us. Milky means don’t drive, call the Vehicle Coordinator.</li><li style=\"margin:0 0 6px 0;\"><strong>Coolant (“water”):</strong> the see-through plastic tank should be between MIN and MAX.</li><li style=\"margin:0 0 6px 0;\"><strong>Leaks:</strong> look at the ground where the vehicle was parked. Drips of oil (black or brown) or coolant (green, pink or orange) mean tell us. Clear water under the front is normal (it’s from the aircon).</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">⛽ AT THE PETROL STATION</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">In South Africa an attendant fills the vehicle for you. You stay in the vehicle.</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Nissan Almera</strong> (DEMO 1 GP) takes <strong>PETROL (unleaded)</strong>. Never put in anything else.</li><li style=\"margin:0 0 6px 0;\"><strong>Honda CR-V</strong> (DEMO 2 GP) takes <strong>PETROL (unleaded)</strong>. Never put in anything else.</li><li style=\"margin:0 0 6px 0;\">Say “Diesel, full please” or “Unleaded, full please”, or give a Rand amount.</li><li style=\"margin:0 0 6px 0;\">Ask: <strong>“Please check the oil, water and tyre pressure.”</strong> They’ll also clean the windscreen if you ask.</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">IN AN EMERGENCY</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">Pull over well off the road, switch on the hazard lights, and put the triangle 15–20 m behind the vehicle.</li><li style=\"margin:0 0 6px 0;\">Then call the Vehicle Coordinator straight away: Pieter Coordinator, +27 00 000 0000</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">RETURNING THE VEHICLE</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Bring the vehicles back on <strong>Friday, 4 December, before 12:00</strong>: washed inside and out, with a full tank, and with the return checks done. You’ll get a reminder the day before, and the return checks that morning.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Safe travels, and thank you! 🙏<br/>FFSA Fleet</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">Booking details&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    }
+   ]
+  },
+  {
+   "at": "2026-12-01 06:30",
+   "title": "Booking B picked up",
+   "events": [
+    {
+     "kind": "slack",
+     "to": "Jonah Peters",
+     "text": "Pick-up today: VW Kombi for Youth camp transport",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "Hi Jonah 👋\n\nYour booking *Youth camp transport* starts today: *VW Kombi* (DEMO 3 GP). As the person who booked, you’re the point person for the vehicle until it’s back.\n\n*TODAY*\n\n1. *Arrange the pick-up time* with the Vehicle Coordinator (pick-ups are between 07:00 and 17:00): Pieter Coordinator, +27 00 000 0000\n2. *Bring every driver’s driver’s licence.* Only the drivers on the booking may drive.\n3. *At the handover*, walk round the vehicle with the Vehicle Coordinator and photograph anything already damaged before you drive off.\n4. *Every driver on the booking has been sent the driver instructions* by email (and Slack, if they’re on the Hub). Please check they’ve read them.\n\n*WHILE YOU HAVE IT*\n\n• Only the drivers on the booking drive.\n• Anything goes wrong (a warning light, a breakdown, an accident, damage): call the Vehicle Coordinator straight away.\n\n*RETURNING IT*\n\nBring the vehicle back on *Monday, 7 December, before 12:00*: washed inside and out, with a full tank, and with the return checks done. The day before, you’ll get a reminder, with the option to return it earlier.\n\nDriver instructions (the same as the drivers received):\n\n*🇿🇦 DRIVING IN SOUTH AFRICA*\n\n• *We drive on the LEFT side of the road.*\n• *Speed limits.* These are only guidelines; always follow the signs posted next to the road:\n   • *60 km/h* in town (*30–40 km/h* in neighbourhoods)\n   • *80–100 km/h* on the open road\n   • *120 km/h* on national highways\n\n*BEFORE EACH TRIP*\n\n*1. Walk around the vehicle*\nWalk slowly all the way round, about one step away. Crouch down to see the lower parts. Look for dents, scratches, cracked lights or mirrors.\n📸 Photograph anything you notice *before you drive*, close up and once from further back, and send it to the Vehicle Coordinator. Then nobody can blame you for damage that was already there.\n\n*2. Tyres (including the spare)*\n\n• All four should look the same: round, with only a slight bulge at the bottom. If one looks flatter, have it checked before you leave.\n• Look at the sides for cuts, bulges or nails. Turn the steering wheel all the way to see the inside of the front tyres.\n• The correct pressure is usually on a sticker inside the driver’s door frame or the fuel flap. A petrol attendant can check and pump them.\n\n*3. Lights*\nSwitch on the headlights and hazard lights and walk round: every light and indicator should work. For the brake lights, ask someone to watch while you press the brake.\n\n*4. Windscreen, wipers and mirrors*\n\n• No cracks in front of the driver.\n• Wipers clear the glass without smearing. Test with the washer spray.\n• Mirrors are clean, not cracked, and set for you.\n\n*5. Inside the vehicle*"
+       }
+      },
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "• *Warning lights:* when you start the engine, the lights on the dashboard come on for a few seconds and then go off. If any stay on, take a photo and send it to the Vehicle Coordinator before you go. Red = don’t drive. Orange = tell us.\n• *Seat belts:* at every seat, pull the belt quickly (it should lock), let go (it should roll back in), and buckle it (it should hold).\n• *Handbrake:* it should hold the vehicle still on a slope.\n• *Licence disc:* the round paper disc on the windscreen must be there and not expired.\n• Every driver carries their driver’s licence.\n\n*6. Safety kit*\nCheck that the *red warning triangle*, the *jack*, the *wheel spanner* and the *spare wheel* are in the vehicle. You legally need the triangle in South Africa.\n\n*7. Under the bonnet (or ask the petrol attendant)*\nOnly check with the engine off, on level ground. *Never open the radiator cap when the engine is hot.*\n\n• *Oil:* pull out the dipstick (a yellow or orange loop), wipe it, push it back in, pull it out. The level should be between the two marks. Golden-brown is good. Very black means it’s due a service, so tell us. Milky means don’t drive, call the Vehicle Coordinator.\n• *Coolant (“water”):* the see-through plastic tank should be between MIN and MAX.\n• *Leaks:* look at the ground where the vehicle was parked. Drips of oil (black or brown) or coolant (green, pink or orange) mean tell us. Clear water under the front is normal (it’s from the aircon).\n\n*⛽ AT THE PETROL STATION*\n\nIn South Africa an attendant fills the vehicle for you. You stay in the vehicle.\n\n• *This vehicle takes DIESEL. Never put in anything else.* Say “Diesel, full please” or give a Rand amount.\n• Ask: *“Please check the oil, water and tyre pressure.”* They’ll also clean the windscreen if you ask.\n\n*IN AN EMERGENCY*\n\n• Pull over well off the road, switch on the hazard lights, and put the triangle 15–20 m behind the vehicle.\n• Then call the Vehicle Coordinator straight away: Pieter Coordinator, +27 00 000 0000\n\n*RETURNING THE VEHICLE*\n\nBring the vehicle back on *Monday, 7 December, before 12:00*: washed inside and out, with a full tank, and with the return checks done. You’ll get a reminder the day before, and the return checks that morning.\n\nThank you! 🙏\nFFSA Fleet"
+       }
+      },
+      {
+       "type": "actions",
+       "elements": [
+        {
+         "type": "button",
+         "text": {
+          "type": "plain_text",
+          "text": "Booking details"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000002",
+         "action_id": "vh_open"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "email",
+     "to": "jonah@example.org",
+     "text": "Pick-up today: VW Kombi for Youth camp transport",
+     "subject": "Pick-up today: VW Kombi for Youth camp transport",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>Pick-up today: VW Kombi for Youth camp transport</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Your vehicle pick-up is today. Here&#39;s what you&#39;re responsible for.</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Pick-up today</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">Pick-up today: VW Kombi for Youth camp transport</h1><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Hi Jonah 👋</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Your booking <strong>Youth camp transport</strong> starts today: <strong>VW Kombi</strong> (DEMO 3 GP). As the person who booked, you’re the point person for the vehicle until it’s back.</p><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">TODAY</p><ol style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Arrange the pick-up time</strong> with the Vehicle Coordinator (pick-ups are between 07:00 and 17:00): Pieter Coordinator, +27 00 000 0000</li><li style=\"margin:0 0 6px 0;\"><strong>Bring every driver’s driver’s licence.</strong> Only the drivers on the booking may drive.</li><li style=\"margin:0 0 6px 0;\"><strong>At the handover</strong>, walk round the vehicle with the Vehicle Coordinator and photograph anything already damaged before you drive off.</li><li style=\"margin:0 0 6px 0;\"><strong>Every driver on the booking has been sent the driver instructions</strong> by email (and Slack, if they’re on the Hub). Please check they’ve read them.</li></ol><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">WHILE YOU HAVE IT</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">Only the drivers on the booking drive.</li><li style=\"margin:0 0 6px 0;\">Anything goes wrong (a warning light, a breakdown, an accident, damage): call the Vehicle Coordinator straight away.</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">RETURNING IT</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Bring the vehicle back on <strong>Monday, 7 December, before 12:00</strong>: washed inside and out, with a full tank, and with the return checks done. The day before, you’ll get a reminder, with the option to return it earlier.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Driver instructions (the same as the drivers received):</p><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">🇿🇦 DRIVING IN SOUTH AFRICA</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>We drive on the LEFT side of the road.</strong></li><li style=\"margin:0 0 6px 0;\"><strong>Speed limits.</strong> These are only guidelines; always follow the signs posted next to the road:<br/>&nbsp;&nbsp;&nbsp;• <strong>60 km/h</strong> in town (<strong>30–40 km/h</strong> in neighbourhoods)<br/>&nbsp;&nbsp;&nbsp;• <strong>80–100 km/h</strong> on the open road<br/>&nbsp;&nbsp;&nbsp;• <strong>120 km/h</strong> on national highways</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">BEFORE EACH TRIP</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>1. Walk around the vehicle</strong><br/>Walk slowly all the way round, about one step away. Crouch down to see the lower parts. Look for dents, scratches, cracked lights or mirrors.<br/>📸 Photograph anything you notice <strong>before you drive</strong>, close up and once from further back, and send it to the Vehicle Coordinator. Then nobody can blame you for damage that was already there.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>2. Tyres (including the spare)</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">All four should look the same: round, with only a slight bulge at the bottom. If one looks flatter, have it checked before you leave.</li><li style=\"margin:0 0 6px 0;\">Look at the sides for cuts, bulges or nails. Turn the steering wheel all the way to see the inside of the front tyres.</li><li style=\"margin:0 0 6px 0;\">The correct pressure is usually on a sticker inside the driver’s door frame or the fuel flap. A petrol attendant can check and pump them.</li></ul><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>3. Lights</strong><br/>Switch on the headlights and hazard lights and walk round: every light and indicator should work. For the brake lights, ask someone to watch while you press the brake.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>4. Windscreen, wipers and mirrors</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">No cracks in front of the driver.</li><li style=\"margin:0 0 6px 0;\">Wipers clear the glass without smearing. Test with the washer spray.</li><li style=\"margin:0 0 6px 0;\">Mirrors are clean, not cracked, and set for you.</li></ul><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>5. Inside the vehicle</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Warning lights:</strong> when you start the engine, the lights on the dashboard come on for a few seconds and then go off. If any stay on, take a photo and send it to the Vehicle Coordinator before you go. Red = don’t drive. Orange = tell us.</li><li style=\"margin:0 0 6px 0;\"><strong>Seat belts:</strong> at every seat, pull the belt quickly (it should lock), let go (it should roll back in), and buckle it (it should hold).</li><li style=\"margin:0 0 6px 0;\"><strong>Handbrake:</strong> it should hold the vehicle still on a slope.</li><li style=\"margin:0 0 6px 0;\"><strong>Licence disc:</strong> the round paper disc on the windscreen must be there and not expired.</li><li style=\"margin:0 0 6px 0;\">Every driver carries their driver’s licence.</li></ul><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>6. Safety kit</strong><br/>Check that the <strong>red warning triangle</strong>, the <strong>jack</strong>, the <strong>wheel spanner</strong> and the <strong>spare wheel</strong> are in the vehicle. You legally need the triangle in South Africa.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>7. Under the bonnet (or ask the petrol attendant)</strong><br/>Only check with the engine off, on level ground. <strong>Never open the radiator cap when the engine is hot.</strong></p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Oil:</strong> pull out the dipstick (a yellow or orange loop), wipe it, push it back in, pull it out. The level should be between the two marks. Golden-brown is good. Very black means it’s due a service, so tell us. Milky means don’t drive, call the Vehicle Coordinator.</li><li style=\"margin:0 0 6px 0;\"><strong>Coolant (“water”):</strong> the see-through plastic tank should be between MIN and MAX.</li><li style=\"margin:0 0 6px 0;\"><strong>Leaks:</strong> look at the ground where the vehicle was parked. Drips of oil (black or brown) or coolant (green, pink or orange) mean tell us. Clear water under the front is normal (it’s from the aircon).</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">⛽ AT THE PETROL STATION</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">In South Africa an attendant fills the vehicle for you. You stay in the vehicle.</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>This vehicle takes DIESEL. Never put in anything else.</strong> Say “Diesel, full please” or give a Rand amount.</li><li style=\"margin:0 0 6px 0;\">Ask: <strong>“Please check the oil, water and tyre pressure.”</strong> They’ll also clean the windscreen if you ask.</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">IN AN EMERGENCY</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">Pull over well off the road, switch on the hazard lights, and put the triangle 15–20 m behind the vehicle.</li><li style=\"margin:0 0 6px 0;\">Then call the Vehicle Coordinator straight away: Pieter Coordinator, +27 00 000 0000</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">RETURNING THE VEHICLE</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Bring the vehicle back on <strong>Monday, 7 December, before 12:00</strong>: washed inside and out, with a full tank, and with the return checks done. You’ll get a reminder the day before, and the return checks that morning.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Thank you! 🙏<br/>FFSA Fleet</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000002\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">Booking details&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    }
+   ]
+  },
+  {
+   "at": "2026-12-03 07:00",
+   "title": "The day before: reminder",
+   "events": [
+    {
+     "kind": "slack",
+     "to": "Thandi Mokoena",
+     "text": "Reminder: Nissan Almera and Honda CR-V is due back tomorrow before 12:00",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "Hi Thandi 👋\n\nA reminder: *Nissan Almera* (DEMO 1 GP) and *Honda CR-V* (DEMO 2 GP) for *Visiting team: Kruger outreach* are due back *tomorrow, Friday, 4 December, before 12:00*.\n\nPlease plan for:\n\n• Washing the vehicles inside and out.\n• Filling the tank.\n• The return checks. You’ll get the list tomorrow morning.\n\n*DONE EARLIER?*\n\nIf you can bring them back earlier, tap *Return early* and choose the day. The Vehicle Coordinator will confirm.\n\nThank you! 🙏\nFFSA Fleet"
+       }
+      },
+      {
+       "type": "actions",
+       "elements": [
+        {
+         "type": "button",
+         "text": {
+          "type": "plain_text",
+          "text": "Return early"
+         },
+         "action_id": "vh_return_early",
+         "value": "00000000-0000-4000-8000-b00000000001",
+         "style": "primary"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "email",
+     "to": "thandi@example.org",
+     "text": "Reminder: Nissan Almera and Honda CR-V is due back tomorrow before 12:00",
+     "subject": "Reminder: Nissan Almera and Honda CR-V is due back tomorrow before 12:00",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>Reminder: Nissan Almera and Honda CR-V is due back tomorrow before 12:00</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Due back tomorrow before 12:00, washed and refuelled.</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Due back tomorrow</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">Reminder: Nissan Almera and Honda CR-V is due back tomorrow before 12:00</h1><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Hi Thandi 👋</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">A reminder: <strong>Nissan Almera</strong> (DEMO 1 GP) and <strong>Honda CR-V</strong> (DEMO 2 GP) for <strong>Visiting team: Kruger outreach</strong> are due back <strong>tomorrow, Friday, 4 December, before 12:00</strong>.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Please plan for:</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">Washing the vehicles inside and out.</li><li style=\"margin:0 0 6px 0;\">Filling the tank.</li><li style=\"margin:0 0 6px 0;\">The return checks. You’ll get the list tomorrow morning.</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">DONE EARLIER?</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">If you can bring them back earlier, tap <strong>Return early</strong> and choose the day. The Vehicle Coordinator will confirm.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Thank you! 🙏<br/>FFSA Fleet</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001?return-early=1\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">Return early&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    },
+    {
+     "kind": "email",
+     "to": "sam@example.org",
+     "text": "Reminder: Nissan Almera and Honda CR-V is due back tomorrow before 12:00",
+     "subject": "Reminder: Nissan Almera and Honda CR-V is due back tomorrow before 12:00",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>Reminder: Nissan Almera and Honda CR-V is due back tomorrow before 12:00</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Due back tomorrow before 12:00, washed and refuelled.</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Due back tomorrow</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">Reminder: Nissan Almera and Honda CR-V is due back tomorrow before 12:00</h1><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Hi Sam 👋</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">A reminder: <strong>Nissan Almera</strong> (DEMO 1 GP) and <strong>Honda CR-V</strong> (DEMO 2 GP) for <strong>Visiting team: Kruger outreach</strong> are due back <strong>tomorrow, Friday, 4 December, before 12:00</strong>.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Please plan for:</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">Washing the vehicles inside and out.</li><li style=\"margin:0 0 6px 0;\">Filling the tank.</li><li style=\"margin:0 0 6px 0;\">The return checks. You’ll get the list tomorrow morning.</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">DONE EARLIER?</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">If you can bring them back earlier, contact the Vehicle Coordinator: Pieter Coordinator, +27 00 000 0000</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Thank you! 🙏<br/>FFSA Fleet</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">Booking details&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    }
+   ]
+  },
+  {
+   "at": "2026-12-03 09:15",
+   "title": "Return early: Jonah asks on the Hub",
+   "detail": "From the booking page's Return early button. The coordinator gets Approve / I'll call them.",
+   "events": [
+    {
+     "kind": "slack",
+     "to": "Vehicle Coordinator (Pieter)",
+     "text": "Early return request: Youth camp transport",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*↩️ Early return request: Youth camp transport*\n*VW Kombi* (DEMO 3 GP)\nJonah Peters asks to return *Youth camp transport* early: on *Saturday, 5 December*, instead of Monday, 7 December."
+       }
+      },
+      {
+       "type": "actions",
+       "block_id": "vh:00000000-0000-4000-8000-b00000000002",
+       "elements": [
+        {
+         "type": "button",
+         "action_id": "vh_early_approve",
+         "style": "primary",
+         "text": {
+          "type": "plain_text",
+          "text": "Approve"
+         },
+         "value": "00000000-0000-4000-8000-b00000000002"
+        },
+        {
+         "type": "button",
+         "action_id": "vh_early_call",
+         "text": {
+          "type": "plain_text",
+          "text": "I’ll call them"
+         },
+         "value": "00000000-0000-4000-8000-b00000000002"
+        },
+        {
+         "type": "button",
+         "action_id": "vh_open",
+         "text": {
+          "type": "plain_text",
+          "text": "Open in Hub"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000002"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "at": "2026-12-03 09:40",
+   "title": "The coordinator taps Approve",
+   "events": [
+    {
+     "kind": "slack",
+     "to": "Jonah Peters",
+     "text": "✏️ Booking updated — Youth camp transport",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*✏️ Booking updated — Youth camp transport*\n1 Dec 2026 – 5 Dec 2026 (4 days) · 🚐 VW Kombi (DEMO 3 GP)"
+       }
+      },
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "The Vehicle Coordinator made some changes:\n• Due back: Monday, 7 December → Saturday, 5 December, before 12:00 (early return approved)"
+       }
+      },
+      {
+       "type": "actions",
+       "elements": [
+        {
+         "type": "button",
+         "action_id": "vh_open",
+         "text": {
+          "type": "plain_text",
+          "text": "Open in Hub"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000002"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "email",
+     "to": "jonah@example.org",
+     "text": "Your vehicle booking was updated",
+     "subject": "Your vehicle booking was updated",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>Your vehicle booking was updated</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Your vehicle booking was updated</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Booking Updated</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">Your booking was updated</h1>\n      <p style=\"margin:0 0 15px;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.72;color:#C5C2AE;\">Hi Jonah, the Vehicle Coordinator made some changes to your booking <strong style=\"color:#FFFFFF;font-weight:700;\">Youth camp transport</strong>:</p>\n      <ul style=\"margin:0 0 16px 18px;padding:0;\"><li style=\"margin:0 0 4px 0;\">Due back: Monday, 7 December → Saturday, 5 December, before 12:00 (early return approved)</li></ul>\n      \n      <p style=\"margin:0 0 15px;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.72;color:#C5C2AE;\"><strong style=\"color:#FFFFFF;font-weight:700;\">Vehicle:</strong> VW Kombi (DEMO 3 GP)</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000002\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">View booking&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    },
+    {
+     "kind": "slack-update",
+     "to": "Vehicle Coordinator (Pieter)",
+     "text": "Early return approved: Youth camp transport",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*✅ Early return approved: Youth camp transport*\n*VW Kombi* (DEMO 3 GP)\nNow due back *Saturday, 5 December*, before 12:00 (approved by Pieter Coordinator)."
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "at": "2026-12-04 07:00",
+   "title": "Due-back day: return instructions + coordinator's Returned message",
+   "events": [
+    {
+     "kind": "slack",
+     "to": "Thandi Mokoena",
+     "text": "Nissan Almera and Honda CR-V is due back today before 12:00",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "Hi Thandi 👋\n\n*Nissan Almera* (DEMO 1 GP) and *Honda CR-V* (DEMO 2 GP) for *Visiting team: Kruger outreach* are due back *today, before 12:00*.\n\n*BEFORE YOU HAND IT BACK*\n\n1. *Wash the vehicles* inside and out (vacuum the inside, clean the windows). Keep the receipt if you use a car wash.\n2. *Fill the tank* with the right fuel for each vehicle.\n3. 📸 Send the Vehicle Coordinator a photo of the *km reading* and *fuel gauge* on the dashboard.\n4. 📸 Send photos of any *new* damage, inside or out, even small scratches or chips. Mistakes happen, and it’s much better that we know.\n5. Tell the Vehicle Coordinator:\n   • Did anything feel, sound or smell different (noises, brakes, steering pulling to one side, vibration)?\n   • Did any warning light come on?\n   • Did you hit any big potholes or kerbs?\n   • Did anything break or stop working?\n6. Check nothing is left inside (under the seats, door pockets, boot or back doors). Make sure all the keys come back. Lock it and check every door and the boot are locked.\n\nThen hand the keys to the Vehicle Coordinator. If you can’t make 12:00, let them know as soon as possible: Pieter Coordinator, +27 00 000 0000\n\nThank you for looking after it! 🙏\nFFSA Fleet"
+       }
+      },
+      {
+       "type": "actions",
+       "elements": [
+        {
+         "type": "button",
+         "text": {
+          "type": "plain_text",
+          "text": "Booking details"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001",
+         "action_id": "vh_open"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "email",
+     "to": "thandi@example.org",
+     "text": "Nissan Almera and Honda CR-V is due back today before 12:00",
+     "subject": "Nissan Almera and Honda CR-V is due back today before 12:00",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>Nissan Almera and Honda CR-V is due back today before 12:00</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Due back today before 12:00. Here&#39;s what to do before you hand it back.</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Due back today</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">Nissan Almera and Honda CR-V is due back today before 12:00</h1><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Hi Thandi 👋</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>Nissan Almera</strong> (DEMO 1 GP) and <strong>Honda CR-V</strong> (DEMO 2 GP) for <strong>Visiting team: Kruger outreach</strong> are due back <strong>today, before 12:00</strong>.</p><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">BEFORE YOU HAND IT BACK</p><ol style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Wash the vehicles</strong> inside and out (vacuum the inside, clean the windows). Keep the receipt if you use a car wash.</li><li style=\"margin:0 0 6px 0;\"><strong>Fill the tank</strong> with the right fuel for each vehicle.</li><li style=\"margin:0 0 6px 0;\">📸 Send the Vehicle Coordinator a photo of the <strong>km reading</strong> and <strong>fuel gauge</strong> on the dashboard.</li><li style=\"margin:0 0 6px 0;\">📸 Send photos of any <strong>new</strong> damage, inside or out, even small scratches or chips. Mistakes happen, and it’s much better that we know.</li><li style=\"margin:0 0 6px 0;\">Tell the Vehicle Coordinator:<br/>&nbsp;&nbsp;&nbsp;• Did anything feel, sound or smell different (noises, brakes, steering pulling to one side, vibration)?<br/>&nbsp;&nbsp;&nbsp;• Did any warning light come on?<br/>&nbsp;&nbsp;&nbsp;• Did you hit any big potholes or kerbs?<br/>&nbsp;&nbsp;&nbsp;• Did anything break or stop working?</li><li style=\"margin:0 0 6px 0;\">Check nothing is left inside (under the seats, door pockets, boot or back doors). Make sure all the keys come back. Lock it and check every door and the boot are locked.</li></ol><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Then hand the keys to the Vehicle Coordinator. If you can’t make 12:00, let them know as soon as possible: Pieter Coordinator, +27 00 000 0000</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Thank you for looking after it! 🙏<br/>FFSA Fleet</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">Booking details&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    },
+    {
+     "kind": "email",
+     "to": "sam@example.org",
+     "text": "Nissan Almera and Honda CR-V is due back today before 12:00",
+     "subject": "Nissan Almera and Honda CR-V is due back today before 12:00",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>Nissan Almera and Honda CR-V is due back today before 12:00</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Due back today before 12:00. Here&#39;s what to do before you hand it back.</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Due back today</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">Nissan Almera and Honda CR-V is due back today before 12:00</h1><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Hi Sam 👋</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>Nissan Almera</strong> (DEMO 1 GP) and <strong>Honda CR-V</strong> (DEMO 2 GP) for <strong>Visiting team: Kruger outreach</strong> are due back <strong>today, before 12:00</strong>.</p><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">BEFORE YOU HAND IT BACK</p><ol style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Wash the vehicles</strong> inside and out (vacuum the inside, clean the windows). Keep the receipt if you use a car wash.</li><li style=\"margin:0 0 6px 0;\"><strong>Fill the tank</strong> with the right fuel for each vehicle.</li><li style=\"margin:0 0 6px 0;\">📸 Send the Vehicle Coordinator a photo of the <strong>km reading</strong> and <strong>fuel gauge</strong> on the dashboard.</li><li style=\"margin:0 0 6px 0;\">📸 Send photos of any <strong>new</strong> damage, inside or out, even small scratches or chips. Mistakes happen, and it’s much better that we know.</li><li style=\"margin:0 0 6px 0;\">Tell the Vehicle Coordinator:<br/>&nbsp;&nbsp;&nbsp;• Did anything feel, sound or smell different (noises, brakes, steering pulling to one side, vibration)?<br/>&nbsp;&nbsp;&nbsp;• Did any warning light come on?<br/>&nbsp;&nbsp;&nbsp;• Did you hit any big potholes or kerbs?<br/>&nbsp;&nbsp;&nbsp;• Did anything break or stop working?</li><li style=\"margin:0 0 6px 0;\">Check nothing is left inside (under the seats, door pockets, boot or back doors). Make sure all the keys come back. Lock it and check every door and the boot are locked.</li></ol><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Then hand the keys to the Vehicle Coordinator. If you can’t make 12:00, let them know as soon as possible: Pieter Coordinator, +27 00 000 0000</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Thank you for looking after it! 🙏<br/>FFSA Fleet</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">Booking details&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    },
+    {
+     "kind": "slack",
+     "to": "Jonah Peters",
+     "text": "Reminder: VW Kombi is due back tomorrow before 12:00",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "Hi Jonah 👋\n\nA reminder: *VW Kombi* (DEMO 3 GP) for *Youth camp transport* is due back *tomorrow, Saturday, 5 December, before 12:00*.\n\nPlease plan for:\n\n• Washing the vehicle inside and out.\n• Filling the tank.\n• The return checks. You’ll get the list tomorrow morning.\n\n*DONE EARLIER?*\n\nIf you can bring it back earlier, tap *Return early* and choose the day. The Vehicle Coordinator will confirm.\n\nThank you! 🙏\nFFSA Fleet"
+       }
+      },
+      {
+       "type": "actions",
+       "elements": [
+        {
+         "type": "button",
+         "text": {
+          "type": "plain_text",
+          "text": "Return early"
+         },
+         "action_id": "vh_return_early",
+         "value": "00000000-0000-4000-8000-b00000000002",
+         "style": "primary"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "email",
+     "to": "jonah@example.org",
+     "text": "Reminder: VW Kombi is due back tomorrow before 12:00",
+     "subject": "Reminder: VW Kombi is due back tomorrow before 12:00",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>Reminder: VW Kombi is due back tomorrow before 12:00</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Due back tomorrow before 12:00, washed and refuelled.</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Due back tomorrow</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">Reminder: VW Kombi is due back tomorrow before 12:00</h1><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Hi Jonah 👋</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">A reminder: <strong>VW Kombi</strong> (DEMO 3 GP) for <strong>Youth camp transport</strong> is due back <strong>tomorrow, Saturday, 5 December, before 12:00</strong>.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Please plan for:</p><ul style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\">Washing the vehicle inside and out.</li><li style=\"margin:0 0 6px 0;\">Filling the tank.</li><li style=\"margin:0 0 6px 0;\">The return checks. You’ll get the list tomorrow morning.</li></ul><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">DONE EARLIER?</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">If you can bring it back earlier, tap <strong>Return early</strong> and choose the day. The Vehicle Coordinator will confirm.</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Thank you! 🙏<br/>FFSA Fleet</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000002?return-early=1\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">Return early&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    },
+    {
+     "kind": "slack",
+     "to": "Vehicle Coordinator (Pieter)",
+     "text": "Due back today before 12:00: Visiting team: Kruger outreach",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*🔑 Due back today before 12:00: Visiting team: Kruger outreach*\n*Nissan Almera* (DEMO 1 GP), *Honda CR-V* (DEMO 2 GP)\nBooked by Thandi Mokoena · Drivers: Thandi Mokoena, Sam Taylor, Lee Chen"
+       }
+      },
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "🧽 *International team: book a full valet wash as soon as it’s back.* The vehicles are held until Wednesday, 9 December for the valet and the post-rental inspection."
+       }
+      },
+      {
+       "type": "context",
+       "elements": [
+        {
+         "type": "mrkdwn",
+         "text": "It should come back washed, with a full tank and the return checks done. Tap *Returned* once you have the keys."
+        }
+       ]
+      },
+      {
+       "type": "actions",
+       "block_id": "vh:00000000-0000-4000-8000-b00000000001",
+       "elements": [
+        {
+         "type": "button",
+         "action_id": "vh_returned",
+         "style": "primary",
+         "text": {
+          "type": "plain_text",
+          "text": "Returned"
+         },
+         "value": "00000000-0000-4000-8000-b00000000001"
+        },
+        {
+         "type": "button",
+         "action_id": "vh_open",
+         "text": {
+          "type": "plain_text",
+          "text": "Open in Hub"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "at": "2026-12-04 10:45",
+   "title": "The coordinator taps Returned",
+   "events": [
+    {
+     "kind": "slack-update",
+     "to": "Vehicle Coordinator (Pieter)",
+     "text": "Returned: Visiting team: Kruger outreach",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*✅ Returned: Visiting team: Kruger outreach*\n*Nissan Almera* (DEMO 1 GP), *Honda CR-V* (DEMO 2 GP)\nMarked returned at 10:45 by Pieter Coordinator. Next: the post-rental inspection and the full valet wash."
+       }
+      }
+     ]
+    },
+    {
+     "kind": "slack",
+     "to": "Vehicle Coordinator (Pieter)",
+     "text": "Post-rental inspection: Visiting team: Kruger outreach",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*🔍 Post-rental inspection: Visiting team: Kruger outreach*\n⬜ Nissan Almera (DEMO 1 GP): to do\n⬜ Honda CR-V (DEMO 2 GP): to do"
+       }
+      },
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "🧽 *International team: book a full valet wash as soon as it’s back.* The vehicles are held until Wednesday, 9 December for the valet and the post-rental inspection."
+       }
+      },
+      {
+       "type": "context",
+       "elements": [
+        {
+         "type": "mrkdwn",
+         "text": "Record it in Fleet. This booking is marked *Completed* as soon as every vehicle’s post-rental inspection is saved."
+        }
+       ]
+      },
+      {
+       "type": "actions",
+       "block_id": "vh:00000000-0000-4000-8000-b00000000001",
+       "elements": [
+        {
+         "type": "button",
+         "action_id": "vh_open_inspect_00000000",
+         "text": {
+          "type": "plain_text",
+          "text": "Inspect Nissan Almera"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/fleet/00000000-0000-4000-8000-e00000000001/inspect?type=post&booking=00000000-0000-4000-8000-b00000000001",
+         "style": "primary"
+        },
+        {
+         "type": "button",
+         "action_id": "vh_open_inspect_00000000",
+         "text": {
+          "type": "plain_text",
+          "text": "Inspect Honda CR-V"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/fleet/00000000-0000-4000-8000-e00000000002/inspect?type=post&booking=00000000-0000-4000-8000-b00000000001",
+         "style": "primary"
+        },
+        {
+         "type": "button",
+         "action_id": "vh_complete",
+         "text": {
+          "type": "plain_text",
+          "text": "Mark completed"
+         },
+         "value": "00000000-0000-4000-8000-b00000000001"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "at": "2026-12-04 11:10",
+   "title": "Post-rental inspection saved: Nissan Almera",
+   "detail": "Saved in Fleet → Post-rental inspection, linked to the booking.",
+   "events": [
+    {
+     "kind": "slack-update",
+     "to": "Vehicle Coordinator (Pieter)",
+     "text": "Post-rental inspection: Visiting team: Kruger outreach",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*🔍 Post-rental inspection: Visiting team: Kruger outreach*\n✅ Nissan Almera (DEMO 1 GP): inspection recorded\n⬜ Honda CR-V (DEMO 2 GP): to do"
+       }
+      },
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "🧽 *International team: book a full valet wash as soon as it’s back.* The vehicles are held until Wednesday, 9 December for the valet and the post-rental inspection."
+       }
+      },
+      {
+       "type": "context",
+       "elements": [
+        {
+         "type": "mrkdwn",
+         "text": "Record it in Fleet. This booking is marked *Completed* as soon as every vehicle’s post-rental inspection is saved."
+        }
+       ]
+      },
+      {
+       "type": "actions",
+       "block_id": "vh:00000000-0000-4000-8000-b00000000001",
+       "elements": [
+        {
+         "type": "button",
+         "action_id": "vh_open_inspect_00000000",
+         "text": {
+          "type": "plain_text",
+          "text": "Inspect Honda CR-V"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/fleet/00000000-0000-4000-8000-e00000000002/inspect?type=post&booking=00000000-0000-4000-8000-b00000000001",
+         "style": "primary"
+        },
+        {
+         "type": "button",
+         "action_id": "vh_complete",
+         "text": {
+          "type": "plain_text",
+          "text": "Mark completed"
+         },
+         "value": "00000000-0000-4000-8000-b00000000001"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "at": "2026-12-04 11:25",
+   "title": "Post-rental inspection saved: Honda CR-V → booking completed",
+   "events": [
+    {
+     "kind": "slack",
+     "to": "Thandi Mokoena",
+     "text": "🏁 Completed — Visiting team: Kruger outreach",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*🏁 Completed — Visiting team: Kruger outreach*\n30 Nov 2026 – 4 Dec 2026 (4 days) · 🚐 Nissan Almera (DEMO 1 GP), Honda CR-V (DEMO 2 GP)"
+       }
+      },
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "All done — thanks for looking after the vehicle."
+       }
+      },
+      {
+       "type": "actions",
+       "elements": [
+        {
+         "type": "button",
+         "action_id": "vh_open",
+         "text": {
+          "type": "plain_text",
+          "text": "Open in Hub"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "email",
+     "to": "thandi@example.org",
+     "text": "Your vehicle booking is complete",
+     "subject": "Your vehicle booking is complete",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>Your vehicle booking is complete</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Your vehicle booking is complete</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Booking Complete</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">All done — thank you</h1>\n      <p style=\"margin:0 0 15px;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.72;color:#C5C2AE;\">Hi Thandi, your booking <strong style=\"color:#FFFFFF;font-weight:700;\">Visiting team: Kruger outreach</strong> is complete. Thanks for looking after the vehicle.</p>\n      \n      \n      <p style=\"margin:0 0 15px;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.72;color:#C5C2AE;\"><strong style=\"color:#FFFFFF;font-weight:700;\">Vehicle:</strong> Nissan Almera (DEMO 1 GP), Honda CR-V (DEMO 2 GP)</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000001\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">View booking&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    },
+    {
+     "kind": "slack-update",
+     "to": "Vehicle Coordinator (Pieter)",
+     "text": "Completed: Visiting team: Kruger outreach",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*🏁 Completed: Visiting team: Kruger outreach*\n*Nissan Almera* (DEMO 1 GP), *Honda CR-V* (DEMO 2 GP)\nPost-rental inspection recorded by Pieter Coordinator. The booking is completed."
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "at": "2026-12-05 07:00",
+   "title": "Booking B due back on the earlier day",
+   "events": [
+    {
+     "kind": "slack",
+     "to": "Jonah Peters",
+     "text": "VW Kombi is due back today before 12:00",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "Hi Jonah 👋\n\n*VW Kombi* (DEMO 3 GP) for *Youth camp transport* is due back *today, before 12:00*.\n\n*BEFORE YOU HAND IT BACK*\n\n1. *Wash the vehicle* inside and out (vacuum the inside, clean the windows). Keep the receipt if you use a car wash.\n2. *Fill the tank* with DIESEL.\n3. 📸 Send the Vehicle Coordinator a photo of the *km reading* and *fuel gauge* on the dashboard.\n4. 📸 Send photos of any *new* damage, inside or out, even small scratches or chips. Mistakes happen, and it’s much better that we know.\n5. Tell the Vehicle Coordinator:\n   • Did anything feel, sound or smell different (noises, brakes, steering pulling to one side, vibration)?\n   • Did any warning light come on?\n   • Did you hit any big potholes or kerbs?\n   • Did anything break or stop working?\n6. Check nothing is left inside (under the seats, door pockets, boot or back doors). Make sure all the keys come back. Lock it and check every door and the boot are locked.\n\nThen hand the keys to the Vehicle Coordinator. If you can’t make 12:00, let them know as soon as possible: Pieter Coordinator, +27 00 000 0000\n\nThank you for looking after it! 🙏\nFFSA Fleet"
+       }
+      },
+      {
+       "type": "actions",
+       "elements": [
+        {
+         "type": "button",
+         "text": {
+          "type": "plain_text",
+          "text": "Booking details"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000002",
+         "action_id": "vh_open"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "email",
+     "to": "jonah@example.org",
+     "text": "VW Kombi is due back today before 12:00",
+     "subject": "VW Kombi is due back today before 12:00",
+     "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />\n  <meta name=\"color-scheme\" content=\"dark\" />\n  <meta name=\"supported-color-schemes\" content=\"dark\" />\n  <title>VW Kombi is due back today before 12:00</title>\n  <link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap\" rel=\"stylesheet\" />\n</head>\n<body style=\"margin:0;padding:0;background:#000000;font-family:'Roboto','Helvetica Neue',Arial,sans-serif;color:#FFFFFF;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#000000;\">Due back today before 12:00. Here&#39;s what to do before you hand it back.</div>\n  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" bgcolor=\"#000000\" style=\"background:#000000;padding:26px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" bgcolor=\"#000000\" style=\"max-width:600px;background:#000000;table-layout:fixed;\">\n\n        <!-- Masthead -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:20px 30px;border-bottom:1px solid #242424;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"><tr>\n            <td valign=\"middle\" style=\"font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:#FFFFFF;\">Fire &amp; Fragrance</td>\n            <td valign=\"middle\" align=\"right\" style=\"font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#C5C2AE;letter-spacing:0.22em;text-transform:uppercase;\">South&nbsp;Africa</td>\n          </tr></table>\n        </td></tr>\n\n        <!-- Yellow slogan band (the landing page's marquee, static) -->\n        <tr><td bgcolor=\"#FFB801\" align=\"center\" style=\"background:#FFB801;padding:11px 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#000000;line-height:1.2;\">\n          CATALYZE OUR GENERATION&nbsp;&nbsp;<span style=\"color:#000DE5;\">&#10022;</span>&nbsp;&nbsp;EVANGELIZE THE WORLD\n        </td></tr>\n\n        <!-- Body -->\n        <tr><td bgcolor=\"#000000\" style=\"background:#000000;padding:40px 34px 34px 34px;\">\n          <p style=\"margin:0 0 14px;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#FFB801;\">&bull;&nbsp;&nbsp;Due back today</p><h1 style=\"margin:0 0 20px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:#FFFFFF;\">VW Kombi is due back today before 12:00</h1><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Hi Jonah 👋</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\"><strong>VW Kombi</strong> (DEMO 3 GP) for <strong>Youth camp transport</strong> is due back <strong>today, before 12:00</strong>.</p><p style=\"margin:22px 0 8px 0;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;\">BEFORE YOU HAND IT BACK</p><ol style=\"margin:0 0 14px 20px;padding:0;font-size:15px;line-height:1.55;\"><li style=\"margin:0 0 6px 0;\"><strong>Wash the vehicle</strong> inside and out (vacuum the inside, clean the windows). Keep the receipt if you use a car wash.</li><li style=\"margin:0 0 6px 0;\"><strong>Fill the tank</strong> with DIESEL.</li><li style=\"margin:0 0 6px 0;\">📸 Send the Vehicle Coordinator a photo of the <strong>km reading</strong> and <strong>fuel gauge</strong> on the dashboard.</li><li style=\"margin:0 0 6px 0;\">📸 Send photos of any <strong>new</strong> damage, inside or out, even small scratches or chips. Mistakes happen, and it’s much better that we know.</li><li style=\"margin:0 0 6px 0;\">Tell the Vehicle Coordinator:<br/>&nbsp;&nbsp;&nbsp;• Did anything feel, sound or smell different (noises, brakes, steering pulling to one side, vibration)?<br/>&nbsp;&nbsp;&nbsp;• Did any warning light come on?<br/>&nbsp;&nbsp;&nbsp;• Did you hit any big potholes or kerbs?<br/>&nbsp;&nbsp;&nbsp;• Did anything break or stop working?</li><li style=\"margin:0 0 6px 0;\">Check nothing is left inside (under the seats, door pockets, boot or back doors). Make sure all the keys come back. Lock it and check every door and the boot are locked.</li></ol><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Then hand the keys to the Vehicle Coordinator. If you can’t make 12:00, let them know as soon as possible: Pieter Coordinator, +27 00 000 0000</p><p style=\"margin:0 0 14px 0;font-size:15px;line-height:1.55;\">Thank you for looking after it! 🙏<br/>FFSA Fleet</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:10px 0 8px;\"><tr><td bgcolor=\"#FFB801\" style=\"background:#FFB801;border:1px solid #FFB801;border-radius:12px;\">\n<a href=\"https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000002\" style=\"display:inline-block;padding:15px 34px;font-family:'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:#000000;text-decoration:none;\">Booking details&nbsp;&nbsp;&rarr;</a>\n</td></tr></table>\n        </td></tr>\n\n        <!-- Footer — deck cover contact row -->\n        <tr><td bgcolor=\"#000000\" align=\"center\" style=\"background:#000000;border-top:1px solid #242424;padding:34px 30px 40px 30px;\">\n          <p style=\"margin:0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;font-weight:700;color:#FFB801;letter-spacing:0.2em;text-transform:uppercase;\">Catalyze our generation. Evangelize the World.</p>\n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:10px;color:#6A6759;letter-spacing:0.08em;line-height:1.7;\">\n            @ff.southafrica&nbsp;&nbsp;&middot;&nbsp;&nbsp;ffsouthafrica.com<br />94 Steve Biko St, Potchefstroom, 2520, South Africa\n          </p>\n          \n          <p style=\"margin:14px 0 0;font-family:'Roboto Mono',ui-monospace,'Courier New',Courier,monospace;font-size:9px;color:#6A6759;letter-spacing:0.18em;text-transform:uppercase;\">Powered by FFSA Hub</p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+    },
+    {
+     "kind": "slack",
+     "to": "Vehicle Coordinator (Pieter)",
+     "text": "Due back today before 12:00: Youth camp transport",
+     "blocks": [
+      {
+       "type": "section",
+       "text": {
+        "type": "mrkdwn",
+        "text": "*🔑 Due back today before 12:00: Youth camp transport*\n*VW Kombi* (DEMO 3 GP)\nBooked by Jonah Peters · Drivers: Jonah Peters"
+       }
+      },
+      {
+       "type": "context",
+       "elements": [
+        {
+         "type": "mrkdwn",
+         "text": "It should come back washed, with a full tank and the return checks done. Tap *Returned* once you have the keys."
+        }
+       ]
+      },
+      {
+       "type": "actions",
+       "block_id": "vh:00000000-0000-4000-8000-b00000000002",
+       "elements": [
+        {
+         "type": "button",
+         "action_id": "vh_returned",
+         "style": "primary",
+         "text": {
+          "type": "plain_text",
+          "text": "Returned"
+         },
+         "value": "00000000-0000-4000-8000-b00000000002"
+        },
+        {
+         "type": "button",
+         "action_id": "vh_open",
+         "text": {
+          "type": "plain_text",
+          "text": "Open in Hub"
+         },
+         "url": "https://www.ffsahub.com/bookings/vehicles/00000000-0000-4000-8000-b00000000002"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "at": "2026-12-07 09:00",
+   "title": "Someone tries to book the Almera during the hold",
+   "detail": "Booking A was an International Team booking: after it's due back (Fri 4 Dec), its vehicles are held for 3 working days (Sat 5 to Wed 9 Dec, the weekend included) for the post-rental inspection and a full valet wash. That holds even though the booking is already completed.",
+   "events": []
+  }
+ ]
+}

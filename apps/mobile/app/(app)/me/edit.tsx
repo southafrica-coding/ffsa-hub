@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, Screen, TextField } from "@/components";
+import { Banner, Button, TextField } from "@/components";
 import { getProfileFields, updateProfile, type ProfileFields } from "@/features/me/api";
+import { GroupSkeleton } from "@/features/me/components/me-kit";
+import { MePage } from "@/features/me/components/MePage";
 import { meStrings } from "@/features/me/strings";
 import { hasErrors, validateProfile, type ProfileErrors } from "@/features/me/validation";
-import { SkeletonRows, useMe } from "@/features/shell";
+import { useMe } from "@/features/shell";
 import { announce } from "@/lib/a11y";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
@@ -77,23 +79,18 @@ export default function EditProfileScreen() {
   }
 
   return (
-    <Screen keyboard edges={["bottom"]}>
-      {load.state === "loading" ? <SkeletonRows count={3} label={s.loading} /> : null}
+    <MePage title={s.title} tabBarHidden>
+      {load.state === "loading" ? <GroupSkeleton count={3} label={s.loading} /> : null}
 
       {load.state === "error" ? (
         <Banner
-          tone="danger"
+          tone="error"
           title={meStrings.error.title}
-          action={
-            <Button
-              label={meStrings.error.retry}
-              variant="secondary"
-              onPress={() => {
-                setLoad({ state: "loading" });
-                setAttempt((n) => n + 1);
-              }}
-            />
-          }
+          actionLabel={meStrings.error.retry}
+          onAction={() => {
+            setLoad({ state: "loading" });
+            setAttempt((n) => n + 1);
+          }}
         >
           {s.loadError}
         </Banner>
@@ -102,7 +99,7 @@ export default function EditProfileScreen() {
       {load.state === "ready" ? (
         <View style={{ gap: 16 }}>
           {saveError ? (
-            <Banner tone="danger" title={s.saveErrorTitle}>
+            <Banner tone="error" title={s.saveErrorTitle}>
               {saveError}
             </Banner>
           ) : null}
@@ -141,6 +138,6 @@ export default function EditProfileScreen() {
           <Button label={s.save} onPress={save} loading={saving} />
         </View>
       ) : null}
-    </Screen>
+    </MePage>
   );
 }

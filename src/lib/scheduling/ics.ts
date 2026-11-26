@@ -18,7 +18,7 @@ export type IcsEventInput = {
   url?: string | null;
 };
 
-function toIcsTimestamp(iso: string): string {
+export function toIcsTimestamp(iso: string): string {
   // ISO → YYYYMMDDTHHMMSSZ (UTC)
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -34,7 +34,7 @@ function toIcsTimestamp(iso: string): string {
   );
 }
 
-function escapeText(s: string): string {
+export function escapeText(s: string): string {
   // RFC 5545 §3.3.11 — backslashes, commas, semicolons, newlines need escaping
   return s
     .replace(/\\/g, "\\\\")

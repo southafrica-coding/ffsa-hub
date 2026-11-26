@@ -1,6 +1,7 @@
 import { View } from "react-native";
 
 import { Text } from "@/components";
+import { fontSize, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import type { DoorStats as Stats } from "../api";
@@ -16,16 +17,16 @@ export function DoorStats({ stats, failed, offline }: { stats: Stats | null; fai
       accessible
       accessibilityRole="summary"
       accessibilityLabel={offline || failed ? `${label}. ${strings.checkIn.statsUnavailable}` : label}
-      style={{ flexDirection: "row", alignItems: "flex-end", gap: 12, paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: colors.text }}
+      style={{ flexDirection: "row", alignItems: "flex-end", gap: space.md, paddingTop: space.xs, paddingBottom: space.sm, borderBottomWidth: 2, borderBottomColor: colors.text }}
     >
-      <View style={{ gap: 2 }}>
-        <Text variant="label" tone="secondary">
-          {strings.checkIn.statsLabel}
+      <View>
+        <Text variant="label">{strings.checkIn.statsLabel}</Text>
+        <Text variant="kpi" style={{ fontSize: fontSize.numeral, lineHeight: 44 }} maxFontSizeMultiplier={1.4}>
+          {stats ? String(stats.checkedIn) : "–"}
         </Text>
-        <Text variant="numeral">{stats ? String(stats.checkedIn) : "–"}</Text>
       </View>
       <View style={{ flex: 1, paddingBottom: 6, gap: 2 }}>
-        <Text variant="bodyStrong" tone="secondary">
+        <Text variant="sectionTitle" tone="secondary">
           {stats ? strings.checkIn.statsOf(stats.total) : ""}
         </Text>
         {offline || failed ? (

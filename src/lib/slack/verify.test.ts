@@ -36,3 +36,23 @@ describe("verifySlackSignature per bot", () => {
     expect(verifySlackSignature(body, t, sign("", t, body), "outreach")).toBe(false);
   });
 });
+
+describe("verifySlackSignature for the Hub assistant app", () => {
+  const saved = { ...process.env };
+  beforeEach(() => {
+    process.env.SLACK_SIGNING_SECRET = "hub-secret";
+    process.env.SLACK_ASSISTANT_SIGNING_SECRET = "assistant-secret";
+  });
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  const body = '{"type":"event_callback"}';
+
+  it("uses the assistant secret, not the hub one", () => {
+    const t = String(Math.floor(Date.now() / 1000));
+    expect(verifySlackSignature(body, t, sign("assistant-secret", t, body), "assistant")).toBe(true);
+    expect(verifySlackSignature(body, t, sign("hub-secret", t, body), "assistant")).toBe(false);
+    expect(verifySlackSignature(body, t, sign("assistant-secret", t, body))).toBe(false);
+  });
+});

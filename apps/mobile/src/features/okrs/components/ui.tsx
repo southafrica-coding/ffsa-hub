@@ -1,34 +1,45 @@
-// Small pieces the OKR screens share. The general ones (section bar, tag,
-// row, sheet, chips, skeleton, error, stale note) are finance's, as Bookings
-// and My Schools reuse them; only what's specific to OKRs lives here.
+// OKR pieces for the redesign (frames 10.1–10.8) that the shared kit doesn't
+// have: the status chip mapping, the figure strip, the progress bar and the
+// cycle switcher. Built from kit components and tokens only. The general
+// ones (section title with a count, free-form list row, load error, stale
+// note) are finance's parts, as its own screens use them.
 
-import { ChevronDown } from "lucide-react-native";
-import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { ChevronDown, ChevronRight, Clock, TriangleAlert, type LucideIcon } from "lucide-react-native";
+import { Children, useState, type ReactNode } from "react";
+import { View, useWindowDimensions } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
-import { Text } from "@/components";
-import { formatSavedAt } from "@/features/finance/cache";
-import { Sheet } from "@/features/finance/components/Sheet";
-import { StaleNote, Tag } from "@/features/finance/components/ui";
-import type { LoadState } from "@/features/finance/use-cached-load";
-import { hairline, touch } from "@/theme/tokens";
+import { Freshness as KitFreshness, isLargeText, ListGroup, RadioRow, Sheet, StatusChip, Text, type FreshnessState, type StatusChipProps } from "@/components";
+import { hairline, radius, space, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-import { formatDay, statusLabel, statusTone } from "../logic";
+import { formatDay, statusLabel } from "../logic";
 import { strings } from "../strings";
 import type { OkrCycle, OkrStatus } from "../types";
 
-/** A status word in a bordered tag: the word carries the meaning, colour only helps. */
+// ── Status chip ─────────────────────────────────────────────────────────────
+
+// Same tones as logic.ts statusTone (complete / moving forward good, stuck
+// bad, the rest quiet), each with its own icon so two greens still differ.
+// "Not started" is the word alone, as the frames draw it.
+const STATUS_CHIP: Record<OkrStatus, { variant: StatusChipProps["variant"]; icon?: LucideIcon | null }> = {
+  complete: { variant: "positive" },
+  moving_forward: { variant: "positive", icon: ChevronRight },
+  in_progress: { variant: "neutral", icon: Clock },
+  not_started: { variant: "neutral", icon: null },
+  stuck: { variant: "danger", icon: TriangleAlert },
+};
+
+/** A status in words (and usually an icon): the word carries the meaning, colour only helps. */
 export function StatusTag({ status, text, testID }: { status: OkrStatus; text?: string; testID?: string }) {
-  return (
-    <View testID={testID}>
-      <Tag tone={statusTone(status)}>{text ?? statusLabel(status)}</Tag>
-    </View>
-  );
+  const chip = STATUS_CHIP[status];
+  return <StatusChip label={text ?? statusLabel(status)} variant={chip.variant} icon={chip.icon} testID={testID} />;
 }
 
-/** One figure in a KPI strip: mono label, condensed numeral, a foot in words. */
-export function Kpi({
+// ── Figures ─────────────────────────────────────────────────────────────────
+
+/** One figure in the strip: a sentence-case label, the number, a foot in words. */
+export function Figure({
   label,
   value,
   foot,
@@ -45,21 +56,18 @@ export function Kpi({
   testID?: string;
 }) {
   return (
-    <View
-      accessible
-      accessibilityLabel={[label, String(value), foot].filter(Boolean).join(", ")}
-      testID={testID}
-      style={{ gap: 4, flexGrow: 1, flexBasis: 140, paddingVertical: 8 }}
-    >
-      <Text variant="label" tone="secondary">
-        {label}
-      </Text>
-      <Text variant="numeral" tone={tone} style={{ fontVariant: ["tabular-nums"] }}>
+    <View accessible accessibilityLabel={[label, String(value), foot].filter(Boolean).join(", ")} testID={testID} style={{ gap: 2 }}>
+      <Text variant="label">{label}</Text>
+      <Text variant="kpi" tone={tone}>
         {String(value)}
       </Text>
-      {barPct !== undefined ? <Bar pct={barPct} /> : null}
+      {barPct !== undefined ? (
+        <View style={{ marginTop: space.xs, marginBottom: 2 }}>
+          <Bar pct={barPct} />
+        </View>
+      ) : null}
       {foot ? (
-        <Text variant="caption" tone={tone === "danger" ? "danger" : "secondary"}>
+        <Text variant="caption" tone="secondary">
           {foot}
         </Text>
       ) : null}
@@ -67,22 +75,48 @@ export function Kpi({
   );
 }
 
-export function KpiStrip({ children }: { children: React.ReactNode }) {
+/**
+ * The figures between two ink rules. Two columns on the wall; `four` puts a
+ * group's four short figures on one line, falling back to two columns once
+ * the text is large enough that four labels would no longer fit, and one
+ * column at large text (QA pass 2: "Objectiv/es" in half the width).
+ */
+export function FigureStrip({ children, four = false }: { children: ReactNode; four?: boolean }) {
   const { colors } = useTheme();
+  const { fontScale } = useWindowDimensions();
+  const columns = figureColumns(fontScale, four);
+  const gap = columns === 4 ? space.sm : space.lg;
   return (
     <View
+      // New layout, new view: iOS keeps old measurements otherwise (see NeedsYouBand).
+      key={columns}
       style={{
         flexDirection: "row",
         flexWrap: "wrap",
-        columnGap: 16,
+        columnGap: gap,
+        rowGap: space.md,
+        paddingVertical: space.md,
+        borderTopWidth: hairline,
         borderBottomWidth: hairline,
-        borderBottomColor: colors.rule,
-        paddingBottom: 4,
+        borderColor: colors.text,
       }}
     >
-      {children}
+      {Children.toArray(children).map((child, i) => (
+        // Basis below an even share, then grow: the gaps never push a cell to the next line.
+        <View key={i} style={{ flexGrow: 1, flexShrink: 1, flexBasis: FIGURE_BASIS[columns], minWidth: 0 }}>
+          {child}
+        </View>
+      ))}
     </View>
   );
+}
+
+// Basis per column count: below an even share, so the gaps fit.
+const FIGURE_BASIS = { 1: "100%", 2: "40%", 4: "20%" } as const;
+
+export function figureColumns(fontScale: number, four: boolean): 1 | 2 | 4 {
+  if (isLargeText(fontScale)) return 1;
+  return four && fontScale <= 1.15 ? 4 : 2;
 }
 
 /** A plain progress track. Decorative: the caption beside it says the figure in words. */
@@ -93,12 +127,14 @@ export function Bar({ pct, testID }: { pct: number; testID?: string }) {
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={{ height: 6, backgroundColor: colors.surfaceStrong }}
+      style={{ height: 6, borderRadius: 3, backgroundColor: colors.rule, overflow: "hidden" }}
     >
-      <View testID={testID} style={{ height: 6, width: `${clamped}%`, backgroundColor: colors.text }} />
+      <View testID={testID} style={{ height: 6, borderRadius: 3, width: `${clamped}%`, backgroundColor: colors.text }} />
     </View>
   );
 }
+
+// ── Cycle switcher ──────────────────────────────────────────────────────────
 
 /**
  * The cycle picker: shows which cycle is on screen, and (when there's more
@@ -118,17 +154,21 @@ export function CycleSwitcher({
   const [open, setOpen] = useState(false);
   const name = active.isCurrent ? strings.cycle.current(active.name) : active.name;
   const dates = strings.cycle.dates(formatDay(active.startsOn), formatDay(active.endsOn));
+  const words = (
+    <View style={{ flex: 1, minWidth: 0 }}>
+      <Text variant="label">{strings.cycle.label}</Text>
+      <Text variant="rowTitle">{name}</Text>
+      <Text variant="caption" tone="secondary">
+        {dates}
+      </Text>
+    </View>
+  );
 
+  // One cycle: nothing to choose, so it's plain text with no chevron.
   if (cycles.length <= 1) {
     return (
-      <View accessible accessibilityLabel={`${strings.cycle.label}: ${name}. ${dates}`} style={{ gap: 2 }}>
-        <Text variant="label" tone="secondary">
-          {strings.cycle.label}
-        </Text>
-        <Text variant="bodyStrong">{name}</Text>
-        <Text variant="caption" tone="secondary">
-          {dates}
-        </Text>
+      <View accessible accessibilityLabel={`${strings.cycle.label}: ${name}. ${dates}`} style={{ flexDirection: "row" }}>
+        {words}
       </View>
     );
   }
@@ -142,83 +182,65 @@ export function CycleSwitcher({
         accessibilityHint={`${dates}. ${strings.cycle.switchHint}`}
         onPress={() => setOpen(true)}
         style={({ pressed }) => ({
-          minHeight: touch.minTarget,
+          minHeight: touch.floor,
           flexDirection: "row",
           alignItems: "center",
-          gap: 12,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
+          gap: space.md,
+          paddingHorizontal: space.md,
+          paddingVertical: space.sm,
           borderWidth: hairline,
-          borderColor: colors.text,
-          backgroundColor: pressed ? colors.surface : "transparent",
+          borderColor: colors.ruleStrong,
+          borderRadius: radius.control,
+          backgroundColor: pressed ? colors.surfaceStrong : colors.raised,
         })}
       >
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text variant="label" tone="secondary">
-            {strings.cycle.label}
-          </Text>
-          <Text variant="bodyStrong">{name}</Text>
-          <Text variant="caption" tone="secondary">
-            {dates}
-          </Text>
-        </View>
+        {words}
         <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <ChevronDown size={20} color={colors.text} />
         </View>
       </Pressable>
       <Sheet visible={open} title={strings.cycle.pickerTitle} onClose={() => setOpen(false)}>
         <View accessibilityRole="radiogroup" accessibilityLabel={strings.cycle.pickerTitle}>
-          {cycles.map((c) => {
-            const selected = c.slug === active.slug;
-            const label = c.isCurrent ? strings.cycle.current(c.name) : c.name;
-            return (
-              <Pressable
-                key={c.id}
-                testID={`cycle-${c.slug}`}
-                accessibilityRole="radio"
-                accessibilityLabel={label}
-                accessibilityHint={strings.cycle.dates(formatDay(c.startsOn), formatDay(c.endsOn))}
-                accessibilityState={{ selected, checked: selected }}
-                onPress={() => {
-                  setOpen(false);
-                  if (!selected) onChange(c.slug);
-                }}
-                style={({ pressed }) => ({
-                  minHeight: touch.minTarget + 8,
-                  justifyContent: "center",
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderBottomWidth: hairline,
-                  borderBottomColor: colors.rule,
-                  borderLeftWidth: selected ? 3 : 0,
-                  borderLeftColor: colors.text,
-                  backgroundColor: selected || pressed ? colors.surface : "transparent",
-                })}
-              >
-                <Text variant={selected ? "bodyStrong" : "body"}>{label}</Text>
-                <Text variant="caption" tone="secondary">
-                  {strings.cycle.dates(formatDay(c.startsOn), formatDay(c.endsOn))}
-                </Text>
-              </Pressable>
-            );
-          })}
+          <ListGroup inset={false}>
+            {cycles.map((c) => {
+              const selected = c.slug === active.slug;
+              const label = c.isCurrent ? strings.cycle.current(c.name) : c.name;
+              const range = strings.cycle.dates(formatDay(c.startsOn), formatDay(c.endsOn));
+              return (
+                <RadioRow
+                  key={c.id}
+                  testID={`cycle-${c.slug}`}
+                  label={label}
+                  body={range}
+                  checked={selected}
+                  onPress={() => {
+                    setOpen(false);
+                    if (!selected) onChange(c.slug);
+                  }}
+                />
+              );
+            })}
+          </ListGroup>
         </View>
       </Sheet>
     </>
   );
 }
 
+// ── Saved copy ──────────────────────────────────────────────────────────────
+
 /**
- * When what's on screen is the copy saved on this phone: a quiet
- * "Last updated" line, or the stale note with a retry if a refresh failed.
+ * The kit's saved-copy note (frame 13.3); `checkinsNote` adds that
+ * check-ins need a signal.
  */
-export function Freshness<T>({ state, onRetry }: { state: LoadState<T>; onRetry: () => void }) {
-  if (state.status !== "ready" || state.staleSince === null) return null;
-  const when = formatSavedAt(state.staleSince);
-  if (state.refreshError) return <StaleNote message={strings.common.refreshFailed(when)} onRetry={onRetry} />;
+export function Freshness({ state, onRetry, checkinsNote = false }: { state: FreshnessState; onRetry: () => void; checkinsNote?: boolean }) {
   return (
-    <Text variant="caption" tone="secondary" testID="last-updated">
-      {strings.common.lastUpdated(when)}
-    </Text>
+    <KitFreshness state={state} onRetry={onRetry}>
+      {checkinsNote ? (
+        <Text variant="note" testID="checkins-need-signal" style={{ paddingHorizontal: space.xs }}>
+          {strings.common.checkinsNeedSignal}
+        </Text>
+      ) : null}
+    </KitFreshness>
   );
 }

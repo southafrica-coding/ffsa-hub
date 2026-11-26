@@ -24,8 +24,14 @@ function contrastRatio(foreground: string, background: string): number {
 
 function toneHex(tone: string): string {
   const match = tone.match(/#([0-9A-Fa-f]{6})/);
-  if (!match) throw new Error(`No hex colour in tone class: ${tone}`);
-  return `#${match[1]}`;
+  if (match) return `#${match[1]}`;
+  // A token class (text-[color:var(--text-muted)]): use its light :root value.
+  const token = tone.match(/var\((--[a-z0-9-]+)\)/);
+  if (!token) throw new Error(`No hex colour in tone class: ${tone}`);
+  const css = readFileSync(path.join(path.resolve(__dirname, "../../../.."), "src/app/globals.css"), "utf8");
+  const declared = css.match(new RegExp(`${token[1]}:\\s*(#[0-9A-Fa-f]{6})`));
+  if (!declared) throw new Error(`No hex value for ${token[1]} in globals.css`);
+  return declared[1];
 }
 
 const HIRE_SURFACES = ["bg", "surface", "surface2", "hover"] as const;

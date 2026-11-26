@@ -143,11 +143,11 @@ export function AfternoonWall({
         {week.days.map((iso) => {
           const t = dayTone(week, iso);
           return (
-            <div key={iso} className={cn("border-l border-[#EFEDE4] px-3 py-[9px]", t.today ? "bg-ink" : "bg-white")}>
+            <div key={iso} className={cn("border-l border-rule px-3 py-[9px]", t.today ? "bg-ink" : "bg-white")}>
               <div
                 className={cn(
                   "font-mono text-[9.5px] font-bold tracking-[0.12em]",
-                  t.today ? "text-white" : t.past ? "text-[#9A9689]" : "text-ink"
+                  t.today ? "text-white" : t.past ? "text-[color:var(--text-quiet)]" : "text-ink"
                 )}
               >
                 {shortDayLabel(iso)}
@@ -155,7 +155,7 @@ export function AfternoonWall({
               <div
                 className={cn(
                   "mt-[3px] font-mono text-[8.5px] font-bold tracking-[0.1em]",
-                  t.today ? "text-yellow" : t.closed ? "text-[#8A6400]" : "text-[#9A9689]"
+                  t.today ? "text-yellow" : t.closed ? "text-amber" : "text-[color:var(--text-quiet)]"
                 )}
               >
                 {t.sub}
@@ -182,10 +182,10 @@ export function AfternoonWall({
             style={{ top: y(laneStart), height: (laneEnd - laneStart) * PX }}
           >
             <span className="font-display text-[21px] font-black leading-[0.9] text-ink">PRACTICE</span>
-            <span className="font-mono text-[8.5px] font-bold tracking-[0.08em] text-[#55524A]">
+            <span className="font-mono text-[8.5px] font-bold tracking-[0.08em] text-[color:var(--text-muted)]">
               {settings.start_time} – {settings.end_time}
             </span>
-            <span className="mt-auto font-mono text-[7.5px] font-bold leading-normal tracking-[0.08em] text-[#7C786C]">
+            <span className="mt-auto font-mono text-[7.5px] font-bold leading-normal tracking-[0.08em] text-[color:var(--text-tertiary)]">
               {stations.slice(0, 4).map((s) => s.short_label).join(" ")}
               <br />
               {stations.slice(4).map((s) => s.short_label).join(" ")}
@@ -218,9 +218,9 @@ export function AfternoonWall({
           );
           const dayBands = bandsOn(week, iso);
           return (
-            <div key={iso} className="relative overflow-hidden border-l border-[#EFEDE4]" style={{ height }}>
+            <div key={iso} className="relative overflow-hidden border-l border-rule" style={{ height }}>
               {hours.map((h) => (
-                <span key={h} className="absolute inset-x-0 h-px bg-[#F4F2EC]" style={{ top: y(h) }} />
+                <span key={h} className="absolute inset-x-0 h-px bg-[var(--surface-hover)]" style={{ top: y(h) }} />
               ))}
               <span
                 className="absolute inset-x-0 border-y border-ink bg-bone"
@@ -268,10 +268,10 @@ export function AfternoonWall({
                     className="flex h-full flex-col items-center justify-center gap-1 border border-rule-strong text-center"
                     style={{ background: "repeating-linear-gradient(45deg,#E7E4D9 0 4px,#F8F7F2 4px 9px)" }}
                   >
-                    <span className="bg-[#F8F7F2] px-1.5 py-0.5 font-display text-[17px] font-black uppercase leading-none text-[#45423B]">
+                    <span className="bg-[var(--surface-hover)] px-1.5 py-0.5 font-display text-[17px] font-black uppercase leading-none text-[color:var(--text-secondary)]">
                       {settings.closed_label}
                     </span>
-                    <span className="bg-[#F8F7F2] px-1.5 py-0.5 font-mono text-[8.5px] font-bold tracking-[0.12em] text-[#55524A]">
+                    <span className="bg-[var(--surface-hover)] px-1.5 py-0.5 font-mono text-[8.5px] font-bold tracking-[0.12em] text-[color:var(--text-muted)]">
                       NO PRACTICE TODAY
                     </span>
                   </div>
@@ -292,9 +292,9 @@ export function AfternoonWall({
                           className="absolute inset-x-1 py-0.5"
                           style={{ top: y(r.start), height: (r.end - r.start) * PX }}
                         >
-                          <div className="flex h-full items-center gap-[7px] overflow-hidden border border-[#C7C3B5] bg-[#E7E4D9] px-2">
-                            <span className="font-mono text-[9px] font-bold text-[#6B675C]">{hhmm(r.start)}</span>
-                            <span className="truncate font-mono text-[8.5px] font-bold uppercase tracking-[0.1em] text-[#55524A]">
+                          <div className="flex h-full items-center gap-[7px] overflow-hidden border border-rule-strong bg-bone-3 px-2">
+                            <span className="font-mono text-[9px] font-bold text-[color:var(--text-muted)]">{hhmm(r.start)}</span>
+                            <span className="truncate font-mono text-[8.5px] font-bold uppercase tracking-[0.1em] text-[color:var(--text-muted)]">
                               {shut.label}
                             </span>
                           </div>
@@ -312,7 +312,7 @@ export function AfternoonWall({
                         <div
                           className={cn(
                             "flex h-full flex-col justify-center gap-[3px] overflow-hidden px-2 py-1 hover:border-ink",
-                            shut ? "border border-[#C7C3B5] bg-[#E7E4D9]" : "bg-white",
+                            shut ? "border border-rule-strong bg-bone-3" : "bg-white",
                             mine ? "border-[1.5px] border-ink" : !shut && "border border-rule-strong"
                           )}
                         >
@@ -323,7 +323,7 @@ export function AfternoonWall({
                             <span
                               className={cn(
                                 "font-mono text-[8px] font-bold tracking-[0.08em]",
-                                taken ? "text-[#55524A]" : "text-[#3E7F2B]"
+                                taken ? "text-[color:var(--text-muted)]" : "text-grass"
                               )}
                             >
                               {shut ? shut.label : `${stations.length - taken} OPEN`}
@@ -333,7 +333,7 @@ export function AfternoonWall({
                             className={cn(
                               "truncate text-[10.5px]",
                               mine ? "font-bold" : "font-normal",
-                              text ? "text-[#2A2822]" : "text-[#9A9689]"
+                              text ? "text-[color:var(--text-strong)]" : "text-[color:var(--text-quiet)]"
                             )}
                           >
                             {text || "Nobody yet"}
@@ -357,7 +357,7 @@ export function AfternoonWall({
                         <div
                           className={cn(
                             "flex h-full flex-col justify-center gap-[3px] overflow-hidden border-2 px-2 py-1",
-                            shut ? "border-[#C7C3B5] bg-[#E7E4D9]" : "border-ink bg-white"
+                            shut ? "border-rule-strong bg-bone-3" : "border-ink bg-white"
                           )}
                         >
                           <div className="flex items-center gap-[7px]">
@@ -392,7 +392,7 @@ export function Squares({ stations, size = 8 }: { stations: boolean[]; size?: nu
       {stations.map((taken, i) => (
         <span
           key={i}
-          className={cn("box-border border", taken ? "border-ink bg-ink" : "border-[#B4B0A2] bg-white")}
+          className={cn("box-border border", taken ? "border-ink bg-ink" : "border-rule-strong bg-white")}
           style={{ width: size, height: size }}
         />
       ))}
@@ -436,7 +436,7 @@ export function PhonePractice({
               type="button"
               onClick={() => setDay(iso)}
               className={cn(
-                "flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 border-r border-[#E7E4D9]",
+                "flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 border-r border-bone-3",
                 on ? "bg-ink" : "bg-white"
               )}
             >
@@ -468,10 +468,10 @@ export function PhonePractice({
             className="flex min-h-[140px] flex-col items-center justify-center gap-1 border border-rule-strong text-center"
             style={{ background: "repeating-linear-gradient(45deg,#E7E4D9 0 4px,#F8F7F2 4px 9px)" }}
           >
-            <span className="bg-[#F8F7F2] px-1.5 py-0.5 font-display text-[19px] font-black uppercase leading-none text-[#45423B]">
+            <span className="bg-[var(--surface-hover)] px-1.5 py-0.5 font-display text-[19px] font-black uppercase leading-none text-[color:var(--text-secondary)]">
               {settings.closed_label}
             </span>
-            <span className="bg-[#F8F7F2] px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-[0.12em] text-[#55524A]">
+            <span className="bg-[var(--surface-hover)] px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-[0.12em] text-[color:var(--text-muted)]">
               NO PRACTICE TODAY
             </span>
           </div>
@@ -484,13 +484,13 @@ export function PhonePractice({
                 <div
                   className={cn(
                     "flex items-baseline justify-between border-b border-ink px-3 py-2.5",
-                    shut ? "bg-[#E7E4D9]" : "bg-bone"
+                    shut ? "bg-bone-3" : "bg-bone"
                   )}
                 >
                   <span className="font-display text-[19px] font-black leading-none tabular-nums text-ink">
                     {hhmm(r.start)} – {hhmm(r.end)}
                   </span>
-                  <span className="font-mono text-[9px] font-bold tracking-[0.1em] text-[#55524A]">
+                  <span className="font-mono text-[9px] font-bold tracking-[0.1em] text-[color:var(--text-muted)]">
                     {shut ? shut.label : st.band ? "FULL BAND" : `${st.open} OF ${stations.length} OPEN`}
                   </span>
                 </div>
@@ -501,13 +501,13 @@ export function PhonePractice({
                     className={cn(
                       "block min-h-[48px] w-full px-3 py-3 text-left",
                       PLAIN_BUTTON,
-                      shut && "bg-[#E7E4D9]"
+                      shut && "bg-bone-3"
                     )}
                   >
                     <div className="font-display text-[18px] font-black uppercase leading-none text-ink">
                       {st.band.band_name}
                     </div>
-                    <div className="mt-1 font-mono text-[9px] font-bold tracking-[0.1em] text-[#7C786C]">
+                    <div className="mt-1 font-mono text-[9px] font-bold tracking-[0.1em] text-[color:var(--text-tertiary)]">
                       THE WHOLE ROOM · {st.band.start_time} – {st.band.end_time}
                     </div>
                   </button>
@@ -531,16 +531,16 @@ export function PhonePractice({
                             PLAIN_BUTTON,
                             "flex min-h-[48px] flex-col items-center justify-center gap-0.5 p-1",
                             shut && !b
-                              ? "border border-[#C7C3B5] bg-[#E7E4D9] text-[#6B675C]"
+                              ? "border border-rule-strong bg-bone-3 text-[color:var(--text-muted)]"
                               : b
-                                ? cn("bg-bone", mine ? "border-[1.5px] border-ink" : "border border-[#E7E4D9]")
+                                ? cn("bg-bone", mine ? "border-[1.5px] border-ink" : "border border-bone-3")
                                 : "border border-ink bg-white"
                           )}
                         >
                           <span
                             className={cn(
                               "font-mono text-[9px] font-bold tracking-[0.08em]",
-                              b ? "text-[#9A9689]" : "text-ink"
+                              b ? "text-[color:var(--text-quiet)]" : "text-ink"
                             )}
                           >
                             {s.short_label}
@@ -551,10 +551,10 @@ export function PhonePractice({
                               b
                                 ? mine
                                   ? "font-bold text-ink"
-                                  : "text-[#55524A]"
+                                  : "text-[color:var(--text-muted)]"
                                 : shut
-                                  ? "text-[#6B675C]"
-                                  : "text-[#3E7F2B]"
+                                  ? "text-[color:var(--text-muted)]"
+                                  : "text-grass"
                             )}
                           >
                             {b ? (mine ? "You" : bookingNames(b)) : shut ? "Closed" : "Open"}
@@ -591,7 +591,7 @@ export function PhonePractice({
         )}
 
         <div className="flex items-center justify-between gap-2.5 border border-rule bg-bone px-3.5 py-3">
-          <span className="text-[13px] text-[#2A2822]">
+          <span className="text-[13px] text-[color:var(--text-strong)]">
             {week.now < week.opensAt ? "This week opens on Sunday" : "Next week opens on Sunday"}
           </span>
           <span className="font-mono text-[9px] font-bold tracking-[0.1em] text-ink">
@@ -666,7 +666,7 @@ export default function PracticeView({
             This week
           </Button>
         </div>
-        <div className="ml-auto hidden items-center gap-3.5 font-mono text-[9px] font-bold tracking-[0.12em] text-[#55524A] md:flex">
+        <div className="ml-auto hidden items-center gap-3.5 font-mono text-[9px] font-bold tracking-[0.12em] text-[color:var(--text-muted)] md:flex">
           <span className="flex items-center gap-[5px]">
             <span className="h-[11px] w-[11px] border-[1.5px] border-ink bg-yellow" />
             CURATED BAND

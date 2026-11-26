@@ -256,7 +256,7 @@ function OptionRow({
         checked={selected}
         disabled={disabled}
         onChange={onSelect}
-        className="h-4 w-4 shrink-0 accent-[#0A0A0A]"
+        className="h-4 w-4 shrink-0 accent-ink"
       />
       {/* globals.css uppercases and mono-tracks every bare `label`, and
           those properties inherit into the text inside one. An option is

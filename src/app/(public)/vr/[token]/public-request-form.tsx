@@ -1,5 +1,7 @@
 "use client";
 
+import { dueBackFrom } from "@/lib/vehicles/return-day";
+import { DueBackNote } from "@/components/vehicles/due-back-note";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +33,7 @@ type PublicVehicle = {
 type DriverRow = {
   name: string;
   phone: string;
+  email: string;
   has_sa_license: boolean;
   licence: File | null;
   passport: File | null;
@@ -39,6 +42,7 @@ type DriverRow = {
 const EMPTY_DRIVER: DriverRow = {
   name: "",
   phone: "",
+  email: "",
   has_sa_license: false,
   licence: null,
   passport: null,
@@ -104,9 +108,9 @@ export function PublicVehicleRequestForm({
     if (!form.point_person.trim()) return "Please give the point person for this booking.";
     if (!form.destination.trim()) return "Please tell us where you plan to go with the vehicle.";
     if (!form.checkout_date || !form.return_date)
-      return "Please choose collection and return dates.";
+      return "Please choose the collection date and the last day you need it.";
     if (form.return_date < form.checkout_date)
-      return "The return date must be on or after the collection date.";
+      return "The last day must be on or after the collection date.";
     if (form.purpose === "other" && !form.purpose_note.trim())
       return "Please describe what you need the vehicle for.";
     const named = drivers.filter((d) => d.name.trim());
@@ -146,12 +150,13 @@ export function PublicVehicleRequestForm({
         home_country: form.home_country || null,
         num_people: form.num_people ? parseInt(form.num_people, 10) : null,
         checkout_date: form.checkout_date,
-        return_date: form.return_date,
+        return_date: dueBackFrom(form.return_date),
         notes: form.notes.trim() || null,
         vehicle_ids: vehicleIds,
         drivers: named.map((d) => ({
           name: d.name.trim(),
           phone: d.phone.trim() || null,
+          email: d.email.trim() || null,
           has_sa_license: d.has_sa_license,
         })),
       })
@@ -301,7 +306,7 @@ export function PublicVehicleRequestForm({
           />
         </div>
         <div className="space-y-2">
-          <Label>Return date *</Label>
+          <Label>Last day you need it *</Label>
           <DateInput value={form.return_date} onChange={(v) => update("return_date", v)} />
         </div>
         <div className="space-y-2">
@@ -315,9 +320,10 @@ export function PublicVehicleRequestForm({
           />
         </div>
       </div>
+      <DueBackNote lastDay={form.return_date} purpose={form.purpose} plain className="sm:max-w-[66%]" />
       {days > 0 && (
         <p className="text-xs opacity-70">
-          {days} day{days === 1 ? "" : "s"} (collection → return, inclusive).
+          {days} day{days === 1 ? "" : "s"} (collection to last day, inclusive).
         </p>
       )}
 
@@ -389,6 +395,14 @@ export function PublicVehicleRequestForm({
                 onChange={(e) => setDriver(i, { phone: e.target.value })}
                 placeholder="WhatsApp number"
                 className="h-9 w-40"
+              />
+              <Input
+                type="email"
+                value={d.email}
+                onChange={(e) => setDriver(i, { email: e.target.value })}
+                placeholder="Email (for their instructions)"
+                aria-label="Driver email"
+                className="h-9 w-56"
               />
               <label className="flex items-center gap-1.5 text-xs opacity-80">
                 <input

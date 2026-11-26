@@ -211,7 +211,7 @@ export default function People({
                 key={r.user_id}
                 type="button"
                 onClick={() => setOpenPerson(r.user_id)}
-                className="grid w-full grid-cols-[1fr_auto] items-center gap-3 border-b border-surface-4 px-5 py-3 text-left hover:bg-[#F7F5EE] md:px-8 lg:grid-cols-[minmax(210px,1.1fr)_minmax(200px,1.3fr)_64px_minmax(170px,1.2fr)_118px] lg:gap-4"
+                className="grid w-full grid-cols-[1fr_auto] items-center gap-3 border-b border-surface-4 px-5 py-3 text-left hover:bg-[var(--surface-hover)] md:px-8 lg:grid-cols-[minmax(210px,1.1fr)_minmax(200px,1.3fr)_64px_minmax(170px,1.2fr)_118px] lg:gap-4"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <Initials name={fullName(r.user)} size={32} />

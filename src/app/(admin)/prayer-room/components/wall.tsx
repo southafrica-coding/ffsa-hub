@@ -414,7 +414,7 @@ export default function Wall({
                         : "border border-dashed border-ink",
                       // Outline rather than a border swap, so the block does not
                       // change size when the drawer opens on it.
-                      s.id === selectedId && "z-10 [outline:3px_solid_#0A0A0A]"
+                      s.id === selectedId && "z-10 [outline:3px_solid_var(--ink)]"
                     )}
                     style={{
                       top: (start - DAY_START) * PX_PER_MIN + 1.5,
@@ -587,7 +587,7 @@ function PracticeGutter({ week }: { week: PracticeWeek }) {
       >
         Practice
       </span>
-      <span className="mt-0.5 font-mono text-[8px] font-bold tracking-[0.06em] text-[#55524A]">
+      <span className="mt-0.5 font-mono text-[8px] font-bold tracking-[0.06em] text-[color:var(--text-muted)]">
         {hhmm(lane.start)}–{hhmm(lane.end)}
       </span>
     </div>
@@ -620,7 +620,7 @@ function PracticeColumn({
         }}
         title={`${week.settings.closed_label} · no practice`}
       >
-        <span className="truncate bg-[#F8F7F2] px-1 font-mono text-[7.5px] font-bold uppercase tracking-[0.1em] text-[#45423B]">
+        <span className="truncate bg-[var(--surface-hover)] px-1 font-mono text-[7.5px] font-bold uppercase tracking-[0.1em] text-[color:var(--text-secondary)]">
           {week.settings.closed_label}, no practice
         </span>
       </div>
@@ -644,10 +644,10 @@ function PracticeColumn({
             <div
               key={r.start}
               title={shut.label}
-              className="absolute left-0 right-0 z-10 mx-[1px] flex items-center overflow-hidden border border-[#C7C3B5] bg-[#E7E4D9] px-1"
+              className="absolute left-0 right-0 z-10 mx-[1px] flex items-center overflow-hidden border border-rule-strong bg-bone-3 px-1"
               style={{ top: top(r.start) + 1.5, height: (r.end - r.start) * PX_PER_MIN - 3 }}
             >
-              <span className="truncate font-mono text-[7.5px] font-bold uppercase tracking-[0.08em] text-[#55524A]">
+              <span className="truncate font-mono text-[7.5px] font-bold uppercase tracking-[0.08em] text-[color:var(--text-muted)]">
                 {shut.label}
               </span>
             </div>
@@ -677,7 +677,7 @@ function PracticeColumn({
             className={cn(
               PLAIN_BUTTON,
               "absolute left-0 right-0 z-10 mx-[1px] flex items-center gap-1 overflow-hidden px-1 text-left hover:border-ink",
-              shut ? "border border-[#C7C3B5] bg-[#E7E4D9]" : "bg-white",
+              shut ? "border border-rule-strong bg-bone-3" : "bg-white",
               mine ? "border-[1.5px] border-ink" : !shut && "border border-rule-strong"
             )}
             style={{ top: top(r.start) + 1.5, height: (r.end - r.start) * PX_PER_MIN - 3 }}
@@ -689,7 +689,7 @@ function PracticeColumn({
                   key={s.id}
                   className={cn(
                     "h-[6px] w-[5px] border md:w-[6px]",
-                    r.byStation.has(s.id) ? "border-ink bg-ink" : "border-[#B4B0A2] bg-white"
+                    r.byStation.has(s.id) ? "border-ink bg-ink" : "border-rule-strong bg-white"
                   )}
                 />
               ))}
@@ -697,7 +697,7 @@ function PracticeColumn({
             <span
               className={cn(
                 "hidden min-w-0 truncate text-[8px] md:inline",
-                mine ? "font-bold text-ink" : "text-[#55524A]"
+                mine ? "font-bold text-ink" : "text-[color:var(--text-muted)]"
               )}
             >
               {shut ? shut.label : names.length ? names.join(" · ") : `${r.open} open`}
@@ -718,7 +718,7 @@ function PracticeColumn({
             className={cn(
               PLAIN_BUTTON,
               "absolute left-0 right-0 z-10 mx-[1px] flex items-center gap-1 overflow-hidden border-2 px-1 text-left",
-              shut ? "border-[#C7C3B5] bg-[#E7E4D9]" : "border-ink bg-white"
+              shut ? "border-rule-strong bg-bone-3" : "border-ink bg-white"
             )}
             style={{ top: top(a) + 1.5, height: (e - a) * PX_PER_MIN - 3 }}
           >

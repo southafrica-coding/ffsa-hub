@@ -26,6 +26,8 @@ export type DriverPanelRow = {
   user_id?: string | null;
   name: string;
   phone: string;
+  /** Optional (364): where their pick-up and return instructions go. */
+  email?: string;
   has_sa_license: boolean;
   is_first_time: boolean;
   driving_test_status: string;
@@ -71,7 +73,7 @@ export function DriversPanel({
 
   async function save() {
     const clean = rows
-      .map((r) => ({ ...r, name: r.name.trim(), phone: r.phone.trim() }))
+      .map((r) => ({ ...r, name: r.name.trim(), phone: r.phone.trim(), email: (r.email ?? "").trim() }))
       .filter((r) => r.name);
     if (clean.length === 0 && rows.some((r) => !r.name.trim())) {
       setError("Every driver needs a name.");
@@ -91,6 +93,7 @@ export function DriversPanel({
           user_id: r.user_id ?? null,
           name: r.name,
           phone: r.phone,
+          email: r.email || null,
           has_sa_license: r.has_sa_license,
           is_first_time: r.is_first_time,
         })),
@@ -275,6 +278,16 @@ export function DriversPanel({
                 placeholder="WhatsApp number"
                 className="h-9 w-40"
               />
+              {!d.user_id && (
+                <Input
+                  type="email"
+                  value={d.email ?? ""}
+                  onChange={(e) => setRow(i, { email: e.target.value })}
+                  placeholder="Email (for their instructions)"
+                  aria-label="Driver email"
+                  className="h-9 w-56"
+                />
+              )}
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <input
                   type="checkbox"

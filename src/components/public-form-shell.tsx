@@ -233,9 +233,11 @@ export function PublicFormShell({
             ? MISSIO_FONT_FAMILY
             : "var(--font-condensed, 'Arial Narrow', sans-serif)";
 
+  // theme-light: the brand shell keeps its own fixed palette in both Hub
+  // modes, and pins the global input/label styles to it too.
   return (
     <div
-      className="min-h-screen px-4 py-10 sm:py-12"
+      className="theme-light min-h-screen px-4 py-10 sm:py-12"
       style={{
         background: tk.bg,
         color: tk.text,

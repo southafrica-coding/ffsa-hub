@@ -15,3 +15,7 @@ original download if ever wanted.
 
 Note: the canvas is ~88,000px tall, which defeats some screenshot tools. Scroll
 to a frame by id instead.
+
+`Missio.dc.html` — the Missio (church) side, boards M1a → M14d, newest turn at the
+top. It shares `support.js`, `image-slot.js`, `brand/` and `icons/` with the file above.
+Start at `../MISSIO-README.md`.

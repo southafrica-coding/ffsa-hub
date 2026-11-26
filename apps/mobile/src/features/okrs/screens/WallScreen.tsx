@@ -1,18 +1,18 @@
 import { useRouter } from "expo-router";
 import { Target } from "lucide-react-native";
 import { useCallback } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Masthead, Screen, Text } from "@/components";
-import { ErrorState, Row, SectionBar, Skeleton } from "@/features/finance/components/ui";
+import { type BackAction, Bleed, EmptyState, FadeIn, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { ListRow, StateMessage, openWebPage } from "@/features/shell";
+import { openWebPage } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { okrsApi } from "../client";
-import { CycleSwitcher, Freshness, Kpi, KpiStrip, StatusTag } from "../components/ui";
+import { CycleSwitcher, Figure, FigureStrip, StatusTag, Freshness } from "../components/ui";
 import { cacheName, loadErrorMessage, statusTally, webPath } from "../logic";
 import { strings } from "../strings";
 import type { OwnerSummary, Wall } from "../types";
@@ -40,100 +40,131 @@ export default function WallScreen({ cycle }: { cycle: string | null }) {
 
   const data = state.status === "ready" ? state.data : null;
   const active = data?.cycle ?? null;
+  // OKRs is reached from Home (it isn't a tab), so the wall goes back to Home.
+  const back: BackAction = { label: strings.common.home, onPress: () => router.navigate("/") };
   const openOwner = (o: OwnerSummary) =>
     router.push({ pathname: "/okrs/[ownerId]", params: active ? { ownerId: o.id, cycle: active.slug } : { ownerId: o.id } });
 
   return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
-      >
-        <Masthead context={active ? `${s.context} · ${active.name}` : s.context} title={s.title} />
+    <LargeTitleScrollView
+      back={back}
+      eyebrow={active ? `${s.context} · ${active.name}` : s.context}
+      title={s.title}
+      gap={0}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
+    >
+      {state.status === "loading" ? (
+        <Bleed>
+          <SkeletonList label={s.loading} count={5} inset={false} />
+        </Bleed>
+      ) : null}
+      {state.status === "error" ? (
+        <Bleed>
+          <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
+        </Bleed>
+      ) : null}
+      {state.status === "ready" && state.staleSince !== null ? (
+        <Bleed style={{ marginBottom: space.md }}>
+          <Freshness state={state} onRetry={retry} checkinsNote />
+        </Bleed>
+      ) : null}
 
-        {state.status === "loading" ? <Skeleton label={s.loading} /> : null}
-        {state.status === "error" ? <ErrorState title={s.errorTitle} message={state.message} onRetry={retry} /> : null}
-        <Freshness state={state} onRetry={retry} />
+      {data && !active ? (
+        <Bleed>
+          <EmptyState testID="no-cycle" icon={Target} title={s.noCycleTitle} body={s.noCycleBody} />
+        </Bleed>
+      ) : null}
 
-        {data && !active ? (
-          <StateMessage testID="no-cycle" icon={Target} title={s.noCycleTitle} body={s.noCycleBody} />
-        ) : null}
-
-        {data && active ? (
-          <>
+      {data && active ? (
+        <FadeIn>
+          <Bleed>
             <CycleSwitcher cycles={data.cycles} active={active} onChange={(slug) => router.setParams({ cycle: slug })} />
+          </Bleed>
 
-            <KpiStrip>
-              <Kpi label={s.kpiStarted} value={data.totals.groupsStarted} foot={s.kpiStartedFoot(data.totals.groups)} testID="kpi-started" />
-              <Kpi label={s.kpiObjectives} value={data.totals.objectives} />
-              <Kpi
+          <View style={{ marginTop: space.lg }}>
+            <FigureStrip>
+              <Figure label={s.kpiStarted} value={data.totals.groupsStarted} foot={s.kpiStartedFoot(data.totals.groups)} testID="kpi-started" />
+              <Figure label={s.kpiObjectives} value={data.totals.objectives} />
+              <Figure
                 label={s.kpiKeyResults}
                 value={data.totals.keyResults}
                 foot={s.kpiComplete(data.totals.complete)}
                 // A completed/total ratio genuinely exists here, so a bar is honest.
                 barPct={data.totals.keyResults > 0 ? (data.totals.complete / data.totals.keyResults) * 100 : undefined}
               />
-              <Kpi
+              <Figure
                 label={s.kpiStuck}
                 value={data.totals.stuck}
                 tone={data.totals.stuck > 0 ? "danger" : "default"}
                 foot={data.totals.stuck > 0 ? s.kpiStuckSome : s.kpiStuckNone}
                 testID="kpi-stuck"
               />
-            </KpiStrip>
+            </FigureStrip>
+          </View>
 
-            <Text tone="secondary">{s.intro(active.name)}</Text>
+          <Text tone="secondary" style={{ marginTop: space.lg }}>
+            {s.intro(active.name)}
+          </Text>
 
-            {data.totals.groups === 0 ? (
-              <Text tone="secondary" testID="no-groups">
-                {s.noGroups}
-              </Text>
-            ) : data.sections.length === 0 ? (
-              <Text tone="secondary" testID="nothing-yet">
-                {s.nothingYet(active.name)}
-              </Text>
-            ) : (
-              data.sections.map((section) => (
-                <View key={section.type} testID={`section-${section.type}`}>
-                  {data.showHeadings ? (
-                    <SectionBar title={section.label} meta={s.sectionMeta(section.started.length, section.total)} />
-                  ) : section.started.length > 0 ? (
-                    <SectionBar title={s.groupsHeading} meta={String(section.started.length)} />
-                  ) : null}
-                  {section.started.map((o) => (
-                    <OwnerRow key={o.id} owner={o} onPress={() => openOwner(o)} />
-                  ))}
-                  {section.notStarted.length > 0 ? (
-                    <View testID={`not-started-${section.type}`} style={{ marginTop: section.started.length > 0 ? 12 : 0 }}>
-                      <SectionBar title={s.notStarted} meta={String(section.notStarted.length)} />
-                      {section.notStarted.map((o) => (
+          {data.totals.groups === 0 ? (
+            <Text tone="secondary" testID="no-groups" style={{ marginTop: space.lg }}>
+              {s.noGroups}
+            </Text>
+          ) : data.sections.length === 0 ? (
+            <Text tone="secondary" testID="nothing-yet" style={{ marginTop: space.lg }}>
+              {s.nothingYet(active.name)}
+            </Text>
+          ) : (
+            data.sections.map((section) => (
+              <View key={section.type} testID={`section-${section.type}`}>
+                {data.showHeadings ? (
+                  <SectionTitle title={section.label} meta={s.sectionMeta(section.started.length, section.total)} />
+                ) : section.started.length > 0 ? (
+                  <SectionTitle title={s.groupsHeading} meta={String(section.started.length)} />
+                ) : null}
+                {section.started.length > 0 ? (
+                  <Bleed>
+                    <ListGroup inset={false}>
+                      {section.started.map((o) => (
                         <OwnerRow key={o.id} owner={o} onPress={() => openOwner(o)} />
                       ))}
-                    </View>
-                  ) : null}
-                </View>
-              ))
-            )}
+                    </ListGroup>
+                  </Bleed>
+                ) : null}
+                {/* Inside its section, so a leader sees which kind of ministry hasn't started. */}
+                {section.notStarted.length > 0 ? (
+                  <View testID={`not-started-${section.type}`}>
+                    <SectionTitle title={s.notStarted} meta={String(section.notStarted.length)} tight={section.started.length > 0} />
+                    <Bleed>
+                      <ListGroup inset={false}>
+                        {section.notStarted.map((o) => (
+                          <OwnerRow key={o.id} owner={o} onPress={() => openOwner(o)} />
+                        ))}
+                      </ListGroup>
+                    </Bleed>
+                  </View>
+                ) : null}
+              </View>
+            ))
+          )}
 
-            {data.canManageCycles ? (
-              <ListRow
-                title={strings.cycle.manage}
-                trailing="web"
-                onPress={() => void openWebPage("/okrs/cycles", colors)}
-                accessibilityHint={strings.cycle.manageHint}
-                testID="manage-cycles"
-              />
-            ) : null}
-            <ListRow
-              title={s.openWeb}
-              trailing="web"
-              onPress={() => void openWebPage(webPath(null, active.slug), colors)}
-              testID="open-web"
-            />
-          </>
-        ) : null}
-      </ScrollView>
-    </Screen>
+          <Bleed style={{ marginTop: space.xl }}>
+            <ListGroup inset={false}>
+              {data.canManageCycles ? (
+                <ListRow
+                  title={strings.cycle.manage}
+                  trailing="web"
+                  onPress={() => void openWebPage("/okrs/cycles", colors)}
+                  accessibilityHint={strings.cycle.manageHint}
+                  testID="manage-cycles"
+                />
+              ) : null}
+              <ListRow title={s.openWeb} trailing="web" onPress={() => void openWebPage(webPath(null, active.slug), colors)} testID="open-web" />
+            </ListGroup>
+          </Bleed>
+        </FadeIn>
+      ) : null}
+    </LargeTitleScrollView>
   );
 }
 
@@ -147,27 +178,23 @@ function OwnerRow({ owner, onPress }: { owner: OwnerSummary; onPress: () => void
   const counts = empty ? s.noOkrsYet : s.counts(owner.objectives, owner.keyResults);
   const a11y = [owner.name, owner.retired ? s.retired : null, counts, ...tally.map((t) => t.text)].filter(Boolean).join(". ");
   return (
-    <Row onPress={onPress} accessibilityLabel={a11y} accessibilityHint={s.ownerHint} testID={`owner-${owner.id}`}>
-      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <Text variant="title" tone={empty ? "secondary" : "default"}>
+    <GroupRow onPress={onPress} accessibilityLabel={a11y} accessibilityHint={s.ownerHint} testID={`owner-${owner.id}`}>
+      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: space.sm }}>
+        <Text variant="rowTitle" tone={empty ? "secondary" : "default"} style={{ flexShrink: 1 }}>
           {owner.name}
         </Text>
-        {owner.retired ? (
-          <Text variant="label" tone="secondary">
-            {s.retired}
-          </Text>
-        ) : null}
+        {owner.retired ? <Text variant="label">{s.retired}</Text> : null}
       </View>
       <Text variant="caption" tone="secondary">
         {counts}
       </Text>
       {tally.length > 0 ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: space.xs }}>
           {tally.map((t) => (
             <StatusTag key={t.status} status={t.status} text={t.text} />
           ))}
         </View>
       ) : null}
-    </Row>
+    </GroupRow>
   );
 }

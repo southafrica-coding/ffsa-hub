@@ -251,6 +251,34 @@ Supabase runs in the cloud (no local Postgres). Migrations are applied via the S
 
 ---
 
+## Fleet (vehicle inspections) — standing rules
+
+Fleet is the FFSA Fleet app rebuilt in the Hub, under Bookings → Vehicles → Fleet. The plan is `vehicles-module/HUB-PLAN.md`; the spec is `vehicles-module/docs/SPEC.md`; `vehicles-module/app/ffsa-fleet.html` is the reference for flow, rules and text.
+
+- **Every change to Fleet updates its Guide and What's new.** Change the Guide text in `src/lib/fleet/content/guide-hub.json` to match, and add a dated line to What's new. A Fleet change isn't done until the Guide matches it.
+- **Rules don't change silently.** `src/lib/fleet/rules/` is SPEC section 6, ported line by line and checked against the reference app by `parity.test.ts`. If a rule looks wrong, ask Gideon; don't "fix" it.
+- **Messages are off.** Fleet sends no email or Slack unless `FLEET_MESSAGES_ENABLED=1` (live site only). Don't switch it on, or add another sender, until Gideon has reviewed the messages. The exceptions are Move and Let them know on the Calendar, and Put on hold, Resume booking and Cancel: vehicle broke down for a vehicle out of action: when the co-ordinator taps them, they tell the person who booked through the Hub's own booking notice (`notifyVehicleRequester`, "changed" / "message"), as the booking page does (Gideon and Jack, 19 Nov 2026). Nothing is sent without a tap.
+- **No bookings from the old app.** The Fleet app's trips and rentals are never imported; bookings are uploaded separately.
+- **Phone first:** every Fleet screen works at 390 px wide with no sideways scrolling; one tap per checklist point.
+- **Field names:** the rules use the Fleet app's names (SPEC section 4); `src/lib/fleet/mapping.ts` is the only place that maps them to columns.
+- `vehicles-module/seed` is FFSA's real data (VINs, insurer details, workshop reports). It is **not committed** (it's in `vehicles-module/.gitignore` and was removed from the branch history): it lives only on Gideon's Mac, for the one-off import. Never commit it, copy it anywhere public or put it in a migration. Tests use the fake data set in `src/lib/fleet/testing/fixture` (same shape, ids, dates and km; every identifying value made up), so they run everywhere, CI included. Never copy real values into the fixture.
+
+## Visas — standing rules
+
+Visa applications for international students, linked to school applications. Migrations 360+ (`360_visa_schema`, `361_visa_rls`, `362_visa_seed`, `363_visa_workflow`, `366_visa_letters`); rules in `src/lib/visas/`; data access in `src/services/visas.ts`. Built in small steps, each a draft PR from a `visa-*` branch.
+
+- **Every change to the visa process updates the FFSA Visa Process Guide** (a shared doc; ask Gideon for the link) and adds a dated line to its What's new. A visa change isn't done until the guide matches it.
+- **Roles:** legal (the visa officer) holds `visas.manage`, granted globally, and approves, signs and manages everything; a `visas.manage` grant scoped to a program manages only cases covering it. RLS and APIs check `has_permission_for(key, program_id)`; plain `has_permission()` is only for module visibility. School leaders hold `visas.follow_up`, **granted scoped to their program**, and only see cases covering their schools. Students see their own case. Nobody else sees anything.
+- **Documents (legal's POPIA ruling, 23 Nov 2026):** school leaders see their students' documents only while the case is open and the stay hasn't ended. Police clearances and medical reports (`is_restricted`) are special personal information: only global legal (FFSA's information officer) and the student see them, never leaders or legal scoped to one school. Leaders check documents against objective points (`leader_checks`) and flag problems; they don't reject anything. Whether a document is acceptable is legal's call.
+- **The visa route comes from the real arrival and departure days**, never the school's name: a 90-day school plus a few buffer days is over 90 days.
+- **Status moves go through SECURITY DEFINER functions** that check the actor and the case's status, never through direct table updates by leaders or students.
+- **One case per student per stay.** The stay runs from the first school's arrival day to the last school's departure day (`computeStay`). Over 90 days always needs a visa, even for a visa-exempt passport (`visaNeed`).
+- **Passport data:** passport numbers stay on `users` / `household_members` (RLS "own row + admins", never widened; staff read them only through the visa API after a scoped `visas.*` check) and are never copied into visa tables, URLs, emails, logs or `visa_case_events.detail`. Files live in the private `visa-documents` bucket at `<case id>/<document id>.<ext>` (enforced by a CHECK), downloaded only through a checked route that logs the download and signs a short-lived URL.
+- **Letters (366):** legal writes each letter as a template in the Hub (Visas → Letter templates); every save is a new version, used only once published, and a published version never changes. The Hub fills in the student's details from `src/lib/visas/letters.ts`; nobody edits the wording of a single letter. The student checks the details before legal signs. Legal signs and stamps by hand and uploads the scan: no digital signatures. An issued letter keeps `{{passport_number}}` as a token; the PDF route fills it in for legal and the student only (`visa_letter_passport`), never school leaders. `visa_text_has_passport` refuses the number (any case, spaces ignored) in a letter's text, its inputs, the student's "something's wrong" note and legal's withdraw note, because leaders can read those notes. A correction is a re-issue, which replaces the old letter.
+- **The repo is public:** no real student data, letters or names in code, seeds, tests or fixtures. Document types and letter wording are draft until legal confirms them, and legal edits them in the Hub, not in migrations.
+
+---
+
 # FFSA Hub — redesign context
 
 Redesign of the FFSA Hub (Next.js admin platform in the attached `ffsa-platform` folder)

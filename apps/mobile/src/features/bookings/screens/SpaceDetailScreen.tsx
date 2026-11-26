@@ -1,14 +1,17 @@
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
+import { Repeat } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, RefreshControl, ScrollView, View } from "react-native";
+import { Alert, RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, Masthead, Screen, Text } from "@/components";
+import { type BackAction, Banner, Bleed, Button, EmptyState, LargeTitleScrollView, LoadFailed, PushedPage, SectionTitle, SkeletonList, StaleNote, Text } from "@/components";
 import { formatSavedAt } from "@/features/finance/cache";
-import { ErrorState, SectionBar, Skeleton, StaleNote } from "@/features/finance/components/ui";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { StateMessage, useMe } from "@/features/shell";
+import { useMe } from "@/features/shell";
+import { useAnnounceOnIOS } from "@/lib/a11y";
 import { refreshControlColors } from "@/theme/styles";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { bookingsAccess } from "../access";
@@ -16,9 +19,10 @@ import { cancelSpace, checkSpace, decideSpace, loadErrorMessage, userMessage } f
 import { bookingsFetch } from "../client";
 import { ConflictList } from "../components/ConflictList";
 import { DecisionSheet } from "../components/DecisionSheet";
-import { Field, StatusLine, useAnnounceOnIOS } from "../components/ui";
+import { Field, FieldList, HintLine, StatusLine } from "../components/ui";
 import { loadSpaceBooking } from "../data";
 import { canCancel, dateRangeLabel, EMPTY_SPACE, hm, timeRangeLabel } from "../logic";
+import { goBackTo } from "../nav";
 import { strings } from "../strings";
 import type { Conflict, SpaceBooking } from "../types";
 
@@ -59,7 +63,11 @@ function useClashes(b: SpaceBooking | null, enabled: boolean): { status: "idle" 
   return answer.conflicts ? { status: "done", conflicts: answer.conflicts } : { status: "idle", conflicts: [] };
 }
 
+// A space booking (frame 7.11): status, the details, then for approvers the
+// server's clash check with Approve / Decline, and Cancel for the requester
+// or a manager (a weekly series also offers every date).
 export default function SpaceDetailScreen({ id }: { id: string }) {
+  const router = useRouter();
   const { colors } = useTheme();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
@@ -86,25 +94,27 @@ export default function SpaceDetailScreen({ id }: { id: string }) {
   const canDecide = !!b && access.spaces.approve && b.status === "pending";
   const clashes = useClashes(b, canDecide);
 
+  const back: BackAction = { label: strings.common.bookings, onPress: () => goBackTo(router, "/bookings") };
+
   if (state.status === "loading") {
     return (
-      <Screen edges={[]}>
-        <Skeleton label={d.loading} />
-      </Screen>
+      <PushedPage back={back}>
+        <SkeletonList label={d.loading} count={5} inset={false} />
+      </PushedPage>
     );
   }
   if (state.status === "error") {
     return (
-      <Screen edges={[]}>
-        <ErrorState title={d.spaceContext} message={state.message} onRetry={retry} />
-      </Screen>
+      <PushedPage back={back}>
+        <LoadFailed title={d.spaceContext} message={state.message} onRetry={retry} />
+      </PushedPage>
     );
   }
   if (!b) {
     return (
-      <Screen edges={[]}>
-        <StateMessage testID="not-found" title={d.spaceContext} body={strings.common.notFound} />
-      </Screen>
+      <PushedPage back={back}>
+        <EmptyState testID="not-found" title={d.spaceContext} body={strings.common.notFound} />
+      </PushedPage>
     );
   }
 
@@ -151,60 +161,89 @@ export default function SpaceDetailScreen({ id }: { id: string }) {
   const multiDay = !!b.end_date && b.end_date > b.booking_date;
 
   return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
+    <>
+      <LargeTitleScrollView
+        back={back}
+        eyebrow={d.spaceContext}
+        title={b.title}
+        gap={0}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
       >
-        <Masthead context={d.spaceContext} title={b.title} />
-        <StatusLine status={b.status} />
-        {state.refreshError && state.staleSince !== null ? <StaleNote message={strings.common.refreshFailed(formatSavedAt(state.staleSince))} onRetry={retry} /> : null}
-        {done ? (
-          <Banner tone="positive" testID="done">
-            {done}
-          </Banner>
-        ) : null}
+        <View style={{ flexDirection: "row", marginTop: -space.sm }}>
+          <StatusLine status={b.status} />
+        </View>
+        <Bleed style={{ gap: space.md, marginTop: space.md }}>
+          {state.refreshError && state.staleSince !== null ? <StaleNote message={strings.common.refreshFailed(formatSavedAt(state.staleSince))} onRetry={retry} /> : null}
+          {done ? (
+            <Banner tone="positive" testID="done">
+              {done}
+            </Banner>
+          ) : null}
+        </Bleed>
 
-        <View>
-          <Field label={d.where} value={[b.venue?.name, b.venue?.building].filter(Boolean).join(" · ")} />
-          <Field label={d.dates} value={dateRangeLabel(b.booking_date, b.end_date)} />
-          <Field label={d.times} value={multiDay ? null : timeRangeLabel(b.start_time, b.end_time)} />
-          <Field label={d.setup} value={multiDay ? null : hm(b.setup_time)} />
-          <Field label={d.setdown} value={multiDay ? null : hm(b.setdown_time)} />
-          <Field label={d.ministry} value={b.ministry?.name} />
-          <Field label={d.pointPerson} value={b.point_person} />
-          <Field label={d.requestedBy} value={b.requester_name} />
-          <Field label={d.description} value={b.description} />
-          <Field label={d.decisionNote} value={b.decision_note} />
-          {b.series_id ? <Text tone="secondary">{d.repeats}</Text> : null}
+        <View style={{ marginTop: space.md }}>
+          <FieldList>
+            <Field label={d.where} value={[b.venue?.name, b.venue?.building].filter(Boolean).join(" · ")} />
+            <Field label={d.dates} value={dateRangeLabel(b.booking_date, b.end_date)} />
+            <Field label={d.times} value={multiDay ? null : timeRangeLabel(b.start_time, b.end_time)} />
+            <Field label={d.setup} value={multiDay ? null : hm(b.setup_time)} />
+            <Field label={d.setdown} value={multiDay ? null : hm(b.setdown_time)} />
+            <Field label={d.ministry} value={b.ministry?.name} />
+            <Field label={d.pointPerson} value={b.point_person} />
+            <Field label={d.requestedBy} value={b.requester_name} />
+            <Field label={d.description} value={b.description} />
+            <Field label={d.decisionNote} value={b.decision_note} />
+          </FieldList>
+          {b.series_id ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: space.sm }}>
+              <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <Repeat size={14} color={colors.textSecondary} />
+              </View>
+              <Text variant="caption" tone="secondary">
+                {d.repeats}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {canDecide ? (
-          <View style={{ gap: 12 }}>
-            <SectionBar title={d.decisionTitle} />
-            {clashes.status === "checking" ? <Text tone="secondary">{d.clashChecking}</Text> : null}
-            {clashes.status === "done" && clashes.conflicts.length === 0 ? <Text tone="secondary">{d.noClash}</Text> : null}
-            <ConflictList conflicts={clashes.conflicts} blocked={false} title={d.clashTitle} />
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <Button label={d.approve} onPress={() => setDecision("approved")} style={{ flex: 1 }} testID="approve" />
-              <Button label={d.decline} variant="destructive" onPress={() => setDecision("denied")} style={{ flex: 1 }} testID="decline" />
+          <View>
+            <SectionTitle title={d.decisionTitle} />
+            <View style={{ gap: space.md }}>
+              {clashes.status === "checking" ? (
+                <Text variant="caption" tone="secondary">
+                  {d.clashChecking}
+                </Text>
+              ) : null}
+              {clashes.status === "done" && clashes.conflicts.length === 0 ? <HintLine tone="ok">{d.noClash}</HintLine> : null}
+              <ConflictList conflicts={clashes.conflicts} blocked={false} title={d.clashTitle} />
+              <View style={{ flexDirection: "row", gap: space.sm }}>
+                <Button label={d.approve} onPress={() => setDecision("approved")} style={{ flex: 1 }} testID="approve" />
+                <Button label={d.decline} variant="danger" onPress={() => setDecision("denied")} style={{ flex: 1 }} testID="decline" />
+              </View>
             </View>
           </View>
         ) : null}
 
         {cancellable ? (
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: space.sm, marginTop: canDecide ? space.sm : space.xl }}>
             {actionError ? (
-              <Banner tone="danger" testID="action-error">
-                {actionError}
-              </Banner>
+              <Bleed>
+                <Banner tone="error" testID="action-error">
+                  {actionError}
+                </Banner>
+              </Bleed>
             ) : null}
-            <Button label={d.cancel} variant="secondary" loading={busy} onPress={() => confirmCancel(false)} testID="cancel" />
-            {b.series_id ? <Button label={d.cancelSeries} variant="ghost" disabled={busy} onPress={() => confirmCancel(true)} testID="cancel-series" /> : null}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+              <Button label={d.cancel} variant="secondary" loading={busy} onPress={() => confirmCancel(false)} style={{ flexGrow: 1, flexBasis: 140 }} testID="cancel" />
+              {b.series_id ? (
+                <Button label={d.cancelSeries} variant="text" disabled={busy} onPress={() => confirmCancel(true)} style={{ flexGrow: 1, flexBasis: 140 }} testID="cancel-series" />
+              ) : null}
+            </View>
           </View>
         ) : null}
-      </ScrollView>
+      </LargeTitleScrollView>
       <DecisionSheet key={decision ?? "closed"} decision={decision} onClose={() => setDecision(null)} onConfirm={decide} seriesOption={!!b.series_id} />
-    </Screen>
+    </>
   );
 }

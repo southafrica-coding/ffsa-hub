@@ -1,55 +1,58 @@
 import { useState } from "react";
-import { View } from "react-native";
 
 import { useMe } from "@/features/shell";
 
+import type { PrayerNav, Section } from "../components/Frame";
 import { MySetsView } from "../components/MySetsView";
 import { PracticeView } from "../components/PracticeView";
-import { Segments, WeekNav } from "../components/ui";
 import { WeekView } from "../components/WeekView";
+import { currentWeekAnchor, defaultDay, weekdayRangeLabel } from "../day-strip";
 import { useUserId } from "../hooks";
-import { prayerAccess, sastToday, shiftDays, weekRangeLabel, weekStart } from "../logic";
+import { prayerAccess, sastToday, shiftDays } from "../logic";
 import { strings } from "../strings";
 
-export type Section = "week" | "practice" | "mine";
-
-const SECTIONS: { key: Section; label: string }[] = [
-  { key: "week", label: strings.segments.week },
-  { key: "practice", label: strings.segments.practice },
-  { key: "mine", label: strings.segments.mine },
-];
+export type { Section };
 
 /**
  * The Prayer tab. Open to everyone signed in, as on the web. Three sections
- * share one masthead: the week (the wall), practice, and my sets. Week and
- * practice share the week you're looking at.
+ * share one title: the week (the wall), practice, and my sets. Week and
+ * practice share the week you're looking at, shown Monday to Friday; at a
+ * weekend "this week" is the coming one.
  */
 export function PrayerScreen({ now = () => new Date(), initialSection = "week" }: { now?: () => Date; initialSection?: Section }) {
   const { me } = useMe();
   const userId = useUserId();
   const access = prayerAccess(me);
   const [section, setSection] = useState<Section>(initialSection);
-  const thisWeek = weekStart(sastToday(now()));
+  const today = sastToday(now());
+  const thisWeek = currentWeekAnchor(today);
   const [anchor, setAnchor] = useState(thisWeek);
+  const [day, setDay] = useState(() => defaultDay(thisWeek, today));
 
-  const segments = <Segments items={SECTIONS} active={section} onChange={setSection} />;
-  const nav =
-    section === "mine" ? (
-      segments
-    ) : (
-      <View style={{ gap: 12 }}>
-        {segments}
-        <WeekNav
-          label={weekRangeLabel(anchor)}
-          onPrev={() => setAnchor((a) => shiftDays(a, -7))}
-          onNext={() => setAnchor((a) => shiftDays(a, 7))}
-          onToday={() => setAnchor(thisWeek)}
-          isThisWeek={anchor === thisWeek}
-        />
-      </View>
-    );
+  const goTo = (week: string) => {
+    setAnchor(week);
+    setDay(defaultDay(week, today));
+  };
+  const isThisWeek = anchor === thisWeek;
+  const range = weekdayRangeLabel(anchor);
+
+  const nav: PrayerNav = {
+    section,
+    onSection: setSection,
+    week:
+      section === "mine"
+        ? null
+        : {
+            label: isThisWeek ? strings.week.rangeThisWeek(weekdayRangeLabel(anchor, { year: false })) : range,
+            spokenLabel: isThisWeek ? strings.week.weekOfThis(range) : strings.week.weekOf(range),
+            onPrev: () => goTo(shiftDays(anchor, -7)),
+            onNext: () => goTo(shiftDays(anchor, 7)),
+            onToday: () => goTo(thisWeek),
+            isThisWeek,
+          },
+  };
 
   if (section === "practice") return <PracticeView anchor={anchor} nav={nav} userId={userId} />;
   if (section === "mine") return <MySetsView nav={nav} userId={userId} access={access} now={now} />;
-  return <WeekView anchor={anchor} nav={nav} userId={userId} access={access} now={now} />;
+  return <WeekView anchor={anchor} day={day} onDay={setDay} nav={nav} userId={userId} access={access} now={now} />;
 }

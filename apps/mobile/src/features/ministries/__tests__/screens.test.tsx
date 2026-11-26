@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import * as WebBrowser from "expo-web-browser";
 import type { ReactElement } from "react";
 import { Alert } from "react-native";
@@ -21,6 +21,7 @@ jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "sign
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("expo-haptics", () => ({ notificationAsync: jest.fn(async () => {}), NotificationFeedbackType: { Success: "success" } }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../api", () => ({ ...jest.requireActual("../api"), getMinistries: jest.fn(), getMinistry: jest.fn(), approveMember: jest.fn() }));
 jest.mock("../shortcut", () => ({ useMinistriesAccess: jest.fn(() => "allowed") }));
 
@@ -88,6 +89,8 @@ describe("Ministries list", () => {
     await fireEvent.press(screen.getByTestId(`ministry-${MEDIA}`));
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: "/ministries/[id]", params: { id: MEDIA } });
     await waitFor(() => expect(cache.writeCache).toHaveBeenCalledWith("user-1", "ministries.list", expect.anything()));
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Home" }));
+    expect(mockRouter.navigate).toHaveBeenCalledWith("/");
   });
 
   it("admin: Main / Part-time headings when both exist, and Create a ministry opens the website", async () => {
@@ -97,6 +100,9 @@ describe("Ministries list", () => {
     await show(<MinistriesListScreen />);
     expect(await screen.findByText("Main ministries")).toBeTruthy();
     expect(screen.getByText("Part-time ministries")).toBeTruthy();
+    // Each heading is read with its count.
+    expect(screen.getByRole("header", { name: "Main ministries, 1" })).toBeTruthy();
+    expect(screen.getByRole("header", { name: "Part-time ministries, 1" })).toBeTruthy();
     expect(screen.getByText("People · 2 ministries")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("create-ministry"));
     expect(openBrowser).toHaveBeenCalledWith("https://hub.example.test/ministry", expect.anything());
@@ -172,11 +178,26 @@ describe("Ministry detail", () => {
   it("manager: the one yellow band counts pending people; the manage link opens this ministry on the website", async () => {
     one.mockResolvedValue(detail({ roster: [member({ membershipId: "m2", name: "Bo Dube", status: "pending" })] }));
     await show(<MinistryDetailScreen id={MEDIA} />);
-    expect(await screen.findByTestId("needs-you")).toBeTruthy();
-    expect(screen.getByText(strings.detail.needsYouOne("Bo Dube"))).toBeTruthy();
+    const band = await screen.findByTestId("needs-you");
+    expect(within(band).getByText(strings.detail.needsYouOne("Bo Dube"))).toBeTruthy();
+    // The band only tells: Approve is on the pending person's own row.
+    expect(within(band).queryByRole("button")).toBeNull();
+    expect(within(screen.getByTestId("member-__none__-m2")).getByRole("button", { name: "Approve Bo Dube" })).toBeTruthy();
+    expect(screen.getByRole("header", { name: "Team, 1" })).toBeTruthy();
     expect(screen.queryByTestId("read-only")).toBeNull();
     await fireEvent.press(screen.getByTestId("manage-web"));
     expect(openBrowser).toHaveBeenCalledWith(`https://hub.example.test/ministry/${MEDIA}`, expect.anything());
+  });
+
+  it("several people waiting: still one band, with the count", async () => {
+    one.mockResolvedValue(
+      detail({ roster: [member({ membershipId: "m2", name: "Bo Dube", status: "pending" }), member({ membershipId: "m3", name: "Cy Nel", status: "pending" })] }),
+    );
+    await show(<MinistryDetailScreen id={MEDIA} />);
+    expect(await screen.findByText(strings.detail.needsYouMany(2))).toBeTruthy();
+    expect(screen.getAllByTestId("needs-you")).toHaveLength(1);
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Ministries" }));
+    expect(mockRouter.back).toHaveBeenCalled();
   });
 
   it("manager approves a pending person after confirming; the team reloads", async () => {

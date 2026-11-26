@@ -5,14 +5,13 @@
 // copying the person's own visa + insurance. POST /api/profile/household or
 // PUT/DELETE /api/profile/household/[id]; the server re-validates everything.
 
-import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useState } from "react";
 import { View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, Text, TextField } from "@/components";
+import { Banner, Button, EmptyState, Text, TextField } from "@/components";
 import { DateTimeField } from "@/features/bookings/components/DateTimeField";
-import { SectionBar, StateMessage } from "@/features/shell";
 import { announce } from "@/lib/a11y";
 import { ApiError } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -92,9 +91,17 @@ function copyFromSelf(draft: MemberDraft, self: HouseholdSelf, options: Option[]
   };
 }
 
+/** A group heading inside the form (sentence case, not a bar). */
+function FormHeading({ children }: { children: string }) {
+  return (
+    <Text variant="sectionTitle" accessibilityRole="header" style={{ paddingTop: 8 }}>
+      {children}
+    </Text>
+  );
+}
+
 export function HouseholdMemberScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
   const params = useLocalSearchParams<{ id?: string; relationship?: string }>();
   const id = typeof params.id === "string" && params.id ? params.id : null;
   const askedRel = params.relationship === "spouse" ? "spouse" : "child";
@@ -119,10 +126,6 @@ export function HouseholdMemberScreen() {
   const form = draft ?? (data && !missing ? draftFrom(member, askedRel, options) : null);
   const relLabel = rels[form?.relationship ?? askedRel] ?? askedRel;
   const title = id ? s.titleEdit(relLabel) : s.titleAdd(relLabel);
-
-  useEffect(() => {
-    navigation.setOptions({ title });
-  }, [navigation, title]);
 
   function set<K extends keyof MemberDraft>(key: K, value: MemberDraft[K]) {
     if (!form) return;
@@ -179,6 +182,9 @@ export function HouseholdMemberScreen() {
 
   return (
     <DocScreen
+      title={title}
+      backLabel={d.household.title}
+      tabBarHidden
       refreshing={load.refreshing}
       onRefresh={() => {
         setDraft(null);
@@ -186,12 +192,12 @@ export function HouseholdMemberScreen() {
       }}
     >
       <LoadGate load={load} loadingLabel={d.household.loading} errorTitle={d.household.loadErrorTitle} />
-      {missing ? <StateMessage testID="member-missing" title={s.notFound} actionLabel={d.cancel} onAction={() => router.back()} /> : null}
+      {missing ? <EmptyState testID="member-missing" title={s.notFound} actionLabel={d.cancel} onAction={() => router.back()} /> : null}
 
       {form ? (
         <View style={{ gap: 16 }}>
           {error ? (
-            <Banner tone="danger" title={s.saveError}>
+            <Banner tone="error" title={s.saveError}>
               {error}
             </Banner>
           ) : null}
@@ -209,7 +215,9 @@ export function HouseholdMemberScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              <Text tone="secondary">{s.spouseNote}</Text>
+              <Text variant="caption" tone="secondary">
+                {s.spouseNote}
+              </Text>
             </>
           ) : (
             <>
@@ -229,7 +237,7 @@ export function HouseholdMemberScreen() {
                 />
               ) : null}
 
-              <SectionBar label={s.passport} />
+              <FormHeading>{s.passport}</FormHeading>
               <OptionField label={s.passportCountry} value={form.passportCountry} options={PASSPORT_COUNTRIES} onChange={(v) => set("passportCountry", v)} searchable />
               <TextField
                 label={s.passportNumber}
@@ -245,7 +253,7 @@ export function HouseholdMemberScreen() {
               <ToggleRow label={s.international} hint={s.internationalHint} value={form.isInternational} onChange={(v) => set("isInternational", v)} />
               {form.isInternational ? (
                 <>
-                  <SectionBar label={s.visa} />
+                  <FormHeading>{s.visa}</FormHeading>
                   <OptionField label={s.visaCategory} value={form.visaCategory} options={VISA_CATEGORIES} onChange={(v) => set("visaCategory", v)} />
                   {form.visaCategory === "long_term" ? (
                     <>
@@ -256,7 +264,7 @@ export function HouseholdMemberScreen() {
                 </>
               ) : null}
 
-              <SectionBar label={s.insurance} />
+              <FormHeading>{s.insurance}</FormHeading>
               <OptionField
                 label={d.insurance.provider}
                 value={form.insuranceChoice}
@@ -282,7 +290,7 @@ export function HouseholdMemberScreen() {
           )}
 
           <Button label={id ? d.save : s.add} onPress={() => void save()} loading={saving} disabled={removing} />
-          {id ? <Button label={s.remove} variant="ghost" onPress={() => void remove()} loading={removing} disabled={saving} /> : null}
+          {id ? <Button label={s.remove} variant="danger" onPress={() => void remove()} loading={removing} disabled={saving} /> : null}
         </View>
       ) : null}
     </DocScreen>

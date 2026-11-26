@@ -79,7 +79,7 @@ export const ORG_CSS = `
 body:has(.org-theme) [data-shell-main] { background: ${P.frame} !important; }
 body:has(.org-theme) [data-shell-panel] { background: ${P.drawer} !important; color: ${P.ink}; }
 body:has(.org-theme) [data-shell-panel] * { border-color: ${P.border} !important; }
-body:has(.org-theme) [data-shell-panel] :is(.text-ink, [class*="text-[#2A2822]"], [class*="text-[#45423B]"]) { color: ${P.ink} !important; }
+body:has(.org-theme) [data-shell-panel] :is(.text-ink, [class*="text-[color:var(--text-strong)]"], [class*="text-[color:var(--text-secondary)]"]) { color: ${P.ink} !important; }
 body:has(.org-theme) [data-shell-panel] .mono-label { color: ${P.mono} !important; }
 body:has(.org-theme) [data-shell-panel] [class*="text-[color:var(--text-secondary)]"] { color: ${P.sub} !important; }
 body:has(.org-theme) [data-shell-panel] a:not([data-active]):hover,

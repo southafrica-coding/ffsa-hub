@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { HOLD_PURPOSE, holdDays } from "@/lib/vehicles/hold";
+import { blockEnd } from "@/lib/vehicles/hold";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect, notFound } from "next/navigation";
@@ -14,8 +16,7 @@ import {
   getVehiclePaymentsForBooking,
   getAgreementsForBooking,
   purposeLabel,
-  dayCount,
-  inspectionKindLabel,
+  billableDays, inspectionKindLabel,
   type Vehicle,
   type VehicleBookingWithRefs,
   type VehicleDriver,
@@ -32,6 +33,9 @@ import { dateRangeLabel } from "@/lib/bookings/dates";
 import { countries } from "@/lib/countries";
 import { VehicleBookingActions } from "./booking-actions";
 import { DriversPanel, type DriverPanelRow } from "./drivers-panel";
+import { ReturnPanel } from "./return-panel";
+import { fmtLong } from "@/lib/vehicles/rental-messages";
+import { loadReturnBooking, postRentalState } from "@/lib/vehicles/rental-return";
 import { DetailsEditor } from "./details-editor";
 import { RequesterMessages } from "./requester-messages";
 import {
@@ -134,10 +138,13 @@ function FileLinks({
 
 export default async function VehicleBookingDetail({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ "return-early"?: string }>;
 }) {
   const { id } = await params;
+  const sp = (await searchParams) ?? {};
   const supabase = await createClient();
   const {
     data: { user },
@@ -159,7 +166,7 @@ export default async function VehicleBookingDetail({
       getOverlappingAssignments(
         createAdminClient(),
         b.checkout_date,
-        b.return_date,
+        blockEnd(b),
         b.id
       ),
       getInspectionsForBooking(supabase, b.id),
@@ -236,6 +243,7 @@ export default async function VehicleBookingDetail({
         user_id: d.user_id,
         name: d.name,
         phone: d.phone ?? "",
+        email: d.email ?? "",
         has_sa_license: d.has_sa_license,
         is_first_time: d.is_first_time,
         driving_test_status: d.driving_test_status,
@@ -252,9 +260,27 @@ export default async function VehicleBookingDetail({
   // access once the booking is closed, managers never do.
   const canEditDrivers =
     isManager || (isOwner && b.status !== "completed" && b.status !== "cancelled");
-  const days = dayCount(b.checkout_date, b.return_date);
+  const days = billableDays(b.checkout_date, b.return_date) // the due-back day isn't counted;
   // Request details are editable only while pending (the API enforces it).
   const canEditDetails = b.status === "pending" && (isManager || isOwner);
+  // The return (364): returned, early return, post-rental inspections. Read with the admin
+  // client: only names, dates and inspection ids reach the page.
+  const rb = await loadReturnBooking(createAdminClient(), b.id).catch(() => null);
+  const nameOfUser = async (uid: string | null | undefined) => {
+    if (!uid) return "";
+    const { data } = await createAdminClient().from("users").select("first_name, preferred_name, last_name").eq("id", uid).maybeSingle();
+    return data ? [data.preferred_name || data.first_name, data.last_name].filter(Boolean).join(" ") : "";
+  };
+  const isDriverUser = driverRows.some((d) => d.user_id === user.id);
+  const returnedAt = rb?.returned_at ?? null;
+  const returnedLabel = returnedAt
+    ? `Returned ${new Intl.DateTimeFormat("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Africa/Johannesburg" }).format(new Date(returnedAt))}${
+        rb?.returned_by ? `, marked by ${await nameOfUser(rb.returned_by)}` : ""
+      }`
+    : null;
+  const post = rb && returnedAt ? await postRentalState(createAdminClient(), rb) : null;
+  const todaySA = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(new Date());
+
   const [requesterMessages, conversation, slackConnected] = isManager
     ? await Promise.all([
         getRequesterMessages(b.id),
@@ -342,6 +368,37 @@ export default async function VehicleBookingDetail({
       </div>
 
       {/* Drivers */}
+      <ReturnPanel
+        bookingId={b.id}
+        status={b.status}
+        dueBack={b.return_date}
+        dueBackLabel={fmtLong(b.return_date)}
+        today={todaySA}
+        returnedLabel={returnedLabel}
+        early={
+          rb?.early_return_status && rb.early_return_date
+            ? { date: rb.early_return_date, label: fmtLong(rb.early_return_date), status: rb.early_return_status, by: (await nameOfUser(rb.early_return_requested_by)) || "Someone" }
+            : null
+        }
+        isManager={isManager}
+        isMember={isOwner || isDriverUser}
+        inspections={(post?.vehicles ?? []).map((v) => ({ vehicleId: v.id, name: v.name, inspectionId: v.inspectionId }))}
+        openEarly={sp["return-early"] === "1"}
+        hold={
+          rb?.purpose === HOLD_PURPOSE
+            ? {
+                days: (() => {
+                  const h = holdDays({ purpose: rb.purpose, return_date: rb.return_date });
+                  return h ? { from: fmtLong(h.from), to: fmtLong(h.to) } : null;
+                })(),
+                released: rb.hold_released_at
+                  ? { by: (await nameOfUser(rb.hold_released_by ?? null)) || "The Vehicle Coordinator", note: rb.hold_release_note ?? "" }
+                  : null,
+              }
+            : null
+        }
+      />
+
       <DriversPanel
         bookingId={b.id}
         initialDrivers={driverRows}

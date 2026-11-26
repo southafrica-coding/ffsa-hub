@@ -248,6 +248,7 @@ export default async function BookingDetailPage({
         hasSeries={!!booking.series_id}
         canApprove={access.canApprove}
         canCancel={canCancel}
+        venueName={booking.venue?.name ?? null}
       />
       </div>
     </div>

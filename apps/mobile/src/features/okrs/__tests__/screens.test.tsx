@@ -7,7 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ApiError } from "@/lib/api";
 import { announce } from "@/lib/a11y";
 
-import { OWNER_ID, PAST, checkin, keyResult, objective, owner, ownerPage, wall } from "../__fixtures__/fixtures";
+import { CURRENT, OWNER_ID, PAST, checkin, keyResult, objective, owner, ownerPage, wall } from "../__fixtures__/fixtures";
 import { okrsApi } from "../client";
 import OwnerScreen from "../screens/OwnerScreen";
 import WallScreen from "../screens/WallScreen";
@@ -23,6 +23,7 @@ jest.mock("expo-haptics", () => ({
 }));
 jest.mock("@/lib/a11y", () => ({ ...jest.requireActual("@/lib/a11y"), announce: jest.fn() }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("../client", () => ({
   okrsApi: { loadWall: jest.fn(), loadOwner: jest.fn(), loadCheckins: jest.fn(), postCheckin: jest.fn() },
 }));
@@ -102,6 +103,42 @@ describe("OKR wall", () => {
     expect(cache.writeCache).toHaveBeenCalledWith("user-1", "okrs.wall.current", expect.anything());
   });
 
+  it("header and figures: the cycle in the eyebrow, the intro, a real bar for key results, back to Home", async () => {
+    api.loadWall.mockResolvedValue(wall());
+    await show(<WallScreen cycle={null} />);
+    expect(await screen.findByText("Strategy · 2026")).toBeTruthy();
+    expect(screen.getByText(strings.wall.intro("2026"))).toBeTruthy();
+    expect(screen.getByLabelText("Objectives, 3")).toBeTruthy();
+    expect(screen.getByLabelText("Key results, 6, 2 complete")).toBeTruthy();
+    // Everyone gets the website link; only those allowed get the cycles one.
+    await fireEvent.press(screen.getByTestId("open-web"));
+    expect(openBrowser).toHaveBeenCalledWith("https://hub.example.test/okrs?cycle=2026", expect.anything());
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Home" }));
+    expect(mockRouter.navigate).toHaveBeenCalledWith("/");
+  });
+
+  it("nothing stuck: the figure says so calmly", async () => {
+    api.loadWall.mockResolvedValue(wall({ totals: { groups: 3, groupsStarted: 2, objectives: 3, keyResults: 6, complete: 2, stuck: 0 } }));
+    await show(<WallScreen cycle={null} />);
+    expect(await screen.findByLabelText(`Stuck, 0, ${strings.wall.kpiStuckNone}`)).toBeTruthy();
+  });
+
+  it("one cycle: the cycle is plain text, with nothing to open", async () => {
+    api.loadWall.mockResolvedValue(wall({ cycles: [CURRENT] }));
+    await show(<WallScreen cycle={null} />);
+    expect(await screen.findByLabelText("Cycle: 2026 (current). 1 Jan 2026 to 31 Dec 2026")).toBeTruthy();
+    expect(screen.queryByTestId("cycle-switcher")).toBeNull();
+  });
+
+  it("a retired group says so in words", async () => {
+    api.loadWall.mockResolvedValue(wall({ showHeadings: false, sections: [{ ...wall().sections[0], started: [owner({ retired: true })] }] }));
+    await show(<WallScreen cycle={null} />);
+    expect(await screen.findByText(strings.wall.retired)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^DTS\. Retired\. 2 objectives · 5 key results/ })).toBeTruthy();
+    // One kind of ministry: a plain "Groups" heading with its count.
+    expect(screen.getByLabelText("Groups, 1")).toBeTruthy();
+  });
+
   it("one kind of ministry: no section headings", async () => {
     api.loadWall.mockResolvedValue(wall({ showHeadings: false, sections: [wall().sections[0]] }));
     await show(<WallScreen cycle={null} />);
@@ -118,6 +155,10 @@ describe("OKR wall", () => {
     const gaps = await screen.findByTestId("not-started-main");
     expect(within(gaps).getByText("Worship")).toBeTruthy();
     expect(within(gaps).getByText(strings.wall.noOkrsYet)).toBeTruthy();
+    // "Not started yet" sits inside its section, and its rows still open the group.
+    expect(within(screen.getByTestId("section-main")).getByLabelText(`${strings.wall.notStarted}, 1`)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("owner-m-worship"));
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: "/okrs/[ownerId]", params: { ownerId: "m-worship", cycle: "2026" } });
     await fireEvent.press(screen.getByTestId("manage-cycles"));
     expect(openBrowser).toHaveBeenCalledWith("https://hub.example.test/okrs/cycles", expect.anything());
   });
@@ -137,6 +178,11 @@ describe("OKR wall", () => {
     expect(await screen.findByText(strings.common.refreshFailed("09:05"))).toBeTruthy();
     expect(screen.getByText("DTS")).toBeTruthy();
     expect(cache.readCache).toHaveBeenCalledWith("user-1", "okrs.wall.2026");
+    // Calm, with a way forward (frame 13.3).
+    expect(screen.getByText(strings.common.checkinsNeedSignal)).toBeTruthy();
+    api.loadWall.mockResolvedValue(wall());
+    await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.queryByText(strings.common.refreshFailed("09:05"))).toBeNull());
   });
 });
 
@@ -186,6 +232,10 @@ describe("OKR owner page", () => {
     expect(screen.queryByTestId("kr-bar-kr2", { includeHiddenElements: true })).toBeNull();
     expect(screen.getByText("90 / 180 people")).toBeTruthy();
     expect(screen.queryByTestId("edit-on-web")).toBeNull();
+    expect(screen.getByText("OKRs · 2026")).toBeTruthy();
+    expect(screen.getByLabelText("Stuck, 1")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Back to OKRs" }));
+    expect(mockRouter.back).toHaveBeenCalled();
 
     api.loadCheckins.mockResolvedValue([checkin()]);
     await fireEvent.press(screen.getByTestId("kr-kr1"));
@@ -231,7 +281,28 @@ describe("OKR owner page", () => {
     await fireEvent.changeText(await screen.findByTestId("checkin-value"), "lots");
     await fireEvent.press(screen.getByTestId("checkin-save"));
     expect(await screen.findByText(strings.errors.valueNotNumber)).toBeTruthy();
+    // Said on the figure's own field, and cleared as soon as it's corrected.
+    expect(screen.getByTestId("checkin-value").props.accessibilityHint).toBe(strings.errors.valueNotNumber);
     expect(api.postCheckin).not.toHaveBeenCalled();
+    await fireEvent.changeText(screen.getByTestId("checkin-value"), "12,5");
+    expect(screen.queryByText(strings.errors.valueNotNumber)).toBeNull();
+  });
+
+  it("leader offline: the saved copy, and a note that check-ins need a signal", async () => {
+    cache.readCache.mockResolvedValue({ savedAt: 1, data: ownerPage({ canEdit: true, readOnly: null }) });
+    api.loadOwner.mockRejectedValue(new ApiError("network", "x"));
+    await show(<OwnerScreen ownerId={OWNER_ID} cycle={null} />);
+    expect(await screen.findByText(strings.common.refreshFailed("09:05"))).toBeTruthy();
+    expect(screen.getByText(strings.common.checkinsNeedSignal)).toBeTruthy();
+    expect(screen.getByText(strings.owner.canEdit)).toBeTruthy();
+  });
+
+  it("member offline: the saved copy without the check-in note", async () => {
+    cache.readCache.mockResolvedValue({ savedAt: 1, data: ownerPage() });
+    api.loadOwner.mockRejectedValue(new ApiError("network", "x"));
+    await show(<OwnerScreen ownerId={OWNER_ID} cycle={null} />);
+    expect(await screen.findByText(strings.common.refreshFailed("09:05"))).toBeTruthy();
+    expect(screen.queryByText(strings.common.checkinsNeedSignal)).toBeNull();
   });
 
   it("leader: a prose key result has no figure field", async () => {

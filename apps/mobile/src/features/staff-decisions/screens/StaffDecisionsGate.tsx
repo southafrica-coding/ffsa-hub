@@ -1,10 +1,8 @@
-import { UserCheck } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { Lock } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { ScrollView } from "react-native";
 
-import { Masthead, Screen } from "@/components";
-import { Skeleton } from "@/features/finance/components/ui";
-import { StateMessage } from "@/features/shell";
+import { Bleed, EmptyState, LargeTitleScrollView, SkeletonList } from "@/components";
 
 import { useStaffDecisionsAccess } from "../access";
 import { strings } from "../strings";
@@ -20,14 +18,14 @@ export function StaffDecisionsGate({ children }: { children: ReactNode }) {
   if (access === "checking") {
     return (
       <GateFrame>
-        <Skeleton label={s.checking} />
+        <SkeletonList label={s.checking} count={3} inset={false} />
       </GateFrame>
     );
   }
   if (access === "notAllowed") {
     return (
       <GateFrame>
-        <StateMessage testID="staff-decisions-not-allowed" icon={UserCheck} title={s.title} body={s.body} />
+        <EmptyState testID="staff-decisions-not-allowed" icon={Lock} title={s.title} body={s.body} />
       </GateFrame>
     );
   }
@@ -35,12 +33,14 @@ export function StaffDecisionsGate({ children }: { children: ReactNode }) {
 }
 
 function GateFrame({ children }: { children: ReactNode }) {
+  const router = useRouter();
   return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}>
-        <Masthead context={strings.list.context} title={strings.list.title} />
-        {children}
-      </ScrollView>
-    </Screen>
+    <LargeTitleScrollView
+      back={{ label: strings.common.home, onPress: () => router.navigate("/") }}
+      eyebrow={strings.list.context}
+      title={strings.list.title}
+    >
+      <Bleed>{children}</Bleed>
+    </LargeTitleScrollView>
   );
 }

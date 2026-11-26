@@ -214,7 +214,7 @@ export function GradesMatrix({
             return (
               <div
                 key={s.enrollmentId}
-                className="grid items-stretch border-b border-rule hover:bg-[#F7F5EE]"
+                className="grid items-stretch border-b border-rule hover:bg-[var(--surface-hover)]"
                 style={{ gridTemplateColumns: cols }}
               >
                 <div className="flex min-w-0 items-center gap-3 px-5 py-2.5">
@@ -285,7 +285,7 @@ export function GradesMatrix({
             type="button"
             onClick={() => setShowTranscripts((v) => !v)}
             aria-expanded={showTranscripts}
-            className="bg-ink px-3.5 py-2 font-mono text-[9.5px] font-bold tracking-[0.12em] text-white hover:bg-[#262622]"
+            className="bg-ink px-3.5 py-2 font-mono text-[9.5px] font-bold tracking-[0.12em] text-white hover:bg-[var(--ink-bg-hover)]"
           >
             PRINT TRANSCRIPTS
           </button>
@@ -307,7 +307,7 @@ export function GradesMatrix({
                     href={`/api/schools/transcript?userId=${s.userId}&programId=${programId}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="block border-b border-rule px-3 py-2 text-[13px] font-semibold text-ink hover:bg-[#F7F5EE]"
+                    className="block border-b border-rule px-3 py-2 text-[13px] font-semibold text-ink hover:bg-[var(--surface-hover)]"
                   >
                     {s.name}
                   </a>

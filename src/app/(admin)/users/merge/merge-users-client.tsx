@@ -143,7 +143,7 @@ function PersonSlot({
                   <button
                     type="button"
                     onClick={() => onPick(c)}
-                    className="block w-full px-3 py-2 text-left text-[13px] hover:bg-[#F7F5EE]"
+                    className="block w-full px-3 py-2 text-left text-[13px] hover:bg-[var(--surface-hover)]"
                   >
                     <span className="font-semibold">{personName(c)}</span>
                     <span className="block text-[color:var(--text-secondary)]">

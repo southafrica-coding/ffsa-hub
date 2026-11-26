@@ -123,7 +123,7 @@ export function ImportQueue({
                 type="button"
                 onClick={applyExact}
                 disabled={busy !== null}
-                className={`${BUTTON} border-ink bg-ink text-yellow hover:bg-[#262622]`}
+                className={`${BUTTON} border-ink bg-ink text-yellow hover:bg-[var(--ink-bg-hover)]`}
               >
                 {busy === "exact" ? "Applying…" : `Apply ${exactOpen} exact matches`}
               </button>
@@ -278,7 +278,7 @@ export function ImportQueue({
                             ministry_id: d.ministryId,
                           })
                         }
-                        className={`${BUTTON} flex-1 border-ink bg-ink text-white hover:bg-[#262622] md:flex-none`}
+                        className={`${BUTTON} flex-1 border-ink bg-ink text-white hover:bg-[var(--ink-bg-hover)] md:flex-none`}
                       >
                         {busy === r.id ? "Saving…" : "Apply"}
                       </button>

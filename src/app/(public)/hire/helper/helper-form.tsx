@@ -12,6 +12,7 @@ import {
   ACTIVITIES,
   EVENT_TYPES,
   FULFILMENT,
+  HIRE_EMAIL,
   INSTRUMENTS,
   MIC_TYPES,
   OWN_AMPS,
@@ -238,7 +239,7 @@ export function HelperForm({ today, initialDate, initialEndDate }: { today: stri
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) {
-        setFormError(json?.error ?? "We couldn't send your answers. Try again, or email us.");
+        setFormError(json?.error ?? `We couldn't send your answers. Try again, or email ${HIRE_EMAIL}.`);
         return;
       }
       setSent(json.number as string);

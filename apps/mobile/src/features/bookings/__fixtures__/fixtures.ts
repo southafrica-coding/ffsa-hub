@@ -2,6 +2,18 @@
 
 import { personSchema, spaceBookingSchema, vehicleBookingSchema, type Person, type SpaceBooking, type VehicleBooking } from "../types";
 
+/**
+ * A YYYY-MM-DD date `n` days from today (local time). Screen tests run against
+ * the real clock, so anything that must be "in the future" or "about to
+ * expire" is written relative to today: a fixed date eventually goes stale.
+ */
+export function daysFromToday(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  const pad = (x: number) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function spaceBooking(over: Record<string, unknown> = {}): SpaceBooking {
   return spaceBookingSchema.parse({
     id: "sb1",

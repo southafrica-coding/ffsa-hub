@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import * as WebBrowser from "expo-web-browser";
 import type { ReactNode } from "react";
-import { Alert } from "react-native";
+import { Alert, Linking } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ServerRefusal } from "@/features/bookings/http";
@@ -27,11 +27,9 @@ jest.mock("@/auth/session-provider", () => ({
 }));
 const mockRouter = { navigate: jest.fn(), push: jest.fn(), back: jest.fn() };
 const mockParams: { current: Record<string, string> } = { current: {} };
-const mockNav = { setOptions: jest.fn() };
 jest.mock("expo-router", () => ({
   useRouter: () => mockRouter,
   useLocalSearchParams: () => mockParams.current,
-  useNavigation: () => mockNav,
   useFocusEffect: () => {},
 }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: "dismiss" }) }));
@@ -88,7 +86,6 @@ beforeEach(() => {
   openBrowser.mockClear();
   alertSpy.mockClear();
   Object.values(mockRouter).forEach((f) => f.mockClear());
-  mockNav.setOptions.mockClear();
   mockParams.current = {};
   mockTables.current = {};
 });
@@ -119,8 +116,10 @@ describe("Licence", () => {
   it("empty: nothing on file yet offers the camera", async () => {
     pf.mockImplementation(apiRoutes({ "/api/profile/licence": { licence: { has_file: false } } }));
     await render(wrap(<LicenceScreen />));
-    expect(await screen.findByLabelText("Photo of your licence: Nothing uploaded yet")).toBeTruthy();
+    expect(await screen.findByLabelText("Nothing uploaded yet")).toBeTruthy();
+    expect(screen.getByRole("header", { name: "Photo of your licence" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Take a photo" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
     expect(screen.queryByRole("button", { name: "View" })).toBeNull();
     expect(screen.getByText(/Only you and the vehicles team can open this/)).toBeTruthy();
   });
@@ -197,10 +196,65 @@ describe("Licence", () => {
 
     fail = false;
     await fireEvent.press(screen.getByRole("button", { name: "Take a photo" }));
-    expect(await screen.findByLabelText("Photo of your licence: On file")).toBeTruthy();
+    expect(await screen.findByLabelText("On file")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Replace: take a photo" })).toBeTruthy();
     expect(cleanup).toHaveBeenCalledTimes(2);
     const post = pf.mock.calls.find((c) => c[1]?.method === "POST");
     expect(post?.[1].body).toBeInstanceOf(FormData);
+  });
+
+  it("the pushed screen has its name in the bar and a way back to Me", async () => {
+    pf.mockImplementation(apiRoutes({ "/api/profile/licence": LICENCE }));
+    await render(wrap(<LicenceScreen />));
+    expect(screen.getByRole("header", { name: "Driver's licence" })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Back to Me" }));
+    expect(mockRouter.back).toHaveBeenCalled();
+  });
+
+  it.each([
+    ["not_required", "Not required"],
+    ["pending", "Booked, waiting for the result"],
+    ["failed", "Not passed"],
+  ])("driving test %s reads '%s' (read-only)", async (status, words) => {
+    pf.mockImplementation(
+      apiRoutes({ "/api/profile/licence": { licence: { ...LICENCE.licence, base_driving_test_status: status, base_driving_test_passed_at: null } } }),
+    );
+    await render(wrap(<LicenceScreen />));
+    expect(await screen.findByLabelText(`Base-vehicle driving test: ${words}`)).toBeTruthy();
+  });
+
+  it("camera: our own sheet explains first; Not now sends nothing, Continue carries on", async () => {
+    const answers: boolean[] = [];
+    take.mockImplementation(async (_name: string, prompts: { explainCamera: () => Promise<boolean> }) => {
+      answers.push(await prompts.explainCamera());
+      return null;
+    });
+    pf.mockImplementation(apiRoutes({ "/api/profile/licence": { licence: { has_file: false } } }));
+    await render(wrap(<LicenceScreen />));
+    await fireEvent.press(await screen.findByRole("button", { name: "Take a photo" }));
+    expect(await screen.findByText("Use the camera?")).toBeTruthy();
+    expect(screen.getByText(/uses the camera only to photograph the document you choose/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Not now" }));
+    await waitFor(() => expect(answers).toEqual([false]));
+
+    await fireEvent.press(screen.getByRole("button", { name: "Take a photo" }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(answers).toEqual([false, true]));
+    expect(pf.mock.calls.filter((c) => c[1]?.method === "POST")).toHaveLength(0);
+  });
+
+  it("camera access off in the phone's Settings: says so and offers Open Settings", async () => {
+    const openSettings = jest.spyOn(Linking, "openSettings").mockResolvedValueOnce(undefined);
+    take.mockImplementation(async (_name: string, prompts: { accessOff: (m: string) => void }) => {
+      prompts.accessOff("Camera access is off for FFSA Hub. Turn it on in Settings, or choose a photo instead.");
+      return null;
+    });
+    pf.mockImplementation(apiRoutes({ "/api/profile/licence": { licence: { has_file: false } } }));
+    await render(wrap(<LicenceScreen />));
+    await fireEvent.press(await screen.findByRole("button", { name: "Take a photo" }));
+    expect(await screen.findByText(/Camera access is off for FFSA Hub/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Open Settings" }));
+    expect(openSettings).toHaveBeenCalled();
   });
 
   it("cancelling the camera sends nothing", async () => {
@@ -247,7 +301,7 @@ describe("Passport photo", () => {
       }),
     );
     await render(wrap(<PassportScreen />));
-    expect(await screen.findByLabelText("Passport photo page: Nothing uploaded yet")).toBeTruthy();
+    expect(await screen.findByLabelText("Nothing uploaded yet")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Choose a photo" }));
     expect(await screen.findByRole("button", { name: "View" })).toBeTruthy();
     expect(cleanup).toHaveBeenCalled();
@@ -263,10 +317,10 @@ describe("Passport photo", () => {
       }),
     );
     await render(wrap(<PassportScreen />));
-    expect(await screen.findByLabelText("Passport photo page: On file. Uploaded 1 Oct 2026")).toBeTruthy();
+    expect(await screen.findByLabelText("On file. Uploaded 1 Oct 2026")).toBeTruthy();
     confirmNextAlert();
     await fireEvent.press(screen.getByRole("button", { name: "Remove" }));
-    expect(await screen.findByLabelText("Passport photo page: Nothing uploaded yet")).toBeTruthy();
+    expect(await screen.findByLabelText("Nothing uploaded yet")).toBeTruthy();
     expect(pf).toHaveBeenCalledWith("/api/profile/passport-photo", { method: "DELETE" });
   });
 
@@ -281,7 +335,7 @@ describe("Passport photo", () => {
     pf.mockImplementation(apiRoutes({ "/api/profile/passport-photo": { passport: { has_file: false } } }));
     await render(wrap(<PassportScreen />));
     await fireEvent.press(await screen.findByRole("button", { name: "Try again" }));
-    expect(await screen.findByLabelText("Passport photo page: Nothing uploaded yet")).toBeTruthy();
+    expect(await screen.findByLabelText("Nothing uploaded yet")).toBeTruthy();
   });
 
   it("forbidden", async () => {
@@ -328,9 +382,10 @@ describe("Health insurance", () => {
   it("success: current policy, no band when valid", async () => {
     insuranceTables();
     await render(wrap(<InsuranceScreen />));
-    expect(await screen.findByLabelText("Provider: Bonitas")).toBeTruthy();
-    expect(screen.getByLabelText("Policy number: POL-1")).toBeTruthy();
-    expect(screen.getByLabelText("Expiry date: Valid until 1 Jan 2031")).toBeTruthy();
+    expect(await screen.findByLabelText("Provider: Bonitas. Policy number: POL-1. Expiry date: Valid until 1 Jan 2031")).toBeTruthy();
+    // One row: provider, "Policy <number>", then the state in words.
+    expect(screen.getByText("Policy POL-1")).toBeTruthy();
+    expect(screen.getByText("Valid until 1 Jan 2031")).toBeTruthy();
     expect(screen.queryByTestId("insurance-needs-you")).toBeNull();
   });
 
@@ -349,6 +404,40 @@ describe("Health insurance", () => {
     expect(screen.getByText(/nothing for a next policy to take over from/)).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Yes, it's still active" }));
     expect(pf).toHaveBeenCalledWith("/api/profile/insurance-confirm", { method: "POST" });
+  });
+
+  it("expiring soon with no next policy: the band, and the row says how long in words", async () => {
+    const soon = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
+    insuranceTables({ ...ROW, health_insurance_expiry_date: soon });
+    await render(wrap(<InsuranceScreen />));
+    expect(await screen.findByText(/Your health insurance expires soon/)).toBeTruthy();
+    expect(screen.getAllByTestId("insurance-needs-you")).toHaveLength(1);
+    expect(screen.getByText(/^Expires in \d+ days? \(/)).toBeTruthy();
+    // No button on the band: the next step is "Add next policy" below.
+    expect(screen.queryByRole("button", { name: "Yes, it's still active" })).toBeNull();
+    expect(screen.getByText("No next policy lined up.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add next policy" })).toBeTruthy();
+  });
+
+  it("next policy lined up: no band, replace and remove (remove asks first)", async () => {
+    insuranceTables({
+      ...ROW,
+      health_insurance_expiry_date: "2020-01-01",
+      next_health_insurance_provider: "Discovery",
+      next_health_insurance_policy_number: "POL-9",
+      next_health_insurance_expiry_date: "2032-01-01",
+      next_health_insurance_no_expiry: false,
+    });
+    pf.mockResolvedValue({ success: true });
+    await render(wrap(<InsuranceScreen />));
+    expect(await screen.findByTestId("next-policy")).toBeTruthy();
+    expect(screen.getByText("Policy POL-9 · Valid until 1 Jan 2032")).toBeTruthy();
+    expect(screen.getByText("Takes over after 1 Jan 2020")).toBeTruthy();
+    expect(screen.queryByTestId("insurance-needs-you")).toBeNull();
+    expect(screen.getByRole("button", { name: "Replace next policy" })).toBeTruthy();
+    confirmNextAlert();
+    await fireEvent.press(screen.getByRole("button", { name: "Remove next policy" }));
+    await waitFor(() => expect(pf).toHaveBeenCalledWith("/api/profile/insurance-next", { method: "DELETE" }));
   });
 
   it("update current policy: validates, sends PUT /api/profile/update", async () => {
@@ -403,7 +492,7 @@ describe("Health insurance", () => {
     expect(screen.queryByText(/relation does not exist/)).toBeNull();
     insuranceTables();
     await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByLabelText("Provider: Bonitas")).toBeTruthy();
+    expect(await screen.findByLabelText(/^Provider: Bonitas/)).toBeTruthy();
   });
 
   it("forbidden on a write", async () => {
@@ -492,7 +581,8 @@ describe("Household member", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Add member" }));
     await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
     expect(posts[0]).toMatchObject({ relationship: "spouse", full_name: "Sample Person", email: "sample@example.org" });
-    expect(mockNav.setOptions).toHaveBeenCalledWith({ title: "Add spouse" });
+    expect(screen.getByRole("header", { name: "Add spouse" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Back to Household" })).toBeTruthy();
   });
 
   it("add child: 'same as mine' copies visa + insurance", async () => {
@@ -521,7 +611,7 @@ describe("Household member", () => {
     );
     await render(wrap(<HouseholdMemberScreen />));
     expect(await screen.findByDisplayValue("Sample Person")).toBeTruthy();
-    expect(mockNav.setOptions).toHaveBeenCalledWith({ title: "Edit child" });
+    expect(screen.getByRole("header", { name: "Edit child" })).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(pf.mock.calls.some((c) => c[0] === "/api/profile/household/m1" && c[1]?.method === "PUT")).toBe(true));
     confirmNextAlert();

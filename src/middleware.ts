@@ -49,18 +49,24 @@ export async function middleware(request: NextRequest) {
     "/e", // public ticket storefront (/e/[slug] + /e/[slug]/thanks)
     "/f", // public form runtime (/f/[slug]) — CRM lead-capture forms
     "/join", // public signup link (/join/[code]) — anyone with the active code can self-onboard
+    "/connect/missio", // public Missio connect card (/connect/missio only — not /connect or any other /connect path)
+    "/api/missio/connect", // public Missio connect submit (/api/missio/connect only — not any other /api/missio route)
     "/preferences", // public email preference / unsubscribe page
     "/subscribe", // public sign-up page for labels opened up with public_subscribe (196)
     "/unsubscribe", // public one-click opt-out landing page from email footers
     "/schedule", // public: /schedule/[token] — applicants pick an interview slot
     "/fb", // public event-feedback runtime (/fb/[slug])
     "/scan", // public door scanner (/scan/[token]) — the welcome team has no Hub account, which is the point
+    "/serve/missio", // public Missio serving link (/serve/missio/[token]) — the volunteer has no Hub account
     "/vr", // public vehicle request form (/vr/[token]) — shipped in 342 but never listed here, so every outsider was bounced to /login
     "/hire", // public equipment-hire storefront (/hire, /hire/c/[slug], /hire/p/[slug]) — browsing needs no account
+    "/store", // public Hub Store (/store, /store/p/[slug], cart, checkout, redeem) + buyer library. NOT /store/admin — see storeStaffArea below
+    "/api/store", // public Store endpoints (checkout, preview, page images, resend, redeem). NOT /api/store/admin — see storeStaffArea below
     "/t", // public tag landing (/t/[tag]) — the QR on every equipment tag; staff are sent on to the register
     "/track-intent", // public FFX track-intent survey (/track-intent/[token], migration 222) — same gotcha as /vr above
     "/.well-known", // public app-link files (apple-app-site-association, assetlinks.json) — fetched by Apple / Google with no session
     "/api/scan", // public door scanner actions — authorised by the token in the path, not session cookies
+    "/api/serve/missio", // public Missio availability — authorised by the hashed token, not session cookies
     "/api/upload/sign", // public applicants upload photos from /apply
     "/api/public", // public application submission + signup
     "/api/f", // public form submission (/api/f/[slug]/submit)
@@ -71,15 +77,26 @@ export async function middleware(request: NextRequest) {
     "/api/tickets", // public QR image endpoint (the code in the URL is the auth) — referenced from confirmation emails
     "/api/cron", // Vercel Cron endpoints — authenticated by CRON_SECRET bearer token in the route handler, not session cookies
     "/api/slack", // inbound Slack events (Q&A bot) — authenticated by Slack signing-secret HMAC in the route handler, not session cookies
+    "/api/webhooks/missio/whatsapp", // Meta's WhatsApp webhook for the Missio number — verify token (GET) and X-Hub-Signature-256 HMAC (POST) in the route handler. Only this path: every other /api/missio route keeps its session check
   ];
   // Match on whole path SEGMENTS, not raw prefixes. A bare startsWith()
   // let "/e" (public ticket storefront) swallow "/events" and "/f"
   // swallow "/finance" — both admin sections — so they skipped the auth
   // redirect below entirely. The admin layout does no auth check of its
   // own, so middleware is the only gate.
-  const isPublicRoute = publicRoutes.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
-  );
+  // The Store's staff area sits under the public /store and /api/store
+  // prefixes. It is never public: it goes through the normal auth gate (and
+  // the pages and handlers check store.manage themselves).
+  const storeStaffArea =
+    pathname === "/store/admin" ||
+    pathname.startsWith("/store/admin/") ||
+    pathname === "/api/store/admin" ||
+    pathname.startsWith("/api/store/admin/");
+  const isPublicRoute =
+    !storeStaffArea &&
+    publicRoutes.some(
+      (route) => pathname === route || pathname.startsWith(`${route}/`)
+    );
 
   // Public ticket checkout — the only public sub-route under
   // /api/events/. Everything else under /api/events/ is admin and
@@ -99,8 +116,15 @@ export async function middleware(request: NextRequest) {
   // Supabase round-trip entirely (~200-300ms per request). We exclude /login
   // (needs to redirect logged-in users) and /auth/* (callback handlers may
   // need the Supabase client to set session cookies).
+  // The Store's buyer pages read the session (My Library, orders, devices,
+  // the reader's API), so they take the slow path too: middleware refreshes
+  // an expired token there. A buyer is a bare auth user with no users row;
+  // nothing below gives them more than "signed in".
+  const isStoreBuyerArea =
+    /^\/store\/(library|orders|auth|redeem|checkout)(\/|$)/.test(pathname) ||
+    /^\/api\/store\/(library|devices|redeem|checkout)(\/|$)/.test(pathname);
   const isAuthAware =
-    pathname === "/login" || pathname.startsWith("/auth/");
+    pathname === "/login" || pathname.startsWith("/auth/") || isStoreBuyerArea;
   if (
     !isAuthAware &&
     (isPublicRoute || isPublicCheckoutRoute || isPublicPromoValidateRoute)
@@ -139,13 +163,17 @@ export async function middleware(request: NextRequest) {
   // request is acceptable — it is a single indexed read and the only way to
   // reliably block a still-valid Supabase session. Skip this check on public
   // routes (already bypassed above) to keep them fast.
+  // `missing: true` only when the read worked and found no row — a Store
+  // buyer (bare auth user). A failed read stays null, so a database hiccup
+  // never reclassifies staff as buyers.
   const readIsActive = async (id: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("users")
       .select("is_active")
       .eq("id", id)
-      .single();
-    return data as { is_active: boolean | null } | null;
+      .maybeSingle();
+    if (data) return data as { is_active: boolean | null; missing?: boolean };
+    return error ? null : { is_active: null, missing: true };
   };
 
   // Refresh session (important for Server Components). getSession() reads the
@@ -172,10 +200,29 @@ export async function middleware(request: NextRequest) {
   ]);
 
   let isDeactivated = false;
+  let isStoreBuyerOnly = false;
   if (user) {
     const userRow =
       user.id === claimedUserId ? claimedRow : await readIsActive(user.id);
     isDeactivated = userRow?.is_active === false;
+    isStoreBuyerOnly = userRow?.missing === true;
+  }
+
+  // A Store buyer (signed in by email link, no Hub account) stays in the
+  // Store. Staff pages and APIs are not for them (and /login, below, sends
+  // them to their library rather than /dashboard). Staff are invited with a users row up front, so this
+  // never catches a Hub user; onboarding is left alone.
+  if (isStoreBuyerOnly && !isPublicRoute && !isOnboarding) {
+    if (isApi && !wantsHtml(request)) {
+      return NextResponse.json(
+        { error: "forbidden", message: "This is a Store account, not a Hub account." },
+        { status: 403, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = "/store/library";
+    url.search = "";
+    return NextResponse.redirect(url);
   }
 
   // Deactivated accounts may only visit /login (so they can see the error and
@@ -218,6 +265,8 @@ export async function middleware(request: NextRequest) {
     if (request.nextUrl.searchParams.get("error") === "signout") {
       return supabaseResponse;
     }
+    // A Store buyer has no Hub home: send them to their library instead.
+    if (isStoreBuyerOnly) return redirectToPath(request, "/store/library");
     // A safe internal return path is honoured. `/`, empty, unsafe, and
     // /login (including redirect=/login?redirect=…) are not one, so they
     // land on /home rather than looping.
@@ -229,7 +278,7 @@ export async function middleware(request: NextRequest) {
   // `/` is not a page. Send a signed-in person to /home once. /home itself
   // is an ordinary protected route, so the next request is not redirected.
   if (user && !isDeactivated && pathname === "/") {
-    return redirectToPath(request, "/home");
+    return redirectToPath(request, isStoreBuyerOnly ? "/store/library" : "/home");
   }
 
   return supabaseResponse;

@@ -1,16 +1,16 @@
 import * as Crypto from "expo-crypto";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { Camera, ImagePlus } from "lucide-react-native";
+import { Camera, Image as ImageIcon } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Banner, Button, Masthead, Screen, Text, TextField } from "@/components";
-import { Chips, ErrorState, SectionBar, Skeleton } from "@/features/finance/components/ui";
+import { type BackAction, Banner, Bleed, Button, ChoiceChips, EmptyState, LargeTitleScrollView, ListGroup, ListRow, LoadFailed, PushedPage, SectionTitle, SkeletonList, Text, TextField, KeyboardAvoidingView } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { ListRow, StateMessage, openWebPage, useMe } from "@/features/shell";
+import { openWebPage, useMe } from "@/features/shell";
 import { announce } from "@/lib/a11y";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { bookingsAccess } from "../access";
@@ -72,6 +72,10 @@ export function seedInspection(detail: VehicleDetail): InspectionForm {
   });
 }
 
+// The collection or return check (frames 7.5, 7.12, 7.13): the web's
+// inspection form as one full-height page (the tab bar is hidden on this
+// route). Photos go into the outbox the moment they're taken and show their
+// state inline; the form itself is queued the same way.
 export default function InspectionScreen({ bookingId, kind }: { bookingId: string; kind: InspectionKind }) {
   const router = useRouter();
   const { colors } = useTheme();
@@ -102,42 +106,47 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
   // Seeded from the booking, like the web's collect/return pages, until the person edits it.
   const form = useMemo(() => draft ?? (detail ? seedInspection(detail) : null), [draft, detail]);
 
+  const title = kind === "collection" ? t.collectionTitle : t.returnTitle;
+  const back: BackAction = { label: strings.common.booking, onPress: () => router.back() };
+
   if (state.status === "loading") {
     return (
-      <Screen edges={[]}>
-        <Skeleton label={strings.common.loading} />
-      </Screen>
+      <PushedPage back={back}>
+        <SkeletonList label={strings.common.loading} count={5} inset={false} />
+      </PushedPage>
     );
   }
   if (state.status === "error") {
     return (
-      <Screen edges={[]}>
-        <ErrorState title={kind === "collection" ? t.collectionTitle : t.returnTitle} message={state.message} onRetry={retry} />
-      </Screen>
+      <PushedPage back={back}>
+        <LoadFailed title={title} message={state.message} onRetry={retry} />
+      </PushedPage>
     );
   }
   if (!detail || !form) {
     return (
-      <Screen edges={[]}>
-        <StateMessage testID="not-found" title={strings.detail.vehicleContext} body={strings.common.notFound} />
-      </Screen>
+      <PushedPage back={back}>
+        <EmptyState testID="not-found" title={strings.detail.vehicleContext} body={strings.common.notFound} />
+      </PushedPage>
     );
   }
 
   const b = detail.booking;
+  // Once the booking is known, Back names it, as its page is titled.
+  const backToBooking: BackAction = { ...back, label: b.booking_name };
   const mayInspect = b.requested_by === userId || access.vehicles.manage;
   if (!mayInspect) {
     return (
-      <Screen edges={[]}>
-        <StateMessage testID="no-access" title={kind === "collection" ? t.collectionTitle : t.returnTitle} body={t.noAccess} />
-      </Screen>
+      <PushedPage back={backToBooking}>
+        <EmptyState testID="no-access" title={title} body={t.noAccess} />
+      </PushedPage>
     );
   }
   if (detail.inspections.some((i) => i.kind === kind)) {
     return (
-      <Screen edges={[]}>
-        <StateMessage testID="already" title={kind === "collection" ? t.collectionTitle : t.returnTitle} body={t.alreadyRecorded} />
-      </Screen>
+      <PushedPage back={backToBooking}>
+        <EmptyState testID="already" title={title} body={t.alreadyRecorded} />
+      </PushedPage>
     );
   }
 
@@ -212,107 +221,124 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
   const photoItemsFor = (k: PhotoKind) =>
     items.filter((i): i is PhotoItem => i.kind === "photo" && i.bookingId === b.id && i.inspectionKind === kind && i.photoKind === k && i.userId === userId);
 
+  const odometer = <TextField label={t.mileage} value={f.mileage} onChangeText={(v) => set({ mileage: v.replace(/[^\d]/g, "") })} keyboardType="number-pad" testID="mileage" />;
+
   return (
-    <Screen keyboard edges={[]}>
-      <Masthead context={t.context(b.booking_name)} title={isCollection ? t.collectionTitle : t.returnTitle} />
-      {notice ? <Banner tone="positive">{notice}</Banner> : null}
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }}>
+      <LargeTitleScrollView back={backToBooking} eyebrow={t.context(b.booking_name)} title={title} edges={["top", "bottom"]} gap={space.lg}>
+        {notice ? (
+          <Bleed>
+            <Banner tone="positive">{notice}</Banner>
+          </Bleed>
+        ) : null}
 
-      {vehicles.length > 1 ? (
-        <Chips label={t.vehicle} options={vehicles.map((v) => ({ value: v.id, label: v.registration_plate ? `${v.name}: ${v.registration_plate}` : v.name }))} value={f.vehicleId || null} onChange={(v) => set({ vehicleId: v })} />
-      ) : vehicles.length === 1 ? (
-        <Text tone="secondary">{`${t.vehicle}: ${vehicles[0].name}${vehicles[0].registration_plate ? ` (${vehicles[0].registration_plate})` : ""}`}</Text>
-      ) : null}
+        {vehicles.length > 1 ? (
+          <ChoiceChips
+            label={t.vehicle}
+            options={vehicles.map((v) => ({ value: v.id, label: v.registration_plate ? `${v.name}: ${v.registration_plate}` : v.name }))}
+            value={f.vehicleId || null}
+            onChange={(v) => set({ vehicleId: v })}
+          />
+        ) : vehicles.length === 1 ? (
+          <Text tone="secondary" style={{ marginTop: -space.sm }}>{`${t.vehicle}: ${vehicles[0].name}${vehicles[0].registration_plate ? ` (${vehicles[0].registration_plate})` : ""}`}</Text>
+        ) : null}
 
-      <TextField label={t.mileage} value={f.mileage} onChangeText={(v) => set({ mileage: v.replace(/[^\d]/g, "") })} keyboardType="number-pad" testID="mileage" />
-      <TextField label={t.drivers} value={f.driverNames} onChangeText={(v) => set({ driverNames: v })} />
-      <Panel>
-        <YesNo label={t.allPresent} hint={t.allPresentHint} value={f.allDriversPresent} onChange={(v) => set({ allDriversPresent: v })} />
-      </Panel>
-
-      {isCollection ? (
-        <>
-          <TextField label={t.usage} value={f.usagePurpose} onChangeText={(v) => set({ usagePurpose: v })} />
-          <YesNo label={t.saLicence} hint={t.saLicenceHint} value={f.saLicenseConfirmed} onChange={(v) => set({ saLicenseConfirmed: v })} />
-          <Panel testID="damage-panels">
-            <Text variant="label" accessibilityRole="header">
-              {t.damage}
-            </Text>
-            <Text variant="caption" tone="secondary">
-              {t.damageHint}
-            </Text>
-            {DAMAGE_PANELS.map((p) => (
-              <CheckRow
-                key={p.key}
-                label={p.label}
-                checked={f.damagePanels.includes(p.key)}
-                onChange={(on) => set({ damagePanels: on ? [...f.damagePanels, p.key] : f.damagePanels.filter((k) => k !== p.key) })}
-              />
-            ))}
-          </Panel>
-          <Panel>
-            <Text variant="label" accessibilityRole="header">
-              {t.inventory}
-            </Text>
-            {INVENTORY_ITEMS.map((i) => (
-              <CheckRow key={i.key} label={i.label} checked={!!f.inventory[i.key]} onChange={(on) => set({ inventory: { ...f.inventory, [i.key]: on } })} />
-            ))}
-          </Panel>
-        </>
-      ) : (
-        <>
-          <DateTimeField mode="date" label={t.checkinDate} value={f.checkinDate} onChange={(v) => set({ checkinDate: v })} />
-          <Panel>
-            <Text variant="label" accessibilityRole="header">
-              {t.condition}
-            </Text>
-            <CheckRow label={t.washed} checked={f.washed} onChange={(v) => set({ washed: v })} testID="washed" />
-            <CheckRow label={t.fuelFull} checked={f.fuelFull} onChange={(v) => set({ fuelFull: v })} testID="fuel" />
-            <CheckRow label={t.damageReported} checked={f.damageReported} onChange={(v) => set({ damageReported: v })} />
-          </Panel>
-        </>
-      )}
-
-      {sections.map((k) => (
-        <View key={k} style={{ gap: 8 }} testID={`photos-${k}`}>
-          <SectionBar title={t.photos[k]} meta={String(counts[k] ?? 0)} />
-          {photoItemsFor(k).length === 0 && !(counts[k] ?? 0) ? <Text tone="secondary">{t.noPhotos}</Text> : null}
-          <QueueList items={photoItemsFor(k)} outbox={outbox} online={online} showTitle={false} onRemoved={(id) => setRemoved((r) => new Set(r).add(id))} />
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Button
-              label={t.takePhoto}
-              variant="secondary"
-              icon={<Camera size={18} color={colors.text} />}
-              disabled={capturing}
-              onPress={() => void addPhotos(k, "camera")}
-              accessibilityLabel={`${t.takePhoto}: ${t.photos[k]}`}
-              style={{ flex: 1 }}
-            />
-            <Button
-              label={t.choosePhoto}
-              variant="ghost"
-              icon={<ImagePlus size={18} color={colors.text} />}
-              disabled={capturing}
-              onPress={() => void addPhotos(k, "library")}
-              accessibilityLabel={`${t.choosePhoto}: ${t.photos[k]}`}
-              style={{ flex: 1 }}
-            />
+        {isCollection ? (
+          odometer
+        ) : (
+          // Return: the odometer and the day it came back, side by side when they fit.
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", gap: space.md }}>
+            <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 140 }}>{odometer}</View>
+            <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 140 }}>
+              <DateTimeField mode="date" label={t.checkinDate} value={f.checkinDate} onChange={(v) => set({ checkinDate: v })} />
+            </View>
           </View>
-        </View>
-      ))}
+        )}
+        <TextField label={t.drivers} value={f.driverNames} onChangeText={(v) => set({ driverNames: v })} />
+        <YesNo label={t.allPresent} hint={t.allPresentHint} value={f.allDriversPresent} onChange={(v) => set({ allDriversPresent: v })} />
 
-      {!isCollection ? (
-        <Panel>
-          <CheckRow label={t.truthful} checked={f.communicatedTruthfully} onChange={(v) => set({ communicatedTruthfully: v })} testID="truthful" />
-          <CheckRow label={t.permission} checked={f.inspectionPermission} onChange={(v) => set({ inspectionPermission: v })} testID="permission" />
-        </Panel>
-      ) : null}
+        {isCollection ? (
+          <>
+            <TextField label={t.usage} value={f.usagePurpose} onChangeText={(v) => set({ usagePurpose: v })} />
+            <YesNo label={t.saLicence} hint={t.saLicenceHint} value={f.saLicenseConfirmed} onChange={(v) => set({ saLicenseConfirmed: v })} />
+            <Bleed style={{ gap: space.md }}>
+              <Panel title={t.damage} hint={t.damageHint} testID="damage-panels">
+                {DAMAGE_PANELS.map((p) => (
+                  <CheckRow
+                    key={p.key}
+                    label={p.label}
+                    checked={f.damagePanels.includes(p.key)}
+                    onChange={(on) => set({ damagePanels: on ? [...f.damagePanels, p.key] : f.damagePanels.filter((k) => k !== p.key) })}
+                  />
+                ))}
+              </Panel>
+              <Panel title={t.inventory}>
+                {INVENTORY_ITEMS.map((i) => (
+                  <CheckRow key={i.key} label={i.label} checked={!!f.inventory[i.key]} onChange={(on) => set({ inventory: { ...f.inventory, [i.key]: on } })} />
+                ))}
+              </Panel>
+            </Bleed>
+          </>
+        ) : (
+          <Bleed>
+            <Panel title={t.condition}>
+              <CheckRow label={t.washed} checked={f.washed} onChange={(v) => set({ washed: v })} testID="washed" />
+              <CheckRow label={t.fuelFull} checked={f.fuelFull} onChange={(v) => set({ fuelFull: v })} testID="fuel" />
+              <CheckRow label={t.damageReported} checked={f.damageReported} onChange={(v) => set({ damageReported: v })} />
+            </Panel>
+          </Bleed>
+        )}
 
-      <TextField label={t.notes} value={f.notes} onChangeText={(v) => set({ notes: v })} multiline />
-      <ListRow title={t.terms} trailing="web" onPress={() => void openWebPage(TERMS_URL, colors)} />
-      <CheckRow label={t.agree} checked={f.agreed} onChange={(v) => set({ agreed: v })} testID="agree" />
+        {sections.map((k) => (
+          <View key={k} style={{ marginTop: -space.lg }} testID={`photos-${k}`}>
+            <SectionTitle title={t.photos[k]} meta={String(counts[k] ?? 0)} tight />
+            <View style={{ gap: space.sm }}>
+              {photoItemsFor(k).length === 0 && !(counts[k] ?? 0) ? <Text tone="secondary">{t.noPhotos}</Text> : null}
+              <Bleed>
+                <QueueList items={photoItemsFor(k)} outbox={outbox} online={online} showTitle={false} onRemoved={(id) => setRemoved((r) => new Set(r).add(id))} />
+              </Bleed>
+              <View style={{ flexDirection: "row", gap: space.sm }}>
+                <Button
+                  label={t.takePhoto}
+                  variant="secondary"
+                  size="small"
+                  icon={<Camera size={20} color={colors.text} />}
+                  disabled={capturing}
+                  onPress={() => void addPhotos(k, "camera")}
+                  accessibilityLabel={`${t.takePhoto}: ${t.photos[k]}`}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  label={t.choosePhoto}
+                  variant="text"
+                  size="small"
+                  icon={<ImageIcon size={20} color={colors.text} />}
+                  disabled={capturing}
+                  onPress={() => void addPhotos(k, "library")}
+                  accessibilityLabel={`${t.choosePhoto}: ${t.photos[k]}`}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </View>
+          </View>
+        ))}
 
-      <FormError message={error} />
-      <Button label={t.submit(kind)} loading={saving} disabled={capturing} onPress={() => void submit()} testID="submit-check" />
-    </Screen>
+        <TextField label={t.notes} value={f.notes} onChangeText={(v) => set({ notes: v })} multiline />
+        <Bleed style={{ gap: space.md }}>
+          <ListGroup inset={false}>
+            <ListRow title={t.terms} trailing="web" onPress={() => void openWebPage(TERMS_URL, colors)} />
+          </ListGroup>
+          {/* The declarations: two more on return, then the one every check ends with. */}
+          <Panel>
+            {isCollection ? null : <CheckRow label={t.truthful} checked={f.communicatedTruthfully} onChange={(v) => set({ communicatedTruthfully: v })} testID="truthful" />}
+            {isCollection ? null : <CheckRow label={t.permission} checked={f.inspectionPermission} onChange={(v) => set({ inspectionPermission: v })} testID="permission" />}
+            <CheckRow label={t.agree} checked={f.agreed} onChange={(v) => set({ agreed: v })} testID="agree" />
+          </Panel>
+        </Bleed>
+
+        <FormError message={error} />
+        <Button label={t.submit(kind)} loading={saving} disabled={capturing} onPress={() => void submit()} testID="submit-check" />
+      </LargeTitleScrollView>
+    </KeyboardAvoidingView>
   );
 }

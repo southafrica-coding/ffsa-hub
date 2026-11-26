@@ -1,0 +1,180 @@
+/* Couple suggestions: the profile banner and the Family suggestions list. Gold, one per pair. */
+
+.banner {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid #e6d3a6;
+  border-radius: 14px;
+  background: var(--gold-soft, #f4ead2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kicker {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-ink, #7a5a17);
+}
+
+.text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink, #1c1b17);
+}
+
+.note {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--sub, #5b574d);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.primary {
+  background: var(--terra, #b4532e);
+  color: #fff;
+}
+
+.primary:hover:not(:disabled) {
+  background: #9e4626;
+}
+
+.secondary {
+  background: var(--panel, #fbf9f4);
+  color: var(--ink, #1c1b17);
+  border-color: var(--rule-strong, #cfc8b6);
+}
+
+.notice {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--terra-ink, #8e3d1f);
+}
+
+.done {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--olive-text, #3f5940);
+}
+
+/* !important: the Missio shell's global link colour wins otherwise (as on .back in person-profile). */
+.personLink {
+  color: var(--link, #2f5d50) !important;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The list page */
+
+.page {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: 14px;
+  color: var(--link, #2f5d50) !important;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.title {
+  margin: 0;
+}
+
+.sub {
+  margin: 0;
+  color: var(--sub, #5b574d);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.empty {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--rule-strong, #cfc8b6);
+  border-radius: 14px;
+  color: var(--sub, #5b574d);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+/* The quiet link on People */
+
+.entry {
+  display: inline-flex;
+  margin: 4px 0 0;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--link, #2f5d50) !important;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--gold-soft, #f4ead2);
+  color: var(--gold-ink, #7a5a17);
+  font-size: 13px;
+  font-weight: 700;
+}

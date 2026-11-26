@@ -1,0 +1,681 @@
+/* A house (board M3c). Phone: title, who leads, health band, people list.
+   Desktop: Leading · Health · Weekly feedback in a row, then the people table. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.page .back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: -10px 0 -8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--link, #2f5d50);
+  text-decoration: none;
+}
+
+.back:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.state {
+  padding: 18px;
+  color: var(--ink-2, #5b574d);
+}
+
+.alert {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm, 10px);
+  background: #f5deda;
+  color: var(--bad, #a3261b);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ── head ───────────────────────────── */
+
+.head {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  min-width: 0;
+}
+
+.headText {
+  flex: 1;
+  min-width: 0;
+}
+
+.number {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3, #6e685b);
+}
+
+.headText .title {
+  margin: 2px 0 0;
+  font-size: 28px;
+  line-height: 34px;
+  overflow-wrap: anywhere;
+}
+
+.where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin-top: 6px !important;
+  font-size: 14px;
+  color: var(--ink-2, #5b574d);
+}
+
+.whereItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.headAction {
+  flex: none;
+}
+
+/* ── layout ─────────────────────────── */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "leading"
+    "health"
+    "people"
+    "add"
+    "feedback"
+    "notes";
+  gap: 14px;
+}
+
+.leading {
+  grid-area: leading;
+}
+.health {
+  grid-area: health;
+}
+.feedback {
+  grid-area: feedback;
+  min-width: 0;
+}
+.people {
+  grid-area: people;
+  min-width: 0;
+}
+.notes {
+  grid-area: notes;
+}
+.add {
+  grid-area: add;
+}
+
+.layout .sect {
+  margin: 0;
+  font-family: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--ink-2, #5b574d);
+}
+
+.leading .sect {
+  display: none;
+}
+
+.health.healthReady .sect {
+  color: var(--olive-ink, #3f5940);
+}
+
+.coachChange {
+  align-self: flex-start;
+  margin: -10px 0 -12px !important;
+}
+
+.leadReady {
+  color: var(--olive-ink, #3f5940);
+}
+
+.leadWarn {
+  color: var(--gold-ink, #7a5a17);
+}
+
+.headActionText {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.head .headAction {
+  width: 44px;
+  padding: 0;
+  align-self: flex-start;
+  margin: -6px -10px 0 0;
+  background: transparent;
+  color: var(--link, #2f5d50);
+}
+
+.head .headAction:hover {
+  background: var(--subtle, #eeeadf);
+  color: var(--link, #2f5d50);
+}
+
+/* ── leading ────────────────────────── */
+
+.leading {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.leaders {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.leader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.leaderText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.leaderName {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink, #1c1b17);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+a.leaderName:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.leaderRole {
+  font-size: 13px;
+  color: var(--ink-2, #5b574d);
+}
+
+.nobody {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--gold-ink, #7a5a17);
+  font-weight: 600;
+}
+
+.emptyFace {
+  background: #fbf6ec;
+  border: 1.5px dashed var(--gold, #b98a2e);
+  color: var(--gold-ink, #7a5a17);
+  box-sizing: border-box;
+}
+
+.coach {
+  border-top: 1px solid #e7e2d5;
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.coachLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.stack {
+  display: inline-flex;
+  flex: none;
+}
+
+.stack > * + * {
+  margin-left: -8px;
+  box-shadow: 0 0 0 2px var(--panel, #fbf9f4);
+}
+
+.coachText {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-2, #5b574d);
+}
+
+.coachText .coachLabel {
+  display: inline;
+  margin: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-2, #5b574d);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.coachNames {
+  display: inline;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.coachNames li {
+  display: inline;
+}
+
+.coachNames li + li::before {
+  content: ", ";
+}
+
+.coachName {
+  font-weight: 600;
+  color: var(--ink, #1c1b17);
+  text-decoration: none;
+}
+
+a.coachName:hover {
+  text-decoration: underline;
+}
+
+.page .textButton {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: -12px 0;
+  padding: 0 4px;
+  cursor: pointer;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--link, #2f5d50);
+  flex: none;
+}
+
+.page .textButton:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.page .textButton:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.coachNames .textButton {
+  margin-left: 6px;
+  color: var(--ink-2, #5b574d);
+}
+
+.coachPick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── health ─────────────────────────── */
+
+.health {
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.healthHead,
+.dots {
+  display: none;
+}
+
+.size {
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.sizeCount {
+  font-size: 40px;
+  line-height: 40px;
+}
+
+.sizeLabel {
+  font-size: 14px;
+  color: var(--ink-2, #5b574d);
+}
+
+.healthNote {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink, #1c1b17);
+}
+
+.signals {
+  grid-area: signals;
+  display: none;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.health.healthReady {
+  background: var(--olive-soft, #e3eadf);
+  border-color: #c9d6c3;
+}
+
+.readyChip {
+  background: var(--panel, #fbf9f4);
+  color: var(--olive-ink, #3f5940);
+}
+
+/* ── people ─────────────────────────── */
+
+.people {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.peopleHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.peopleHead .peopleTitle {
+  margin: 0;
+  font-size: 20px;
+  line-height: 26px;
+}
+
+.peopleCount {
+  font-size: 13px;
+  color: var(--ink-2, #5b574d);
+  white-space: nowrap;
+}
+
+.table {
+  overflow: hidden;
+}
+
+.thead {
+  display: none;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 8px 10px 16px;
+  border-bottom: 1px solid #e7e2d5;
+  min-width: 0;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.cellName {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nameStack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.memberName {
+  all: unset;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink, #1c1b17);
+  overflow-wrap: anywhere;
+}
+
+.page .memberOpen {
+  cursor: pointer;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  min-height: 24px;
+}
+
+.page .memberOpen:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.page .memberOpen:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.metaPhone {
+  font-size: 14px;
+  color: var(--ink-2, #5b574d);
+}
+
+.cellRole,
+.cellSince {
+  display: none;
+}
+
+.cellEdit {
+  flex: none;
+  width: 44px;
+}
+
+.page .more {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  cursor: pointer;
+  color: var(--link, #2f5d50);
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+}
+
+.page .more:hover {
+  background: var(--subtle, #eeeadf);
+}
+
+.page .more:focus-visible {
+  outline: 2px solid var(--link, #2f5d50);
+  outline-offset: 2px;
+}
+
+/* ── notes, add ─────────────────────── */
+
+.notes,
+.add {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.add .addTitle {
+  margin: 0;
+  font-size: 20px;
+  line-height: 26px;
+}
+
+/* ── desktop (M3c desktop) ──────────── */
+
+@media (min-width: 1000px) {
+  .page {
+    gap: 22px;
+  }
+
+  .headText .title {
+    font-size: 32px;
+    line-height: 38px;
+  }
+
+  .where {
+    font-size: 15px;
+    margin-top: 8px !important;
+  }
+
+  .layout {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+      "leading health feedback"
+      "people people people"
+      "notes add add";
+    gap: 24px;
+  }
+
+  .leading,
+  .health {
+    padding: 20px;
+  }
+
+  .health {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .healthHead {
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .healthHead,
+  .dots,
+  .signals {
+    display: flex;
+  }
+
+  .healthNote b {
+    display: none;
+  }
+
+  .leading .sect {
+    display: block;
+  }
+
+  .headActionText {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+
+  .head .headAction,
+  .head .headAction:hover {
+    width: auto;
+    padding: 0 18px;
+    margin: 0;
+    align-self: flex-end;
+    background: var(--terra, #b4532e);
+    color: #ffffff;
+  }
+
+  .size {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .sizeCount {
+    font-size: 56px;
+    line-height: 56px;
+  }
+
+  .sizeLabel {
+    font-size: 15px;
+    color: var(--ink, #1c1b17);
+  }
+
+  .table .thead {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 1fr 44px;
+    align-items: center;
+    padding: 0 20px;
+    min-height: 40px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-2, #5b574d);
+    letter-spacing: 0.02em;
+    background: var(--page, #f3f0e8);
+    border-bottom: 1px solid #e7e2d5;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 1fr 44px;
+    min-height: 56px;
+    padding: 0 20px;
+  }
+
+  .metaPhone {
+    display: none;
+  }
+
+  .cellRole,
+  .cellSince {
+    display: block;
+    font-size: 15px;
+    color: var(--ink-2, #5b574d);
+  }
+}

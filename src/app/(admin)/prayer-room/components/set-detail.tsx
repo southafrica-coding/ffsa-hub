@@ -336,7 +336,9 @@ export default function SetDetail({
             : msg
         );
       }
-      toast.success("Set updated");
+      const saved = (await res.json().catch(() => ({}))) as { altBookingNotice?: string };
+      if (saved.altBookingNotice) toast.warning("Set updated", { description: saved.altBookingNotice });
+      else toast.success("Set updated");
       setEditing(false);
       await refresh();
     } catch (e) {

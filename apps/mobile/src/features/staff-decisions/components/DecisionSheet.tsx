@@ -1,17 +1,16 @@
 import * as Haptics from "expo-haptics";
-import { useState } from "react";
-import { Alert, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, Platform, View } from "react-native";
 
-import { Button, Text, TextField } from "@/components";
-import { FormError } from "@/features/bookings/components/ui";
-import { Chips } from "@/features/finance/components/ui";
-import { Sheet } from "@/features/finance/components/Sheet";
+import { Button, ChoiceChips, ChoiceSegments, FieldError, Sheet, Text, TextField } from "@/components";
 import { announce } from "@/lib/a11y";
 import { apiFetch } from "@/lib/api-client";
+import { space } from "@/theme/tokens";
 
 import { actionErrorMessage, makeStaff, recordDecision, type DepartmentOption, type StaffDecisionRow } from "../api";
 import { decisionProblem, departmentLabel, initialDepartmentSelection, offerMakeStaffAfterSave } from "../logic";
 import { strings } from "../strings";
+
 
 const sh = strings.sheet;
 
@@ -51,6 +50,13 @@ export function DecisionSheet({
   const [error, setError] = useState<string | null>(null);
 
   const noteRequired = accepted === false;
+  // The missing note is said on the note field itself; everything else above the button.
+  const noteError = error === sh.noteRequired;
+
+  // VoiceOver doesn't follow Android's live regions: speak a new error on iOS.
+  useEffect(() => {
+    if (error && Platform.OS === "ios") announce(error);
+  }, [error]);
 
   async function save() {
     const problem = decisionProblem(accepted, note);
@@ -101,14 +107,14 @@ export function DecisionSheet({
   if (step === "make-staff") {
     return (
       <Sheet visible title={sh.makeStaffTitle(row.name)} onClose={onClose}>
-        <View style={{ gap: 12, paddingBottom: 8 }} testID="make-staff-step">
+        <View style={{ gap: space.lg, paddingBottom: space.sm }} testID="make-staff-step">
           <Text tone="secondary">{sh.makeStaffIntro}</Text>
           {row.department && !departmentOptions.some((option) => option.value === row.department) ? (
             <Text tone="secondary">
               {sh.currentDepartment(departmentLabel(departmentOptions, row.department) ?? row.department)}
             </Text>
           ) : null}
-          <Chips
+          <ChoiceChips
             label={sh.departmentLabel}
             options={[{ value: LATER, label: sh.departmentLater }, ...departmentOptions]}
             value={department}
@@ -116,8 +122,10 @@ export function DecisionSheet({
             disabled={busy}
           />
           <FormError message={error} />
-          <Button label={sh.makeStaffConfirm} loading={busy} onPress={confirmMakeStaff} testID="make-staff-confirm" />
-          <Button label={sh.notNow} variant="ghost" disabled={busy} onPress={onClose} testID="make-staff-later" />
+          <View style={{ gap: space.sm, marginTop: space.sm }}>
+            <Button label={sh.makeStaffConfirm} loading={busy} onPress={confirmMakeStaff} testID="make-staff-confirm" />
+            <Button label={sh.notNow} variant="secondary" disabled={busy} onPress={onClose} testID="make-staff-later" />
+          </View>
         </View>
       </Sheet>
     );
@@ -125,9 +133,11 @@ export function DecisionSheet({
 
   return (
     <Sheet visible title={sh.decideTitle(row.name)} onClose={onClose}>
-      <View style={{ gap: 12, paddingBottom: 8 }} testID="decide-step">
-        <Text tone="secondary">{sh.decideIntro}</Text>
-        <Chips
+      <View style={{ gap: space.lg, paddingBottom: space.sm }} testID="decide-step">
+        <Text variant="caption" tone="secondary">
+          {sh.decideIntro}
+        </Text>
+        <ChoiceSegments
           label={sh.acceptedLabel}
           options={[
             { value: "yes", label: sh.yes },
@@ -150,11 +160,22 @@ export function DecisionSheet({
           placeholder={noteRequired ? sh.notePlaceholderRequired : sh.notePlaceholderOptional}
           multiline
           editable={!busy}
+          error={noteError ? error : null}
           testID="decision-note"
         />
-        <FormError message={error} />
+        <FormError message={noteError ? null : error} />
         <Button label={sh.save} loading={busy} onPress={() => void save()} testID="decision-save" />
       </View>
     </Sheet>
+  );
+}
+
+/** A problem that isn't one field's (nothing chosen, the save failed), in the kit's error line. */
+function FormError({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <View testID="form-error">
+      <FieldError>{message}</FieldError>
+    </View>
   );
 }

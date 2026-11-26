@@ -1,18 +1,17 @@
 import { useRouter } from "expo-router";
 import { CalendarCheck, FileText, SearchX } from "lucide-react-native";
 import { useCallback } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
-import { Masthead, Screen, Text } from "@/components";
-import { ErrorState, Row, SectionBar, Skeleton } from "@/features/finance/components/ui";
+import { type BackAction, Bleed, EmptyState, FadeIn, Freshness, GroupRow, LargeTitleScrollView, ListGroup, ListRow, LoadError, SectionTitle, SkeletonList, Text } from "@/components";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
-import { ListRow, StateMessage, openWebPage } from "@/features/shell";
-import { hairline } from "@/theme/tokens";
+import { openWebPage } from "@/features/shell";
 import { refreshControlColors } from "@/theme/styles";
+import { hairline, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-import { Figure, Freshness, StatusTag } from "../components/ui";
+import { Figure, StatusTag } from "../components/parts";
 import { loadEnrolment, loadErrorMessage, type EnrolmentData } from "../data";
 import {
   courseTiming,
@@ -30,9 +29,9 @@ import { strings } from "../strings";
 
 const s = strings.detail;
 
-// One enrolment: status, who's walking with you, the grades strip (GPA is the
-// screen's one big number), the courses with their dates and grades, and the
-// transcript (which stays on the website). Read-only.
+// One enrolment (frames 8.2, 8.6): status, who's walking with you, the grades
+// strip (GPA is the screen's one big number), the courses with their dates
+// and grades, and the transcript (which stays on the website). Read-only.
 export default function EnrolmentScreen({ id }: { id: string | undefined }) {
   const router = useRouter();
   const { colors } = useTheme();
@@ -51,39 +50,54 @@ export default function EnrolmentScreen({ id }: { id: string | undefined }) {
     errorMessage: loadErrorMessage,
   });
 
+  const back: BackAction = { label: strings.list.title, onPress: () => router.back() };
   const data = state.status === "ready" ? state.data : null;
 
   if (state.status === "ready" && !data) {
     return (
-      <Screen edges={[]}>
-        <StateMessage testID="not-found" icon={SearchX} title={s.notFoundTitle} body={s.notFound} actionLabel={strings.common.back} onAction={() => router.back()} />
-      </Screen>
+      <LargeTitleScrollView eyebrow={strings.list.context} title={strings.list.title} back={back}>
+        <Bleed>
+          <ListGroup inset={false}>
+            <EmptyState
+              testID="not-found"
+              card={false}
+              icon={SearchX}
+              title={s.notFoundTitle}
+              body={s.notFound}
+              actionLabel={strings.common.back}
+              onAction={() => router.back()}
+            />
+          </ListGroup>
+        </Bleed>
+      </LargeTitleScrollView>
     );
   }
 
   const e = data?.enrolment ?? null;
   const programme = e?.programs ?? null;
-  const name = programme?.name ?? strings.list.programmeFallback;
 
   return (
-    <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
-      >
-        {e ? (
-          <Masthead context={s.context(programme?.code ?? "", formatDate(e.enrolled_at) ?? "")} title={name} />
-        ) : (
-          <Masthead context={strings.list.context} title={strings.list.title} />
-        )}
+    <LargeTitleScrollView
+      eyebrow={e ? s.context(programme?.code ?? "", formatDate(e.enrolled_at) ?? "") : strings.list.context}
+      title={e ? (programme?.name ?? strings.list.programmeFallback) : strings.list.title}
+      back={back}
+      contentContainerStyle={{ flexGrow: 1 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
+    >
+      {state.status === "loading" ? (
+        <Bleed>
+          <SkeletonList label={s.loading} count={5} inset={false} />
+        </Bleed>
+      ) : null}
+      {state.status === "error" ? (
+        <Bleed>
+          <LoadError title={s.errorTitle} message={state.message} onRetry={retry} />
+        </Bleed>
+      ) : null}
+      <Freshness state={state} onRetry={retry} bleed />
 
-        {state.status === "loading" ? <Skeleton label={s.loading} /> : null}
-        {state.status === "error" ? <ErrorState title={s.errorTitle} message={state.message} onRetry={retry} /> : null}
-        <Freshness state={state} onRetry={retry} />
-
-        {data && e ? <Body data={data} onAttendance={() => router.push("/schools/attendance")} onTranscript={() => void openWebPage(`/my-schools/${e.id}`, colors)} /> : null}
-      </ScrollView>
-    </Screen>
+      {data && e ? <Body data={data} onAttendance={() => router.push("/schools/attendance")} onTranscript={() => void openWebPage(`/my-schools/${e.id}`, colors)} /> : null}
+    </LargeTitleScrollView>
   );
 }
 
@@ -100,16 +114,14 @@ function Body({ data, onAttendance, onTranscript }: { data: EnrolmentData; onAtt
   const totalCredits = programme?.credit_hours || summary.creditsAttempted;
 
   return (
-    <>
-      <View style={{ gap: 8 }}>
-        <View accessible accessibilityLabel={`${s.status}: ${status.label}`} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text variant="label" tone="secondary">
-            {s.status}
-          </Text>
+    <FadeIn style={{ gap: space.lg }}>
+      <View style={{ gap: 6 }}>
+        <View accessible accessibilityLabel={`${s.status}: ${status.label}`} style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm }}>
+          <Text variant="label">{s.status}</Text>
           <StatusTag label={status.label} tone={status.tone} testID="enrolment-status" />
         </View>
         {arrival ? (
-          <Text variant="bodyStrong" testID="arrival">
+          <Text variant="rowTitle" testID="arrival">
             {s.arrival(formatDate(arrival) ?? "")}
           </Text>
         ) : null}
@@ -121,14 +133,23 @@ function Body({ data, onAttendance, onTranscript }: { data: EnrolmentData; onAtt
       </View>
 
       {/* One big number per screen: the GPA (or a quiet note until graded). */}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 12, columnGap: 16, borderTopWidth: hairline, borderBottomWidth: hairline, borderColor: colors.text, paddingVertical: 14 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          rowGap: space.md,
+          columnGap: 20,
+          borderTopWidth: hairline,
+          borderBottomWidth: hairline,
+          borderColor: colors.text,
+          paddingVertical: space.md,
+        }}
+      >
         {summary.gpa !== null ? (
           <Figure label={s.gpa} value={summary.gpa.toFixed(2)} big />
         ) : (
-          <View accessible style={{ flexBasis: "100%", gap: 4 }}>
-            <Text variant="label" tone="secondary">
-              {s.gpa}
-            </Text>
+          <View accessible style={{ flexBasis: "100%", gap: 2 }}>
+            <Text variant="label">{s.gpa}</Text>
             <Text tone="secondary">{s.notGraded}</Text>
           </View>
         )}
@@ -137,21 +158,29 @@ function Body({ data, onAttendance, onTranscript }: { data: EnrolmentData; onAtt
       </View>
 
       <View>
-        <SectionBar title={s.courses} meta={String(summary.courses.length)} />
+        <SectionTitle title={s.courses} meta={String(summary.courses.length)} tight />
         {summary.courses.length === 0 ? (
-          <Text tone="secondary" style={{ paddingVertical: 16 }}>
+          <Text tone="secondary" style={{ paddingVertical: space.sm }}>
             {s.noCourses}
           </Text>
         ) : (
-          summary.courses.map((c) => <CourseRow key={c.id} course={c} mark={marks.get(c.id) ?? null} />)
+          <Bleed>
+            <ListGroup inset={false}>
+              {summary.courses.map((c) => (
+                <CourseRow key={c.id} course={c} mark={marks.get(c.id) ?? null} />
+              ))}
+            </ListGroup>
+          </Bleed>
         )}
       </View>
 
-      <View>
-        <ListRow icon={FileText} title={s.transcript} subtitle={s.transcriptSub} trailing="web" onPress={onTranscript} accessibilityHint={s.transcriptHint} testID="transcript" />
-        <ListRow icon={CalendarCheck} title={s.attendance} subtitle={strings.list.attendanceRowSub} onPress={onAttendance} testID="attendance-row" />
-      </View>
-    </>
+      <Bleed>
+        <ListGroup inset={false}>
+          <ListRow icon={FileText} title={s.transcript} subtitle={s.transcriptSub} trailing="web" onPress={onTranscript} accessibilityHint={s.transcriptHint} testID="transcript" />
+          <ListRow icon={CalendarCheck} title={s.attendance} subtitle={strings.list.attendanceRowSub} onPress={onAttendance} testID="attendance-row" />
+        </ListGroup>
+      </Bleed>
+    </FadeIn>
   );
 }
 
@@ -161,24 +190,33 @@ function CourseRow({ course: c, mark }: { course: CourseWithGrade; mark: "now" |
   const grade = c.letterGrade ? s.grade(c.letterGrade) : s.noGrade;
   const markLabel = mark === "now" ? s.now : mark === "next" ? s.next : null;
   return (
-    <Row accessibilityLabel={s.courseA11y([c.name, markLabel ?? "", dates, meta, grade])} testID={`course-${c.id}`}>
-      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text variant="bodyStrong">{c.name}</Text>
-          <Text variant="caption" tone="secondary">
-            {dates}
+    <GroupRow
+      accessibilityLabel={s.courseA11y([c.name, markLabel ?? "", dates, meta, grade])}
+      testID={`course-${c.id}`}
+      trail={
+        c.letterGrade ? (
+          <Text variant="sectionTitle">{grade}</Text>
+        ) : (
+          <Text variant="caption" tone="secondary" style={{ textAlign: "right" }}>
+            {grade}
           </Text>
-          {meta ? (
-            <Text variant="caption" tone="secondary">
-              {meta}
-            </Text>
-          ) : null}
-          {markLabel ? <StatusTag label={markLabel} tone={mark === "now" ? "positive" : "default"} testID={`mark-${mark}`} /> : null}
-        </View>
-        <Text variant={c.letterGrade ? "bodyStrong" : "caption"} tone={c.letterGrade ? "default" : "secondary"}>
-          {grade}
+        )
+      }
+    >
+      <Text variant="rowTitle">{c.name}</Text>
+      <Text variant="caption" tone="secondary">
+        {dates}
+      </Text>
+      {meta ? (
+        <Text variant="caption" tone="secondary">
+          {meta}
         </Text>
-      </View>
-    </Row>
+      ) : null}
+      {markLabel ? (
+        <View style={{ marginTop: 6 }}>
+          <StatusTag label={markLabel} tone={mark === "now" ? "positive" : "default"} testID={`mark-${mark}`} />
+        </View>
+      ) : null}
+    </GroupRow>
   );
 }

@@ -13,10 +13,13 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "src"),
       "server-only": path.resolve(__dirname, "src/lib/testing/server-only.ts"),
+      "next/font/google": path.resolve(__dirname, "src/test/next-font-google.ts"),
     },
   },
   test: {
     // apps/mobile is a separate Expo app with its own Jest setup.
-    exclude: [...configDefaults.exclude, "apps/**"],
+    // vehicles-module/ is the FFSA Fleet reference app with its own node:test suite
+    // (cd vehicles-module && npm test).
+    exclude: [...configDefaults.exclude, "apps/**", "vehicles-module/**"],
   },
 });

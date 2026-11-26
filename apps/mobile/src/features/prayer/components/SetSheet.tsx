@@ -1,9 +1,10 @@
+import { Clock, MapPin, Repeat } from "lucide-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
-import { Banner, Button, Text } from "@/components";
-import { ListRow, SkeletonRows, openWebPage } from "@/features/shell";
-import { hairline } from "@/theme/tokens";
+import { Banner, Button, ListGroup, ListRow, Sheet, SkeletonList, StatusChip, Text } from "@/components";
+import { openWebPage } from "@/features/shell";
+import { fontFamily, hairline, radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { askForSeat, respondToInvite, type Band, type PrayerSet, type SeatRequest, type SeatType, type Slot } from "../api";
@@ -31,14 +32,15 @@ import {
 } from "../logic";
 import { strings } from "../strings";
 
-import { ActionNotice, Chip, LabelRow, Sheet } from "./ui";
+import { ActionNotice, BandChip, LabelRow } from "./ui";
 
 /**
- * The set drawer (web frames 9a / 10b) as a bottom sheet: when, who leads,
- * what we're praying, and the lineup with the actions the web gives THIS
- * person: accept or decline an invitation, or ask the lead for an open seat.
- * Filling seats, removing people and editing the set are the owner's and
- * staff's tools; those open the website.
+ * The set as a bottom sheet (frames 4.2, 4.3): when, who leads, what we're
+ * praying, and the lineup, one row per seat with the two lead seats first,
+ * with the actions the web gives THIS person: accept or decline an
+ * invitation, or ask the lead for an open seat. Filling seats, removing
+ * people and editing the set are the owner's and staff's tools; those open
+ * the website.
  */
 export function SetSheet({
   setId,
@@ -125,15 +127,21 @@ export function SetSheet({
   const leadLine = set ? leadNames(set, seatTypes) : null;
 
   return (
-    <Sheet visible={!!setId} title={set ? dayLabel(set.set_date) : strings.set.devo} onClose={onClose} testID="set-sheet">
-      {state.status === "loading" ? <SkeletonRows label={strings.set.loading} /> : null}
+    <Sheet
+      visible={!!setId}
+      title={title}
+      subtitle={
+        set ? `${dayLabel(set.set_date)} · ${timeRange(set.start_time, set.end_time)} · ${durationLabel(set.start_time, set.end_time)}` : undefined
+      }
+      subtitleAccessibilityLabel={set ? `${spokenDate(set.set_date)}, ${spokenTimeRange(set.start_time, set.end_time)}` : undefined}
+      onClose={onClose}
+      closeLabel={strings.set.close}
+      testID="set-sheet"
+    >
+      {state.status === "loading" ? <SkeletonList label={strings.set.loading} inset={false} /> : null}
 
       {state.status === "error" ? (
-        <Banner
-          tone="danger"
-          testID="set-error"
-          action={<Button label={strings.errors.retry} variant="secondary" onPress={retry} />}
-        >
+        <Banner tone="error" testID="set-error" actionLabel={strings.errors.retry} onAction={retry}>
           {isForbidden(state.error) ? strings.errors.forbiddenBody : friendlyErrorOrMissing(state.error)}
         </Banner>
       ) : null}
@@ -141,46 +149,47 @@ export function SetSheet({
       {set && ready ? (
         <>
           {/* ── identity ─────────────────────────── */}
-          <View style={{ gap: 8 }}>
-            <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-              {band ? <Chip label={band} tone="band" /> : null}
-              {set.status !== "scheduled" ? <Chip label={set.status} /> : null}
-              {set.series_id ? <Chip label={strings.set.repeats} /> : null}
-            </View>
-            <Text variant="display">{title}</Text>
-            <View
-              accessible
-              accessibilityLabel={`${spokenDate(set.set_date)}, ${spokenTimeRange(set.start_time, set.end_time)}`}
-              style={{ flexDirection: "row", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}
-            >
-              <Text variant="title" style={{ fontVariant: ["tabular-nums"] }}>
-                {timeRange(set.start_time, set.end_time)}
-              </Text>
-              <Text variant="label" tone="secondary">
-                {dayLabel(set.set_date)} · {durationLabel(set.start_time, set.end_time)}
-              </Text>
-            </View>
-            <Text tone="secondary">
+          <View style={{ gap: space.sm }}>
+            {band || set.status !== "scheduled" || set.series_id ? (
+              <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+                {band ? <BandChip label={band} /> : null}
+                {set.status !== "scheduled" ? (
+                  <StatusChip
+                    label={set.status.charAt(0).toUpperCase() + set.status.slice(1)}
+                    variant={set.status === "cancelled" ? "danger" : "quiet"}
+                  />
+                ) : null}
+                {set.series_id ? <StatusChip label={strings.set.repeats} icon={Repeat} /> : null}
+              </View>
+            ) : null}
+            <Text variant="caption" tone="secondary">
               {[set.owner ? strings.set.setUpBy(fullName(set.owner)) : null, leadLine ? strings.set.ledBy(leadLine) : strings.set.noLead]
                 .filter(Boolean)
                 .join(" · ")}
             </Text>
           </View>
 
-          {set.relocation_note ? <Banner tone="info">{strings.set.relocated(set.relocation_note)}</Banner> : null}
+          {set.relocation_note ? (
+            <Banner tone="info" icon={MapPin}>
+              {strings.set.relocated(set.relocation_note)}
+            </Banner>
+          ) : null}
 
           <ActionNotice result={result} />
 
           {/* ── what we're praying ───────────────── */}
           {set.prayer_focus || set.theme || set.scripture ? (
-            <View style={{ gap: 6 }}>
+            <View style={{ gap: space.xs }}>
               <LabelRow label={strings.set.praying} />
-              <Text>{set.prayer_focus ?? strings.set.nothingWritten}</Text>
-              <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-                {[set.theme, set.scripture].filter((t): t is string => !!t).map((t) => (
-                  <Chip key={t} label={t} />
-                ))}
-              </View>
+              <Text variant="caption">{set.prayer_focus ?? strings.set.nothingWritten}</Text>
+              {set.theme || set.scripture ? (
+                <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", marginTop: space.xs }}>
+                  {[set.theme, set.scripture].filter((t): t is string => !!t).map((t) => (
+                    // A tag, not a status: the word is the whole meaning.
+                    <StatusChip key={t} label={t} variant="quiet" icon={null} />
+                  ))}
+                </View>
+              ) : null}
             </View>
           ) : null}
 
@@ -197,19 +206,21 @@ export function SetSheet({
           />
 
           {set.setlist ? (
-            <View style={{ gap: 6, padding: 12, backgroundColor: colors.surface }}>
+            <View style={{ gap: space.xs, padding: space.md, borderRadius: radius.card, backgroundColor: colors.surface }}>
               <LabelRow label={strings.set.walkIn} />
-              <Text>{set.setlist}</Text>
+              <Text variant="caption">{set.setlist}</Text>
             </View>
           ) : null}
 
           {canManageSet(set, userId, access) ? (
-            <ListRow
-              title={strings.set.manageOnWeb}
-              trailing="web"
-              onPress={() => openWebPage("/prayer-room", colors)}
-              testID="manage-on-web"
-            />
+            <ListGroup inset={false}>
+              <ListRow
+                title={strings.set.manageOnWeb}
+                trailing="web"
+                onPress={() => openWebPage("/prayer-room", colors)}
+                testID="manage-on-web"
+              />
+            </ListGroup>
           ) : (
             <Text variant="caption" tone="secondary">
               {strings.set.leaveNote(set.owner ? displayName(set.owner) : null)}
@@ -278,23 +289,23 @@ function Lineup({
       >
         <View accessible accessibilityLabel={spoken} style={{ flexDirection: "row", gap: 12, alignItems: "flex-start" }}>
           <Text
-            variant={lead ? "bodyStrong" : "label"}
+            variant="label"
             tone={lead ? "default" : "secondary"}
             // A floor, not a fixed width: at large text sizes the seat name
             // may take more room instead of breaking mid-word.
-            style={{ minWidth: 104, maxWidth: "45%", flexShrink: 1, textTransform: "uppercase" }}
+            style={{ minWidth: 96, maxWidth: "45%", flexShrink: 1, paddingTop: 2, ...(lead ? { fontFamily: fontFamily.bodyBold } : null) }}
           >
             {label}
           </Text>
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             {empty ? (
-              <Text tone="secondary">
+              <Text variant="caption" tone="secondary">
                 {strings.set.nobody}
                 {slot.required_label ? ` · ${slot.required_label.name}` : ""}
               </Text>
             ) : (
               <>
-                <Text variant="bodyStrong">{me || invitedMe ? strings.set.you : displayName(person)}</Text>
+                <Text variant="sectionTitle">{me || invitedMe ? strings.set.you : displayName(person)}</Text>
                 {slot.status === "invited" ? (
                   <Text variant="caption" tone="secondary">
                     {strings.set.invitedPending}
@@ -309,6 +320,7 @@ function Lineup({
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             <Button
               label={strings.set.accept}
+              size="small"
               onPress={() => onAccept(slot)}
               loading={busy === slot.id}
               disabled={!!busy}
@@ -317,6 +329,7 @@ function Lineup({
             <Button
               label={strings.set.decline}
               variant="secondary"
+              size="small"
               onPress={() => onDecline(slot)}
               disabled={!!busy}
               accessibilityLabel={`${strings.set.decline} ${label}`}
@@ -326,12 +339,13 @@ function Lineup({
 
         {empty && !canManage && set.status === "scheduled" ? (
           asked.has(seatKey) ? (
-            <Chip label={strings.set.asked} testID={`asked-${slot.id}`} />
+            <StatusChip label={strings.set.asked} icon={Clock} testID={`asked-${slot.id}`} />
           ) : (
             <View style={{ flexDirection: "row" }}>
               <Button
                 label={strings.set.askToJoin}
                 variant="secondary"
+                size="small"
                 onPress={() => onAsk(slot)}
                 loading={busy === slot.id}
                 disabled={!!busy}
@@ -346,15 +360,19 @@ function Lineup({
   };
 
   return (
-    <View style={{ gap: 4 }}>
+    <View style={{ gap: space.xs }}>
       <LabelRow label={strings.set.lineup} right={strings.set.openSeats(c.open, c.total)} />
-      {set.slots.length === 0 ? <Text tone="secondary">{strings.set.noSeats}</Text> : null}
+      {set.slots.length === 0 ? (
+        <Text variant="caption" tone="secondary">
+          {strings.set.noSeats}
+        </Text>
+      ) : null}
       {leads.map((s) => row(s, true))}
       {leads.length > 0 && others.length > 0 ? (
         <View
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
-          style={{ height: 2, backgroundColor: colors.text, marginVertical: 4 }}
+          style={{ height: 2, backgroundColor: colors.text, marginVertical: space.xs }}
         />
       ) : null}
       {others.map((s) => row(s, false))}

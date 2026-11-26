@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import * as Brightness from "expo-brightness";
 import * as WebBrowser from "expo-web-browser";
+import { StyleSheet } from "react-native";
 
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
@@ -11,6 +12,11 @@ import { ticketCacheKey } from "../ticket-cache";
 import { makeTickets, ticketEvent } from "../testing/fixtures";
 
 let mockNet = { isConnected: true, isInternetReachable: true };
+let mockScheme: "light" | "dark" = "light";
+jest.mock("@/theme/use-theme", () => {
+  const actual = jest.requireActual("@/theme/use-theme");
+  return { ...actual, useTheme: () => actual.themeFor(mockScheme) };
+});
 jest.mock("expo-network", () => ({ useNetworkState: () => mockNet }));
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
 jest.mock("@/lib/supabase", () => ({
@@ -48,6 +54,7 @@ beforeEach(async () => {
   mockFetch.mockReset();
   jest.clearAllMocks();
   mockNet = { isConnected: true, isInternetReachable: true };
+  mockScheme = "light";
   await AsyncStorage.clear();
 });
 
@@ -73,6 +80,31 @@ describe("Ticket detail", () => {
     await waitFor(() => expect(Brightness.setBrightnessAsync).toHaveBeenLastCalledWith(0.4));
   });
 
+  it("header: the event is the title, with a way back to My tickets", async () => {
+    mockFetch.mockResolvedValue(makeTickets());
+    const onBack = jest.fn();
+    await render(<TicketDetailScreen ticketId="t-up" onBack={onBack} />);
+    expect(await screen.findByRole("header", { name: "Send Night" })).toBeTruthy();
+    expect(screen.getByText("Ready to scan")).toBeTruthy();
+    expect(screen.getByText("Show this at the door")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Back to My tickets" }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["light", "dark"] as const)("the QR sits on white in %s, and the code keeps its case", async (scheme) => {
+    mockScheme = scheme;
+    mockFetch.mockResolvedValue(makeTickets());
+    await render(<TicketDetailScreen ticketId="t-up" />);
+    const qr = await screen.findByTestId("ticket-qr");
+    expect(StyleSheet.flatten(qr.props.style)).toMatchObject({ backgroundColor: "#FFFFFF" });
+    const code = screen.getByTestId("ticket-code", { includeHiddenElements: true });
+    expect(code).toHaveTextContent("AbCdEfGhIjK");
+    const style = StyleSheet.flatten(code.props.style);
+    expect(style.textTransform).toBeUndefined();
+    expect(style.fontFamily).toMatch(/RobotoMono/);
+    expect(style.fontSize).toBeGreaterThanOrEqual(11);
+  });
+
   it("works offline from the copy saved on this phone", async () => {
     await AsyncStorage.setItem(ticketCacheKey("u1"), JSON.stringify({ savedAt: "2026-11-02T10:00:00.000Z", data: makeTickets() }));
     mockNet = { isConnected: false, isInternetReachable: false };
@@ -86,6 +118,9 @@ describe("Ticket detail", () => {
     mockFetch.mockResolvedValue(makeTickets());
     await render(<TicketDetailScreen ticketId="t-past" />);
     expect(await screen.findByText(/^Checked in at \d\d:\d\d$/)).toBeTruthy();
+    expect(screen.getByText("Checked in")).toBeTruthy();
+    // The QR still shows.
+    expect(screen.getByTestId("ticket-qr")).toBeTruthy();
   });
 
   it("cancelled ticket: explains, QR dimmed, no brightness boost", async () => {
@@ -95,6 +130,33 @@ describe("Ticket detail", () => {
     await render(<TicketDetailScreen ticketId="t-void" />);
     expect(await screen.findByText(/cancelled or refunded/)).toBeTruthy();
     expect(Brightness.setBrightnessAsync).not.toHaveBeenCalled();
+    // Said three ways: the chip and banner in words, and the QR's own label.
+    expect(screen.getAllByText("Cancelled").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole("alert")).toHaveTextContent(/Cancelled.*won't scan/);
+    expect(screen.getByRole("image", { name: /^Cancelled ticket, it won't scan/ })).toBeTruthy();
+    expect(screen.queryByText("Show this at the door")).toBeNull();
+    expect(screen.queryByText("Screen brightness is turned up while this is open.")).toBeNull();
+  });
+
+  it("waiver not needed: no waiver row at all", async () => {
+    mockFetch.mockResolvedValue(makeTickets());
+    await render(<TicketDetailScreen ticketId="t-up" />);
+    await screen.findByText("Send Night");
+    expect(screen.queryByTestId("waiver")).toBeNull();
+    expect(screen.queryByRole("button", { name: "View signed waiver" })).toBeNull();
+  });
+
+  it("waiver not signed yet: sends them to the event team, with nothing to open", async () => {
+    mockFetch.mockResolvedValue(
+      makeTickets({
+        tickets: [{ ...signedTicket, waiver: { required: true, signed: false, signedAt: null, title: "Camp waiver", hasDocument: false } }],
+      }),
+    );
+    await render(<TicketDetailScreen ticketId="t-w" />);
+    expect(
+      await screen.findByLabelText("Waiver · Camp waiver: Not signed yet. Contact the event team before you arrive."),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "View signed waiver" })).toBeNull();
   });
 
   it("waiver: shows status and opens the signed copy in the in-app browser", async () => {

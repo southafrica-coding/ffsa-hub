@@ -76,11 +76,15 @@ export function useStudentDemographics(): DemographicsState {
 
 // Shared control styling for the scope / school pickers.
 export const pickerStyle: React.CSSProperties = {
-  background: "hsl(22 8% 12%)",
-  border: "1px solid hsl(22 8% 18%)",
-  borderRadius: "6px",
-  color: "hsl(30 8% 65%)",
-  fontSize: "10px",
-  padding: "4px 8px",
-  letterSpacing: "0.05em",
+  background: "var(--surface-1)",
+  border: "1px solid var(--rule-strong)",
+  borderRadius: 0,
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-roboto), Roboto, sans-serif",
+  fontSize: "14px",
+  lineHeight: 1.4,
+  padding: "8px 12px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
 };

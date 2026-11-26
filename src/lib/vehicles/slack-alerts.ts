@@ -6,11 +6,14 @@
 //                 place once it's decided (in Slack or the Hub).
 //   • collected / paid / signed / cancelled — FYI.
 //   • returned  — mileage, km driven, wash/fuel, damage, + Mark completed.
-//   • digest    — 07:00 SAST: pickups, returns, overdue, unpaid, waiting.
+//   • digest    — 07:00 SAST, in two parts: BOOKINGS (pickups, returns, overdue,
+//                 unpaid, waiting, + Fleet's clashes and trip checks) and FLEET
+//                 (every vehicle IN or OUT, with what's due on it). One message.
 //
 // Everything is best-effort: nothing here may fail the action that triggered
 // it. All reads use the ADMIN client (callers are already authorised).
 
+import { blockEnd } from "@/lib/vehicles/hold";
 import * as slack from "@/lib/slack/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { dateRangeLabel } from "@/lib/bookings/dates";
@@ -18,8 +21,7 @@ import { checkDriverEligibility } from "@/lib/vehicles/licence";
 import {
   DAMAGE_PANELS,
   INVENTORY_ITEMS,
-  dayCount,
-  purposeLabel,
+  billableDays, purposeLabel,
   randsLabel,
   getLicenceFactsFor,
   eligibilityInput,
@@ -41,15 +43,16 @@ export const VH_OPEN = "vh_open";
 export const VH_DENY_VIEW = "vh_deny_view";
 export const isVehicleAction = (actionId: string) => actionId.startsWith("vh_");
 
-type Block = Record<string, unknown>;
-type Message = { text: string; blocks: Block[] };
+export type Block = Record<string, unknown>;
+export type Message = { text: string; blocks: Block[] };
 
 const panelLabel = new Map(DAMAGE_PANELS.map((p) => [p.key, p.label]));
 const itemLabel = new Map(INVENTORY_ITEMS.map((i) => [i.key, i.label]));
 
-const section = (text: string): Block => ({ type: "section", text: { type: "mrkdwn", text } });
-const context = (text: string): Block => ({ type: "context", elements: [{ type: "mrkdwn", text }] });
-const openButton = (id: string): Block => ({
+export const section = (text: string): Block => ({ type: "section", text: { type: "mrkdwn", text } });
+export const context = (text: string): Block => ({ type: "context", elements: [{ type: "mrkdwn", text }] });
+const divider = (): Block => ({ type: "divider" });
+export const openButton = (id: string): Block => ({
   type: "button",
   action_id: VH_OPEN,
   text: { type: "plain_text", text: "Open in Hub" },
@@ -58,7 +61,7 @@ const openButton = (id: string): Block => ({
 
 // ── recipients + posting ────────────────────────────────────
 
-async function recipients(admin: Client): Promise<{ userId: string; slackUserId: string }[]> {
+export async function recipients(admin: Client): Promise<{ userId: string; slackUserId: string }[]> {
   const { data: settings } = await admin.from("vehicle_alert_settings").select("slack_alert_user_ids").maybeSingle();
   const ids = ((settings?.slack_alert_user_ids as string[] | null) ?? []).filter(Boolean);
   if (ids.length === 0) return [];
@@ -83,7 +86,12 @@ async function dm(slackUserId: string, message: Message): Promise<{ channel: str
 }
 
 /** DM everyone, recording the message so it can be rewritten later. */
-async function postTracked(admin: Client, bookingId: string, kind: "request" | "returned", message: Message) {
+export async function postTracked(
+  admin: Client,
+  bookingId: string,
+  kind: "request" | "returned" | "due-back" | "post-rental" | "early-return",
+  message: Message
+) {
   for (const r of await recipients(admin)) {
     // Claim first: two triggers racing must not double-DM.
     const { data: claimed } = await admin
@@ -144,7 +152,7 @@ async function loadCtx(admin: Client, bookingId: string): Promise<Ctx | null> {
 
   const [fleetRes, overlapping, inspRes] = await Promise.all([
     admin.from("vehicles").select("id, name, vehicle_type, status").eq("status", "active").order("sort_order"),
-    getOverlappingAssignments(admin, b.checkout_date, b.return_date, b.id),
+    getOverlappingAssignments(admin, b.checkout_date, blockEnd(b), b.id),
     admin
       .from("vehicle_inspections")
       .select("kind, mileage, fuel_full, washed, damage_reported, damage_panels, inventory, condition_notes, driver_names, created_at")
@@ -185,7 +193,7 @@ async function loadCtx(admin: Client, bookingId: string): Promise<Ctx | null> {
 }
 
 function headline(b: VehicleBookingWithRefs): string {
-  const days = dayCount(b.checkout_date, b.return_date);
+  const days = billableDays(b.checkout_date, b.return_date) // the due-back day isn't counted;
   return `${dateRangeLabel(b.checkout_date, b.return_date)} (${days} day${days === 1 ? "" : "s"})`;
 }
 
@@ -337,9 +345,11 @@ export async function refreshVehicleRequestAlerts(bookingId: string): Promise<vo
       if (row.kind === "request") {
         close = c.b.status !== "pending";
         message = close ? await requestClosedMessage(admin, c) : requestOpenMessage(c);
-      } else {
+      } else if (row.kind === "returned") {
         close = c.b.status !== "approved";
         message = close ? await requestClosedMessage(admin, c) : returnedMessage(c);
+      } else {
+        continue; // due-back, post-rental, early-return: lib/vehicles/rental-return refreshes those
       }
       await slack.updateMessage({ channel: row.slack_channel, ts: row.slack_ts, ...message }).catch(() => null);
       if (close) {
@@ -500,8 +510,16 @@ const rowLine = (b: Row, tail?: string) => {
   return `• <${bookingUrl(b.id)}|${b.booking_name}>${v ? ` · ${v}` : ""}${b.requester_name ? ` · ${b.requester_name}` : ""}${tail ? ` · ${tail}` : ""}`;
 };
 
-/** The morning summary. Sends nothing on a quiet day. */
-export async function sendVehicleDigest(): Promise<{ sent: boolean; items: number }> {
+/**
+ * The 07:00 digest, in two parts (Gideon, 19 Nov 2026): BOOKINGS, everything about
+ * bookings, and FLEET, every vehicle IN or OUT (lib/fleet/digest). `fleet` is Fleet's
+ * share (lib/fleet/reminder-send fleetDigestPart); the Vehicle Coordinator(s) get the
+ * message even when they aren't on the alert list. Without Fleet's share, a quiet day
+ * sends nothing; with it, the vehicles are listed every day.
+ */
+export async function sendVehicleDigest(
+  opts: { fleet?: { bookingParts: string[]; fleetParts: string[]; items: number; slackUserIds: string[] } | null } = {}
+): Promise<{ sent: boolean; items: number }> {
   if (!process.env.SLACK_BOT_TOKEN) return { sent: false, items: 0 };
   const admin = createAdminClient() as Client;
   const today = sastToday();
@@ -546,16 +564,31 @@ export async function sendVehicleDigest(): Promise<{ sent: boolean; items: numbe
   if (waiting.length) parts.push(`*⏳ Waiting on a decision 2+ days (${waiting.length})*\n${waiting.map((b) => rowLine(b, headline(b))).join("\n")}`);
   if (toComplete.length) parts.push(`*✔️ Signed in, not marked completed (${toComplete.length})*\n${toComplete.map((b) => rowLine(b)).join("\n")}`);
 
-  const items = overdue.length + pickups.length + returns.length + unpaid.length + waiting.length + toComplete.length;
-  if (items === 0) return { sent: false, items: 0 };
+  const fleet = opts.fleet && (opts.fleet.fleetParts.length || opts.fleet.bookingParts.length) ? opts.fleet : null;
+  if (fleet) parts.push(...fleet.bookingParts);
 
-  await postFyi(admin, {
+  const items = overdue.length + pickups.length + returns.length + unpaid.length + waiting.length + toComplete.length + (fleet?.items ?? 0);
+  if (items === 0 && !fleet?.fleetParts.length) return { sent: false, items: 0 };
+
+  // Fleet off (FLEET_MESSAGES_ENABLED unset): exactly the bookings digest as before.
+  const body = fleet?.fleetParts.length
+    ? [
+        section(`*📅 BOOKINGS – <${SITE}/bookings/vehicles/board|open the board>*`),
+        ...(parts.length ? parts : ["Nothing on bookings today."]).map(section),
+        divider(),
+        ...fleet.fleetParts.map(section),
+      ]
+    : parts.map(section);
+  const message = {
     text: `Vehicles today — ${items} thing${items === 1 ? "" : "s"} to know`,
     blocks: [
       section(`*🚐 Vehicles — ${dateRangeLabel(today, null)}*`),
-      ...parts.map(section),
+      ...body,
       context(`<${SITE}/bookings/vehicles|Open the vehicle board>`),
     ],
-  });
+  };
+  const to = new Set((await recipients(admin)).map((r) => r.slackUserId));
+  for (const id of fleet?.slackUserIds ?? []) to.add(id);
+  for (const id of to) await dm(id, message);
   return { sent: true, items };
 }

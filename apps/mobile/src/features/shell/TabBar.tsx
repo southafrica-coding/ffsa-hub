@@ -1,34 +1,43 @@
 import type { BottomTabBarProps } from "expo-router/js-tabs";
-import { Pressable, View } from "react-native";
+import { Text as RNText, View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
-import { Text } from "@/components";
-import { hairline, touch } from "@/theme/tokens";
+import { selectionHaptic } from "@/components";
+import { fontFamily, fontSize, hairline, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { badgeText, useTabBadge } from "./badges";
 import { useMe } from "./me-context";
 import { shellStrings } from "./strings";
-import { TABS, tabForRoute, visibleTabs, type TabDef } from "./tabs";
+import { focusedPath, hidesTabBar, isTabRoot, TABS, tabForRoute, visibleTabs, type TabDef } from "./tabs";
 
-// The bottom tab bar (web frame 4d): hairline top rule, labelled icons, the
-// active tab marked by a yellow tick AND bold ink text (never colour alone).
-// Order and visibility come from TABS, not from the navigator, so a route
-// arriving as "finance" or "finance/index" lands in the same place.
+// The bottom tab bar (spec §5): 48pt + home indicator, top hairline. The
+// active tab is marked by a 3pt yellow tick on the top edge AND a bold label
+// AND a heavier icon (never colour alone). Order and visibility come from
+// TABS, not from the navigator. Hidden routes (Bookings, Schools, …) mark
+// Home active; full-screen moments (ticket QR, scanner, long forms) hide it.
+
+/** Tab labels grow with Dynamic Type up to 13pt, then stop (mockup: min(11×dt, 13)). */
+export const TAB_LABEL_MAX_SCALE = 13 / fontSize.tab;
 
 export type TabBarProps = BottomTabBarProps & { tabs?: readonly TabDef[] };
 
-export function TabBar({ state, emitter, navigateToTab, insets, tabs = TABS }: TabBarProps) {
+export function TabBar({ state, descriptors, emitter, navigateToTab, insets, tabs = TABS }: TabBarProps) {
   const { colors } = useTheme();
   const { me } = useMe();
-  const shown = visibleTabs(me, tabs);
-  const focusedKey = state.routes[state.index]?.key;
+  const focusedRoute = state.routes[state.index];
+  const focusedKey = focusedRoute?.key;
+  const focusedTab = focusedRoute ? tabForRoute(focusedRoute.name, tabs) : undefined;
+  const optionsHide = focusedKey ? (descriptors?.[focusedKey]?.options?.tabBarStyle as { display?: string } | undefined)?.display === "none" : false;
+  if (optionsHide || hidesTabBar(focusedPath(state as Parameters<typeof focusedPath>[0]))) return null;
 
-  const items = shown
-    .map((tab) => ({ tab, route: state.routes.find((r) => tabForRoute(r.name, tabs)?.id === tab.id) }))
+  const items = visibleTabs(me, tabs)
+    .map((tab) => ({ tab, route: state.routes.find((r) => isTabRoot(r.name, tab)) }))
     .filter((x): x is { tab: TabDef; route: (typeof state.routes)[number] } => !!x.route);
 
   return (
     <View
+      testID="tab-bar"
       accessibilityRole="tablist"
       style={{
         flexDirection: "row",
@@ -45,10 +54,13 @@ export function TabBar({ state, emitter, navigateToTab, insets, tabs = TABS }: T
           key={tab.id}
           tab={tab}
           position={`${i + 1} of ${items.length}`}
-          focused={route.key === focusedKey}
+          focused={focusedTab?.id === tab.id}
           onPress={() => {
             const event = emitter.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
-            if (route.key !== focusedKey && !event.defaultPrevented) navigateToTab(route.key);
+            if (route.key !== focusedKey && !event.defaultPrevented) {
+              selectionHaptic();
+              navigateToTab(route.key);
+            }
           }}
           onLongPress={() => emitter.emit({ type: "tabLongPress", target: route.key })}
         />
@@ -86,64 +98,79 @@ function TabButton({
       onLongPress={onLongPress}
       style={({ pressed }) => ({
         flex: 1,
-        minHeight: touch.minTarget + 8,
+        minHeight: touch.minTarget,
         alignItems: "center",
         justifyContent: "center",
-        paddingTop: 8,
-        paddingBottom: 6,
-        gap: 3,
+        paddingTop: 6,
+        paddingBottom: 4,
+        paddingHorizontal: 2,
+        gap: 2,
         backgroundColor: pressed ? colors.surface : "transparent",
       })}
     >
-      {/* Active marker: the yellow tick from the web's tab bar. */}
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: "25%",
-          right: "25%",
-          height: 3,
-          backgroundColor: focused ? colors.accent : "transparent",
-        }}
-      />
+      {/* Active marker: 3pt yellow tick on the top edge (decoration; the bold label and role carry the state). */}
+      {focused ? (
+        <View
+          testID={`tab-tick-${tab.id}`}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{
+            position: "absolute",
+            top: -hairline,
+            alignSelf: "center",
+            width: 28,
+            height: 3,
+            borderBottomLeftRadius: 2,
+            borderBottomRightRadius: 2,
+            backgroundColor: colors.accent,
+          }}
+        />
+      ) : null}
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Icon size={22} color={tint} strokeWidth={focused ? 2.5 : 2} />
+        <Icon size={24} color={tint} strokeWidth={focused ? 2.5 : 2} />
         {badge > 0 ? (
           <View
             testID={`tab-badge-${tab.id}`}
-            importantForAccessibility="no-hide-descendants"
-            accessibilityElementsHidden
             style={{
               position: "absolute",
-              top: -6,
-              left: 14,
+              top: -5,
+              left: 15,
               minWidth: 20,
-              paddingHorizontal: 4,
-              paddingVertical: 1,
+              minHeight: 18,
+              paddingHorizontal: 5,
+              borderRadius: 9,
+              borderWidth: 2,
+              borderColor: colors.bg,
+              // Ink pill in light, cream in dark (inverse), with its own contrasting text.
               backgroundColor: colors.inverse,
               alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            <Text variant="label" tone="onInverse" maxFontSizeMultiplier={1.3}>
+            <RNText
+              maxFontSizeMultiplier={1.2}
+              style={{ fontFamily: fontFamily.bodyBold, fontSize: 11, lineHeight: 13, color: colors.onInverse }}
+            >
               {badgeText(badge)}
-            </Text>
+            </RNText>
           </View>
         ) : null}
       </View>
-      <Text
-        variant="label"
-        style={{ color: tint, letterSpacing: focused ? 1.6 : 1.4 }}
+      <RNText
+        testID={`tab-label-${tab.id}`}
         numberOfLines={1}
-        maxFontSizeMultiplier={1.6}
-        // Five tabs on a 320pt phone leave ~64pt each: at large text sizes
-        // shrink the label to fit rather than cutting it off.
-        adjustsFontSizeToFit
-        minimumFontScale={0.7}
+        allowFontScaling
+        maxFontSizeMultiplier={TAB_LABEL_MAX_SCALE}
+        style={{
+          fontFamily: focused ? fontFamily.bodyExtraBold : fontFamily.bodyMedium,
+          fontSize: fontSize.tab,
+          lineHeight: 13,
+          color: tint,
+          textAlign: "center",
+        }}
       >
         {tab.label}
-      </Text>
+      </RNText>
     </Pressable>
   );
 }

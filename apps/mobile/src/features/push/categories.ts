@@ -16,4 +16,14 @@ export const PUSH_CHANNELS: ChannelDef[] = [
     name: "Your bookings",
     description: "When a booking you asked for is approved or declined.",
   },
+  {
+    id: "training_care",
+    name: "Students who need care",
+    description: "When a student you lead or walk with is flagged as needing care.",
+  },
+  {
+    id: "training_week",
+    name: "Your week in Training",
+    description: "Monday morning, when something needs you this week (if you're not on Slack).",
+  },
 ];

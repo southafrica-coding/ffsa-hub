@@ -1,66 +1,71 @@
-import { useState, type ReactNode } from "react";
+import { CalendarDays, Lock } from "lucide-react-native";
+import { useState } from "react";
 import { View } from "react-native";
 
-import { Banner, Button, Text } from "@/components";
-import { SectionBar, SkeletonRows, StateMessage } from "@/features/shell";
+import { Banner, EmptyState, FadeIn, NeedsYouBand, SkeletonList, Text } from "@/components";
+import { space } from "@/theme/tokens";
 
+import { dayMarker, stripDays, stripSummary, stripWeek, type DayMarker } from "../day-strip";
 import { useWeek } from "../hooks";
 import {
   blockoutWhen,
-  dayLabel,
   friendlyError,
-  groupWeek,
   isForbidden,
   isOfflineError,
   needsALead,
+  sastToday,
   savedAtLabel,
-  spokenDate,
-  weekRangeLabel,
-  weekSummary,
   type PrayerAccess,
 } from "../logic";
 import { strings } from "../strings";
 
-import { Frame } from "./Frame";
+import { DayStrip } from "./DayStrip";
+import { Frame, type PrayerNav } from "./Frame";
 import { SetRow } from "./SetRow";
 import { SetSheet } from "./SetSheet";
-import { ErrorState } from "./ui";
+import { DayHeader, ErrorState } from "./ui";
 
 /**
- * The wall on a phone (frame 11b): the week as a vertical run of days, each
- * set a row you can open. The screen's ONE yellow band is the web's: sets
- * nobody leads yet.
+ * The wall on a phone (frame 4.1): Monday to Friday as a day strip, and the
+ * chosen day's sets as a vertical run, each a row you can open. The screen's
+ * ONE yellow band is the web's: sets nobody leads yet.
  */
 export function WeekView({
   anchor,
+  day,
+  onDay,
   nav,
   userId,
   access,
   now,
 }: {
   anchor: string;
-  nav: ReactNode;
+  /** The day of the strip that's showing. */
+  day: string;
+  onDay: (date: string) => void;
+  nav: PrayerNav;
   userId: string | null;
   access: PrayerAccess;
   now: () => Date;
 }) {
   const week = useWeek(anchor);
   const [openId, setOpenId] = useState<string | null>(null);
-  const label = weekRangeLabel(anchor);
+  const today = sastToday(now());
 
   if (week.status === "loading") {
     return (
-      <Frame context={label} nav={nav}>
-        <SkeletonRows count={5} label={strings.week.loading} />
+      <Frame nav={nav}>
+        <DayStrip days={stripDays(anchor)} selected={day} today={today} onSelect={onDay} />
+        <SkeletonList count={4} label={strings.week.loading} inset={false} />
       </Frame>
     );
   }
 
   if (week.status === "error") {
     return (
-      <Frame context={label} nav={nav} onRefresh={week.refresh} refreshing={week.refreshing}>
+      <Frame nav={nav} onRefresh={week.refresh} refreshing={week.refreshing}>
         {isForbidden(week.error) ? (
-          <StateMessage title={strings.errors.forbiddenTitle} body={strings.errors.forbiddenBody} testID="forbidden" />
+          <EmptyState icon={Lock} title={strings.errors.forbiddenTitle} body={strings.errors.forbiddenBody} testID="forbidden" />
         ) : (
           <ErrorState message={friendlyError(week.error)} onRetry={week.refresh} />
         )}
@@ -69,67 +74,86 @@ export function WeekView({
   }
 
   const { sets, blockouts, meta } = week.data;
-  const summary = weekSummary(sets);
-  const days = groupWeek(anchor, sets, blockouts);
+  const days = stripWeek(anchor, sets, blockouts);
+  const summary = stripSummary(days);
   const needLead = days.flatMap((d) => d.sets).filter((s) => needsALead(s, meta.seatTypes));
+  const markers: Record<string, DayMarker | null> = Object.fromEntries(days.map((d) => [d.date, dayMarker(d, meta.seatTypes, userId)]));
+  const shown = days.find((d) => d.date === day) ?? days[0];
   const offline = week.stale && week.refreshError !== null && isOfflineError(week.refreshError);
   const failed = week.stale && week.refreshError !== null && !offline;
+  const emptyWeek = summary.sets === 0;
 
   return (
     <Frame
-      context={strings.week.context(label, summary.sets, summary.open, summary.seats)}
       nav={nav}
+      summary={strings.week.summary(summary.sets, summary.open, summary.seats)}
       onRefresh={week.refresh}
       refreshing={week.refreshing}
     >
       {offline && week.savedAt ? (
-        <Banner tone="info" title={strings.week.offline} testID="offline-banner">
+        <Banner tone="offline" title={strings.week.offline} testID="offline-banner">
           {strings.week.offlineBody(savedAtLabel(week.savedAt, now()))}
         </Banner>
       ) : null}
       {failed && week.savedAt ? (
-        <Banner tone="danger" title={strings.week.staleTitle} testID="stale-banner">
+        <Banner
+          tone="error"
+          title={strings.week.staleTitle}
+          testID="stale-banner"
+          actionLabel={strings.errors.retry}
+          onAction={week.refresh}
+        >
           {`${friendlyError(week.refreshError)} ${strings.week.staleBody(savedAtLabel(week.savedAt, now()))}`}
         </Banner>
       ) : null}
 
       {needLead.length > 0 ? (
-        <Banner
-          tone="needsYou"
+        <NeedsYouBand
           testID="needs-lead-band"
-          action={<Button label={strings.week.openFirst} variant="secondary" onPress={() => setOpenId(needLead[0].id)} />}
-        >
-          {strings.week.needLead(needLead.length)}
-        </Banner>
+          eyebrow={strings.week.needLeadEyebrow}
+          text={strings.week.needLead(needLead.length)}
+          actionLabel={strings.week.openFirst}
+          onAction={() => {
+            // Show the day it's on behind the sheet, so closing lands there.
+            onDay(needLead[0].set_date);
+            setOpenId(needLead[0].id);
+          }}
+        />
       ) : null}
 
-      {summary.sets === 0 ? (
-        <StateMessage title={strings.week.emptyTitle} body={strings.week.emptyBody} testID="week-empty" />
-      ) : null}
+      <DayStrip days={days.map((d) => d.date)} selected={shown.date} today={today} markers={markers} onSelect={onDay} />
 
-      {days.map((day) => (
-        <View key={day.date} style={{ gap: 8 }} testID={`day-${day.date}`}>
-          <View accessible accessibilityRole="header" accessibilityLabel={spokenDate(day.date)}>
-            <SectionBar label={dayLabel(day.date)} />
+      {emptyWeek && shown.blockouts.length === 0 ? (
+        <EmptyState icon={CalendarDays} title={strings.week.emptyTitle} body={strings.week.emptyBody} testID="week-empty" />
+      ) : (
+        <FadeIn>
+          <View testID={`day-${shown.date}`}>
+            <DayHeader date={shown.date} />
+            <View style={{ gap: space.sm }}>
+              {shown.blockouts.map((b) => (
+                <Banner key={b.id} tone="info" icon={Lock} testID={`blockout-${b.id}`}>
+                  {strings.week.blocked(blockoutWhen(b), b.reason, b.relocation_note)}
+                </Banner>
+              ))}
+              {shown.sets.length === 0 ? (
+                <Text variant="caption" tone="secondary">
+                  {strings.week.nothingThisDay}
+                </Text>
+              ) : null}
+              {shown.sets.map((s) => (
+                <SetRow
+                  key={s.id}
+                  set={s}
+                  seatTypes={meta.seatTypes}
+                  bands={meta.bands}
+                  userId={userId}
+                  onPress={() => setOpenId(s.id)}
+                />
+              ))}
+            </View>
           </View>
-          {day.blockouts.map((b) => (
-            <Banner key={b.id} tone="info">
-              {strings.week.blocked(blockoutWhen(b), b.reason, b.relocation_note)}
-            </Banner>
-          ))}
-          {day.sets.length === 0 && summary.sets > 0 ? <Text tone="secondary">{strings.week.nothingThisDay}</Text> : null}
-          {day.sets.map((s) => (
-            <SetRow
-              key={s.id}
-              set={s}
-              seatTypes={meta.seatTypes}
-              bands={meta.bands}
-              userId={userId}
-              onPress={() => setOpenId(s.id)}
-            />
-          ))}
-        </View>
-      ))}
+        </FadeIn>
+      )}
 
       <SetSheet
         setId={openId}

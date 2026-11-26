@@ -55,7 +55,7 @@ export function MastheadAction({ href, children }: { href: string; children: Rea
   return (
     <Link
       href={href}
-      className="inline-flex min-h-11 shrink-0 items-center border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white"
+      className="inline-flex min-h-11 shrink-0 items-center border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[var(--ink-bg-hover)] hover:text-white"
     >
       {children}
     </Link>
@@ -80,7 +80,7 @@ export function MastheadButton({
       className={cn(
         "inline-flex min-h-11 shrink-0 items-center border px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em]",
         tone === "solid"
-          ? "border-ink bg-ink text-white hover:bg-[#262622]"
+          ? "border-ink bg-ink text-white hover:bg-[var(--ink-bg-hover)]"
           : "border-ink bg-bone text-ink hover:bg-bone-2"
       )}
     >
@@ -94,7 +94,7 @@ export function NeedsYouAction({ href, children }: { href: string; children: Rea
   return (
     <Link
       href={href}
-      className="inline-flex min-h-11 shrink-0 items-center border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-yellow hover:bg-[#262622]"
+      className="inline-flex min-h-11 shrink-0 items-center border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-yellow hover:bg-[var(--ink-bg-hover)]"
     >
       {children}
     </Link>
@@ -131,7 +131,7 @@ export function ModuleTabs({
                 "flex min-h-11 items-center gap-1.5 px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]",
                 on
                   ? "bg-ink text-white"
-                  : "border border-b-0 border-rule text-[#7C786C] hover:text-ink"
+                  : "border border-b-0 border-rule text-[color:var(--text-tertiary)] hover:text-ink"
               )}
             >
               {t.mark && <span className={cn("h-2.5 w-2.5", on ? "bg-yellow" : "bg-rule-strong")} />}
@@ -161,7 +161,7 @@ export type Tone = "good" | "warn" | "quiet" | "bad";
 export const TONE: Record<Tone, string> = {
   good: "border-grass text-grass-text",
   warn: "border-amber-border text-amber",
-  quiet: "border-rule-strong text-[#55524A]",
+  quiet: "border-rule-strong text-[color:var(--text-muted)]",
   bad: "border-destructive text-destructive",
 };
 export function StatusPill({ tone = "quiet", children }: { tone?: Tone; children: React.ReactNode }) {
@@ -182,7 +182,7 @@ export function Numeral({ children, size = 54, sub }: { children: React.ReactNod
   return (
     <div className="flex items-baseline gap-2">
       <span className="numeral" style={{ fontSize: size }}>{children}</span>
-      {sub && <span className="numeral text-[#7C786C]" style={{ fontSize: size * 0.42 }}>{sub}</span>}
+      {sub && <span className="numeral text-[color:var(--text-tertiary)]" style={{ fontSize: size * 0.42 }}>{sub}</span>}
     </div>
   );
 }
@@ -235,7 +235,7 @@ export function Kpi({
           <Bar pct={bar.pct} tone={bar.tone} />
         </div>
       )}
-      {foot && <div className="mt-2.5 font-mono text-[10px] tracking-[0.08em] text-[#55524A]">{foot}</div>}
+      {foot && <div className="mt-2.5 font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-muted)]">{foot}</div>}
     </div>
   );
 }
@@ -290,7 +290,7 @@ export function DateBlock({ day, mon, invert }: { day: string; mon: string; inve
     <div className={cn("w-12 shrink-0 border py-1.5 text-center",
       invert ? "border-ink bg-ink" : "border-rule-strong bg-bone")}>
       <div className={cn("font-display text-[20px] font-black leading-none", invert ? "text-white" : "text-ink")}>{day}</div>
-      <div className={cn("font-mono text-[8px] tracking-[0.14em]", invert ? "text-yellow" : "text-[#7C786C]")}>{mon}</div>
+      <div className={cn("font-mono text-[8px] tracking-[0.14em]", invert ? "text-yellow" : "text-[color:var(--text-tertiary)]")}>{mon}</div>
     </div>
   );
 }

@@ -1,0 +1,76 @@
+/* Portaled dialogs and sheets sit outside the Missio font wrapper.
+   This class carries the skin faces onto that content. */
+
+.surface {
+  --display: var(--font-missio-display), Fraunces, Georgia, serif;
+  --body: var(--font-missio-body), Archivo, system-ui, sans-serif;
+  font-family: var(--body);
+  color: var(--ink, #1c1b17);
+  background: var(--panel, #fbf9f4);
+}
+
+.surface h1,
+.surface h2,
+.surface h3 {
+  font-family: var(--display) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+  line-height: 1.25 !important;
+  color: var(--ink, #1c1b17) !important;
+}
+
+.surface h1 {
+  font-size: 22px !important;
+}
+
+.surface h2 {
+  font-size: 22px !important;
+}
+
+.surface label {
+  font-family: var(--body) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--sub, #5b574d) !important;
+}
+
+.surface button,
+.surface button:hover,
+.surface button:focus,
+.surface button:focus-visible,
+.surface [role="button"] {
+  font-family: var(--body) !important;
+  font-weight: 600 !important;
+  font-size: 15px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  border-radius: 6px !important;
+  min-height: 44px !important;
+  height: auto !important;
+}
+
+.surface input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.surface textarea,
+.surface select {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  font-family: var(--body) !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  line-height: 1.5 !important;
+  border-radius: 6px !important;
+  color: var(--ink, #1c1b17) !important;
+}
+
+/* Hub dark mode: .theme-light (added in portal.ts) sets the Hub's own ink as
+   the text colour; keep Missio's warmer ink instead. */
+:global(html.dark) .surface.surface {
+  color: var(--ink, #1c1b17);
+}

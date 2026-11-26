@@ -114,11 +114,11 @@ export function FollowupQueue({
         <div
           className=""
           style={{
-            background: "#FFFFFF",
+            background: "var(--surface-1)",
             border: "1px solid var(--rule)",
             textAlign: "center",
             padding: "3rem 1rem",
-            color: "#45423B",
+            color: "var(--text-secondary)",
             fontSize: "13px",
           }}
         >
@@ -154,7 +154,7 @@ const th: React.CSSProperties = {
   fontSize: "10px",
   letterSpacing: "0.15em",
   fontWeight: 700,
-  color: "#45423B",
+  color: "var(--text-secondary)",
   textTransform: "uppercase",
   padding: "12px 16px",
 };
@@ -176,8 +176,8 @@ function AgeBadge({ days }: { days: number }) {
     days >= 7
       ? { bg: "transparent", fg: "hsl(var(--destructive))" }
       : days >= 3
-      ? { bg: "var(--yellow-dim)", fg: "#0A0A0A" }
-      : { bg: "#F1EFE7", fg: "#7C786C" };
+      ? { bg: "var(--yellow-dim)", fg: "var(--text-primary)" }
+      : { bg: "var(--surface-3)", fg: "var(--text-tertiary)" };
   return (
     <span
       style={{
@@ -256,7 +256,7 @@ function FilterBar({
               fontSize: "12px",
               padding: "6px 10px",
               border: "1px solid var(--rule-strong)",
-              background: "#F4F2EA",
+              background: "var(--surface-2)",
               color: "var(--text-primary)",
             }}
           >
@@ -306,7 +306,7 @@ function EventGroup({
     <section
       className="overflow-hidden "
       style={{
-        background: "#FFFFFF",
+        background: "var(--surface-1)",
         border: "1px solid var(--rule)",
       }}
     >
@@ -315,7 +315,7 @@ function EventGroup({
         style={{
           padding: "14px 18px",
           borderBottom: "1px solid var(--rule)",
-          background: "#FFFFFF",
+          background: "var(--surface-1)",
         }}
       >
         <div className="flex items-baseline gap-3">
@@ -331,7 +331,7 @@ function EventGroup({
           </h2>
           <span
             style={{
-              color: "#55524A",
+              color: "var(--text-muted)",
               fontSize: "11px",
               letterSpacing: "0.15em",
               textTransform: "uppercase",
@@ -348,7 +348,7 @@ function EventGroup({
           style={{
             padding: "10px 18px",
             borderBottom: "1px solid var(--rule)",
-            background: "#FFFFFF",
+            background: "var(--surface-1)",
           }}
         >
           <OutcomeDownloadButtons eventId={eventId} outcomes={outcomes} />
@@ -385,14 +385,14 @@ function EventGroup({
                   {r.staff_notes && (
                     <span
                       title="Has staff notes"
-                      style={{ color: "#0A0A0A", display: "inline-flex" }}
+                      style={{ color: "var(--text-primary)", display: "inline-flex" }}
                     >
                       <StickyNote className="h-3 w-3" />
                     </span>
                   )}
                 </div>
                 {r.contact.email && (
-                  <div style={{ color: "#55524A", fontSize: "11px" }}>
+                  <div style={{ color: "var(--text-muted)", fontSize: "11px" }}>
                     {r.contact.email}
                   </div>
                 )}
@@ -421,7 +421,7 @@ function EventGroup({
                         background: o.active
                           ? "var(--yellow-dim)"
                           : "var(--rule)",
-                        color: o.active ? "#0A0A0A" : "#7C786C",
+                        color: o.active ? "var(--text-primary)" : "var(--text-tertiary)",
                         border: o.active
                           ? "1px solid var(--yellow-dim)"
                           : "1px solid transparent",
@@ -433,13 +433,13 @@ function EventGroup({
                 </div>
               </TableCell>
               <TableCell>
-                <div style={{ color: "#9A9689", fontSize: "12px" }}>
+                <div style={{ color: "var(--text-quiet)", fontSize: "12px" }}>
                   {r.stage_label}
                 </div>
                 {r.total_steps > 0 && (
                   <div
                     style={{
-                      color: "#45423B",
+                      color: "var(--text-secondary)",
                       fontSize: "10px",
                       letterSpacing: "0.05em",
                       marginTop: "2px",
@@ -460,7 +460,7 @@ function EventGroup({
                 ) : (
                   <span
                     style={{
-                      color: "#0A0A0A",
+                      color: "var(--text-primary)",
                       fontSize: "11px",
                       fontWeight: 600,
                       letterSpacing: "0.05em",
@@ -501,8 +501,8 @@ function Chip({
         border: active
           ? "1px solid #0A0A0A"
           : "1px solid var(--rule-strong)",
-        background: active ? "#FFF4D9" : "#F4F2EA",
-        color: active ? "#0A0A0A" : "#9A9689",
+        background: active ? "var(--yellow-dim)" : "var(--surface-2)",
+        color: active ? "var(--text-primary)" : "var(--text-quiet)",
         cursor: "pointer",
         display: "inline-flex",
         alignItems: "center",
@@ -517,7 +517,7 @@ function Chip({
             fontWeight: 700,
             padding: "1px 6px",
             background: active ? "#FFB801" : "var(--rule-strong)",
-            color: active ? "#0A0A0A" : "#9A9689",
+            color: active ? "#0A0A0A" : "var(--text-quiet)",
             lineHeight: 1,
           }}
         >

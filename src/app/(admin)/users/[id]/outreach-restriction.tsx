@@ -57,7 +57,7 @@ export function OutreachRestriction({
   }
 
   return (
-    <div style={{ background: "#FFFFFF", border: "1px solid var(--rule)", padding: "20px" }}>
+    <div style={{ background: "var(--surface-1)", border: "1px solid var(--rule)", padding: "20px" }}>
       <p
         style={{
           fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
@@ -69,7 +69,7 @@ export function OutreachRestriction({
       >
         Outreach access
       </p>
-      <p style={{ fontSize: "13px", color: "#55524A", marginBottom: "14px" }}>
+      <p style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "14px" }}>
         Finance view or edit access normally opens every outreach team. Limit it here
         without touching the rest of their Finance access.
       </p>
@@ -84,7 +84,7 @@ export function OutreachRestriction({
         />
         <span>
           <span className="block text-sm font-medium text-ink">Outreach: own teams only</span>
-          <span id="outreach-restriction-help" className="block text-[13px]" style={{ color: "#55524A" }}>
+          <span id="outreach-restriction-help" className="block text-[13px]" style={{ color: "var(--text-muted)" }}>
             {personName} sees only the outreach teams they are on (owner, co-leader or member)
             and the teams in outreach groups they manage. Their other Finance access stays
             as it is. Admins and Finance Admins see every team regardless.

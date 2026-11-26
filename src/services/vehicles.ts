@@ -3,6 +3,7 @@
 // generated database.ts yet, so this service uses the project's standard
 // `Client = any` pattern and hand-written row types (mirrors services/bookings.ts).
 
+import { blocksWindow, holdLookback, HOLD_STATUSES, type HoldFields } from "@/lib/vehicles/hold";
 import { getRoleDerivedPermissionRows } from "@/services/permissions";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -71,6 +72,10 @@ export type VehicleBooking = {
   decided_at: string | null;
   created_at: string;
   updated_at: string;
+  /** 365: the International Team hold (lib/vehicles/hold.ts), released by the coordinator. */
+  hold_released_at?: string | null;
+  hold_released_by?: string | null;
+  hold_release_note?: string | null;
 };
 
 export type VehicleDriver = {
@@ -82,6 +87,8 @@ export type VehicleDriver = {
   licence_number_snapshot: string | null;
   name: string;
   phone: string | null;
+  /** Optional (364): for the pick-up and return instructions. */
+  email?: string | null;
   has_sa_license: boolean;
   is_first_time: boolean;
   driving_test_status: "not_required" | "pending" | "passed" | "failed";
@@ -327,6 +334,25 @@ export async function setBookingVehicles(
   return supabase.from("vehicle_booking_assignments").insert(rows);
 }
 
+export type WorkshopBlock = { id: string; vehicle_id: string; date: string; until: string | null; kind: string | null; provider: string | null };
+
+/**
+ * Booked Fleet workshop visits that overlap [from, to] (SPEC 7.3: a booked visit
+ * blocks its vehicle from `date` to `until`). Needs an ADMIN client: the fleet_
+ * tables are only readable to Fleet users.
+ */
+export async function getWorkshopBlocks(supabase: Client, from: string, to: string): Promise<WorkshopBlock[]> {
+  const { data } = await supabase
+    .from("fleet_workshop_visits")
+    .select("*") // includes deleted_at once 359 is applied: a hidden visit blocks nothing
+    .eq("status", "booked")
+    .lte("date", to);
+  return ((data ?? []) as (WorkshopBlock & { deleted_at?: string | null })[])
+    .filter((v) => !v.deleted_at)
+    .map(({ id, vehicle_id, date, until, kind, provider }): WorkshopBlock => ({ id, vehicle_id, date, until, kind, provider }))
+    .filter((v) => v.date && (v.until && v.until >= v.date ? v.until : v.date) >= from);
+}
+
 /**
  * Vehicle assignments that overlap a [from, to] window on still-live bookings
  * (pending or approved), optionally excluding one booking (when editing it).
@@ -347,23 +373,37 @@ export async function getOverlappingAssignments(
   to: string,
   excludeBookingId?: string
 ): Promise<{ vehicle_id: string; vehicle_booking_id: string }[]> {
+  // An International Team booking keeps its vehicles for 3 working days after the
+  // due-back day (lib/vehicles/hold.ts), so look back far enough to catch its hold.
+  // "*" rather than named columns: before migration 365 the hold columns don't exist,
+  // and naming one would fail the query and wave every booking through.
   const { data: bk } = await supabase
     .from("vehicle_bookings")
-    .select("id")
-    .in("status", ["pending", "approved"])
+    .select("*")
+    .in("status", HOLD_STATUSES)
     .lte("checkout_date", to)
-    .gte("return_date", from);
+    .gte("return_date", holdLookback(from));
 
-  let ids: string[] = (bk ?? []).map((b: { id: string }) => b.id);
+  let ids: string[] = ((bk ?? []) as (HoldFields & { id: string; status: string; checkout_date: string })[])
+    .filter((b) => blocksWindow(b, from, to))
+    .map((b) => b.id);
   if (excludeBookingId) ids = ids.filter((id) => id !== excludeBookingId);
-  if (ids.length === 0) return [];
+
+  // Fleet (SPEC 7.3): a booked workshop visit blocks its vehicle from `date` to
+  // `until`, so it counts as taken here too. Its id is "fleet-visit:<id>".
+  const blocked = (await getWorkshopBlocks(supabase, from, to)).map((v) => ({
+    vehicle_id: v.vehicle_id,
+    vehicle_booking_id: `fleet-visit:${v.id}`,
+  }));
+
+  if (ids.length === 0) return blocked;
 
   const { data: asg } = await supabase
     .from("vehicle_booking_assignments")
     .select("vehicle_id, vehicle_booking_id")
     .in("vehicle_booking_id", ids);
 
-  return asg ?? [];
+  return [...(asg ?? []), ...blocked];
 }
 
 // ── Drivers ────────────────────────────────────────────────
@@ -569,6 +609,15 @@ export const PURPOSE_OPTIONS: { value: VehiclePurpose; label: string }[] = [
 
 export function purposeLabel(value: string): string {
   return PURPOSE_OPTIONS.find((p) => p.value === value)?.label ?? value;
+}
+
+/**
+ * Days quoted and shown for a booking (Gideon, 24 Nov 2026: "The due back day should not
+ * be quoted"): collection to the last day it's needed, i.e. return_date (the due-back
+ * morning) not counted. Never less than 1.
+ */
+export function billableDays(checkout: string, ret: string): number {
+  return Math.max(1, dayCount(checkout, ret) - 1);
 }
 
 /** Inclusive day count between two ISO dates (collection → return). */

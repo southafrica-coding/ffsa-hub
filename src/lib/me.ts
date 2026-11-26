@@ -31,8 +31,12 @@ export type MePayload = {
   };
   roles: MeRole[];
   permissions: MePermission[];
+  /** Phone Training tab ties (334). null when they could not be read. */
+  training: MeTraining | null;
   serverTime: string;
 };
+
+export type MeTraining = { walkingWith: number; programStaff: number };
 
 // PostgREST returns an embedded to-one relation as an object, but the
 // generated types (and some joins) say array; accept both.
@@ -140,6 +144,7 @@ export function buildMePayload(input: {
   assignments: RoleAssignmentRow[];
   direct: DirectPermissionRow[];
   bundles: RoleBundleRow[];
+  training?: MeTraining | null;
   now: Date;
 }): MePayload {
   const p = input.profile;
@@ -155,6 +160,7 @@ export function buildMePayload(input: {
     },
     roles: listRoles(input.assignments),
     permissions: mergePermissions(input.direct, input.assignments, input.bundles),
+    training: input.training ?? null,
     serverTime: input.now.toISOString(),
   };
 }

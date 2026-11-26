@@ -4,7 +4,20 @@ import { House } from "lucide-react-native";
 import { makeMe } from "../../../../test/fixtures";
 import { can, hasRole, isAdmin, roleLabel, roleLabels } from "../access";
 import { badgeText, getTabBadge, setTabBadge, useTabBadge } from "../badges";
-import { routeSegment, TABS, tabForRoute, visibleTabs, type TabDef } from "../tabs";
+import { TAB_LABEL_MAX_SCALE } from "../TabBar";
+import { ROBOTO_EXTRABOLD, ROBOTO_MEDIUM, textWidth } from "../__fixtures__/font-metrics";
+import {
+  focusedPath,
+  hidesTabBar,
+  HOME_ROUTES,
+  isTabRoot,
+  routeSegment,
+  TAB_BAR_HIDDEN_ROUTES,
+  TABS,
+  tabForRoute,
+  visibleTabs,
+  type TabDef,
+} from "../tabs";
 
 describe("access (UX gates from /api/me)", () => {
   const staff = makeMe();
@@ -48,8 +61,8 @@ describe("access (UX gates from /api/me)", () => {
 });
 
 describe("tabs", () => {
-  it("are Home · Finance · Prayer · Tickets · Me, for everyone", () => {
-    expect(TABS.map((t) => t.label)).toEqual(["Home", "Finance", "Prayer", "Tickets", "Me"]);
+  it("are Home · Finance · Prayer · Tickets · Me for everyone, plus Training for Training staff", () => {
+    expect(TABS.map((t) => t.label)).toEqual(["Home", "Training", "Finance", "Prayer", "Tickets", "Me"]);
     expect(visibleTabs(null).map((t) => t.id)).toEqual(["home", "finance", "prayer", "tickets", "me"]);
     expect(visibleTabs(makeMe({ roles: [], permissions: [] })).map((t) => t.id)).toEqual([
       "home",
@@ -60,12 +73,20 @@ describe("tabs", () => {
     ]);
   });
 
-  it("five labels fit a 320pt-wide phone at the default text size", () => {
-    // Roboto Mono advances 0.6em per character; labels are 11pt caps with
-    // ~1.4pt tracking (TabBar). 320pt / 5 tabs = 64pt per tab. Larger text
-    // sizes shrink the label to fit (adjustsFontSizeToFit) instead of cutting it.
-    const width = (label: string) => label.length * (11 * 0.6 + 1.6);
-    for (const t of TABS) expect(width(t.label)).toBeLessThanOrEqual(320 / TABS.length);
+  // Labels are Roboto 500 (inactive) / 800 (active), 11pt growing to 13pt at
+  // the largest text sizes (TAB_LABEL_MAX_SCALE). Widths come from the real
+  // font files. Each tab is 1/n of a 360pt phone, minus 2pt padding a side.
+  it.each([
+    ["five tabs (everyone)", makeMe()],
+    ["six tabs (Training staff)", makeMe({ training: { walkingWith: 1, programStaff: 0 } })],
+  ])("%s: every label fits a 360pt phone at the largest tab size, in the bold active weight", (_name, me) => {
+    const shown = visibleTabs(me);
+    const slot = 360 / shown.length - 4;
+    for (const t of shown) {
+      const widest = 11 * TAB_LABEL_MAX_SCALE; // 13pt
+      expect([t.label, textWidth(t.label, widest, ROBOTO_EXTRABOLD) <= slot]).toEqual([t.label, true]);
+      expect(textWidth(t.label, widest, ROBOTO_MEDIUM)).toBeLessThanOrEqual(slot);
+    }
   });
 
   it("match routes on the first segment, so placeholders and real slices are the same tab", () => {
@@ -76,6 +97,50 @@ describe("tabs", () => {
     expect(tabForRoute("index")?.id).toBe("home");
     expect(tabForRoute("me")?.id).toBe("me");
     expect(tabForRoute("+not-found")).toBeUndefined();
+  });
+
+  it("hidden routes (Bookings, Schools, History, OKRs, Ministries, Staff decisions) mark Home", () => {
+    for (const route of ["bookings", "schools", "history", "okrs", "ministries", "staff-decisions", "bookings/index"]) {
+      expect([route, tabForRoute(route)?.id]).toEqual([route, "home"]);
+    }
+    expect(HOME_ROUTES).toHaveLength(6);
+    // …but they are never a tab's own root.
+    const home = TABS.find((t) => t.id === "home")!;
+    expect(isTabRoot("bookings", home)).toBe(false);
+    expect(isTabRoot("index", home)).toBe(true);
+  });
+
+  it("focusedPath reads the focused screen through nested stacks", () => {
+    const state = (tab: string, nested?: string[], index?: number) => ({
+      index: 0,
+      routes: [{ name: tab, state: nested ? { index: index ?? nested.length - 1, routes: nested.map((name) => ({ name })) } : undefined }],
+    });
+    expect(focusedPath(state("index"))).toBe("index");
+    expect(focusedPath(state("tickets", ["index"]))).toBe("tickets");
+    expect(focusedPath(state("tickets", ["index", "ticket/[id]"]))).toBe("tickets/ticket/[id]");
+    expect(focusedPath(state("tickets", ["index", "ticket/[id]"], 0))).toBe("tickets");
+    expect(focusedPath(state("bookings", ["index", "vehicle/[id]/[kind]"]))).toBe("bookings/vehicle/[id]/[kind]");
+    // Before a nested navigator mounts there is no nested state.
+    expect(focusedPath(state("finance"))).toBe("finance");
+  });
+
+  it("the tab bar hides on the ticket QR, the door scanner and full-height forms only", () => {
+    for (const path of [
+      "tickets/ticket/[id]",
+      "tickets/check-in/[eventId]",
+      "finance/[teamId]/new",
+      "finance/receipt",
+      "bookings/new",
+      "bookings/vehicle/[id]/[kind]",
+      "me/edit",
+      "me/household-member",
+    ]) {
+      expect([path, hidesTabBar(path)]).toEqual([path, true]);
+    }
+    for (const path of ["index", "tickets", "tickets/check-in/index", "finance", "finance/[teamId]/index", "bookings", "me", "prayer"]) {
+      expect([path, hidesTabBar(path)]).toEqual([path, false]);
+    }
+    expect(TAB_BAR_HIDDEN_ROUTES).toHaveLength(8);
   });
 
   it("a gated tab shows only to people who pass its gate", () => {

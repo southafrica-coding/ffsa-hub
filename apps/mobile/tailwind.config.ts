@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 
-import { colors, fontFamily, fontSize, palette, radius, touch } from "./src/theme/tokens";
+import { colors, fontFamily, fontSize, palette, radius, space, touch } from "./src/theme/tokens";
 
 // Semantic colours: `bg-surface`, `text-text-secondary`, … resolve to the light
 // value; add the `dark:` variant with the `-dark` name (`dark:bg-surface-dark`).
@@ -18,12 +18,13 @@ function kebab(s: string) {
 
 export const themeColors: Record<string, string> = {
   ...semantic(),
-  // Raw brand names for the rare one-off (`bg-bone`, `border-rule`).
+  // Raw brand names for the rare one-off (`bg-ink`, `text-bone`). `bone` is
+  // text on black only; `subtle` is the light warm surface.
   ink: palette.ink,
   white: palette.white,
+  paper: palette.paper,
+  subtle: palette.subtle,
   bone: palette.bone,
-  "bone-2": palette.bone2,
-  "bone-3": palette.bone3,
   yellow: palette.yellow,
   "yellow-dim": palette.yellowDim,
   transparent: "transparent",
@@ -38,30 +39,37 @@ export default {
     colors: themeColors,
     borderRadius: {
       none: "0px",
-      sm: `${radius.sm}px`,
-      md: `${radius.md}px`,
-      DEFAULT: `${radius.default}px`,
+      control: `${radius.control}px`,
+      card: `${radius.card}px`,
+      DEFAULT: `${radius.control}px`,
     },
     fontFamily: {
       sans: [fontFamily.body],
       "sans-medium": [fontFamily.bodyMedium],
+      "sans-semibold": [fontFamily.bodySemibold],
       "sans-bold": [fontFamily.bodyBold],
+      "sans-extrabold": [fontFamily.bodyExtraBold],
       display: [fontFamily.display],
+      condensed: [fontFamily.condensed],
       mono: [fontFamily.mono],
       "mono-bold": [fontFamily.monoBold],
     },
     extend: {
       fontSize: {
-        label: `${fontSize.label}px`,
+        "mono-label": `${fontSize.monoLabel}px`,
+        eyebrow: `${fontSize.eyebrow}px`,
         caption: `${fontSize.caption}px`,
+        label: `${fontSize.label}px`,
+        note: `${fontSize.note}px`,
+        section: `${fontSize.sectionTitle}px`,
         body: `${fontSize.body}px`,
-        "body-lg": `${fontSize.bodyLarge}px`,
-        title: `${fontSize.title}px`,
-        display: `${fontSize.display}px`,
-        "display-lg": `${fontSize.displayLarge}px`,
+        kpi: `${fontSize.kpi}px`,
+        "page-title": `${fontSize.pageTitle}px`,
+        hero: `${fontSize.hero}px`,
       },
-      minHeight: { target: `${touch.minTarget}px` },
-      minWidth: { target: `${touch.minTarget}px` },
+      spacing: { gutter: `${space.gutter}px`, inset: `${space.inset}px` },
+      minHeight: { target: `${touch.minTarget}px`, floor: `${touch.floor}px` },
+      minWidth: { target: `${touch.minTarget}px`, floor: `${touch.floor}px` },
     },
   },
   plugins: [],

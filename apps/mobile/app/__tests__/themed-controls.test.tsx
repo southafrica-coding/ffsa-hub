@@ -36,6 +36,7 @@ jest.mock("expo-router", () => ({ useRouter: () => ({ navigate: jest.fn(), push:
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 jest.mock("@/features/schools/shortcut", () => ({ useSchoolsShortcut: () => false }));
 jest.mock("@/features/finance/cache", () => ({ readCache: jest.fn(async () => null), writeCache: jest.fn(async () => {}), formatSavedAt: () => "09:05" }));
+jest.mock("@/lib/saved-at", () => ({ formatSavedAt: () => "09:05" }));
 jest.mock("@/features/schools/data", () => ({
   ...jest.requireActual("@/features/schools/data"),
   loadSchools: jest.fn(),
@@ -119,8 +120,8 @@ describe("notification switches use the themed colours", () => {
     const on = await screen.findByRole("switch", { name: "Prayer Room" });
     const off = screen.getByRole("switch", { name: "Finance" });
     // Host props: trackColor.true → onTintColor, trackColor.false → tintColor, thumbColor → thumbTintColor.
-    expect(on.props).toMatchObject({ onTintColor: c.text, tintColor: c.ruleStrong });
-    expect(on.props.thumbTintColor).toBe(scheme === "dark" ? c.onInverse : c.bg);
+    expect(on.props).toMatchObject({ onTintColor: c.primary, tintColor: c.ruleStrong });
+    expect(on.props.thumbTintColor).toBe(scheme === "dark" ? c.onPrimary : c.bg);
     expect(off.props.thumbTintColor).toBe(scheme === "dark" ? c.textSecondary : c.bg);
   });
 });

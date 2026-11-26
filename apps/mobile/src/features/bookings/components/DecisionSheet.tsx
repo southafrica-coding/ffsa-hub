@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { View } from "react-native";
 
-import { Button, Text, TextField } from "@/components";
-import { Sheet } from "@/features/finance/components/Sheet";
+import { Button, Sheet, Text, TextField } from "@/components";
 
 import { strings } from "../strings";
 
@@ -11,7 +10,8 @@ import { CheckRow, FormError } from "./ui";
 const d = strings.decision;
 
 /**
- * Approve or decline, from a bottom sheet. The note is optional (it is on
+ * Approve or decline, from a bottom sheet (frame 7.10): Cancel beside the
+ * decision, which is a filled red button when declining. The note is optional (it is on
  * the web too) and goes to the requester with the decision. The sheet stays
  * open on failure so the server's reason is read where the person acted.
  * Give it key={decision} so each opening starts clean.
@@ -50,24 +50,22 @@ export function DecisionSheet({
 
   return (
     <Sheet visible={decision !== null} title={approving ? d.approveTitle : d.declineTitle} onClose={onClose}>
-      <View style={{ gap: 12, paddingBottom: 8 }}>
-        {hint ? <Text tone="secondary">{hint}</Text> : null}
-        <TextField
-          label={d.noteLabel}
-          hint={d.noteHint}
-          value={note}
-          onChangeText={setNote}
-          placeholder={d.notePlaceholder}
-          multiline
-          testID="decision-note"
-        />
-        {seriesOption ? <CheckRow label={d.series} checked={series} onChange={setSeries} testID="decision-series" /> : null}
-        <FormError message={error} />
+      {hint ? (
+        <Text variant="caption" tone="secondary">
+          {hint}
+        </Text>
+      ) : null}
+      <TextField label={d.noteLabel} hint={d.noteHint} value={note} onChangeText={setNote} placeholder={d.notePlaceholder} multiline testID="decision-note" />
+      {seriesOption ? <CheckRow label={d.series} checked={series} onChange={setSeries} testID="decision-series" /> : null}
+      <FormError message={error} />
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <Button label={strings.common.cancel} variant="secondary" disabled={busy} onPress={onClose} style={{ flex: 1 }} testID="decision-cancel" />
         <Button
           label={approving ? d.confirmApprove : d.confirmDecline}
-          variant={approving ? "primary" : "destructive"}
+          variant={approving ? "primary" : "dangerFill"}
           loading={busy}
           onPress={() => void confirm()}
+          style={{ flex: 1 }}
           testID="decision-confirm"
         />
       </View>

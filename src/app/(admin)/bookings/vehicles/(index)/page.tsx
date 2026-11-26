@@ -5,9 +5,10 @@ import {
   Plus,
   Inbox,
   ClipboardList,
-  Settings2,
   CalendarRange,
   Table2,
+  GraduationCap,
+  Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Masthead, NeedsYou } from "@/components/ffsa";
@@ -68,6 +69,12 @@ export default async function VehiclesPage({
         title="Rent a Vehicle"
         actions={
           <>
+            <Link href="/bookings/vehicles/training">
+              <Button size="sm" variant="outline" className="gap-1.5">
+                <GraduationCap className="h-4 w-4" />
+                Training
+              </Button>
+            </Link>
             <Link href="/bookings/vehicles/my-requests">
               <Button size="sm" variant="outline" className="gap-1.5">
                 <CalendarRange className="h-4 w-4" />
@@ -96,14 +103,6 @@ export default async function VehiclesPage({
               </Link>
             )}
             {isTeam && <RequestLinkButton />}
-            {access.canManage && (
-              <Link href="/bookings/vehicles/fleet">
-                <Button size="sm" variant="outline" className="gap-1.5">
-                  <Settings2 className="h-4 w-4" />
-                  Fleet
-                </Button>
-              </Link>
-            )}
             {canRequest && (
               <Link href="/bookings/vehicles/new">
                 <Button size="sm" className="gap-1.5">
@@ -155,7 +154,7 @@ export default async function VehiclesPage({
                 </p>
               </div>
               {access.canManage && (
-                <Link href="/bookings/vehicles/fleet">
+                <Link href="/bookings/vehicles/fleet/settings">
                   <Button size="sm" variant="outline" className="mt-1 gap-1">
                     <Settings2 className="h-4 w-4" />
                     Set up the fleet

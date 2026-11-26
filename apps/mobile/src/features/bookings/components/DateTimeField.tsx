@@ -1,14 +1,15 @@
 // A date or time, picked with the platform's own picker: the system dialog
-// on Android, a bottom sheet with the iOS wheel on iPhone. The field shows
-// the value in words and is one 48dp button for screen readers.
+// on Android, a bottom sheet with the iOS wheel on iPhone. The field looks
+// like the kit's TextField (label above, 48pt box, chevron), shows the value
+// in words and is one button for screen readers.
 
 import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import { CalendarDays, Clock } from "lucide-react-native";
+import { ChevronDown, X } from "lucide-react-native";
 import { useState } from "react";
-import { Platform, Pressable, View } from "react-native";
+import { Platform, View } from "react-native";
+import { Pressable } from "@/components/Pressable";
 
-import { Button, Text } from "@/components";
-import { Sheet } from "@/features/finance/components/Sheet";
+import { Button, Sheet, Text } from "@/components";
 import { hairline, radius, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -44,7 +45,6 @@ export function DateTimeField({ mode, label, value, onChange, clearable = false,
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Date>(() => toDate(mode, value, minimumDate));
   const shown = value ? (mode === "date" ? humanDate(value) : value) : strings.when.notSet;
-  const Icon = mode === "date" ? CalendarDays : Clock;
   const min = mode === "date" && minimumDate ? dateFromISO(minimumDate) : undefined;
 
   function openPicker() {
@@ -68,10 +68,21 @@ export function DateTimeField({ mode, label, value, onChange, clearable = false,
   return (
     <View style={{ gap: 6 }}>
       {/* The button below says the label and the value, so this isn't read twice. */}
-      <Text variant="label" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
+      <Text variant="label" accessibilityElementsHidden importantForAccessibility="no">
         {label}
       </Text>
-      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          minHeight: touch.minTarget,
+          borderWidth: hairline,
+          borderColor: colors.ruleStrong,
+          borderRadius: radius.control,
+          backgroundColor: colors.raised,
+          overflow: "hidden",
+        }}
+      >
         <Pressable
           testID={testID}
           accessibilityRole="button"
@@ -80,25 +91,43 @@ export function DateTimeField({ mode, label, value, onChange, clearable = false,
           onPress={openPicker}
           style={({ pressed }) => ({
             flex: 1,
-            minHeight: touch.minTarget,
+            minHeight: touch.minTarget - 2,
             flexDirection: "row",
             alignItems: "center",
-            gap: 10,
+            justifyContent: "space-between",
+            gap: 8,
             paddingHorizontal: 12,
-            borderWidth: hairline,
-            borderColor: colors.ruleStrong,
-            borderRadius: radius.default,
-            backgroundColor: pressed ? colors.surface : colors.bg,
+            paddingVertical: 8,
+            backgroundColor: pressed ? colors.surface : "transparent",
           })}
         >
-          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            <Icon size={18} color={colors.textSecondary} />
-          </View>
-          <Text tone={value ? "default" : "secondary"} style={{ flexShrink: 1 }}>
+          <Text tone={value ? "default" : "quiet"} style={{ flexShrink: 1 }}>
             {shown}
           </Text>
+          {clearable && value ? null : (
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <ChevronDown size={18} color={colors.textTertiary} />
+            </View>
+          )}
         </Pressable>
-        {clearable && value ? <Button label={strings.when.clear} variant="ghost" onPress={() => onChange("")} accessibilityLabel={`${strings.when.clear} ${label}`} /> : null}
+        {clearable && value ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${strings.when.clear} ${label}`}
+            onPress={() => onChange("")}
+            style={({ pressed }) => ({
+              width: touch.floor,
+              minHeight: touch.minTarget - 2,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: pressed ? colors.surface : "transparent",
+            })}
+          >
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <X size={18} color={colors.textSecondary} />
+            </View>
+          </Pressable>
+        ) : null}
       </View>
       {Platform.OS === "ios" ? (
         <Sheet visible={open} title={label} onClose={() => setOpen(false)}>
