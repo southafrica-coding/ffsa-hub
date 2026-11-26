@@ -28,6 +28,7 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 import { middleware } from "@/middleware";
+import { ACTIVITY_COOKIE, activityCookieValue, activityDay, resetMobileSeen } from "@/lib/user-activity";
 
 function jwtFor(sub: string) {
   const enc = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
@@ -127,7 +128,9 @@ describe("middleware", () => {
     const res = await middleware(req("/finance"));
     expect(location(res)).toBeNull();
     expect(current.getUserCalls).toEqual([jwtFor("u1")]);
-    expect(current.queries.map((q) => filterValue(q, "eq", "id"))).toEqual(["u1"]);
+    expect(
+      current.queries.filter((q) => q.table === "users").map((q) => filterValue(q, "eq", "id"))
+    ).toEqual(["u1"]);
   });
 
   it("a deactivated user is sent to /login?error=deactivated", async () => {
@@ -263,7 +266,9 @@ describe("middleware: bearer tokens (phone app)", () => {
     expect(bearer.getUserCalls).toEqual([T1]);
     expect(bearer.headersSent).toEqual([`Bearer ${T1}`]);
     // is_active read once, for the validated user, with the bearer client.
-    expect(bearer.queries.map((q) => filterValue(q, "eq", "id"))).toEqual(["u1"]);
+    expect(
+      bearer.queries.filter((q) => q.table === "users").map((q) => filterValue(q, "eq", "id"))
+    ).toEqual(["u1"]);
     expect(cookieClientsBuilt).toBe(0);
     expect(forwardedHeaders(res)).toContain("authorization");
   });
@@ -380,5 +385,67 @@ describe("middleware: bearer tokens (phone app)", () => {
     expect(location(res)).toBeNull();
     expect(res.status).toBe(200);
     expect(current.getUserCalls).toHaveLength(0);
+  });
+});
+
+describe("middleware: daily activity (DAU / WAU)", () => {
+  const rpcCalls = (c: { queries: Array<{ table: string; rpc?: { args: unknown } }> }) =>
+    c.queries.filter((q) => q.table === "rpc:record_user_activity");
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  beforeEach(() => {
+    current = makeClient({ token: jwtFor("u1"), validUserId: "u1" });
+    bearer = makeBearerClient({ valid: { [jwtFor("u1")]: "u1" } });
+    cookieClientsBuilt = 0;
+    resetMobileSeen();
+  });
+
+  it("first page view of the day records once and sets the throttle cookie", async () => {
+    const res = await middleware(req("/finance"));
+    await flush();
+    expect(rpcCalls(current)).toHaveLength(1);
+    expect(rpcCalls(current)[0].rpc?.args).toEqual({ p_platform: "web" });
+    expect(res.cookies.get(ACTIVITY_COOKIE)?.value).toBe(activityCookieValue("u1", activityDay()));
+  });
+
+  it("does not record again while the cookie is current", async () => {
+    const cookie = `${ACTIVITY_COOKIE}=${activityCookieValue("u1", activityDay())}`;
+    const res = await middleware(req("/finance", { cookie }));
+    await flush();
+    expect(rpcCalls(current)).toHaveLength(0);
+    expect(res.cookies.get(ACTIVITY_COOKIE)).toBeUndefined();
+  });
+
+  it("another user on the same browser is recorded", async () => {
+    const cookie = `${ACTIVITY_COOKIE}=${activityCookieValue("someone-else", activityDay())}`;
+    await middleware(req("/finance", { cookie }));
+    await flush();
+    expect(rpcCalls(current)).toHaveLength(1);
+  });
+
+  it("prefetches, public routes and signed-out visits are not counted", async () => {
+    await middleware(req("/finance", { "next-router-prefetch": "1" }));
+    await middleware(req("/e/some-event"));
+    current = makeClient({});
+    await middleware(req("/finance"));
+    await flush();
+    expect(rpcCalls(current)).toHaveLength(0);
+  });
+
+  it("a failing write never breaks the request", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (current.client as any).rpc = () => Promise.reject(new Error("db down"));
+    const res = await middleware(req("/finance"));
+    await flush();
+    expect(res.status).toBe(200);
+  });
+
+  it("the phone app is recorded as mobile, once per day per instance", async () => {
+    const headers = { authorization: `Bearer ${jwtFor("u1")}` };
+    await middleware(req("/api/me", headers));
+    await middleware(req("/api/me", headers));
+    await flush();
+    expect(rpcCalls(bearer)).toHaveLength(1);
+    expect(rpcCalls(bearer)[0].rpc?.args).toEqual({ p_platform: "mobile" });
   });
 });
