@@ -30,16 +30,29 @@ export function failureCopy(kind: FailureKind, code?: string | null): string {
 /**
  * The current time, re-read every `intervalMs` and whenever the tab comes
  * back. Callers compute from timestamps, so a missed tick never drifts.
+ * When the viewer prefers reduced motion the clock is not polled; it still
+ * updates if they switch back to the tab.
  */
 export function useNow(intervalMs = 1000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const tick = () => setNow(Date.now());
-    const id = window.setInterval(tick, intervalMs);
+    const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    let id: number | undefined;
+    const start = () => {
+      if (id !== undefined) {
+        window.clearInterval(id);
+        id = undefined;
+      }
+      if (!media?.matches) id = window.setInterval(tick, intervalMs);
+    };
+    start();
+    media?.addEventListener("change", start);
     document.addEventListener("visibilitychange", tick);
     window.addEventListener("focus", tick);
     return () => {
-      window.clearInterval(id);
+      if (id !== undefined) window.clearInterval(id);
+      media?.removeEventListener("change", start);
       document.removeEventListener("visibilitychange", tick);
       window.removeEventListener("focus", tick);
     };

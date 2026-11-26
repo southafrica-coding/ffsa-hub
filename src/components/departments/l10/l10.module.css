@@ -507,6 +507,7 @@
 .meterFill {
   height: 100%;
   background: var(--ink);
+  transition: width 0.35s linear;
 }
 
 /* ── Team page ────────────────────────────────────────────────── */
@@ -1156,3 +1157,25 @@
   margin: 0 0 16px;
 }
 
+
+
+@keyframes l10-sheet-in {
+  from { transform: translateY(12px); }
+  to { transform: none; }
+}
+
+.sheet,
+.dialog {
+  animation: l10-sheet-in 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meterFill,
+  .sheet,
+  .dialog,
+  .scrim,
+  .overlay {
+    transition: none;
+    animation: none;
+  }
+}
