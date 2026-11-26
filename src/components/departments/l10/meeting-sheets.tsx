@@ -212,7 +212,13 @@ export function ConfirmDialog({
         ) : null}
         <div className="mt-2">
           <SumRow label="DMs with to-dos" value={summary.dmCount} unit={summary.dmCount === 1 ? "person" : "people"} />
-          <SumRow label={`Recap to ${summary.recapPosts > 0 && recapChannel ? recapChannel : "team channel"}`} value={summary.recapPosts} unit={summary.recapPosts === 1 ? "post" : "posts"} />
+          {recapChannel ? (
+            <SumRow
+              label={`Recap to ${recapChannel}`}
+              value={summary.recapPosts}
+              unit={summary.recapPosts === 1 ? "post" : "posts"}
+            />
+          ) : null}
           <SumRow label="Issues kept for next week" value={summary.issuesKept} unit={summary.issuesKept === 1 ? "issue" : "issues"} />
         </div>
         {failure ? <p className={styles.fieldError}>{failureCopy(failure, failureCode)}</p> : null}

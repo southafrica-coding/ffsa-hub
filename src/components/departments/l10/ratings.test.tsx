@@ -265,7 +265,7 @@ describe("Conclude and End copy follow the team's recap channel", () => {
     expect(html).toContain("Everyone with an open to-do gets a Slack DM listing theirs.");
     expect(html).not.toContain("recap goes to");
     expect(html).not.toContain("no recap channel set");
-    expect(html).toContain("Recap to team channel");
-    expect(html).toMatch(/>0<\/span> <span[^>]*>posts</);
+    expect(html).not.toContain("Recap to team channel");
+    expect(html).not.toContain("Recap to");
   });
 });
