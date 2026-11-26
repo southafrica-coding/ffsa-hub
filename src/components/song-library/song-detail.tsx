@@ -318,38 +318,42 @@ function SongBody({
         </div>
       ) : null}
 
-      <div className={pw.sectionBar}>
-        <h2 className={pw.sectionTitle}>Refine</h2>
-        <span className={pw.sectionMeta}>
-          {refine.done} of 10 · bonus {refine.bonus ? "done" : "open"}
-        </span>
-      </div>
-      {[...REFINE_QUESTIONS.map((q, i) => ({ q_no: i + 1, text: q })), { q_no: REFINE_BONUS_Q_NO, text: REFINE_BONUS_QUESTION }].map((item) => {
-        const row = detail.refine.find((r) => r.q_no === item.q_no);
-        const checked = row?.checked ?? false;
-        const bonus = item.q_no === REFINE_BONUS_Q_NO;
-        return (
-          <button
-            key={item.q_no}
-            type="button"
-            role="checkbox"
-            aria-checked={checked}
-            disabled={!canTick || busy}
-            className={`${sl.ck} ${bonus ? sl.bonus : ""}`}
-            onClick={() => tick(item.q_no, !checked)}
-          >
-            <span className={pw.cbHit}>
-              <span className={`${pw.cb} ${checked ? pw.cbOn : ""}`} />
+      {canTick ? (
+        <>
+          <div className={pw.sectionBar}>
+            <h2 className={pw.sectionTitle}>Refine</h2>
+            <span className={pw.sectionMeta}>
+              {refine.done} of 10 · bonus {refine.bonus ? "done" : "open"}
             </span>
-            <span className={sl.ckQ}>
-              {bonus ? null : <span className={sl.ckN}>{item.q_no}.</span>}
-              {item.text}
-              {row?.note ? <span className={sl.ckA}>{row.note}</span> : null}
-              {bonus ? <span className={sl.ckA}>Bonus question · not required to move on</span> : null}
-            </span>
-          </button>
-        );
-      })}
+          </div>
+          {[...REFINE_QUESTIONS.map((q, i) => ({ q_no: i + 1, text: q })), { q_no: REFINE_BONUS_Q_NO, text: REFINE_BONUS_QUESTION }].map((item) => {
+            const row = detail.refine.find((r) => r.q_no === item.q_no);
+            const checked = row?.checked ?? false;
+            const bonus = item.q_no === REFINE_BONUS_Q_NO;
+            return (
+              <button
+                key={item.q_no}
+                type="button"
+                role="checkbox"
+                aria-checked={checked}
+                disabled={busy}
+                className={`${sl.ck} ${bonus ? sl.bonus : ""}`}
+                onClick={() => tick(item.q_no, !checked)}
+              >
+                <span className={pw.cbHit}>
+                  <span className={`${pw.cb} ${checked ? pw.cbOn : ""}`} />
+                </span>
+                <span className={sl.ckQ}>
+                  {bonus ? null : <span className={sl.ckN}>{item.q_no}.</span>}
+                  {item.text}
+                  {row?.note ? <span className={sl.ckA}>{row.note}</span> : null}
+                  {bonus ? <span className={sl.ckA}>Bonus question · not required to move on</span> : null}
+                </span>
+              </button>
+            );
+          })}
+        </>
+      ) : null}
 
       <div className={pw.sectionBar}>
         <h2 className={pw.sectionTitle}>Placement</h2>

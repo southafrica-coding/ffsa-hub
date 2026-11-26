@@ -60,6 +60,7 @@ export type {
 
 import type {
   SongHelpCategory,
+  SongLibraryCelebrateNote,
   SongLibraryCheckpoint,
   SongLibraryHelpRequest,
   SongLibraryPathwayStep,
@@ -118,6 +119,13 @@ export interface SongDetail {
   viewerFollowsLead: boolean;
   /** From the song payload. canManage and canTickRefine are used; other flags are ignored here. */
   viewer?: SongViewer;
+  /**
+   * GET /api/song-library/songs/:id sends `celebrateNotes` (camelCase), and
+   * only when the viewer may read them. Absent otherwise. No celebrate UI
+   * is built here; the type matches the song payload. (The dedicated
+   * GET /songs/:id/celebrate list uses `celebrate_notes`, unused by this client.)
+   */
+  celebrateNotes?: SongLibraryCelebrateNote[];
 }
 
 export interface WriterProfile {
