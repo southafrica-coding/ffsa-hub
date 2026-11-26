@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import pw from "./pw.module.css";
 import sl from "./sl.module.css";
 import { songLibraryApi } from "./api";
+import { NoAccessNote } from "./no-access";
 import { errorCopy } from "./client";
 import { initials } from "./format";
 import { libraryPaths, type LibraryScope } from "./paths";
@@ -18,6 +19,7 @@ export function WriterProfile({ scope, userId, initial }: { scope: LibraryScope;
   const paths = libraryPaths(scope);
   const [profile, setProfile] = useState<WriterProfileData | null>(initial ?? null);
   const [loading, setLoading] = useState(initial === undefined);
+  const [denied, setDenied] = useState(false);
   const [subscribed, setSubscribed] = useState(initial?.viewerSubscribed ?? false);
   const [message, setMessage] = useState<string | null>(null);
   const [now] = useState(() => new Date());
@@ -29,12 +31,14 @@ export function WriterProfile({ scope, userId, initial }: { scope: LibraryScope;
       if (controller.signal.aborted) return;
       setProfile(result.data);
       setSubscribed(result.data?.viewerSubscribed ?? false);
+      setDenied(result.denied);
       setLoading(false);
     });
     return () => controller.abort();
   }, [userId, initial]);
 
   if (loading) return <p className={pw.hint}>Loading…</p>;
+  if (denied) return <NoAccessNote />;
   if (!profile) {
     return (
       <div className={pw.empty}>

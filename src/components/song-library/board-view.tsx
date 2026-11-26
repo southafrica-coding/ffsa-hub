@@ -6,6 +6,7 @@ import { PlayIcon } from "@/components/departments/songwriting/icons";
 import pw from "./pw.module.css";
 import sl from "./sl.module.css";
 import { songLibraryApi } from "./api";
+import { NoAccessNote } from "./no-access";
 import { errorCopy } from "./client";
 import { libraryPaths, type LibraryScope } from "./paths";
 import { canMovePlacement, PLACEMENT_LABEL, STAGE_LABEL, stageMoveOptions } from "./stages";
@@ -19,6 +20,7 @@ export function BoardView({ scope, ownerName, initial }: { scope: LibraryScope; 
   const paths = libraryPaths(scope);
   const [items, setItems] = useState<SongListItem[]>(initial ?? []);
   const [loading, setLoading] = useState(!initial);
+  const [denied, setDenied] = useState(false);
   const [stage, setStage] = useState<SongStage | null>(null);
   const [order, setOrder] = useState<"stuck" | "recent">("stuck");
   const [placement, setPlacement] = useState<SongPlacement | "all">("all");
@@ -32,6 +34,7 @@ export function BoardView({ scope, ownerName, initial }: { scope: LibraryScope; 
     songLibraryApi.board(controller.signal).then((result) => {
       if (controller.signal.aborted) return;
       setItems(result.data);
+      setDenied(result.denied);
       setLoading(false);
     });
     return () => controller.abort();
@@ -70,6 +73,8 @@ export function BoardView({ scope, ownerName, initial }: { scope: LibraryScope; 
     );
     setOpen(null);
   }
+
+  if (denied) return <NoAccessNote />;
 
   return (
     <div aria-busy={loading || undefined}>

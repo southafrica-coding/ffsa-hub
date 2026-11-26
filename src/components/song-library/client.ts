@@ -1,9 +1,11 @@
 // Shared fetch helper for the Song Library and Songwriting UIs.
 //
-// The backend routes do not exist yet. Reads treat any failure (404 while
-// the routes are missing, network, bad JSON) as "nothing to show", so the
-// pages render their empty states. Writes report a code, never the
-// server's text: only `code` and `fieldErrors` keys are read from a reply.
+// The backend routes do not exist yet. Reads treat a missing route, a
+// network error or bad JSON as "nothing to show", so the pages render
+// their empty states. A 403 or code "forbidden" is not an empty catalogue:
+// readOr flags `denied` and the page shows a no-access state. Writes
+// report a code, never the server's text: only `code` and `fieldErrors`
+// keys are read from a reply.
 
 export type ApiFailure = {
   ok: false;
@@ -65,11 +67,20 @@ export async function requestJson<T>(
   return { ok: true, data: body as T };
 }
 
-/** Read with a fallback: any failure becomes the empty value. */
-export async function readOr<T>(url: string, empty: T, signal?: AbortSignal): Promise<{ data: T; missing: boolean }> {
+export type ReadOrResult<T> = { data: T; missing: boolean; denied: boolean };
+
+function isDenied(result: ApiFailure): boolean {
+  return result.status === 403 || result.code === "forbidden" || result.code === "403";
+}
+
+/** Read with a fallback: missing routes become the empty value. A 403 is denied, not empty. */
+export async function readOr<T>(url: string, empty: T, signal?: AbortSignal): Promise<ReadOrResult<T>> {
   const result = await requestJson<T>(url, { signal });
-  if (!result.ok || result.data == null) return { data: empty, missing: true };
-  return { data: result.data, missing: false };
+  if (result.ok) {
+    if (result.data == null) return { data: empty, missing: true, denied: false };
+    return { data: result.data, missing: false, denied: false };
+  }
+  return { data: empty, missing: true, denied: isDenied(result) };
 }
 
 /** Fixed copy for a failed write. The server's own words are never shown. */

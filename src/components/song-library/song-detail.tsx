@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import pw from "./pw.module.css";
 import sl from "./sl.module.css";
 import { songLibraryApi, versionAudioUrl } from "./api";
+import { NoAccessNote } from "./no-access";
 import { errorCopy } from "./client";
 import { describeEvent } from "./events";
 import { duration, eventDay, initials, moverFor, shortDay } from "./format";
@@ -54,18 +55,21 @@ export function SongDetail({
   const paths = libraryPaths(scope);
   const [detail, setDetail] = useState<SongDetailData | null>(initial ?? null);
   const [loading, setLoading] = useState(initial === undefined);
+  const [denied, setDenied] = useState(false);
   useEffect(() => {
     if (initial !== undefined) return;
     const controller = new AbortController();
     songLibraryApi.song(songId, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
       setDetail(result.data);
+      setDenied(result.denied);
       setLoading(false);
     });
     return () => controller.abort();
   }, [songId, initial]);
 
   if (loading) return <p className={pw.hint}>Loading the song…</p>;
+  if (denied) return <NoAccessNote />;
   if (!detail) {
     return (
       <div className={pw.empty}>

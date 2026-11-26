@@ -1,5 +1,5 @@
 // Song Library client, aimed at the future /api/song-library routes.
-// Nothing here ships data: a missing route reads as empty.
+// Nothing here ships data: a missing route reads as empty. A 403 is denied, not empty.
 
 import { readOr, requestJson } from "./client";
 import type {

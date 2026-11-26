@@ -6,6 +6,7 @@ import { SearchIcon } from "@/components/departments/songwriting/icons";
 import pw from "./pw.module.css";
 import sl from "./sl.module.css";
 import { EMPTY_HOME, songLibraryApi } from "./api";
+import { NoAccessNote } from "./no-access";
 import { errorCopy } from "./client";
 import { libraryPaths, type LibraryScope } from "./paths";
 import { SongRow } from "./song-row";
@@ -36,6 +37,7 @@ export function LibraryHome({ scope, canManage, initial }: { scope: LibraryScope
   const paths = libraryPaths(scope);
   const [data, setData] = useState<LibraryHomeData>(initial ?? EMPTY_HOME);
   const [loading, setLoading] = useState(!initial);
+  const [denied, setDenied] = useState(false);
   const [state, setState] = useState<LibraryState>("in_process");
   const [placement, setPlacement] = useState<SongPlacement | "all">("all");
   const [query, setQuery] = useState("");
@@ -51,6 +53,7 @@ export function LibraryHome({ scope, canManage, initial }: { scope: LibraryScope
       if (controller.signal.aborted) return;
       setData(result.data);
       setSubscribed(result.data.subscribedAllUploads);
+      setDenied(result.denied);
       setLoading(false);
     });
     return () => controller.abort();
@@ -79,6 +82,8 @@ export function LibraryHome({ scope, canManage, initial }: { scope: LibraryScope
       setMessage(errorCopy(result.code));
     }
   }
+
+  if (denied) return <NoAccessNote />;
 
   return (
     <div aria-busy={loading || undefined}>
