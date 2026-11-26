@@ -97,8 +97,23 @@ export async function getAsset(supabase: Client, id: string) {
   return supabase.from("store_assets").select("*").eq("id", id).maybeSingle();
 }
 
-export async function createAsset(supabase: Client, row: { id: string; product_id: string; source_path: string; uploaded_by: string | null }) {
-  return supabase.from("store_assets").insert({ ...row, status: "uploaded" }).select("*").single();
+export async function createAsset(
+  supabase: Client,
+  row: { id: string; product_id: string; source_path: string; uploaded_by: string | null; filename?: string | null; byte_size?: number | null }
+) {
+  return supabase.from("store_assets").insert({ ...row, status: "awaiting_upload" }).select("*").single();
+}
+
+/** Move an asset into "rendering" only if it's in one of `from`. Returns
+ *  the row, or null when someone else already claimed it. */
+export async function claimAssetForRender(supabase: Client, id: string, from: string[]) {
+  return supabase
+    .from("store_assets")
+    .update({ status: "rendering", error: null, page_count: 0, render_started_at: new Date().toISOString() })
+    .eq("id", id)
+    .in("status", from)
+    .select("*")
+    .maybeSingle();
 }
 
 export async function updateAsset(supabase: Client, id: string, patch: Record<string, unknown>) {

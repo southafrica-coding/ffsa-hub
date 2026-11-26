@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { parseRandsToCents } from "@/lib/store/money";
+import { formatMb, MAX_PDF_BYTES } from "@/lib/store/upload";
 import type { StoreVariant } from "@/lib/store/types";
 import { cn } from "@/lib/utils/cn";
 
@@ -48,33 +49,65 @@ export function CoverUpload({ productId, hasCover }: { productId: string; hasCov
 export function PdfUpload({ productId }: { productId: string }) {
   const router = useRouter();
   const [step, setStep] = useState<"idle" | "uploading" | "rendering">("idle");
+  const [progress, setProgress] = useState<string | null>(null);
+
+  // The PDF goes straight from this browser to private Supabase Storage on a
+  // signed URL. It must never be posted to a Hub route: Vercel caps function
+  // bodies at 4.5 MB and a Review is 20+ MB. See src/lib/store/upload.ts.
   async function upload(file: File) {
-    if (file.type !== "application/pdf") return toast.error("That isn't a PDF");
+    if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) return toast.error("That isn't a PDF");
+    if (file.size > MAX_PDF_BYTES) return toast.error(`That PDF is ${formatMb(file.size)}. The limit is ${formatMb(MAX_PDF_BYTES)}.`);
     setStep("uploading");
+    setProgress(formatMb(file.size));
     try {
-      const start = await fetch(`/api/store/admin/products/${productId}/pdf`, { method: "POST" });
+      const start = await fetch(`/api/store/admin/products/${productId}/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, contentType: "application/pdf", size: file.size }),
+      });
       const s = await start.json();
       if (!start.ok) throw new Error(s.error ?? "Couldn't start the upload");
       const { error } = await createClient().storage.from(s.bucket).uploadToSignedUrl(s.path, s.token, file, { contentType: "application/pdf" });
       if (error) throw new Error(error.message);
+
       setStep("rendering");
-      const render = await fetch(`/api/store/admin/assets/${s.assetId}/render`, { method: "POST" });
-      const r = await render.json().catch(() => ({}));
-      if (!render.ok) throw new Error(r.error ?? "Rendering failed");
-      toast.success(`Flipbook ready: ${r.pages} pages`);
-      router.refresh();
+      setProgress(null);
+      const done = await fetch(`/api/store/admin/assets/${s.assetId}/complete`, { method: "POST" });
+      const d = await done.json().catch(() => ({}));
+      if (!done.ok) throw new Error(d.error ?? "Couldn't start making the pages");
+
+      // Rendering runs in the background; poll until it's ready or failed.
+      const deadline = Date.now() + 10 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const res = await fetch(`/api/store/admin/assets/${s.assetId}`, { cache: "no-store" });
+        const a = await res.json().catch(() => ({}));
+        if (a.status === "ready") {
+          toast.success(`Flipbook ready: ${a.pages} pages`);
+          return;
+        }
+        if (a.status === "failed") throw new Error(a.error ?? "Rendering failed");
+        if (a.pages) setProgress(`${a.pages} pages so far`);
+      }
+      throw new Error("Still making the pages. Refresh in a minute to check.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
-      router.refresh();
     } finally {
       setStep("idle");
+      setProgress(null);
+      router.refresh();
     }
   }
   return (
-    <label className={cn("inline-flex min-h-11 cursor-pointer items-center border border-ink bg-ink px-4 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[var(--ink-bg-hover)]", step !== "idle" && "pointer-events-none opacity-60")}>
-      {step === "uploading" ? "Uploading PDF…" : step === "rendering" ? "Making pages… (up to a few minutes)" : "Upload PDF"}
-      <input type="file" accept="application/pdf" className="sr-only" disabled={step !== "idle"} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-    </label>
+    <div className="space-y-2">
+      <label className={cn("inline-flex min-h-11 cursor-pointer items-center border border-ink bg-ink px-4 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[var(--ink-bg-hover)]", step !== "idle" && "pointer-events-none opacity-60")}>
+        {step === "uploading" ? "Uploading PDF…" : step === "rendering" ? "Making pages…" : "Upload PDF"}
+        <input type="file" accept="application/pdf" className="sr-only" disabled={step !== "idle"} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+      </label>
+      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-tertiary)]">
+        {progress ?? `PDF up to ${formatMb(MAX_PDF_BYTES)}`}
+      </p>
+    </div>
   );
 }
 

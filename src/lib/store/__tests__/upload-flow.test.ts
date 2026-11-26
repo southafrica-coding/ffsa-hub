@@ -1,0 +1,290 @@
+// The PDF upload flow end to end: sign-url API → the file PUT straight to
+// Storage (a local stand-in speaking Supabase's storage HTTP API, driven by
+// the real supabase-js client) → complete → background render → watermarked
+// page and Print + Digital PDF for a buyer.
+//
+// CI runs it on the small fake sample. To run it on a real PDF locally
+// (never committed, never required in CI):
+//
+//   STORE_LOCAL_PDF=/path/to/review.pdf NODE_OPTIONS=--experimental-require-module \
+//     npx vitest run src/lib/store/__tests__/upload-flow.test.ts
+//
+// Outputs (timings, page images, the buyer's PDF) go to tmp/store-local-pdf/.
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { createClient as createSupabase } from "@supabase/supabase-js";
+import { PDFDocument } from "pdf-lib";
+import sharp from "sharp";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { createMemoryDb, storeRpcs, type MemoryDb } from "../testing/memory-db";
+import { catalogue, IDS } from "../testing/fixtures";
+import { startLocalStorage, type LocalStorage } from "../testing/local-storage";
+import { checkStoredObject, MAX_PDF_BYTES, validatePdfUpload } from "../upload";
+import { buildSpreads } from "@/app/(public)/store/_components/flipbook";
+
+vi.mock("server-only", () => ({}));
+
+let db: MemoryDb;
+let storage: LocalStorage;
+let sb: ReturnType<typeof createSupabase>;
+let who: { id: string; email: string } | null = null;
+let grants: string[] = [];
+const background: Promise<unknown>[] = [];
+
+vi.mock("next/server", async (orig) => {
+  const real = await orig<typeof import("next/server")>();
+  return { ...real, after: (fn: () => Promise<unknown>) => void background.push(fn()) };
+});
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({
+    from: db.client.from,
+    rpc: async (name: string, args: Record<string, unknown>) =>
+      name === "has_permission" ? { data: !!who && grants.includes(String(args.required_permission)), error: null } : db.client.rpc(name, args),
+    auth: { getUser: async () => ({ data: { user: who }, error: null }) },
+  }),
+}));
+vi.mock("@/lib/store/db", () => ({ storeAdminClient: () => ({ ...db.client, storage: sb.storage }) }));
+
+const STAFF = { id: "staff-1", email: "media@example.org" };
+const BUYER = { id: "buyer-1", email: "reader@example.org" };
+const SAMPLE = path.join(__dirname, "../fixtures/sample-review.pdf");
+const LOCAL_PDF = process.env.STORE_LOCAL_PDF?.trim();
+
+const post = (url: string, body?: unknown) =>
+  new Request(`https://hub.test${url}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
+
+function seed() {
+  db = createMemoryDb(
+    {
+      users: [{ id: STAFF.id, is_active: true }],
+      user_roles: [{ user_id: STAFF.id, roles: { name: "staff" } }],
+      store_products: catalogue.products,
+      store_variants: catalogue.variants,
+      store_entitlements: [
+        { id: "ent-1", product_id: IDS.bundle, email: BUYER.email, user_id: BUYER.id, source: "purchase", order_item_id: null, code_id: null, includes_pdf: true, starts_at: "2026-01-01T00:00:00Z", expires_at: null, revoked_at: null },
+      ],
+    },
+    { rpc: storeRpcs }
+  );
+}
+
+beforeAll(async () => {
+  storage = await startLocalStorage(path.join(os.tmpdir(), `store-upload-${process.pid}`), { "store-source": MAX_PDF_BYTES });
+  sb = createSupabase(storage.url, "local-test-key", { auth: { persistSession: false } });
+});
+afterAll(async () => {
+  await storage.close();
+  rmSync(storage.root, { recursive: true, force: true });
+});
+beforeEach(() => {
+  seed();
+  who = STAFF;
+  grants = ["store.manage"];
+  background.length = 0;
+  vi.stubEnv("STORE_SIGNING_SECRET", "local-test-secret-0123456789");
+});
+
+/** Staff uploads `pdf` for the Print + Digital product the way the admin page does. */
+async function uploadAndRender(pdf: Blob, filename: string) {
+  const sign = await import("@/app/api/store/admin/products/[id]/pdf/route");
+  const complete = await import("@/app/api/store/admin/assets/[id]/complete/route");
+  const status = await import("@/app/api/store/admin/assets/[id]/route");
+  const t0 = Date.now();
+
+  const res = await sign.POST(post(`/api/store/admin/products/${IDS.bundle}/pdf`, { filename, contentType: "application/pdf", size: pdf.size }), ctx(IDS.bundle));
+  expect(res.status).toBe(200);
+  const s = await res.json();
+  expect(s).toMatchObject({ bucket: "store-source", maxBytes: MAX_PDF_BYTES });
+  expect(s.path).toBe(`${IDS.bundle}/${s.assetId}.pdf`); // our path, not the file name
+  expect(db.table("store_assets")[0]).toMatchObject({ status: "awaiting_upload", byte_size: pdf.size, filename });
+
+  // The browser's PUT, straight to Storage with the signed token.
+  const up = await sb.storage.from(s.bucket).uploadToSignedUrl(s.path, s.token, pdf, { contentType: "application/pdf" });
+  expect(up.error).toBeNull();
+  const uploadMs = Date.now() - t0;
+
+  const done = await complete.POST(post(`/api/store/admin/assets/${s.assetId}/complete`), ctx(s.assetId));
+  expect(done.status).toBe(202);
+  // A double-click doesn't start a second render.
+  expect((await complete.POST(post(`/api/store/admin/assets/${s.assetId}/complete`), ctx(s.assetId))).status).toBe(409);
+  const mid = await (await status.GET(new Request("https://hub.test/x"), ctx(s.assetId))).json();
+  expect(mid.status).toBe("rendering");
+
+  await Promise.all(background);
+  const renderMs = Date.now() - t0 - uploadMs;
+  const final = await (await status.GET(new Request("https://hub.test/x"), ctx(s.assetId))).json();
+  return { assetId: s.assetId as string, final, uploadMs, renderMs };
+}
+
+async function buyerPage(assetId: string, page: number) {
+  const { pageUrl } = await import("../signing");
+  const { GET } = await import("@/app/api/store/page/route");
+  const res = await GET(new Request(`https://hub.test${pageUrl({ assetId, page, viewer: BUYER.email })}`));
+  expect(res.status).toBe(200);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+async function buyerPdf() {
+  const { GET } = await import("@/app/api/store/library/[productId]/pdf/route");
+  const res = await GET(new Request("https://hub.test/x"), { params: Promise.resolve({ productId: IDS.bundle }) });
+  expect(res.status).toBe(303);
+  const signed = res.headers.get("location")!;
+  expect(signed.startsWith(storage.url)).toBe(true);
+  const r = await fetch(signed);
+  expect(r.ok).toBe(true);
+  return Buffer.from(await r.arrayBuffer());
+}
+
+describe("upload rules", () => {
+  it("accepts a 21.9 MB PDF and refuses anything over 50 MB, or not a PDF", () => {
+    expect(validatePdfUpload({ filename: "draft.pdf", contentType: "application/pdf", size: 22_972_092 }).ok).toBe(true);
+    expect(validatePdfUpload({ filename: "draft.pdf", contentType: "application/pdf", size: MAX_PDF_BYTES }).ok).toBe(true);
+    expect(validatePdfUpload({ filename: "draft.pdf", contentType: "application/pdf", size: MAX_PDF_BYTES + 1 })).toMatchObject({ ok: false, status: 413 });
+    expect(validatePdfUpload({ filename: "draft.docx", contentType: "application/pdf", size: 10 })).toMatchObject({ ok: false, status: 400 });
+    expect(validatePdfUpload({ filename: "draft.pdf", contentType: "image/png", size: 10 })).toMatchObject({ ok: false, status: 400 });
+    expect(validatePdfUpload({ filename: "draft.pdf", contentType: "application/pdf", size: 0 })).toMatchObject({ ok: false, status: 400 });
+    expect(validatePdfUpload(null)).toMatchObject({ ok: false });
+  });
+
+  it("checks the stored object against what was signed for", () => {
+    expect(checkStoredObject({ size: 100 }, 100)).toEqual({ ok: true });
+    expect(checkStoredObject(null, 100).ok).toBe(false);
+    expect(checkStoredObject({ size: 99 }, 100).ok).toBe(false);
+    expect(checkStoredObject({ size: MAX_PDF_BYTES + 1 }, null).ok).toBe(false);
+  });
+
+  it("the sign-url API takes metadata only: 413 over 50 MB, 403 without store.manage, 401 signed out", async () => {
+    const { POST } = await import("@/app/api/store/admin/products/[id]/pdf/route");
+    const meta = { filename: "big.pdf", contentType: "application/pdf", size: MAX_PDF_BYTES + 1 };
+    expect((await POST(post(`/x`, meta), ctx(IDS.bundle))).status).toBe(413);
+    grants = ["store.view"];
+    expect((await POST(post(`/x`, { ...meta, size: 1000 }), ctx(IDS.bundle))).status).toBe(403);
+    who = BUYER;
+    grants = [];
+    expect((await POST(post(`/x`, { ...meta, size: 1000 }), ctx(IDS.bundle))).status).toBe(403);
+    who = null;
+    expect((await POST(post(`/x`, { ...meta, size: 1000 }), ctx(IDS.bundle))).status).toBe(401);
+    expect(db.table("store_assets")).toHaveLength(0);
+  });
+
+  it("Storage itself refuses a PUT over the bucket's 50 MB limit", async () => {
+    const { data } = await sb.storage.from("store-source").createSignedUploadUrl("x/too-big.pdf");
+    const { error } = await sb.storage.from("store-source").uploadToSignedUrl("x/too-big.pdf", data!.token, Buffer.alloc(MAX_PDF_BYTES + 1), { contentType: "application/pdf" });
+    expect(error).not.toBeNull();
+  });
+
+  it("complete fails the upload when the stored file doesn't match the size signed for", async () => {
+    const sign = await import("@/app/api/store/admin/products/[id]/pdf/route");
+    const complete = await import("@/app/api/store/admin/assets/[id]/complete/route");
+    const pdf = readFileSync(SAMPLE);
+    const s = await (await sign.POST(post(`/x`, { filename: "s.pdf", contentType: "application/pdf", size: pdf.length + 5 }), ctx(IDS.bundle))).json();
+    await sb.storage.from(s.bucket).uploadToSignedUrl(s.path, s.token, new Blob([pdf], { type: "application/pdf" }));
+    const res = await complete.POST(post(`/x`), ctx(s.assetId));
+    expect(res.status).toBe(400);
+    expect(db.table("store_assets")[0]).toMatchObject({ status: "failed" });
+  });
+
+  it("complete before the upload finished says so", async () => {
+    const sign = await import("@/app/api/store/admin/products/[id]/pdf/route");
+    const complete = await import("@/app/api/store/admin/assets/[id]/complete/route");
+    const s = await (await sign.POST(post(`/x`, { filename: "s.pdf", contentType: "application/pdf", size: 100 }), ctx(IDS.bundle))).json();
+    const res = await complete.POST(post(`/x`), ctx(s.assetId));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/didn't finish uploading/);
+  });
+});
+
+describe("flipbook spreads", () => {
+  const P = { w: 1080, h: 1527 };
+  const L = { w: 1620, h: 1146 };
+  it("phones show one page at a time", () => {
+    expect(buildSpreads([P, P, P], false)).toEqual([[0], [1], [2]]);
+  });
+  it("wide screens pair portrait pages after the cover", () => {
+    expect(buildSpreads([P, P, P, P, P], true)).toEqual([[0], [1, 2], [3, 4]]);
+  });
+  it("a landscape page (a spread saved as one page) always stands alone", () => {
+    expect(buildSpreads([P, L, L, L, P], true)).toEqual([[0], [1], [2], [3], [4]]);
+    expect(buildSpreads([P, P, L, P, P], true)).toEqual([[0], [1], [2], [3, 4]]);
+  });
+});
+
+describe("signed upload → render → watermark, on the small sample", () => {
+  it("renders, activates, stamps the buyer's page and builds their low-res PDF", { timeout: 120_000 }, async () => {
+    const pdf = new Blob([readFileSync(SAMPLE)], { type: "application/pdf" });
+    const { assetId, final } = await uploadAndRender(pdf, "sample-review.pdf");
+    expect(final).toMatchObject({ status: "ready", pages: 4, error: null });
+    expect(db.table("store_assets")[0]).toMatchObject({ is_active: true });
+    expect(db.table("store_asset_pages").filter((p) => p.is_preview).map((p) => p.page_no)).toEqual([1, 2, 3]);
+
+    const stamped = await buyerPage(assetId, 1);
+    expect((await sharp(stamped).metadata()).format).toBe("webp");
+
+    who = BUYER;
+    grants = [];
+    const bytes = await buyerPdf();
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBe(4);
+    expect(doc.getSubject()).toBe(`Licensed to ${BUYER.email}`);
+  });
+});
+
+describe.skipIf(!LOCAL_PDF)("signed upload → render → watermark, on a real local PDF (STORE_LOCAL_PDF)", () => {
+  it("handles the real file", { timeout: 1_800_000 }, async () => {
+    const out = path.resolve("tmp/store-local-pdf");
+    rmSync(out, { recursive: true, force: true });
+    mkdirSync(out, { recursive: true });
+    const bytes = readFileSync(LOCAL_PDF!);
+    const pdf = new Blob([bytes], { type: "application/pdf" });
+
+    const rss0 = process.memoryUsage().rss;
+    let peak = rss0;
+    const timer = setInterval(() => (peak = Math.max(peak, process.memoryUsage().rss)), 100);
+    const { assetId, final, uploadMs, renderMs } = await uploadAndRender(pdf, path.basename(LOCAL_PDF!));
+    clearInterval(timer);
+    expect(final.status).toBe("ready");
+    expect(final.pages).toBeGreaterThan(0);
+
+    const pages = db.table("store_asset_pages") as Array<{ page_no: number; path: string; width: number; height: number }>;
+    let pageBytes = 0;
+    for (const p of pages) pageBytes += statSync(storage.file("store-pages", p.path)).size;
+
+    const t1 = Date.now();
+    for (const n of [1, 2, Math.min(3, pages.length)]) writeFileSync(path.join(out, `watermarked-p${n}.webp`), await buyerPage(assetId, n));
+    const wmMs = (Date.now() - t1) / 3;
+
+    who = BUYER;
+    grants = [];
+    const t2 = Date.now();
+    const buyerPdfBytes = await buyerPdf();
+    const pdfMs = Date.now() - t2;
+    writeFileSync(path.join(out, "buyer-low-res-watermarked.pdf"), buyerPdfBytes);
+    const doc = await PDFDocument.load(buyerPdfBytes);
+    expect(doc.getPageCount()).toBe(final.pages);
+
+    const shapes: Record<string, number[]> = {};
+    for (const p of pages) (shapes[`${p.width}x${p.height}`] ??= []).push(p.page_no);
+    const report = {
+      file: path.basename(LOCAL_PDF!),
+      sourceBytes: bytes.length,
+      pages: final.pages,
+      pageShapes: shapes,
+      signedUploadMs: uploadMs,
+      renderMs,
+      renderedPagesBytes: pageBytes,
+      watermarkPerPageMs: Math.round(wmMs),
+      buyerPdfMs: pdfMs,
+      buyerPdfBytes: buyerPdfBytes.length,
+      peakRssMB: Math.round(peak / 1e6),
+      startRssMB: Math.round(rss0 / 1e6),
+    };
+    writeFileSync(path.join(out, "report.json"), JSON.stringify(report, null, 2));
+    // Keep the rendered (clean) pages next to the report for the screenshot run.
+    mkdirSync(path.join(out, "pages"), { recursive: true });
+    for (const p of pages) writeFileSync(path.join(out, "pages", `${p.page_no}.webp`), readFileSync(storage.file("store-pages", p.path)));
+    writeFileSync(path.join(out, "pages", "meta.json"), JSON.stringify(pages.map((p) => ({ n: p.page_no, w: p.width, h: p.height }))));
+    console.log("[store-local-pdf]", JSON.stringify(report));
+  });
+});

@@ -54,9 +54,12 @@ export type StoreAsset = {
   id: string;
   product_id: string;
   source_path: string;
+  filename: string | null;
+  byte_size: number | null;
   page_count: number;
-  status: "uploaded" | "rendering" | "ready" | "failed";
+  status: "awaiting_upload" | "uploaded" | "rendering" | "ready" | "failed";
   error: string | null;
+  render_started_at: string | null;
   is_active: boolean;
   created_at: string;
   ready_at: string | null;

@@ -18,6 +18,14 @@ import sharp from "sharp";
  *  retina screen while a typical magazine page stays near 100-200 KB. */
 export const PAGE_WIDTH = 1080;
 export const PAGE_QUALITY = 72;
+/** Landscape pages (a two-page spread saved as one PDF page, as in Jack's
+ *  2026 draft) are drawn 1.5x wider so each half keeps ~810px of detail. */
+export const LANDSCAPE_SCALE = 1.5;
+
+/** Pixel width to draw a page at, from its PDF size. */
+export function targetWidth(pdfWidth: number, pdfHeight: number, width = PAGE_WIDTH): number {
+  return pdfWidth > pdfHeight ? Math.round(width * LANDSCAPE_SCALE) : width;
+}
 
 export type RenderedPage = {
   pageNo: number;
@@ -56,7 +64,13 @@ export async function countPdfPages(pdf: Uint8Array): Promise<number> {
  */
 export async function renderPdfToWebp(
   pdf: Uint8Array,
-  opts: { width?: number; quality?: number; onPage?: (page: RenderedPage) => Promise<void> | void } = {}
+  opts: {
+    width?: number;
+    quality?: number;
+    /** Called once with the page count, before any page renders. */
+    onStart?: (pageCount: number) => Promise<void> | void;
+    onPage?: (page: RenderedPage) => Promise<void> | void;
+  } = {}
 ): Promise<RenderedPage[]> {
   const width = opts.width ?? PAGE_WIDTH;
   const quality = opts.quality ?? PAGE_QUALITY;
@@ -72,10 +86,11 @@ export async function renderPdfToWebp(
 
   const out: RenderedPage[] = [];
   try {
+    if (opts.onStart) await opts.onStart(doc.numPages);
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i);
       const base = page.getViewport({ scale: 1 });
-      const viewport = page.getViewport({ scale: width / base.width });
+      const viewport = page.getViewport({ scale: targetWidth(base.width, base.height, width) / base.width });
       const w = Math.round(viewport.width);
       const h = Math.round(viewport.height);
       const canvas = createCanvas(w, h);

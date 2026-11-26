@@ -37,14 +37,7 @@ export function Flipbook({
     return () => mq.removeEventListener("change", set);
   }, []);
 
-  // Spreads: [0], [1,2], [3,4]… on wide screens; one page each otherwise.
-  const spreads: number[][] = useMemo(
-    () =>
-      wide
-        ? [[0], ...Array.from({ length: Math.ceil((pages.length - 1) / 2) }, (_, i) => [1 + i * 2, 2 + i * 2].filter((x) => x < pages.length))]
-        : pages.map((_, i) => [i]),
-    [wide, pages]
-  );
+  const spreads: number[][] = useMemo(() => buildSpreads(pages, wide), [wide, pages]);
   const spreadIndex = Math.max(0, spreads.findIndex((s) => s.includes(index)));
   const spread = spreads[spreadIndex] ?? [0];
 
@@ -75,8 +68,6 @@ export function Flipbook({
   }, [spreadIndex, spreads, pages]);
 
   if (pages.length === 0) return null;
-  const first = pages[spread[0]];
-  const ratio = first.w / first.h;
   const label = spread.map((i) => pages[i].n).join("–");
 
   return (
@@ -92,12 +83,15 @@ export function Flipbook({
         }}
         onContextMenu={(e) => e.preventDefault()}
       >
-        <div className={cn("flex w-full justify-center", spread.length === 1 && wide && spread[0] === 0 && "md:pl-[50%]")}>
+        <div className={cn("flex w-full justify-center", spread.length === 1 && wide && spread[0] === 0 && !isLandscape(pages[0]) && "md:pl-[50%]")}>
           {spread.map((i) => (
             <div
               key={pages[i].n}
-              className="relative w-full max-w-[min(100%,560px)] animate-fade-up border border-rule bg-white"
-              style={{ aspectRatio: `${ratio}` }}
+              className={cn(
+                "relative w-full animate-fade-up border border-rule bg-white",
+                isLandscape(pages[i]) ? "max-w-[min(100%,1120px)]" : "max-w-[min(100%,560px)]"
+              )}
+              style={{ aspectRatio: `${pages[i].w / pages[i].h}` }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -138,4 +132,27 @@ export function Flipbook({
       </div>
     </div>
   );
+}
+
+const isLandscape = (p: Pick<FlipPage, "w" | "h">) => p.w > p.h;
+
+/**
+ * Which pages show together. Phones: one page at a time. Wide screens: the
+ * cover alone, then facing pairs like a printed magazine, except that a
+ * landscape page (a spread already saved as one PDF page) always shows on
+ * its own, and so does a portrait page whose neighbour is landscape.
+ */
+export function buildSpreads(pages: Pick<FlipPage, "w" | "h">[], wide: boolean): number[][] {
+  if (!wide) return pages.map((_, i) => [i]);
+  const out: number[][] = [];
+  for (let i = 0; i < pages.length; ) {
+    if (i === 0 || isLandscape(pages[i]) || i + 1 >= pages.length || isLandscape(pages[i + 1])) {
+      out.push([i]);
+      i += 1;
+    } else {
+      out.push([i, i + 1]);
+      i += 2;
+    }
+  }
+  return out;
 }

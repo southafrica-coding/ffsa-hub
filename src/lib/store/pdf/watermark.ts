@@ -38,10 +38,14 @@ export async function watermarkOverlay(width: number, height: number, label: str
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
-  // Diagonal repeat — light enough to read through.
+  // Diagonal repeat — light enough to read through. Dark fill for light
+  // pages plus a faint light outline so it still shows on dark photo
+  // spreads (the 2026 Review is mostly dark photography).
   const size = Math.max(14, Math.round(width / 36));
   ctx.font = `${size}px ${FONT_FAMILY}`;
   ctx.fillStyle = "rgba(10,10,10,0.07)";
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = Math.max(1, size / 24);
   ctx.save();
   ctx.translate(width / 2, height / 2);
   ctx.rotate(-Math.PI / 6);
@@ -52,6 +56,7 @@ export async function watermarkOverlay(width: number, height: number, label: str
     const offset = (Math.round(y / step) % 2) * (textW / 2);
     for (let x = -reach / 2 - offset; x < reach / 2; x += textW) {
       ctx.fillText(label, x, y);
+      ctx.strokeText(label, x, y);
     }
   }
   ctx.restore();

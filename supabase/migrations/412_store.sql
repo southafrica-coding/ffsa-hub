@@ -127,9 +127,14 @@ CREATE TABLE IF NOT EXISTS public.store_assets (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id    uuid NOT NULL REFERENCES public.store_products (id) ON DELETE CASCADE,
   source_path   text NOT NULL,             -- store-source/<product>/<asset>.pdf
-  page_count    integer NOT NULL DEFAULT 0,
-  status        text NOT NULL DEFAULT 'uploaded' CHECK (status IN ('uploaded', 'rendering', 'ready', 'failed')),
+  filename      text,                      -- as uploaded, for the admin page
+  byte_size     bigint CHECK (byte_size > 0 AND byte_size <= 52428800), -- declared at sign time; 50 MB max
+  page_count    integer NOT NULL DEFAULT 0, -- pages rendered so far, then the total
+  -- awaiting_upload: signed URL issued, browser still uploading straight to
+  -- Storage (PDFs never go through a route: Vercel's 4.5 MB body limit).
+  status        text NOT NULL DEFAULT 'awaiting_upload' CHECK (status IN ('awaiting_upload', 'uploaded', 'rendering', 'ready', 'failed')),
   error         text,
+  render_started_at timestamptz,
   is_active     boolean NOT NULL DEFAULT false,
   uploaded_by   uuid REFERENCES public.users (id) ON DELETE SET NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),
@@ -462,11 +467,12 @@ GRANT EXECUTE ON FUNCTION public.store_register_device(uuid, text, text, integer
 -- ────────────────────────────────────────────────────────────
 -- 7. Storage — all private
 -- ────────────────────────────────────────────────────────────
---   store-source : uploaded PDFs + EFT proofs. Never served.
+--   store-source : uploaded PDFs + EFT proofs. Never served. 50 MB cap
+--                  (matches MAX_PDF_BYTES in src/lib/store/upload.ts).
 --   store-pages  : rendered WebP pages. Served only watermarked, via route.
 --   store-covers : cover images. Private too; served by /api/store/cover.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types) VALUES
-  ('store-source', 'store-source', false, 157286400, ARRAY['application/pdf', 'image/jpeg', 'image/png']),
+  ('store-source', 'store-source', false, 52428800,  ARRAY['application/pdf', 'image/jpeg', 'image/png']),
   ('store-pages',  'store-pages',  false, 10485760,  ARRAY['image/webp', 'application/pdf']),
   ('store-covers', 'store-covers', false, 5242880,   ARRAY['image/jpeg', 'image/png', 'image/webp'])
 ON CONFLICT (id) DO UPDATE

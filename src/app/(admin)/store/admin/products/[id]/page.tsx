@@ -65,8 +65,11 @@ export default async function ProductAdminPage({ params }: { params: Promise<{ i
                 {latest && latest.status === "failed" && (
                   <p className="border-l-2 border-destructive bg-bone px-4 py-3 text-[13px]">Last upload failed: {latest.error}</p>
                 )}
-                {latest && (latest.status === "uploaded" || latest.status === "rendering") && !latest.is_active && (
-                  <p className="flex items-center gap-2 text-[13px]"><StatusPill tone="warn">{latest.status}</StatusPill> If this is stuck, upload again.</p>
+                {latest && (latest.status === "awaiting_upload" || latest.status === "uploaded" || latest.status === "rendering") && !latest.is_active && (
+                  <p className="flex items-center gap-2 text-[13px]">
+                    <StatusPill tone="warn">{latest.status === "awaiting_upload" ? "upload not finished" : latest.status}</StatusPill>
+                    {latest.status === "rendering" ? `${latest.page_count} pages so far. ` : ""}If this is stuck, upload again.
+                  </p>
                 )}
                 <PdfUpload productId={id} />
               </div>
