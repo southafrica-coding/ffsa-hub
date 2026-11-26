@@ -270,3 +270,102 @@ describe("migration 422 song library new_version DMs", () => {
     );
   });
 });
+
+describe("migration 423 song library agreed revoke", () => {
+  const m423 = readFileSync(
+    path.join(ROOT, "supabase/migrations/423_song_library_agreed_revoke.sql"),
+    "utf8",
+  );
+  const r423 = readFileSync(
+    path.join(
+      ROOT,
+      "supabase/rollbacks/423_song_library_agreed_revoke_rollback.sql",
+    ),
+    "utf8",
+  );
+  const code423 = m423.replace(/--.*$/gm, "");
+  const fnOf = (sql: string): string => {
+    const start = sql.indexOf(
+      "CREATE OR REPLACE FUNCTION public.song_library_writers_before()",
+    );
+    expect(start).toBeGreaterThanOrEqual(0);
+    return sql.slice(start, sql.indexOf("\n$$;\n", start) + 5);
+  };
+
+  it("replaces writers_before and adds only the new_version event trigger", () => {
+    const fns = [
+      ...code423.matchAll(/CREATE (?:OR REPLACE )?FUNCTION public\.(\w+)/g),
+    ].map((m) => m[1]);
+    expect(fns).toEqual([
+      "song_library_writers_before",
+      "song_library_notifications_version_event",
+    ]);
+    expect(code423).not.toMatch(
+      /\b(CREATE POLICY|DROP POLICY|GRANT|ALTER TABLE)\b/,
+    );
+    expect(code423).toContain(
+      "DROP TRIGGER IF EXISTS song_library_notifications_version_event ON public.song_library_notifications;",
+    );
+    expect(squash(code423)).toContain(
+      "CREATE TRIGGER song_library_notifications_version_event BEFORE INSERT OR UPDATE OF kind, stage_event_id, song_id ON public.song_library_notifications FOR EACH ROW EXECUTE FUNCTION public.song_library_notifications_version_event();",
+    );
+  });
+
+  it("ties new_version claims to a version event of the same song (23514)", () => {
+    const start = code423.indexOf(
+      "CREATE OR REPLACE FUNCTION public.song_library_notifications_version_event()",
+    );
+    const fn = code423.slice(start, code423.indexOf("\n$$;\n", start));
+    expect(fn).toMatch(/SECURITY DEFINER\s+SET search_path = ''/);
+    expect(squash(fn)).toContain(
+      "e.id = NEW.stage_event_id AND e.kind = 'version' AND e.song_id = NEW.song_id",
+    );
+    expect(squash(fn)).toContain(
+      "USING ERRCODE = 'check_violation', CONSTRAINT = 'song_library_notifications_new_version_event'",
+    );
+    // No auth.uid() / role escape: the service role is checked too.
+    expect(fn).not.toMatch(/auth\.uid|pg_trigger_depth|current_user/);
+    expect(code423).toContain(
+      "REVOKE ALL ON FUNCTION public.song_library_notifications_version_event() FROM PUBLIC, anon, authenticated;",
+    );
+    expect(r423).toContain(
+      "DROP TRIGGER IF EXISTS song_library_notifications_version_event ON public.song_library_notifications;",
+    );
+    expect(r423).toContain(
+      "DROP FUNCTION IF EXISTS public.song_library_notifications_version_event();",
+    );
+  });
+
+  it("refuses a non-manager revoke while agreed with 42501", () => {
+    const body = fnOf(m423);
+    expect(body).toMatch(
+      /NOT \(public\.song_library_is_admin\(\) OR public\.song_library_can_manage\(\)\)[\s\S]*?c\.kind = 'credits_splits_agreed'[\s\S]*?c\.done_at IS NOT NULL[\s\S]*?only a Song Library manager or an admin can revoke the agreement'\s+USING ERRCODE = '42501'/,
+    );
+  });
+
+  it("rollback restores 419's song_library_writers_before exactly", () => {
+    expect(fnOf(r423)).toBe(fnOf(migration));
+    expect(fnOf(m423)).not.toBe(fnOf(migration));
+  });
+});
+
+describe("rollback 422 reports what it deletes", () => {
+  const r422 = readFileSync(
+    path.join(
+      ROOT,
+      "supabase/rollbacks/422_song_library_new_version_dm_rollback.sql",
+    ),
+    "utf8",
+  ).replace(/--.*$/gm, "");
+
+  it("NOTICEs the count, and the ids when 50 or fewer", () => {
+    expect(r422).toMatch(
+      /DELETE FROM public\.song_library_notifications WHERE kind = 'new_version' RETURNING id/,
+    );
+    expect(r422).toMatch(/cardinality\(ids\) <= 50/);
+    expect(r422).toMatch(
+      /RAISE NOTICE '422 rollback: deleted % new_version notification\(s\): %'/,
+    );
+    expect(r422).toMatch(/ids not listed, more than 50/);
+  });
+});

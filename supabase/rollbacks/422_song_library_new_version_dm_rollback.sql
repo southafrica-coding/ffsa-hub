@@ -5,8 +5,10 @@
 -- It refuses to run while any new_version claim exists (419's CHECKs would
 -- reject those rows), unless the session first runs
 --   SET song_library.rollback_drops_new_version = 'yes';
--- in which case it deletes them. They are send records: once deleted, a
--- re-applied 422 could DM those people again for the same versions.
+-- in which case it deletes them and RAISEs a NOTICE with the count (and
+-- the ids when there are 50 or fewer). They are send records: once
+-- deleted, a re-applied 422 could DM those people again for the same
+-- versions.
 -- Export before this runs. From psql:
 --   \copy (SELECT * FROM public.song_library_notifications WHERE kind = 'new_version') TO 'song_library_new_version_dms.csv' CSV HEADER
 -- Safe to run twice. Run before the 419 rollback.
@@ -16,6 +18,7 @@ BEGIN;
 DO $guard$
 DECLARE
   n bigint;
+  ids uuid[];
 BEGIN
   IF to_regclass('public.song_library_notifications') IS NOT NULL THEN
     EXECUTE $q$SELECT count(*) FROM public.song_library_notifications WHERE kind = 'new_version'$q$ INTO n;
@@ -24,8 +27,13 @@ BEGIN
         RAISE EXCEPTION '422 rollback refused: % new_version notification(s) exist. Export them, then SET song_library.rollback_drops_new_version = ''yes'' in this session to delete them.', n
           USING ERRCODE = '55000';
       END IF;
-      EXECUTE $q$DELETE FROM public.song_library_notifications WHERE kind = 'new_version'$q$;
-      RAISE NOTICE '422 rollback: deleted % new_version notification(s)', n;
+      EXECUTE $q$WITH d AS (DELETE FROM public.song_library_notifications WHERE kind = 'new_version' RETURNING id)
+                 SELECT array_agg(id ORDER BY id) FROM d$q$ INTO ids;
+      IF cardinality(ids) <= 50 THEN
+        RAISE NOTICE '422 rollback: deleted % new_version notification(s): %', cardinality(ids), array_to_string(ids, ', ');
+      ELSE
+        RAISE NOTICE '422 rollback: deleted % new_version notification(s) (ids not listed, more than 50)', cardinality(ids);
+      END IF;
     END IF;
   END IF;
 END
