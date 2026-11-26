@@ -143,12 +143,6 @@ export function TeamPicker({ slug, departmentName }: { slug: string; departmentN
               onStart={() => start(card.team.id)}
             />
           ))}
-          <li>
-            {/* Visual only: there is no create-team API yet. */}
-            <div className={styles.addTeam} aria-disabled="true">
-              + Add an L10 team
-            </div>
-          </li>
         </ul>
       ) : null}
     </div>
@@ -227,7 +221,7 @@ function TeamCard({
                   "—"
                 )}
               </div>
-              <div className={styles.statLabel}>Rocks on track</div>
+              <div className={`${styles.statLabel} ${styles.statLabelWrap}`}>Rocks on track</div>
               {stats && stats.rocksTotal > 0 ? (
                 <div className={styles.meter} aria-hidden="true">
                   <div className={styles.meterFill} style={{ width: `${Math.round(rockShare * 100)}%` }} />
@@ -303,11 +297,6 @@ export function TeamPickerScreen({
               onStart={() => onStart?.(card.team.id)}
             />
           ))}
-          <li>
-            <div className={styles.addTeam} aria-disabled="true">
-              + Add an L10 team
-            </div>
-          </li>
         </ul>
       ) : null}
     </div>
