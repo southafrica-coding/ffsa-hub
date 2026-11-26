@@ -150,7 +150,7 @@
         },
         {
           "ul": [
-            "Spare keys and the key safe, locknut keys, and remotes.",
+            "Spare keys and the key safe, and remotes.",
             "Where the service books and licence disc papers are kept.",
             "Tread depth gauge, tyre pressure gauge and torch."
           ]
@@ -194,6 +194,7 @@
             "Monthly check ({monthly} points): the weekly points plus the slower once-a-month points. It replaces the weekly check on the vehicle’s first inspection day of the month.",
             "Workshop report ({workshop} points): what only a mechanic can check. It starts with the workshop’s 25-point check, in the same order and wording as Motech’s sheet: for each line, tap OK if it’s ticked as Checked, Monitor or Fix now if it’s ticked as Attention needed (N/A if it doesn’t apply, like spark plugs on a diesel), and type the sheet’s note in the box next to it. Mark the rest OK does the lines that are fine in one tap. Then fill in any points under “If the workshop checked them”, put anything else on the report (like “see diagnostic”) in What the workshop recommends, and attach the report.",
             "Mark each point OK, Monitor (keep an eye on it, book it soon) or Fix now (fix before the vehicle is used again). For Monitor and Fix now, write what you saw and add a photo.",
+            "Every check also has Photos and documents at the end: add a photo, a receipt, a report or a PDF that belongs with the check. They’re kept with the inspection and listed on its page.",
             "Once a Fix now or Monitor point has been fixed, open the vehicle’s Condition tab and tap Mark as fixed next to it: enter the date it was fixed, who fixed it (a person or the workshop) and what was done. The point goes back to OK from that date, and the Condition tab shows who fixed it and what it was before. The fix is also kept for good in the vehicle’s History, even after the next inspection checks that point again.",
             "A half-done inspection is saved as a draft as you go, until you save or discard it. Continue it from the vehicle’s page."
           ]
@@ -412,6 +413,14 @@
     [
       "2026-11-25",
       "Bookings: changing only the dates of a pending booking now checks its vehicle is free on the new dates. Nobody can approve or decline their own early return. Mark as fixed saves the fix and the point together, so a half-saved fix can’t be left behind."
+    ],
+    [
+      "2026-11-25",
+      "Photos and documents on every check: pre-rental, post-rental, weekly, monthly and workshop inspections can all take a photo or a PDF at the end (Add photo or document), and the inspection’s page lists them."
+    ],
+    [
+      "2026-11-25",
+      "No more locknut keys: FFSA’s vehicles don’t have locking wheel nuts, so the checklist help, the Guide and the in-car guide no longer mention them. The points are now “Keys and remote returned” and “All wheel nuts present”."
     ]
   ]
 }

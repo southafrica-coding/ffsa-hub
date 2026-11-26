@@ -144,6 +144,14 @@ describe("inspection screen", () => {
     expect(host.textContent).toContain("Walk-around photos");
   });
 
+  it("every check can take a photo or a document (Gideon, 25 Nov 2026)", async () => {
+    await open();
+    await click(buttons("Full list")[0]);
+    expect(host.textContent).toContain("Photos and documents");
+    const input = Array.from(host.querySelectorAll("label")).find((l) => /Add photo or document/i.test(l.textContent || ""))?.querySelector("input[type=file]") as HTMLInputElement;
+    expect(input?.accept).toBe("image/*,application/pdf");
+  });
+
   it("continues a draft from the device", async () => {
     localStorage.setItem(draftKey(v.id), JSON.stringify({ vehicleId: v.id, type: "monthly", date: TODAY, odometer: "1234", gstep: 0, results: {}, savedAt: 5 }));
     await open();

@@ -215,6 +215,15 @@ describe("save (saveInspection)", () => {
     expect(out.doc).toMatchObject({ type: "weekly", odometer: 225100, inspector: "Jack", provider: "", bookingId: null, docs: [], counts: { ok: 1, mon: 1, fix: 1, na: 0 } });
   });
 
+  it("any check keeps its documents, not only a workshop report (Gideon, 25 Nov 2026)", () => {
+    const v = veh("h1-2");
+    const { d } = weeklyDraft(v);
+    const doc = { id: "b".repeat(32), name: "Fuel receipt.pdf", type: "application/pdf" };
+    const out = buildInspection(cl, { ...d, docs: [doc] }, { vehicleId: v.id, today: TODAY });
+    if ("error" in out) throw new Error(out.error);
+    expect(out.doc.docs).toEqual([doc]);
+  });
+
   it("SPEC 10.10: a weekly check with 17 minutes of active use saves mins 17", () => {
     const v = veh("h1-2");
     const { d } = weeklyDraft(v);

@@ -130,7 +130,7 @@ export default async function InspectionPage({ params }: { params: Promise<{ id:
       {ins.docs.length > 0 && (
         <section className="border-b border-rule">
           <div className="section-bar">
-            <span className="section-bar-title">Workshop report</span>
+            <span className="section-bar-title">{ins.type === "workshop" ? "Workshop report" : "Documents"}</span>
           </div>
           <ul className="space-y-1.5 px-5 py-4 md:px-8">
             {ins.docs.map((f) => (

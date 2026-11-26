@@ -373,7 +373,7 @@ export function buildInspection(
       inspector: (d.inspector || "").trim(),
       provider: d.type === "workshop" ? d.provider || "" : "",
       bookingId: d.type === "post" && UUID.test(d.bookingId) ? d.bookingId : null,
-      docs: d.type === "workshop" ? d.docs || [] : [],
+      docs: d.docs || [], // every check can carry documents (Gideon, 25 Nov 2026), not only workshop reports
       results,
       walk: d.walk || {},
       extra: d.extra || [],

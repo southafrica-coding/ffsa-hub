@@ -350,7 +350,7 @@
       "id": "pst-keys",
       "section": "trip",
       "sectionName": "Trip & handover",
-      "text": "Keys, remote and locknut key returned",
+      "text": "Keys and remote returned",
       "hint": "",
       "checks": [
         "post"
@@ -359,17 +359,16 @@
       "routeStage": "docs",
       "suggestMonthly": false,
       "help": {
-        "why": "A lost key or remote costs a lot to replace and could let someone steal the vehicle. The locknut key is the special socket for the locking wheel nut: without it nobody can take a wheel off to change a flat tyre.",
+        "why": "A lost key or remote costs a lot to replace and could let someone steal the vehicle.",
         "safetyFirst": "",
         "howToCheck": [
           "Count the keys and remotes handed back against what went out.",
-          "Press the remote buttons: it should lock and unlock from a few metres away.",
-          "Check the locknut key is in the vehicle (usually in the cubby hole or with the jack)."
+          "Press the remote buttons: it should lock and unlock from a few metres away."
         ],
         "markOk": "Everything is back and works.",
         "markMonitor": "Remote only works close up: its battery is getting weak.",
-        "markFixNow": "A key, remote or the locknut key is missing.",
-        "looksLike": "Every key goes back on its own labelled hook or tag. The remote has buttons that press and spring back. The locknut key is a small, round socket with a pattern on its end, usually in a little bag.",
+        "markFixNow": "A key or remote is missing.",
+        "looksLike": "Every key goes back on its own labelled hook or tag. The remote has buttons that press and spring back.",
         "whatGoesWrong": [
           {
             "problem": "Key or remote missing",
@@ -2421,7 +2420,7 @@
       "id": "tyr-nuts",
       "section": "tyres",
       "sectionName": "Tyres & wheels",
-      "text": "All wheel nuts present; locknut key in the vehicle",
+      "text": "All wheel nuts present",
       "hint": "",
       "checks": [
         "weekly"
@@ -2430,17 +2429,16 @@
       "routeStage": "tyres",
       "suggestMonthly": false,
       "help": {
-        "why": "Wheel nuts hold the wheels on. A missing or loose nut puts more strain on the others, and in the worst case the wheel comes off. The locknut key is needed to undo the special locking nut.",
+        "why": "Wheel nuts hold the wheels on. A missing or loose nut puts more strain on the others, and in the worst case the wheel comes off.",
         "safetyFirst": "",
         "howToCheck": [
           "Count the nuts on each wheel. None should be missing.",
-          "Look for rust streaks coming from a nut, which can mean it’s loose.",
-          "Check the locknut key is in the vehicle."
+          "Look for rust streaks coming from a nut, which can mean it’s loose."
         ],
-        "markOk": "All there, key in the vehicle.",
+        "markOk": "All there and none look loose.",
         "markMonitor": "A rust streak: ask the workshop to check the torque.",
-        "markFixNow": "A missing nut, or no locknut key.",
-        "looksLike": "Each wheel has the same number of shiny nuts or bolts in a circle (usually 5 or 6). One per wheel may be a special locking nut with a pattern on its face.",
+        "markFixNow": "A nut is missing.",
+        "looksLike": "Each wheel has the same number of shiny nuts or bolts in a circle (usually 5 or 6).",
         "whatGoesWrong": [
           {
             "problem": "Missing nut",
@@ -2449,10 +2447,6 @@
           {
             "problem": "Loose nut",
             "signs": "A rust-coloured streak running out from a nut."
-          },
-          {
-            "problem": "Damaged locknut",
-            "signs": "The pattern on the locking nut is chewed, so the key won’t fit."
           }
         ]
       }
@@ -3900,12 +3894,12 @@
         "safetyFirst": "",
         "howToCheck": [
           "Find the jack and wheel spanner and check nothing is missing.",
-          "Check the spanner fits the wheel nuts, and the locknut key is with it."
+          "Check the spanner fits the wheel nuts."
         ],
         "markOk": "Complete.",
         "markMonitor": "",
         "markFixNow": "Missing or broken.",
-        "looksLike": "The jack is a small scissor or bottle jack. The wheel spanner is an L-shaped or straight bar with a socket that fits the wheel nuts. The locknut key sits with them.",
+        "looksLike": "The jack is a small scissor or bottle jack. The wheel spanner is an L-shaped or straight bar with a socket that fits the wheel nuts.",
         "whatGoesWrong": [
           {
             "problem": "Missing jack or spanner",

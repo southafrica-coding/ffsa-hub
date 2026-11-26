@@ -320,7 +320,8 @@ export function InspectForm(props: InspectFormProps) {
           if (kind === "item") {
             const res = x.results[key] || (x.results[key] = { p: [] });
             res.p = (res.p || []).concat(r.id);
-          } else if (kind === "extra") x.extra = (x.extra || []).concat(r.id);
+          } else if (kind === "extra" || (kind === "any" && f.type.startsWith("image/"))) x.extra = (x.extra || []).concat(r.id);
+          else if (kind === "any") x.docs = (x.docs || []).concat({ id: r.id, name: f.name, type: f.type });
           else if (kind === "docs") x.docs = (x.docs || []).concat({ id: r.id, name: f.name, type: f.type });
           else if (kind === "walk") x.walk[key] = r.id;
         });
@@ -480,11 +481,36 @@ export function InspectForm(props: InspectFormProps) {
     </div>
   );
 
+  // Photos and documents for the whole inspection (Gideon, 25 Nov 2026: "the ability to add
+  // a file, photo or document" on every check). Photos show as thumbnails; PDFs are listed.
+  // A workshop report's documents stay in its own "Workshop report" panel above.
+  const docList = (
+    <ul className="space-y-1.5">
+      {d.docs.map((f, i) => (
+        <li key={f.id + i} className="flex flex-wrap items-center gap-2 text-[14px]">
+          <a href={fileUrl(f.id)} target="_blank" rel="noopener noreferrer" className="min-w-0 break-all underline">
+            {(f.type || "").startsWith("image/") ? `Photo: ${f.name || "image"}` : f.name || "Document"}
+          </a>
+          <button type="button" className={cn(btnOutline, "min-h-11")} onClick={() => update((x) => void x.docs.splice(i, 1))}>
+            Remove
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
   const extraPhotos = (
     <div className="mt-4 space-y-2">
-      <span className="mono-label">Other photos</span>
+      <span className="mono-label">Photos and documents</span>
+      <p className="text-[13px] text-[#55524A]">Anything that belongs with this check: a photo, a receipt, a report or a PDF.</p>
       <Thumbs ids={d.extra} caption="Extra photo" onRemove={(pid) => removePhoto("extra", pid)} />
-      <UploadButton label="Add photos" multiple busy={(uploading.extra || 0) > 0} onFiles={(f) => upload("extra", f)} />
+      {type !== "workshop" && d.docs.length > 0 && docList}
+      <UploadButton
+        label="Add photo or document"
+        accept="image/*,application/pdf"
+        multiple
+        busy={(uploading.any || 0) > 0}
+        onFiles={(f) => upload("any", f)}
+      />
     </div>
   );
 
@@ -853,18 +879,7 @@ export function InspectForm(props: InspectFormProps) {
         <Panel title="Workshop report">
           <p className="mb-3 text-[13px] text-[#55524A]">Attach the mechanic’s report or job card, then record their findings point by point below.</p>
           {d.docs.length ? (
-            <ul className="mb-3 space-y-1.5">
-              {d.docs.map((f, i) => (
-                <li key={f.id + i} className="flex flex-wrap items-center gap-2 text-[14px]">
-                  <a href={fileUrl(f.id)} target="_blank" rel="noopener noreferrer" className="min-w-0 break-all underline">
-                    {(f.type || "").startsWith("image/") ? `Photo: ${f.name || "image"}` : f.name || "Document"}
-                  </a>
-                  <button type="button" className={cn(btnOutline, "min-h-9")} onClick={() => update((x) => void x.docs.splice(i, 1))}>
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className="mb-3">{docList}</div>
           ) : (
             <p className="mb-3 text-[13px] text-[#55524A]">Nothing attached yet.</p>
           )}
