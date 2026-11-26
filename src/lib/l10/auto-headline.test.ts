@@ -11,10 +11,10 @@ const LIVE_MEETING = "00000000-0000-4000-8000-00000000f004";
 function world() {
   return makeWorld({
     l10_meetings: [
-      { id: SRC_OLD, team_id: PRODUCTION, started_at: "2026-11-12T17:00:00.000Z", ended_at: "2026-11-12T18:30:00.000Z", segment_timings: {} },
-      { id: SRC, team_id: PRODUCTION, started_at: "2026-11-19T17:00:00.000Z", ended_at: "2026-11-19T18:30:00.000Z", segment_timings: {} },
-      { id: SRC_RUNNING, team_id: PRODUCTION, started_at: "2026-11-26T17:00:00.000Z", ended_at: null, segment_timings: {} },
-      { id: LIVE_MEETING, team_id: LIVE, started_at: "2026-11-26T18:00:00.000Z", ended_at: null, segment_timings: {} },
+      { id: SRC_OLD, team_id: PRODUCTION, department_id: PW_ID, started_at: "2026-11-12T17:00:00.000Z", ended_at: "2026-11-12T18:30:00.000Z", segment_timings: {} },
+      { id: SRC, team_id: PRODUCTION, department_id: PW_ID, started_at: "2026-11-19T17:00:00.000Z", ended_at: "2026-11-19T18:30:00.000Z", segment_timings: {} },
+      { id: SRC_RUNNING, team_id: PRODUCTION, department_id: PW_ID, started_at: "2026-11-26T17:00:00.000Z", ended_at: null, segment_timings: {} },
+      { id: LIVE_MEETING, team_id: LIVE, department_id: PW_ID, started_at: "2026-11-26T18:00:00.000Z", ended_at: null, segment_timings: {} },
     ],
     l10_meeting_attendees: [
       { id: "a1", team_id: PRODUCTION, meeting_id: SRC, profile_id: LEAD, rating: 9 },
@@ -54,7 +54,9 @@ describe("ensureAutoHeadline", () => {
     expect((await ensureAutoHeadline(admin, LIVE_MEETING)).outcome).toBe("exists");
     const autos = db.tables.l10_headlines.filter((h) => h.is_auto);
     expect(autos).toHaveLength(1);
-    expect(autos[0]).toMatchObject({ team_id: LIVE, source_meeting_id: LIVE_MEETING, recap_of_meeting_id: SRC, author_id: null });
+    expect(autos[0]).toMatchObject({ team_id: LIVE, department_id: PW_ID, source_meeting_id: LIVE_MEETING, recap_of_meeting_id: SRC, author_id: null });
+    const inserted = db.log.find((e) => e.table === "l10_headlines" && e.action === "insert");
+    expect(inserted?.payload).not.toHaveProperty("department_id");
     expect(String(autos[0].body).split("\n")).toEqual([
       "Production L10 on Thu 19 Nov 2026",
       "Rocks: 2 on track, 1 off track",
@@ -74,7 +76,7 @@ describe("ensureAutoHeadline", () => {
 
   it("inserts nothing for an unpaired team, with no ended source meeting, or for an ended meeting", async () => {
     const db = world();
-    db.tables.l10_meetings.push({ id: "t3m", team_id: TEAM3, started_at: "2026-11-26T18:00:00.000Z", ended_at: null, segment_timings: {} });
+    db.tables.l10_meetings.push({ id: "t3m", team_id: TEAM3, department_id: PW_ID, started_at: "2026-11-26T18:00:00.000Z", ended_at: null, segment_timings: {} });
     expect((await ensureAutoHeadline(db.client(), "t3m")).outcome).toBe("no-source-team");
     expect((await ensureAutoHeadline(db.client(), SRC)).outcome).toBe("meeting-ended");
     const none = world();

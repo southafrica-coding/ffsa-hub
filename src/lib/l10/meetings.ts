@@ -26,7 +26,7 @@ type DbError = { code?: string; message?: string };
 
 export type MeetingRow = Pick<
   L10Meeting,
-  "id" | "team_id" | "started_at" | "ended_at" | "facilitator_id" | "segment_timings" | "notes" | "recap_posted_at" | "followup_sent_at" | "created_by"
+  "id" | "team_id" | "department_id" | "started_at" | "ended_at" | "facilitator_id" | "segment_timings" | "notes" | "recap_posted_at" | "followup_sent_at" | "created_by"
 >;
 export type AttendeeRow = Pick<L10MeetingAttendee, "id" | "team_id" | "meeting_id" | "profile_id" | "rating" | "followup_sent_at">;
 
