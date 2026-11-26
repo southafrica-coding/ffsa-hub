@@ -161,6 +161,9 @@ export interface DepartmentBudgetLink {
 // department leaders and admins only; l10_team_members writes add the
 // team's own leaders.
 
+/** Postgres error message (SQLSTATE 42501) when a caller may not set an attendee rating. */
+export const L10_RATING_NOT_ALLOWED = "l10_rating_not_allowed" as const;
+
 export const L10_TEAM_ROLES = ["member", "leader"] as const;
 export type L10TeamRole = (typeof L10_TEAM_ROLES)[number];
 
@@ -248,7 +251,12 @@ export interface L10MeetingAttendee {
   team_id: string;
   meeting_id: string;
   profile_id: string;
-  /** 1–10, null until rated. */
+  /**
+   * 1–10, null until rated. A DB trigger lets only the attendee, a team
+   * leader, an overseer (admin / department leader) or this meeting's
+   * facilitator set or change it; anyone else gets 42501
+   * `l10_rating_not_allowed`. service_role is exempt.
+   */
   rating: number | null;
   /** When this attendee's Slack follow-up DM went out. */
   followup_sent_at: string | null;

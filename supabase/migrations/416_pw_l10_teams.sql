@@ -40,6 +40,10 @@
 -- l10_teams:          read = access, write = oversee
 -- l10_team_members:   read = access, write = manage
 -- all other L10 rows: read/write = access
+-- attendee rating:    trigger l10_meeting_attendees_rating_guard; only
+--                     the attendee, team leaders, overseers or the
+--                     meeting facilitator may set it (42501
+--                     l10_rating_not_allowed). service_role is exempt.
 -- anon and every other authenticated user: nothing.
 --
 -- Seed: production, live and team-3 under prayer_and_worship, looked up
@@ -254,6 +258,89 @@ CREATE INDEX IF NOT EXISTS l10_meeting_attendees_profile_id_idx ON public.l10_me
 
 COMMENT ON COLUMN public.l10_meeting_attendees.rating IS 'The attendee''s 1–10 meeting rating. Null until rated.';
 COMMENT ON COLUMN public.l10_meeting_attendees.followup_sent_at IS 'When this attendee''s Slack follow-up DM was sent. Null = not sent.';
+
+-- Ratings. RLS lets anyone with team access write attendee rows; the
+-- rating itself is narrower. A caller may set or change a rating only on
+-- their own attendee row, unless they are a team leader, an overseer
+-- (admin or leader of the team's department) or that meeting's
+-- facilitator (the conclude screen: one person enters everyone's 1–10).
+-- Other columns (followup_sent_at included) follow the table policies.
+-- Only authenticated / anon callers are checked: service_role and the
+-- table owner (migrations, SQL editor) are not.
+
+CREATE OR REPLACE FUNCTION public.l10_can_rate_attendee(
+  p_team_id uuid,
+  p_meeting_id uuid,
+  p_profile_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT public.dept_caller_is_active()
+     AND (
+       p_profile_id = auth.uid()
+       OR public.l10_can_manage_team(p_team_id)
+       OR EXISTS (
+         SELECT 1
+           FROM public.l10_meetings mt
+          WHERE mt.id = p_meeting_id
+            AND mt.team_id = p_team_id
+            AND mt.facilitator_id = auth.uid()
+       )
+     );
+$$;
+
+REVOKE ALL ON FUNCTION public.l10_can_rate_attendee(uuid, uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.l10_can_rate_attendee(uuid, uuid, uuid) TO authenticated, service_role;
+
+-- SECURITY INVOKER on purpose: current_user must be the caller's role so
+-- service_role and the owner can be told apart from authenticated. The
+-- membership lookups run inside the SECURITY DEFINER helper above.
+CREATE OR REPLACE FUNCTION public.l10_meeting_attendees_rating_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.rating IS NULL THEN
+      RETURN NEW;
+    END IF;
+  ELSIF NEW.rating IS NOT DISTINCT FROM OLD.rating
+        AND NEW.profile_id = OLD.profile_id
+        AND NEW.meeting_id = OLD.meeting_id
+        AND NEW.team_id = OLD.team_id THEN
+    -- Rating untouched and still on the same person and meeting.
+    RETURN NEW;
+  ELSIF NEW.rating IS NULL AND OLD.rating IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF NOT public.l10_can_rate_attendee(NEW.team_id, NEW.meeting_id, NEW.profile_id)
+     OR (TG_OP = 'UPDATE'
+         AND OLD.rating IS NOT NULL
+         AND NOT public.l10_can_rate_attendee(OLD.team_id, OLD.meeting_id, OLD.profile_id)) THEN
+    RAISE EXCEPTION 'l10_rating_not_allowed'
+      USING ERRCODE = '42501',
+            DETAIL = 'Only the attendee, a team leader, a department leader, an admin or the meeting facilitator can set this rating.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.l10_meeting_attendees_rating_guard() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS l10_meeting_attendees_rating_guard ON public.l10_meeting_attendees;
+CREATE TRIGGER l10_meeting_attendees_rating_guard
+  BEFORE INSERT OR UPDATE ON public.l10_meeting_attendees
+  FOR EACH ROW EXECUTE FUNCTION public.l10_meeting_attendees_rating_guard();
 
 -- ────────────────────────────────────────────────────────────
 -- 4. Rocks — extend 320

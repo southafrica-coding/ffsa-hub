@@ -79,6 +79,8 @@ DROP TABLE IF EXISTS public.l10_meetings;
 DROP TABLE IF EXISTS public.l10_team_members;
 DROP TABLE IF EXISTS public.l10_teams;
 
+DROP FUNCTION IF EXISTS public.l10_meeting_attendees_rating_guard();
+DROP FUNCTION IF EXISTS public.l10_can_rate_attendee(uuid, uuid, uuid);
 DROP FUNCTION IF EXISTS public.l10_segment_timings_valid(jsonb);
 DROP FUNCTION IF EXISTS public.l10_can_manage_team(uuid);
 DROP FUNCTION IF EXISTS public.l10_can_access_team(uuid);
