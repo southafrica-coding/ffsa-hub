@@ -1,7 +1,8 @@
 // L10 (any department): the table, column and value names the server uses, aligned with
-// migration 416 (Hub Data, PR #739). Row types come from
-// lib/departments/db.types.ts, which 416 extends; this file only adds the
-// table names, the column lists the API selects, and the item kinds.
+// migration 416 (Hub Data, PR #739) and 420 (PR #744: department_id on
+// meetings and headlines, filled by trigger; clients never send it). Row types
+// come from lib/departments/db.types.ts; this file only adds the table names,
+// the column lists the API selects, and the item kinds.
 
 export {
   L10_GOAL_DIRECTIONS,
@@ -97,9 +98,9 @@ export const L10_COLUMNS = {
   todos: "id, team_id, title, owner_id, due_on, done, done_at, source_meeting_id, created_by, created_at",
   issues:
     "id, team_id, title, description, owner_id, status, priority, solved_at, source_meeting_id, resolved_meeting_id, created_by, created_at",
-  headlines: "id, team_id, body, author_id, source_meeting_id, is_auto, recap_of_meeting_id, dismissed_at, created_at",
+  headlines: "id, team_id, department_id, body, author_id, source_meeting_id, is_auto, recap_of_meeting_id, dismissed_at, created_at",
   meetings:
-    "id, team_id, started_at, ended_at, facilitator_id, segment_timings, notes, recap_posted_at, followup_sent_at, created_by",
+    "id, team_id, department_id, started_at, ended_at, facilitator_id, segment_timings, notes, recap_posted_at, followup_sent_at, created_by",
   attendees: "id, team_id, meeting_id, profile_id, rating, followup_sent_at",
 } as const;
 

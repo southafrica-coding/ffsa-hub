@@ -90,6 +90,22 @@ export function createMemoryDb(
   const log: MemoryDb["log"] = [];
   const rowsOf = (t: string) => (tables[t] ??= []);
 
+  // 420: department_id on meetings and headlines is filled from the team and
+  // overwritten if a client sends it. Same before insert, and before an
+  // update that touches team_id or department_id.
+  function setDepartmentFromTeam(table: string, row: Row): { code: string; message: string } | null {
+    if (table !== "l10_meetings" && table !== "l10_headlines") return null;
+    const team = rowsOf("l10_teams").find((t) => t.id === row.team_id);
+    if (!team || typeof team.department_id !== "string") {
+      return { code: "23503", message: `l10 team ${String(row.team_id)} not found` };
+    }
+    row.department_id = team.department_id;
+    return null;
+  }
+  for (const table of ["l10_meetings", "l10_headlines"]) {
+    for (const row of rowsOf(table)) setDepartmentFromTeam(table, row);
+  }
+
   function client(c: { userId?: string | null; rls?: Rls } = {}) {
     const uid = c.userId ?? null;
     const canRead = (t: string, r: Row) => !c.rls || c.rls.read(t, r, uid);
@@ -106,6 +122,10 @@ export function createMemoryDb(
         } else if (q.action === "insert") {
           const list = (Array.isArray(q.payload) ? q.payload : [q.payload]) as Row[];
           const made = list.map((p) => ({ id: randomUUID(), ...(DEFAULTS[table] ?? {}), ...p }));
+          for (const r of made) {
+            const err = setDepartmentFromTeam(table, r);
+            if (err) return { data: null, error: err };
+          }
           if (made.some((r) => !canWrite(table, r))) return { data: null, error: { code: "42501", message: "rls" } };
           for (const r of made) {
             const u = opts.unique ? opts.unique(table, r, all) : true;
@@ -118,6 +138,13 @@ export function createMemoryDb(
         } else if (q.action === "update") {
           const hit = all.filter((r) => matches(r, q.filters) && canRead(table, r) && canWrite(table, r));
           const after = hit.map((r) => ({ ...r, ...(q.payload as Row) }));
+          const payload = (q.payload ?? {}) as Row;
+          if ("team_id" in payload || "department_id" in payload) {
+            for (const r of after) {
+              const err = setDepartmentFromTeam(table, r);
+              if (err) return { data: null, error: err };
+            }
+          }
           if (after.some((r) => !canWrite(table, r))) return { data: null, error: { code: "42501", message: "rls" } };
           hit.forEach((r, i) => Object.assign(r, after[i]));
           result = q.returning ? hit.map((r) => ({ ...r })) : null;
