@@ -165,9 +165,14 @@ export async function setPreviewPages(supabase: Client, assetId: string, pages: 
 // Orders
 // ────────────────────────────────────────────────────────────
 
+/**
+ * Insert a pending order and its items. coupon_id / discount_cents are left
+ * to the database defaults (no coupon): a code is attached afterwards by
+ * applyCouponToOrder, which takes the use in the same transaction.
+ */
 export async function createOrder(
   supabase: Client,
-  order: Omit<StoreOrder, "id" | "status" | "provider_payment_id" | "eft_proof_path" | "paid_at" | "created_at">,
+  order: Omit<StoreOrder, "id" | "status" | "provider_payment_id" | "eft_proof_path" | "paid_at" | "created_at" | "coupon_id" | "discount_cents">,
   items: Array<Omit<StoreOrderItem, "id" | "order_id">>
 ) {
   const { data, error } = await supabase.from("store_orders").insert({ ...order, status: "pending" }).select("*").single();
@@ -255,6 +260,94 @@ export async function cancelPendingOrder(supabase: Client, id: string) {
     .eq("status", "pending")
     .select("id")
     .maybeSingle();
+}
+
+/** Remove an order that never got going (its items and any coupon
+ *  redemption cascade; removing the redemption gives the use back). */
+export async function deleteOrder(supabase: Client, id: string) {
+  return supabase.from("store_orders").delete().eq("id", id).eq("status", "pending");
+}
+
+/**
+ * A free (R0) order whose settle failed part-way: take back what it
+ * granted and cancel it, which gives its coupon use back (413 trigger).
+ * Stock already taken for merch isn't put back; Media sees the cancelled
+ * order and can adjust.
+ */
+export async function undoFreeOrder(supabase: Client, orderId: string) {
+  const { data: items } = await getOrderItems(supabase, orderId);
+  const itemIds = ((items ?? []) as StoreOrderItem[]).map((i) => i.id);
+  if (itemIds.length) {
+    await supabase.from("store_entitlements").delete().in("order_item_id", itemIds).eq("source", "purchase");
+    await supabase.from("store_codes").delete().in("order_item_id", itemIds);
+  }
+  await supabase.from("store_fulfilments").delete().eq("order_id", orderId);
+  return supabase
+    .from("store_orders")
+    .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .eq("payment_method", "free")
+    .in("status", ["pending", "paid"])
+    .select("id")
+    .maybeSingle();
+}
+
+// ────────────────────────────────────────────────────────────
+// Coupons (413)
+// ────────────────────────────────────────────────────────────
+
+const COUPON_COLUMNS =
+  "id, code, description, percent_off, amount_off_cents, product_id, max_uses, used_count, expires_at, active, created_by, created_at, updated_at";
+
+export async function listCoupons(supabase: Client) {
+  return supabase.from("store_coupons").select(COUPON_COLUMNS).order("created_at", { ascending: false });
+}
+
+export async function getCoupon(supabase: Client, id: string) {
+  return supabase.from("store_coupons").select(COUPON_COLUMNS).eq("id", id).maybeSingle();
+}
+
+/** By its normalised (upper-case) code. Service role at checkout: buyers can't read coupons. */
+export async function getCouponByCode(supabase: Client, code: string) {
+  return supabase.from("store_coupons").select(COUPON_COLUMNS).eq("code", code).maybeSingle();
+}
+
+export async function createCoupon(
+  supabase: Client,
+  row: { code: string; description: string | null; percent_off: number | null; amount_off_cents: number | null; product_id: string | null; max_uses: number | null; expires_at: string | null; active: boolean }
+) {
+  return supabase.from("store_coupons").insert(row).select(COUPON_COLUMNS).single();
+}
+
+export async function updateCoupon(
+  supabase: Client,
+  id: string,
+  patch: Partial<{ code: string; description: string | null; percent_off: number | null; amount_off_cents: number | null; product_id: string | null; max_uses: number | null; expires_at: string | null; active: boolean }>
+) {
+  return supabase.from("store_coupons").update(patch).eq("id", id).select(COUPON_COLUMNS).maybeSingle();
+}
+
+export type ApplyCouponResult = {
+  outcome: "ok" | "malformed" | "order" | "unknown" | "inactive" | "expired" | "used_up" | "wrong_product" | "changed";
+  coupon_id?: string;
+  discount_cents?: number;
+  total_cents?: number;
+};
+
+/**
+ * Take one use of a code for a pending order (store_apply_coupon, service
+ * role only): locks the coupon, re-checks it against the order's items,
+ * takes the use, writes the redemption and stamps the order, in one
+ * transaction. Refuses (no use taken) when the discount isn't
+ * `expectedDiscountCents`, so the buyer never pays something they weren't shown.
+ */
+export async function applyCouponToOrder(supabase: Client, orderId: string, code: string, expectedDiscountCents: number) {
+  const { data, error } = await supabase.rpc("store_apply_coupon", {
+    p_order_id: orderId,
+    p_code: code,
+    p_expected_discount_cents: expectedDiscountCents,
+  });
+  return { data: (data ?? null) as ApplyCouponResult | null, error };
 }
 
 // ────────────────────────────────────────────────────────────
