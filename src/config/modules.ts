@@ -24,6 +24,7 @@ import {
   UserCheck,
   Car,
   ClipboardList,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -107,6 +108,16 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     icon: Car,
     description: "Vehicle inspections, km readings and workshop visits",
     requiredRoles: ["super_admin", "admin"], // others via fleet.* permissions
+  },
+  {
+    // docs/operations-plan.md — maintenance requests from Slack, the 07:00
+    // area messages, the weekly summary and the Wednesday meeting.
+    id: "operations",
+    label: "Operations",
+    href: "/operations",
+    icon: Wrench,
+    description: "Maintenance and the other operations areas: what needs attention, the week, the meeting",
+    requiredRoles: ["super_admin", "admin"], // + Operations department members, + operations.team helpers
   },
   {
     id: "schools",

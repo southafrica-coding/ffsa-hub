@@ -39,6 +39,8 @@ import {
   displayName,
 } from "@/lib/prayer-room/booking-alerts";
 import { isVehicleAction } from "@/lib/vehicles/slack-alerts";
+import { isOpsAction } from "@/lib/operations/messages";
+import { handleOpsInteraction, isOpsView, type OpsInteraction } from "@/lib/operations/slack";
 import { handleVehicleInteraction, isVehicleView, type VehicleInteraction } from "@/lib/vehicles/slack-interactions";
 
 export const maxDuration = 60;
@@ -135,6 +137,14 @@ export async function POST(request: Request) {
     (payload.type === "block_actions" && payload.actions?.[0] && isVehicleAction(payload.actions[0].action_id))
   ) {
     return handleVehicleInteraction(admin, payload as unknown as VehicleInteraction);
+  }
+
+  // ── Operations: the ⋯ menu on items and its modal (lib/operations/slack) ──
+  if (
+    isOpsView(payload.view?.callback_id) ||
+    (payload.type === "block_actions" && payload.actions?.[0] && isOpsAction(payload.actions[0].action_id))
+  ) {
+    return handleOpsInteraction(admin, payload as unknown as OpsInteraction);
   }
 
   // ── the "Other…" modal ──
