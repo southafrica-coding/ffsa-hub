@@ -35,19 +35,19 @@ export function DmPreview({ paths }: { paths: Pick<LibraryPaths, "home" | "helpe
             </span>
             <span>verse-and-chorus-idea.mp3 · 1:42</span>
           </div>
-          <Buttons primary="Listen in Hub" href={paths.home} secondary="Unsubscribe" />
+          <Buttons primary="Listen in Hub" href={paths.home} />
           <div className={sl.why}>You get this because you subscribe to Dani Blood.</div>
         </Dm>
         <Dm time="11:40">
           <div className={sl.bubbleH}>“Mercy Like Morning” is Demo ready</div>
           <div className={sl.bubbleP}>Moved from Written, needs demo. Placement: Ministry Nights.</div>
-          <Buttons primary="Hear the demo" href={paths.home} secondary="Unsubscribe" />
+          <Buttons primary="Hear the demo" href={paths.home} />
           <div className={sl.why}>You get this because you follow all uploads.</div>
         </Dm>
         <Dm time="14:05" help>
           <div className={sl.bubbleH}>Kiri asked for help: bass and drums</div>
           <div className={sl.bubbleP}>For the demo of “Lanterns in the Valley”.</div>
-          <Buttons primary="I can help" href={paths.helpers} secondary="Unsubscribe" />
+          <Buttons primary="I can help" href={paths.helpers} />
           <div className={sl.why}>You get this because you signed up to help with Bass.</div>
         </Dm>
       </div>
@@ -72,15 +72,12 @@ function Dm({ time, help, children }: { time: string; help?: boolean; children: 
   );
 }
 
-function Buttons({ primary, href, secondary }: { primary: string; href: string; secondary: string }) {
+function Buttons({ primary, href }: { primary: string; href: string }) {
   return (
     <div className={pw.btnrow} style={{ marginTop: 10 }}>
       <Link className={`${pw.btn} ${pw.primary} ${pw.grow}`} href={href}>
         {primary}
       </Link>
-      <span className={`${pw.btn} ${pw.grow}`} aria-disabled="true">
-        {secondary}
-      </span>
     </div>
   );
 }
