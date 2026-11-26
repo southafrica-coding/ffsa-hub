@@ -1,0 +1,85 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { storeAdminClient } from "@/lib/store/db";
+import { eftDetails } from "@/lib/store/emails";
+import { formatZar } from "@/lib/store/money";
+import type { StoreOrder } from "@/lib/store/types";
+import { getOrder } from "@/services/store";
+import { EftProofForm, PendingRefresh } from "./thanks-client";
+
+export const metadata: Metadata = { title: "Thank you", robots: { index: false } };
+export const dynamic = "force-dynamic";
+
+// /store/thanks?order=<uuid> — after PayFast returns, or after an EFT
+// order. The order id (an unguessable UUID only the buyer was given) is
+// the key; the page shows status and payment details, nothing personal
+// beyond the email it went to.
+export default async function ThanksPage({ searchParams }: { searchParams: Promise<{ order?: string }> }) {
+  const { order: id } = await searchParams;
+  if (!id || !/^[0-9a-f-]{36}$/i.test(id)) notFound();
+  const { data } = await getOrder(storeAdminClient(), id);
+  const order = data as StoreOrder | null;
+  if (!order) notFound();
+  const bank = eftDetails();
+
+  const paid = order.status === "paid";
+  const pendingEft = order.status === "pending" && order.payment_method === "eft";
+  const pendingCard = order.status === "pending" && order.payment_method === "payfast";
+
+  return (
+    <div className="mx-auto max-w-[640px] px-4 pt-10 md:pt-16">
+      <div className="masthead-context">Order {order.reference}</div>
+      <h1 className="masthead-title">{paid ? "It's yours" : pendingEft ? "Almost there" : pendingCard ? "Confirming payment" : "Order closed"}</h1>
+
+      {paid && (
+        <div className="mt-6 space-y-5">
+          <p className="text-[15px] leading-relaxed text-[color:var(--text-secondary)]">
+            We&apos;ve emailed a receipt to {order.buyer_email}. Anything you read is in My Library; sign in with that email.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/store/library" className="inline-flex min-h-12 items-center border border-ink bg-ink px-5 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-white hover:bg-[var(--ink-bg-hover)]">Open My Library</Link>
+            <Link href="/store" className="inline-flex min-h-12 items-center border border-ink px-5 font-mono text-[11px] font-bold uppercase tracking-[0.16em] hover:bg-bone">Back to the Store</Link>
+          </div>
+        </div>
+      )}
+
+      {pendingCard && (
+        <div className="mt-6 space-y-3">
+          <p className="text-[15px] leading-relaxed text-[color:var(--text-secondary)]">PayFast is confirming your payment. This page updates by itself, usually within a minute.</p>
+          <PendingRefresh />
+        </div>
+      )}
+
+      {pendingEft && (
+        <div className="mt-6 space-y-6">
+          <p className="text-[15px] leading-relaxed text-[color:var(--text-secondary)]">
+            Pay the amount below from your bank with the reference exactly as shown. We&apos;ll confirm it once it reflects (usually 1–2 working days) and email {order.buyer_email}.
+          </p>
+          <dl className="grid grid-cols-2 border-t border-ink">
+            {[
+              ["Amount", formatZar(order.total_cents)],
+              ["Reference", order.reference],
+              ...(bank ? [["Bank", bank.bank], ["Account name", bank.accountName], ["Account number", bank.accountNumber], ["Branch code", bank.branchCode]] : []),
+            ].map(([k, v], i) => (
+              <div key={k} className={`border-b border-rule py-3 ${i % 2 ? "pl-4" : "pr-4"}`}>
+                <dt className="mono-label">{k}</dt>
+                <dd className={k === "Amount" || k === "Reference" ? "numeral mt-1 text-[26px]" : "mt-1 font-semibold tabular-nums"}>{v}</dd>
+              </div>
+            ))}
+          </dl>
+          <div>
+            <div className="mono-label mb-2">Paid already? Speed it up</div>
+            {order.eft_proof_path ? <p className="text-[14px]">Thanks, we have your proof of payment.</p> : <EftProofForm orderId={order.id} />}
+          </div>
+        </div>
+      )}
+
+      {(order.status === "cancelled" || order.status === "refunded") && (
+        <p className="mt-6 text-[15px] text-[color:var(--text-secondary)]">
+          This order was {order.status}. Nothing more is owed. <Link href="/store" className="underline decoration-yellow decoration-2 underline-offset-4">Back to the Store</Link>
+        </p>
+      )}
+    </div>
+  );
+}

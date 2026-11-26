@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Store PDF pipeline (src/lib/store/pdf): pdfjs and the native canvas are
+  // loaded at runtime, not bundled, and pdfjs's standard-font data and the
+  // watermark font are traced into the functions that need them.
+  serverExternalPackages: ["pdfjs-dist", "@napi-rs/canvas"],
+  outputFileTracingIncludes: {
+    "/api/store/admin/assets/[id]/render": ["./node_modules/pdfjs-dist/standard_fonts/**/*"],
+    "/api/store/page": ["./public/brand/fonts/RobotoCondensed-Bold.ttf"],
+    "/api/store/library/[productId]/pdf": ["./public/brand/fonts/RobotoCondensed-Bold.ttf"],
+  },
   eslint: {
     // Lint is a manual/dev tool (`npm run lint`), not a build gate. The repo
     // carries pre-existing lint errors; keep them out of the deploy path so

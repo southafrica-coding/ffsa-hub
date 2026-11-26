@@ -24,6 +24,7 @@ import {
   UserCheck,
   Car,
   ClipboardList,
+  ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 
@@ -107,6 +108,21 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     icon: Car,
     description: "Vehicle inspections, km readings and workshop visits",
     requiredRoles: ["super_admin", "admin"], // others via fleet.* permissions
+  },
+  {
+    // The Hub Store's staff side: products, PDF uploads, orders, fulfilment.
+    // Run by the Media team. Admins see it; anyone else needs store.manage
+    // or store.view (migration 412, module 'store').
+    // TODO(services): when Departments/Services lands, register this as
+    // service_key "store", owned("store", "media"), and move the nav entry
+    // into the Services panel instead of a second ownership model here.
+    // Buyers never get this: they have no users row or roles.
+    id: "store",
+    label: "Store",
+    href: "/store/admin",
+    icon: ShoppingBag,
+    description: "Products, reviews and merch, orders and fulfilment",
+    requiredRoles: ["super_admin", "admin"], // others via store.manage / store.view
   },
   {
     id: "schools",

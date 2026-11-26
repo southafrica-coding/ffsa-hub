@@ -1,0 +1,192 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createMemoryDb, storeRpcs, type MemoryDb } from "../testing/memory-db";
+import { catalogue, IDS } from "../testing/fixtures";
+import { listPublishedProducts } from "@/services/store";
+
+vi.mock("server-only", () => ({}));
+
+// One in-memory database and one "who is signed in" per test. Both the
+// request client and the service-role client point at it; the request
+// client also answers auth.getUser and has_permission like Supabase would.
+let db: MemoryDb;
+let who: { id: string; email: string } | null = null;
+let grants: string[] = [];
+
+function requestClient() {
+  const c = db.client;
+  return {
+    from: c.from,
+    rpc: async (name: string, args: Record<string, unknown>) =>
+      name === "has_permission" ? { data: !!who && grants.includes(String(args.required_permission)), error: null } : c.rpc(name, args),
+    auth: { getUser: async () => ({ data: { user: who }, error: null }) },
+  };
+}
+
+vi.mock("@/lib/supabase/server", () => ({ createClient: async () => requestClient() }));
+vi.mock("@/lib/store/db", () => ({ storeAdminClient: () => db.client }));
+vi.mock("@/lib/rate-limit", async (orig) => {
+  const real = await orig<typeof import("@/lib/rate-limit")>();
+  const limiter = new real.InMemoryRateLimiter();
+  return { ...real, getRateLimiter: () => limiter };
+});
+
+const STAFF = { id: "staff-1", email: "media@example.org" };
+const BUYER = { id: "buyer-1", email: "buyer@example.org" };
+
+function seed() {
+  db = createMemoryDb(
+    {
+      users: [{ id: STAFF.id, is_active: true }], // buyers have no users row
+      user_roles: [{ user_id: STAFF.id, roles: { name: "staff" } }],
+      store_products: catalogue.products,
+      store_variants: catalogue.variants,
+    },
+    { rpc: storeRpcs, unique: { store_products: [["slug"]] } }
+  );
+}
+
+const json = (body: unknown, method = "POST") => new Request("https://hub.test/x", { method, headers: { "Content-Type": "application/json", "x-forwarded-for": "7.7.7.7" }, body: JSON.stringify(body) });
+
+beforeEach(() => {
+  seed();
+  who = null;
+  grants = [];
+});
+afterEach(() => vi.unstubAllEnvs());
+
+describe("catalogue as data: admin creates, storefront shows when published", () => {
+  const newProduct = { title: "Example Year-End Review", kind: "digital", price_cents: 18000, status: "draft" };
+
+  it("staff with store.manage create a draft (hidden), then publish it (shown)", async () => {
+    const { POST } = await import("@/app/api/store/admin/products/route");
+    const { PATCH } = await import("@/app/api/store/admin/products/[id]/route");
+    who = STAFF;
+    grants = ["store.manage"];
+
+    const created = await POST(json(newProduct));
+    expect(created.status).toBe(200);
+    const { product } = await created.json();
+    expect(product).toMatchObject({ slug: "example-year-end-review", status: "draft", price_cents: 18000, ships: false });
+
+    const before = (await listPublishedProducts(db.client)).data as Array<{ slug: string }>;
+    expect(before.map((p) => p.slug)).not.toContain("example-year-end-review");
+
+    const published = await PATCH(json({ ...newProduct, status: "published", price_cents: 20000 }, "PATCH"), { params: Promise.resolve({ id: product.id }) });
+    expect(published.status).toBe(200);
+    const after = (await listPublishedProducts(db.client)).data as Array<{ slug: string; price_cents: number }>;
+    expect(after.find((p) => p.slug === "example-year-end-review")?.price_cents).toBe(20000);
+    expect(after.map((p) => p.slug)).not.toContain("example-draft");
+  });
+
+  it("refuses a second product with the same link name", async () => {
+    const { POST } = await import("@/app/api/store/admin/products/route");
+    who = STAFF;
+    grants = ["store.manage"];
+    expect((await POST(json({ ...newProduct, slug: "example-review" }))).status).toBe(409);
+  });
+
+  it("buyers and view-only staff can't change the catalogue; signed-out gets 401", async () => {
+    const { POST } = await import("@/app/api/store/admin/products/route");
+    who = null;
+    expect((await POST(json(newProduct))).status).toBe(401);
+    who = BUYER;
+    grants = ["store.manage"]; // even a forged grant: no users row means not staff
+    expect((await POST(json(newProduct))).status).toBe(403);
+    who = STAFF;
+    grants = ["store.view"];
+    expect((await POST(json(newProduct))).status).toBe(403);
+    expect(db.table("store_products").some((p) => p.title === newProduct.title)).toBe(false);
+  });
+
+  it("a buyer can't mark an EFT order paid or read the order export", async () => {
+    const { POST } = await import("@/app/api/store/admin/orders/[id]/mark-paid/route");
+    const { GET } = await import("@/app/api/store/admin/orders/export/route");
+    who = BUYER;
+    expect((await POST(json({}), { params: Promise.resolve({ id: "o1" }) })).status).toBe(403);
+    expect((await GET(new Request("https://hub.test/x"))).status).toBe(403);
+  });
+});
+
+describe("checkout", () => {
+  function sandbox() {
+    vi.stubEnv("STORE_PAYMENTS_ENABLED", "1");
+    vi.stubEnv("PAYFAST_MERCHANT_ID", "10000100");
+    vi.stubEnv("PAYFAST_MERCHANT_KEY", "46f0cd694581a");
+    vi.stubEnv("PAYFAST_PASSPHRASE", "test-pass-phrase");
+    vi.stubEnv("PAYFAST_MODE", "sandbox");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://hub.test");
+  }
+  const body = (extra: Record<string, unknown> = {}) => ({
+    lines: [
+      { productId: IDS.review, quantity: 1, purpose: "self" },
+      { productId: IDS.tee, variantId: IDS.teeM, quantity: 2, purpose: "self", unitPriceCents: 1 }, // client "price" is ignored
+    ],
+    buyer: { name: "Example Buyer", email: "Buyer@Example.org" },
+    fulfilment: "collect",
+    paymentMethod: "payfast",
+    ...extra,
+  });
+
+  it("is closed while STORE_PAYMENTS_ENABLED is off", async () => {
+    const { POST } = await import("@/app/api/store/checkout/route");
+    const res = await POST(json(body()));
+    expect(res.status).toBe(503);
+    expect(db.table("store_orders")).toHaveLength(0);
+  });
+
+  it("prices on the server, saves a PENDING order and sends the buyer to the PayFast sandbox", async () => {
+    sandbox();
+    const { POST } = await import("@/app/api/store/checkout/route");
+    const res = await POST(json(body()));
+    expect(res.status).toBe(200);
+    const out = await res.json();
+    expect(out.next).toMatch(/^https:\/\/sandbox\.payfast\.co\.za\/eng\/process\?/);
+    expect(out.next).toContain("amount=650.00");
+    expect(out.next).toContain(encodeURIComponent("https://hub.test/api/integrations/payfast/store-notify"));
+    const [order] = db.table("store_orders");
+    expect(order).toMatchObject({ status: "pending", buyer_email: "buyer@example.org", total_cents: 15000 + 2 * 25000, fulfilment_method: "collect", payment_method: "payfast" });
+    expect(db.table("store_order_items").map((i) => i.unit_price_cents)).toEqual([15000, 25000]);
+    expect(db.table("store_entitlements")).toHaveLength(0); // nothing granted until the ITN
+  });
+
+  it("won't create an order PayFast would run live", async () => {
+    sandbox();
+    vi.stubEnv("PAYFAST_MODE", "live");
+    const { POST } = await import("@/app/api/store/checkout/route");
+    expect((await POST(json(body()))).status).toBe(503);
+  });
+
+  it("rejects a sold-out size and a cart that needs a fulfilment choice", async () => {
+    sandbox();
+    const { POST } = await import("@/app/api/store/checkout/route");
+    const soldOut = await POST(json(body({ lines: [{ productId: IDS.tee, variantId: IDS.teeS, quantity: 1, purpose: "self" }] })));
+    expect(soldOut.status).toBe(409);
+    const noChoice = await POST(json(body({ fulfilment: "none" })));
+    expect(noChoice.status).toBe(409);
+  });
+
+  it("EFT: a pending order with the bank reference, until Media marks it paid", async () => {
+    sandbox();
+    vi.stubEnv("STORE_EFT_BANK", "Example Bank");
+    vi.stubEnv("STORE_EFT_ACCOUNT_NAME", "Example Account");
+    vi.stubEnv("STORE_EFT_ACCOUNT_NUMBER", "000000000");
+    vi.stubEnv("STORE_EFT_BRANCH_CODE", "000000");
+    const { POST } = await import("@/app/api/store/checkout/route");
+    const res = await POST(json(body({ paymentMethod: "eft", lines: [{ productId: IDS.review, quantity: 1, purpose: "self" }], fulfilment: "none" })));
+    expect(res.status).toBe(200);
+    const out = await res.json();
+    expect(out.next).toBe(`/store/thanks?order=${out.orderId}`);
+    expect(db.table("store_orders")[0]).toMatchObject({ status: "pending", payment_method: "eft" });
+
+    // Media marks it paid → the buyer gets the entitlement, once.
+    const markPaid = (await import("@/app/api/store/admin/orders/[id]/mark-paid/route")).POST;
+    who = STAFF;
+    grants = ["store.manage"];
+    const paid = await markPaid(json({}), { params: Promise.resolve({ id: out.orderId }) });
+    expect(paid.status).toBe(200);
+    expect(db.table("store_orders")[0]).toMatchObject({ status: "paid", marked_paid_by: STAFF.id });
+    expect(db.table("store_entitlements")).toEqual([expect.objectContaining({ email: "buyer@example.org", product_id: IDS.review, includes_pdf: false })]);
+    expect((await (await markPaid(json({}), { params: Promise.resolve({ id: out.orderId }) })).json()).outcome).toBe("already");
+    expect(db.table("store_entitlements")).toHaveLength(1);
+  });
+});
