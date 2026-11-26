@@ -129,9 +129,9 @@ function membershipLabel(value: Membership): string {
 
 // The single membership role shown/edited in the Users list. Staff wins over
 // student, student over community (mirrors the app's precedence).
-function currentMembership(user: UserRow): Membership {
+export function currentMembership(user: UserRow): Membership {
   const names = new Set(
-    user.user_roles.map((ur) => ur.roles?.name).filter((n): n is string => !!n)
+    (user.user_roles ?? []).map((ur) => ur.roles?.name).filter((n): n is string => !!n)
   );
   if (names.has("staff")) return "staff";
   if (names.has("student")) return "student";
@@ -145,14 +145,14 @@ function currentMembership(user: UserRow): Membership {
 const COMMUNITY_FLOOR_ROLES = new Set(["community_member", "self_service"]);
 
 /** Roles beyond the community floor — job titles, admin, super_admin, … */
-function elevatedRoleCount(user: UserRow): number {
-  return user.user_roles.filter(
+export function elevatedRoleCount(user: UserRow): number {
+  return (user.user_roles ?? []).filter(
     (ur) => ur.roles?.name && !COMMUNITY_FLOOR_ROLES.has(ur.roles.name)
   ).length;
 }
 
-function holdsSuperAdmin(user: UserRow): boolean {
-  return user.user_roles.some((ur) => ur.roles?.name === "super_admin");
+export function holdsSuperAdmin(user: UserRow): boolean {
+  return (user.user_roles ?? []).some((ur) => ur.roles?.name === "super_admin");
 }
 
 /** Already a plain community member as far as the list can tell. */
