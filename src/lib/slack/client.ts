@@ -319,6 +319,34 @@ export type SlackHistoryMessage = {
   subtype?: string;
 };
 
+// The bot reading a channel it has been added to (needs channels:history
+// for public channels, groups:history for private ones). Used by
+// Operations to pick up posts from the maintenance request form.
+export function conversationHistory(args: {
+  channel: string;
+  oldest?: string;
+  limit?: number;
+  cursor?: string;
+  bot?: SlackBotId;
+}) {
+  return callSlack<{
+    messages?: (SlackHistoryMessage & { bot_id?: string; blocks?: unknown[] })[];
+    has_more?: boolean;
+    response_metadata?: { next_cursor?: string };
+  }>(
+    "conversations.history",
+    {
+      channel: args.channel,
+      oldest: args.oldest,
+      // Exclusive: `oldest` is the last ts already imported.
+      inclusive: false,
+      limit: args.limit ?? 200,
+      cursor: args.cursor,
+    },
+    args.bot
+  );
+}
+
 export function conversationHistoryAs(
   userToken: string,
   args: { channel: string; oldest?: string; latest?: string; limit?: number }

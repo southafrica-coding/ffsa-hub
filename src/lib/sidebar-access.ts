@@ -1,6 +1,7 @@
 import { grantCounts } from "@/lib/auth/grant-scope";
 import { getAccessibleSchoolsProgramIds } from "@/lib/auth/schools-program-access";
 import { getPermissionRowsForRoles } from "@/services/permissions";
+import { isOperationsMember } from "@/lib/operations/access";
 
 export interface SidebarAccess {
   /** Role names assigned to the user (e.g. "super_admin", "events_admin"). */
@@ -129,7 +130,7 @@ export async function getSidebarAccess(
       const roleIds = unscopedRoles
         .map((r) => r.role_id)
         .filter((id): id is string => typeof id === "string");
-      const [permRows, roleDerived, staffSeat, schoolsAccess] = await Promise.all([
+      const [permRows, roleDerived, staffSeat, schoolsAccess, opsMember] = await Promise.all([
         readOrThrow<
           Array<{
             scope_type?: string | null;
@@ -161,6 +162,9 @@ export async function getSidebarAccess(
           .catch(() => [] as { id: string }[]),
         // Program-scoped schools grants light Training without opening every module.
         getAccessibleSchoolsProgramIds(supabase, userId),
+        // Operations is a department: its members see the Operations module
+        // without a grant. Best-effort — a failed read just leaves it out.
+        isOperationsMember(supabase, userId).catch(() => false),
       ]);
 
       for (const row of permRows ?? []) {
@@ -192,6 +196,8 @@ export async function getSidebarAccess(
       // Forms has no permission module of its own: an unscoped comms_admin
       // manages Hub forms (canManageHubForms), so the role lights it.
       if (result.userRoles.includes("comms_admin")) result.permittedModules.add("forms");
+
+      if (opsMember) result.permittedModules.add("operations");
 
       if (schoolsAccess === "all" || schoolsAccess.length > 0) result.permittedModules.add("schools");
       if (staffSeat.length > 0) result.permittedModules.add("schools");
