@@ -93,6 +93,13 @@ describe("coverSrcFor", () => {
     expect(await coverSrcFor(client, draft, { requirePublished: false, now: NOW, key: KEY })).not.toBeNull();
   });
 
+  it("hides an unpublished Media cover on public surfaces, not in the library", async () => {
+    const client = db({});
+    const unpublished = { ...draft, cover_image_url: "x/cover.webp" };
+    expect(await coverSrcFor(client, unpublished, { key: KEY })).toBeNull();
+    expect(await coverSrcFor(client, unpublished, { requirePublished: false, key: KEY })).toBe(`/api/store/cover/${IDS.draft}`);
+  });
+
   it("returns null instead of throwing when the lookup fails", async () => {
     const broken = { from: () => { throw new Error("db down"); } };
     expect(await coverSrcFor(broken, review, { key: KEY })).toBeNull();

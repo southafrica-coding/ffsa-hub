@@ -53,8 +53,10 @@ export async function coverSrcFor(
   product: CoverProduct,
   opts: { requirePublished?: boolean; now?: number; key?: string } = {}
 ): Promise<string | null> {
-  if (product.cover_image_url) return `/api/store/cover/${product.id}`;
+  // Published check first: an unpublished product must not show a Media
+  // cover (or a page-1 render) on public surfaces.
   if ((opts.requirePublished ?? true) && product.status !== "published") return null;
+  if (product.cover_image_url) return `/api/store/cover/${product.id}`;
   try {
     const { data: asset } = await getActiveAsset(admin, product.id);
     if (!asset || asset.status !== "ready") return null;
