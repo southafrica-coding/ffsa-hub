@@ -5,7 +5,7 @@ import { loadCachedDepartmentsIndex, sessionClient } from "@/lib/departments/loa
 import { loginPath } from "@/lib/departments/login-path";
 import { getViewer, requireSignedIn } from "@/lib/departments/session";
 import { SONGWRITING_DEPARTMENT_SLUG } from "@/components/departments/songwriting/header";
-import { callerCanAccessSongwriting } from "../../departments/[slug]/songwriting/_lib/context";
+import { callerCanManageSongLibrary, canManageFromRpc } from "./can-manage";
 
 export type LibraryViewer = {
   /** A member of the owning department (or an admin): moves stage and placement, sees the lead board. */
@@ -15,15 +15,16 @@ export type LibraryViewer = {
 };
 
 /**
- * Managers are the owning department's members and admins, the same rule as
- * 417's pw_can_access_songwriting; the database enforces it again on every
- * write. If the RPC isn't there yet, the viewer's own membership decides.
+ * Managers are whoever 419's song_library_can_manage allows (P&W members
+ * and admins under the seeded grant). The database enforces it again on
+ * every write. If the RPC isn't there yet, the viewer's own membership
+ * in the owning department decides.
  */
 async function resolveViewer(): Promise<LibraryViewer> {
   const supabase = await sessionClient();
-  const [index, rpc] = await Promise.all([loadCachedDepartmentsIndex(supabase), callerCanAccessSongwriting(supabase)]);
+  const [index, rpc] = await Promise.all([loadCachedDepartmentsIndex(supabase), callerCanManageSongLibrary(supabase)]);
   const owner = index.kind === "ok" ? index.data.find((d) => d.slug === SONGWRITING_DEPARTMENT_SLUG) : undefined;
-  const canManage = rpc.error ? (owner?.viewerMembership ?? "none") !== "none" : rpc.data === true;
+  const canManage = canManageFromRpc(rpc, owner?.viewerMembership);
   return { canManage, ownerName: owner?.name ?? null };
 }
 
