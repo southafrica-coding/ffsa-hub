@@ -37,6 +37,16 @@
 --                              OR leader of the team's department OR admin)
 --   l10_can_oversee_team(team) active caller AND (leader of the team's
 --                              department OR admin)
+-- Auto headlines: l10_teams.recap_source_team_id pairs teams in one
+-- department; the Hub (service_role) inserts is_auto headlines that
+-- recap the paired team's latest ended meeting. Trigger
+-- l10_headlines_auto_guard locks them (42501 l10_auto_headline_locked);
+-- signed-in team members may only set dismissed_at.
+--
+-- One open meeting per team (partial unique index on team_id where
+-- ended_at is null). leadership_ministry_rollup (320) now lists
+-- department rocks only (team_id IS NULL).
+--
 -- l10_teams:          read = access, write = oversee
 -- l10_team_members:   read = access, write = manage
 -- all other L10 rows: read/write = access
@@ -66,22 +76,34 @@ CREATE TABLE IF NOT EXISTS public.l10_teams (
   meeting_timezone  text NOT NULL DEFAULT 'Africa/Johannesburg' CHECK (btrim(meeting_timezone) <> ''),
   facilitator_id    uuid REFERENCES public.users (id) ON DELETE SET NULL,
   slack_channel_id  text CHECK (slack_channel_id IS NULL OR btrim(slack_channel_id) <> ''),
+  recap_source_team_id uuid,
   sort_order        int NOT NULL DEFAULT 0,
   is_active         boolean NOT NULL DEFAULT true,
   created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT l10_teams_department_slug_key UNIQUE (department_id, slug),
   -- Target for composite FKs that pin a child to the team's department.
-  CONSTRAINT l10_teams_id_department_key UNIQUE (id, department_id)
+  CONSTRAINT l10_teams_id_department_key UNIQUE (id, department_id),
+  CONSTRAINT l10_teams_recap_source_not_self CHECK (recap_source_team_id <> id),
+  -- The paired team must be in the same department. Deleting it clears
+  -- only recap_source_team_id.
+  CONSTRAINT l10_teams_recap_source_fkey
+    FOREIGN KEY (department_id, recap_source_team_id)
+    REFERENCES public.l10_teams (department_id, id)
+    ON DELETE SET NULL (recap_source_team_id)
 );
 
 CREATE INDEX IF NOT EXISTS l10_teams_facilitator_id_idx ON public.l10_teams (facilitator_id);
+CREATE INDEX IF NOT EXISTS l10_teams_recap_source_idx
+  ON public.l10_teams (department_id, recap_source_team_id) WHERE recap_source_team_id IS NOT NULL;
 
 COMMENT ON TABLE public.l10_teams IS
   'An EOS L10 team inside one department (staff_ministries). P&W has production, live and team-3.';
 COMMENT ON COLUMN public.l10_teams.department_id IS 'staff_ministries.id of the owning department.';
 COMMENT ON COLUMN public.l10_teams.meeting_weekday IS 'ISO weekday, 1 = Monday … 7 = Sunday. Null until set.';
 COMMENT ON COLUMN public.l10_teams.meeting_time IS 'Local start time in meeting_timezone. Null until set.';
+COMMENT ON COLUMN public.l10_teams.recap_source_team_id IS
+  'Paired team in the same department. When this team''s meeting starts, the Hub (service_role) inserts one auto headline recapping the paired team''s latest ended meeting. Null = no auto recap.';
 COMMENT ON COLUMN public.l10_teams.slack_channel_id IS 'Slack channel id (for example C0123ABCD) for the post-meeting recap. Null = no channel recap.';
 
 CREATE TABLE IF NOT EXISTS public.l10_team_members (
@@ -229,6 +251,10 @@ CREATE TABLE IF NOT EXISTS public.l10_meetings (
 );
 
 CREATE INDEX IF NOT EXISTS l10_meetings_team_started_idx ON public.l10_meetings (team_id, started_at DESC);
+-- One open meeting per team: a second start while ended_at is null fails
+-- with 23505 on this index.
+CREATE UNIQUE INDEX IF NOT EXISTS l10_meetings_one_open_per_team
+  ON public.l10_meetings (team_id) WHERE ended_at IS NULL;
 CREATE INDEX IF NOT EXISTS l10_meetings_facilitator_id_idx ON public.l10_meetings (facilitator_id);
 CREATE INDEX IF NOT EXISTS l10_meetings_created_by_idx ON public.l10_meetings (created_by);
 
@@ -418,6 +444,67 @@ CREATE POLICY "Ministry leaders delete rocks"
     END
   );
 
+-- Leadership roll-up (320): department rocks only. 320's definition,
+-- options, comment intent and grants, with one added predicate
+-- (r.team_id IS NULL). The rollback restores 320's text verbatim.
+CREATE OR REPLACE VIEW public.leadership_ministry_rollup
+WITH (security_invoker = true) AS
+SELECT
+  m.id AS staff_ministry_id,
+  m.slug AS ministry_slug,
+  m.name AS ministry_name,
+  m.ministry_type,
+  m.is_active AS ministry_is_active,
+  'rock'::text AS source,
+  r.id AS source_id,
+  r.title,
+  r.status,
+  NULL::text AS objective_scope,
+  r.owner_user_id,
+  r.due_on,
+  r.quarter,
+  r.description,
+  r.notes,
+  r.updated_at
+FROM public.staff_ministries m
+JOIN public.rocks r ON r.staff_ministry_id = m.id
+WHERE public.dept_caller_is_active()
+  AND (public.is_admin() OR public.dept_is_leadership_reader())
+  AND r.team_id IS NULL
+UNION ALL
+SELECT
+  m.id,
+  m.slug,
+  m.name,
+  m.ministry_type,
+  m.is_active,
+  'okr_objective'::text,
+  o.id,
+  o.title,
+  'current'::text,
+  o.scope::text,
+  o.owner_user_id,
+  NULL::date,
+  NULL::text,
+  o.description,
+  o.notes,
+  o.updated_at
+FROM public.staff_ministries m
+JOIN public.okr_objectives o
+  ON o.staff_ministry_id = m.id
+ AND o.is_archived = false
+JOIN public.okr_cycles c
+  ON c.id = o.cycle_id
+ AND c.is_current
+WHERE public.dept_caller_is_active()
+  AND (public.is_admin() OR public.dept_is_leadership_reader());
+
+COMMENT ON VIEW public.leadership_ministry_rollup IS
+  'Leadership roll-up: department rocks (team_id IS NULL; L10 team rocks are left out) plus current-cycle OKR objectives on a staff ministry. security_invoker. Not a second OKR store.';
+
+REVOKE ALL ON public.leadership_ministry_rollup FROM PUBLIC, anon;
+GRANT SELECT ON public.leadership_ministry_rollup TO authenticated, service_role;
+
 -- ────────────────────────────────────────────────────────────
 -- 5. Scorecard
 -- ────────────────────────────────────────────────────────────
@@ -535,13 +622,21 @@ COMMENT ON COLUMN public.l10_issues.resolved_meeting_id IS 'Meeting where it was
 COMMENT ON COLUMN public.l10_issues.priority IS 'Optional top-3 rank for this meeting''s IDS (1 = first). Null = unranked.';
 
 CREATE TABLE IF NOT EXISTS public.l10_headlines (
-  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  team_id            uuid NOT NULL REFERENCES public.l10_teams (id) ON DELETE RESTRICT,
-  body               text NOT NULL CHECK (btrim(body) <> ''),
-  author_id          uuid REFERENCES public.users (id) ON DELETE SET NULL,
-  source_meeting_id  uuid,
-  created_at         timestamptz NOT NULL DEFAULT now(),
-  updated_at         timestamptz NOT NULL DEFAULT now(),
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id              uuid NOT NULL REFERENCES public.l10_teams (id) ON DELETE RESTRICT,
+  body                 text NOT NULL CHECK (btrim(body) <> ''),
+  -- CASCADE, not SET NULL: a normal headline must keep an author (CHECK
+  -- below), so deleting a user removes their headlines instead of failing.
+  author_id            uuid REFERENCES public.users (id) ON DELETE CASCADE,
+  source_meeting_id    uuid,
+  is_auto              boolean NOT NULL DEFAULT false,
+  -- Another team's meeting, so a plain FK (not the same-team composite).
+  recap_of_meeting_id  uuid REFERENCES public.l10_meetings (id) ON DELETE SET NULL,
+  dismissed_at         timestamptz,
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT l10_headlines_author_unless_auto CHECK (is_auto OR author_id IS NOT NULL),
+  CONSTRAINT l10_headlines_recap_only_on_auto CHECK (recap_of_meeting_id IS NULL OR is_auto),
   CONSTRAINT l10_headlines_source_meeting_fkey
     FOREIGN KEY (team_id, source_meeting_id) REFERENCES public.l10_meetings (team_id, id)
     ON DELETE SET NULL (source_meeting_id)
@@ -550,6 +645,88 @@ CREATE TABLE IF NOT EXISTS public.l10_headlines (
 CREATE INDEX IF NOT EXISTS l10_headlines_team_created_idx ON public.l10_headlines (team_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS l10_headlines_author_id_idx ON public.l10_headlines (author_id);
 CREATE INDEX IF NOT EXISTS l10_headlines_source_meeting_idx ON public.l10_headlines (team_id, source_meeting_id) WHERE source_meeting_id IS NOT NULL;
+-- One auto recap per (meeting it appears in, meeting it recaps).
+CREATE UNIQUE INDEX IF NOT EXISTS l10_headlines_one_auto_recap
+  ON public.l10_headlines (source_meeting_id, recap_of_meeting_id) WHERE is_auto;
+CREATE INDEX IF NOT EXISTS l10_headlines_recap_of_meeting_idx
+  ON public.l10_headlines (recap_of_meeting_id) WHERE recap_of_meeting_id IS NOT NULL;
+
+COMMENT ON COLUMN public.l10_headlines.is_auto IS
+  'System headline (cross-team recap). Only service_role inserts, edits or deletes these; signed-in users may only set dismissed_at.';
+COMMENT ON COLUMN public.l10_headlines.source_meeting_id IS
+  'Meeting the headline appears in. Required for auto headlines (checked on insert/update by the guard trigger).';
+COMMENT ON COLUMN public.l10_headlines.recap_of_meeting_id IS
+  'The paired team''s ended meeting this auto headline recaps. Set exactly on auto rows when written; cleared if that meeting is deleted.';
+COMMENT ON COLUMN public.l10_headlines.dismissed_at IS 'When someone on the team dismissed it. Null = showing.';
+
+-- Auto headlines. SECURITY INVOKER (like the rating guard) so
+-- current_user tells service_role from authenticated.
+--   authenticated / anon: may not insert or delete an auto row, may not
+--     flip is_auto either way, and on an auto row may change only
+--     dismissed_at (plus updated_at, which the timestamp trigger sets).
+--     → 42501 l10_auto_headline_locked
+--   service_role: anything, but an auto row it writes must have both
+--     source_meeting_id and recap_of_meeting_id.
+--     → 23514 l10_auto_headline_incomplete
+--   owner (migrations, and FK SET NULL actions when a meeting is
+--     deleted): not checked, so deleting a meeting still works.
+CREATE OR REPLACE FUNCTION public.l10_headlines_auto_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN
+    IF current_user = 'service_role' AND TG_OP <> 'DELETE' AND NEW.is_auto
+       AND (NEW.source_meeting_id IS NULL OR NEW.recap_of_meeting_id IS NULL) THEN
+      RAISE EXCEPTION 'l10_auto_headline_incomplete'
+        USING ERRCODE = '23514',
+              DETAIL = 'An auto headline needs source_meeting_id and recap_of_meeting_id.';
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+      RETURN OLD;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.is_auto THEN
+      RAISE EXCEPTION 'l10_auto_headline_locked'
+        USING ERRCODE = '42501', DETAIL = 'Only the Hub creates auto headlines.';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.is_auto THEN
+      RAISE EXCEPTION 'l10_auto_headline_locked'
+        USING ERRCODE = '42501', DETAIL = 'Auto headlines can be dismissed, not deleted.';
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  IF (OLD.is_auto OR NEW.is_auto)
+     AND (NEW.is_auto IS DISTINCT FROM OLD.is_auto
+          OR NEW.body IS DISTINCT FROM OLD.body
+          OR NEW.author_id IS DISTINCT FROM OLD.author_id
+          OR NEW.recap_of_meeting_id IS DISTINCT FROM OLD.recap_of_meeting_id
+          OR NEW.source_meeting_id IS DISTINCT FROM OLD.source_meeting_id
+          OR NEW.team_id IS DISTINCT FROM OLD.team_id
+          OR NEW.id IS DISTINCT FROM OLD.id
+          OR NEW.created_at IS DISTINCT FROM OLD.created_at) THEN
+    RAISE EXCEPTION 'l10_auto_headline_locked'
+      USING ERRCODE = '42501', DETAIL = 'On an auto headline only dismissed_at can change.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.l10_headlines_auto_guard() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS l10_headlines_auto_guard ON public.l10_headlines;
+CREATE TRIGGER l10_headlines_auto_guard
+  BEFORE INSERT OR UPDATE OR DELETE ON public.l10_headlines
+  FOR EACH ROW EXECUTE FUNCTION public.l10_headlines_auto_guard();
 
 -- ────────────────────────────────────────────────────────────
 -- 7. updated_at triggers, grants, RLS
@@ -678,3 +855,13 @@ SELECT sm.id, v.slug, v.name, v.sort_order
   ) AS v(slug, name, sort_order)
  WHERE sm.slug = 'prayer_and_worship'
 ON CONFLICT (department_id, slug) DO NOTHING;
+
+-- Recap pairs: production ↔ live; team-3 none. Only while the column is
+-- still null, so a pairing someone changed is kept on a re-run.
+UPDATE public.l10_teams t
+   SET recap_source_team_id = src.id
+  FROM public.l10_teams src
+  JOIN public.staff_ministries sm ON sm.id = src.department_id AND sm.slug = 'prayer_and_worship'
+ WHERE t.department_id = src.department_id
+   AND t.recap_source_team_id IS NULL
+   AND (t.slug, src.slug) IN (('production', 'live'), ('live', 'production'));
