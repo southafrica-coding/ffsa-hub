@@ -679,6 +679,9 @@
   font-size: 30px;
   line-height: 1;
   text-transform: uppercase;
+  /* Explicit on-ink white: the bar is also .theme-light, whose dark-mode
+     rule pins inherited text to ink, black on the black bar. */
+  color: #fff;
 }
 
 .segOf {

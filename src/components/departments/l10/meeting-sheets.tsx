@@ -14,7 +14,9 @@ export interface QuickValues {
   dueOn: string | null;
 }
 
-export type SubmitOutcome = { ok: true } | { ok: false; kind: FailureKind; fieldErrors: Record<string, string> };
+export type SubmitOutcome =
+  | { ok: true }
+  | { ok: false; kind: FailureKind; fieldErrors: Record<string, string>; code?: string | null };
 
 const HEADINGS: Record<QuickKind, string> = { todo: "New to-do", issue: "New issue", headline: "New headline" };
 const SUBMIT: Record<QuickKind, string> = { todo: "Add to-do", issue: "Add issue", headline: "Add headline" };
@@ -57,6 +59,7 @@ export function QuickAddSheet({
   const [dueOn, setDueOn] = useState(defaultDue);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState<FailureKind | null>(null);
+  const [failureCode, setFailureCode] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   useEscape(onClose);
 
@@ -67,6 +70,7 @@ export function QuickAddSheet({
     if (kind === "todo" && !ownerId) local.owner_id = "Pick who owns it.";
     setErrors(local);
     setFailure(null);
+    setFailureCode(null);
     if (Object.keys(local).length > 0) return;
     setSaving(true);
     const outcome = await onSubmit({
@@ -77,7 +81,10 @@ export function QuickAddSheet({
     setSaving(false);
     if (outcome.ok) return onClose();
     setErrors(outcome.fieldErrors);
-    if (Object.keys(outcome.fieldErrors).length === 0) setFailure(outcome.kind);
+    if (Object.keys(outcome.fieldErrors).length === 0) {
+      setFailure(outcome.kind);
+      setFailureCode(outcome.code ?? null);
+    }
   }
 
   const ownerLabel = kind === "headline" ? "Whose" : "Owner";
@@ -139,7 +146,7 @@ export function QuickAddSheet({
             {errors.due_on ? <p className={styles.fieldError}>{errors.due_on}</p> : null}
           </label>
         ) : null}
-        {failure ? <p className={styles.fieldError}>{failureCopy(failure)}</p> : null}
+        {failure ? <p className={styles.fieldError}>{failureCopy(failure, failureCode)}</p> : null}
         <div className={styles.sheetActions}>
           <button type="button" className={styles.btn} onClick={onClose}>
             Cancel
@@ -169,12 +176,15 @@ export function ConfirmDialog({
   summary,
   ending,
   failure,
+  failureCode = null,
   onBack,
   onConfirm,
 }: {
   summary: ConfirmSummary;
   ending: boolean;
   failure: FailureKind | null;
+  /** #741 `code` from the failed end, mapped to our copy before the kind fallback. */
+  failureCode?: string | null;
   onBack: () => void;
   onConfirm: () => void;
 }) {
@@ -202,7 +212,7 @@ export function ConfirmDialog({
           <SumRow label="Recap to team channel" value={summary.recapPosts} unit={summary.recapPosts === 1 ? "post" : "posts"} />
           <SumRow label="Issues kept for next week" value={summary.issuesKept} unit={summary.issuesKept === 1 ? "issue" : "issues"} />
         </div>
-        {failure ? <p className={styles.fieldError}>{failureCopy(failure)}</p> : null}
+        {failure ? <p className={styles.fieldError}>{failureCopy(failure, failureCode)}</p> : null}
         <div className={styles.sheetActions}>
           <button type="button" className={styles.btn} onClick={onBack} disabled={ending}>
             Back

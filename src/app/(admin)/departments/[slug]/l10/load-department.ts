@@ -1,8 +1,10 @@
 import "server-only";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { loadDepartmentHomeForViewer } from "@/lib/departments";
 import { sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
+import { isUuid } from "@/lib/departments/validate";
+import { L10_TABLES } from "@/lib/l10/types";
 
 /**
  * Signed in, active, and allowed to see the department; then its name.
@@ -16,5 +18,33 @@ export async function loadL10Department(slug: string, path: string) {
     redirect(`/departments/${encodeURIComponent(result.slug)}${path.slice(`/departments/${slug}`.length)}`);
   }
   const home = settleViewerResult(result, path);
-  return { viewerId: user.id, department: home.department };
+  return { viewerId: user.id, department: home.department, supabase };
+}
+
+/**
+ * loadL10Department, then fail closed: a teamId that isn't a uuid, or a team
+ * RLS hides from this viewer (not on it, not overseeing it), inactive or in
+ * another department, is a 404 rather than a client shell.
+ */
+export async function loadL10Team(slug: string, teamId: string, path: string) {
+  if (!isUuid(teamId)) notFound();
+  const loaded = await loadL10Department(slug, path);
+  // 416 / l10_teams is not in the generated Database type yet.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = loaded.supabase as any;
+  const [team, ministry] = await Promise.all([
+    db.from(L10_TABLES.teams).select("id, department_id, is_active").eq("id", teamId).maybeSingle(),
+    db.from("staff_ministries").select("id").eq("slug", loaded.department.slug).maybeSingle(),
+  ]);
+  if (
+    team.error ||
+    ministry.error ||
+    !team.data ||
+    team.data.is_active === false ||
+    !ministry.data?.id ||
+    team.data.department_id !== ministry.data.id
+  ) {
+    notFound();
+  }
+  return loaded;
 }

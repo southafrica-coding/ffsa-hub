@@ -19,6 +19,7 @@ import {
   type IdsRow,
 } from "./derive";
 import { averageRating, formatAverage, isValidRating, meetingTotals, type Person } from "./followup";
+import { canRateAttendee, type RatingRights } from "./ratings";
 import type { IssuePatch, L10Issue, L10Rock, L10Team, L10TeamDetail, L10Todo } from "./types";
 import { rockTag, Trend } from "./team-view";
 import { AutoRecapCard, Avatar, Checkbox, Empty } from "./ui";
@@ -48,6 +49,8 @@ export interface MeetingCtx {
   people: Person[];
   attendees: Person[];
   ratings: Record<string, number | null>;
+  /** Who this viewer may rate (#741: self, or leader / overseer / facilitator for anyone). */
+  ratingRights: RatingRights;
   now: number;
   busy: ReadonlySet<string>;
   actions: MeetingActions;
@@ -544,6 +547,25 @@ function Stepper({ name, value, onChange }: { name: string; value: number | null
   );
 }
 
+/** Someone else's rating, for a viewer who may only set their own. */
+function ReadOnlyRating({ name, value }: { name: string; value: number | null }) {
+  if (!isValidRating(value)) {
+    return (
+      <span className={styles.tagQuiet} aria-label={`${name} has not rated yet`}>
+        Not rated
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`${styles.stepValue} ${value < 8 ? styles.stepLow : ""}`}
+      aria-label={`${name}'s rating: ${value}`}
+    >
+      {value}
+    </span>
+  );
+}
+
 export function ConcludeBody({ ctx }: { ctx: MeetingCtx }) {
   const totals = meetingTotals(ctx.meetingId, ctx.detail.todos, ctx.detail.issues);
   const average = averageRating(ctx.attendees.map((person) => ctx.ratings[person.id]));
@@ -580,11 +602,15 @@ export function ConcludeBody({ ctx }: { ctx: MeetingCtx }) {
               <div className={styles.rowTitle}>{person.name}</div>
               <div className={styles.rowMeta}>{isValidRating(ctx.ratings[person.id]) ? "Rated" : "Not rated yet"}</div>
             </div>
-            <Stepper
-              name={person.name}
-              value={ctx.ratings[person.id] ?? null}
-              onChange={(value) => ctx.actions.setRating(person.id, value)}
-            />
+            {canRateAttendee(ctx.ratingRights, person.id) ? (
+              <Stepper
+                name={person.name}
+                value={ctx.ratings[person.id] ?? null}
+                onChange={(value) => ctx.actions.setRating(person.id, value)}
+              />
+            ) : (
+              <ReadOnlyRating name={person.name} value={ctx.ratings[person.id] ?? null} />
+            )}
           </li>
         ))}
       </ul>

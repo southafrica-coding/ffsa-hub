@@ -7,6 +7,7 @@ import { displayName, formatHm, issueFor, membersAsPeople, nextL10Date, rankChan
 import { buildConfirmSummary, buildEndMeetingPayload, readEndResponse, type Person, type SentView } from "./followup";
 import { ConfirmDialog, QuickAddSheet, type QuickKind, type QuickValues, type SubmitOutcome } from "./meeting-sheets";
 import { SentBody } from "./meeting-sent";
+import { allowedRatingEntries, canRateAttendee, type RatingRights } from "./ratings";
 import {
   ConcludeBody,
   HeadlinesBody,
@@ -91,8 +92,8 @@ export function MeetingMode({
   const [phase, setPhase] = useState<Phase>("run");
   const [sent, setSent] = useState<{ view: SentView; endedAt: string | null } | null>(null);
   const [ending, setEnding] = useState(false);
-  const [endFailure, setEndFailure] = useState<FailureKind | null>(null);
-  const [problem, setProblem] = useState<FailureKind | null>(null);
+  const [endFailure, setEndFailure] = useState<{ kind: FailureKind; code: string | null } | null>(null);
+  const [problem, setProblem] = useState<{ kind: FailureKind; code: string | null } | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [advancing, setAdvancing] = useState(false);
@@ -216,6 +217,11 @@ export function MeetingMode({
   const over = isOverTime(timer, now);
   const paused = isPaused(timer);
   const upcoming = nextSegment(segment);
+  const ratingRights: RatingRights = {
+    viewerId,
+    canManage: detail.access?.canManage === true,
+    facilitatorId: meeting.facilitator_id ?? null,
+  };
 
   // ── Actions ─────────────────────────────────────────────────────────
 
@@ -224,7 +230,7 @@ export function MeetingMode({
     return withBusy(titleKey(title), async () => {
       const result = await api.addIssue(teamId, { title: title.trim(), owner_id: ownerId ?? null, source_meeting_id: meetingId });
       if (!result.ok) {
-        setProblem(result.kind);
+        setProblem({ kind: result.kind, code: result.code });
         return false;
       }
       const issue = result.data?.issue;
@@ -238,7 +244,7 @@ export function MeetingMode({
     return withBusy(`issue:${id}`, async () => {
       const result = await api.updateIssue(teamId, id, patch);
       if (!result.ok) {
-        setProblem(result.kind);
+        setProblem({ kind: result.kind, code: result.code });
         return false;
       }
       const updated = result.data?.issue;
@@ -264,7 +270,7 @@ export function MeetingMode({
     toggleTodo: (id, done) => {
       void withBusy(`todo:${id}`, async () => {
         const result = await api.setTodoDone(teamId, id, done);
-        if (!result.ok) return setProblem(result.kind);
+        if (!result.ok) return setProblem({ kind: result.kind, code: result.code });
         const updated = result.data?.todo;
         setDetail((d) => ({
           ...d,
@@ -287,7 +293,7 @@ export function MeetingMode({
       withBusy(`issue:${id}`, async () => {
         const result = await api.deleteIssue(teamId, id);
         if (!result.ok) {
-          setProblem(result.kind);
+          setProblem({ kind: result.kind, code: result.code });
           return false;
         }
         setDetail((d) => ({ ...d, issues: d.issues.filter((issue) => issue.id !== id) }));
@@ -302,7 +308,11 @@ export function MeetingMode({
         defaultOwner: issue.owner_id ?? viewerOnTeam,
         solving: issue,
       }),
-    setRating: (userId, rating) => setRatings((prev) => ({ ...prev, [userId]: rating })),
+    setRating: (userId, rating) => {
+      // Defence in depth: the Conclude rows only offer steppers the viewer may use.
+      if (!canRateAttendee(ratingRights, userId)) return;
+      setRatings((prev) => ({ ...prev, [userId]: rating }));
+    },
     requestEnd: () => {
       setEndFailure(null);
       setPhase("confirm");
@@ -310,7 +320,7 @@ export function MeetingMode({
     dismissHeadline: (id) => {
       void withBusy(`headline:${id}`, async () => {
         const result = await api.dismissHeadline(teamId, id);
-        if (!result.ok) return setProblem(result.kind);
+        if (!result.ok) return setProblem({ kind: result.kind, code: result.code });
         const stamped = result.data.headline?.dismissed_at ?? new Date().toISOString();
         setDetail((d) => ({
           ...d,
@@ -323,7 +333,7 @@ export function MeetingMode({
     restoreHeadline: (id) => {
       void withBusy(`headline:${id}`, async () => {
         const result = await api.restoreHeadline(teamId, id);
-        if (!result.ok) return setProblem(result.kind);
+        if (!result.ok) return setProblem({ kind: result.kind, code: result.code });
         setDetail((d) => ({
           ...d,
           headlines: d.headlines.map((headline) =>
@@ -400,17 +410,18 @@ export function MeetingMode({
         return;
       }
     }
-    setProblem(result.kind);
+    setProblem({ kind: result.kind, code: result.code });
   }
 
   async function end() {
     setEnding(true);
     setEndFailure(null);
-    const payload = buildEndMeetingPayload(attendees.map((person) => ({ user_id: person.id, rating: ratings[person.id] })));
+    // Only ratings this viewer may set: a member who sent anyone else's would get a 403.
+    const payload = buildEndMeetingPayload(allowedRatingEntries(attendees, ratings, ratingRights));
     const result = await api.end(teamId, meetingId, payload);
     setEnding(false);
     if (!result.ok) {
-      setEndFailure(result.kind);
+      setEndFailure({ kind: result.kind, code: result.code });
       return;
     }
     setSent({
@@ -431,6 +442,7 @@ export function MeetingMode({
     people,
     attendees,
     ratings,
+    ratingRights,
     now,
     busy,
     actions,
@@ -534,7 +546,7 @@ export function MeetingMode({
       </header>
 
       <div className={styles.mBody}>
-        {problem ? <Notice>{failureCopy(problem)}</Notice> : null}
+        {problem ? <Notice>{failureCopy(problem.kind, problem.code)}</Notice> : null}
         {phase === "sent" && sent ? (
           <SentBody view={sent.view} teamHref={pages.team(teamId)} teamsHref={pages.teams} />
         ) : (
@@ -582,7 +594,8 @@ export function MeetingMode({
             hasRecapChannel: detail.team.slack_channel_id !== null,
           })}
           ending={ending}
-          failure={endFailure}
+          failure={endFailure?.kind ?? null}
+          failureCode={endFailure?.code ?? null}
           onBack={() => setPhase("run")}
           onConfirm={end}
         />

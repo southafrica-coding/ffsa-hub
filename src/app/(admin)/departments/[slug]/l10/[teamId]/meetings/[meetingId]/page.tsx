@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { MeetingMode } from "@/components/departments/l10/meeting-mode";
-import { loadL10Department } from "../../../load-department";
+import { notFound } from "next/navigation";
+import { isUuid } from "@/lib/departments/validate";
+import { loadL10Team } from "../../../load-department";
 
 export const metadata: Metadata = { title: "L10 meeting" };
 export const dynamic = "force-dynamic";
@@ -12,8 +14,10 @@ export default async function L10MeetingPage({
   params: Promise<{ slug: string; teamId: string; meetingId: string }>;
 }) {
   const { slug, teamId, meetingId } = await params;
-  const { department, viewerId } = await loadL10Department(
+  if (!isUuid(meetingId)) notFound();
+  const { department, viewerId } = await loadL10Team(
     slug,
+    teamId,
     `/departments/${slug}/l10/${teamId}/meetings/${meetingId}`
   );
   return <MeetingMode slug={department.slug} teamId={teamId} meetingId={meetingId} viewerId={viewerId} />;

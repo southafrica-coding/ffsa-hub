@@ -29,6 +29,12 @@ vi.mock("@/lib/departments/session", () => ({
   getViewer: async () => ({ supabase: { kind: "session" }, user: { id: "donors-dev-member" }, active: true }),
 }));
 
+const departmentHasL10Teams = vi.hoisted(() => vi.fn<(client: unknown, slug: string) => Promise<boolean>>());
+
+vi.mock("./[slug]/l10/has-l10-teams", () => ({
+  departmentHasL10Teams: (client: unknown, slug: string) => departmentHasL10Teams(client, slug),
+}));
+
 import DepartmentsIndexPage from "./page";
 import DepartmentPage from "./[slug]/page";
 
@@ -76,6 +82,35 @@ describe("department pages with loader fixtures", () => {
     loadServicesForViewer.mockResolvedValue({ kind: "ok", data: [] });
     requireSignedIn.mockReset();
     requireSignedIn.mockResolvedValue({ id: "donors-dev-member" });
+    departmentHasL10Teams.mockReset();
+    departmentHasL10Teams.mockResolvedValue(false);
+  });
+
+  it("links to L10 from the overview when the department has an active L10 team", async () => {
+    loadDepartmentHomeForViewer.mockResolvedValue({ kind: "ok", data: foldedFinanceHome() });
+    departmentHasL10Teams.mockResolvedValue(true);
+    const element = await DepartmentPage({
+      params: Promise.resolve({ slug: "finances_legal" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(departmentHasL10Teams).toHaveBeenCalledWith({ kind: "session" }, "finances_legal");
+    expect(element.props.hasL10Teams).toBe(true);
+    const markup = renderToStaticMarkup(element);
+    expect(markup).toContain('href="/departments/finances_legal/l10"');
+    expect(markup).toContain("Weekly Level 10 meetings");
+  });
+
+  it("has no L10 link when the department has no L10 team", async () => {
+    loadDepartmentHomeForViewer.mockResolvedValue({ kind: "ok", data: foldedFinanceHome() });
+    departmentHasL10Teams.mockResolvedValue(false);
+    const element = await DepartmentPage({
+      params: Promise.resolve({ slug: "finances_legal" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(element.props.hasL10Teams).toBe(false);
+    const markup = renderToStaticMarkup(element);
+    expect(markup).not.toContain("/l10");
+    expect(markup).not.toContain("Weekly Level 10 meetings");
   });
 
   it("renders detail for a donors_dev member when the loader sets canSeeDepartmentDetail", async () => {

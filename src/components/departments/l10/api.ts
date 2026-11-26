@@ -32,6 +32,7 @@ import {
   L10_MEETING_ALREADY_OPEN,
   L10_ONE_AUTO_RECAP,
   L10_RATING_NOT_ALLOWED,
+  L10_ATTENDEE_IMMUTABLE,
 } from "./types";
 import { personName } from "./derive";
 
@@ -41,6 +42,7 @@ export {
   L10_MEETING_ALREADY_OPEN,
   L10_ONE_AUTO_RECAP,
   L10_RATING_NOT_ALLOWED,
+  L10_ATTENDEE_IMMUTABLE,
 };
 
 export type FailureKind = "unauthenticated" | "forbidden" | "not_found" | "conflict" | "invalid" | "error";
@@ -63,6 +65,7 @@ export const CODE_COPY: Record<string, string> = {
   [L10_AUTO_HEADLINE_LOCKED]: "This headline can't be edited or deleted. Dismiss it instead.",
   [L10_AUTO_HEADLINE_FIELD]: "That field is set by the Hub, not by a person on the team.",
   [L10_RATING_NOT_ALLOWED]: "You can only set your own rating.",
+  [L10_ATTENDEE_IMMUTABLE]: "That person's attendance can't be changed this way.",
   [L10_ONE_AUTO_RECAP]: "This meeting already has that recap.",
 };
 
