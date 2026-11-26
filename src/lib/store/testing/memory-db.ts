@@ -14,7 +14,15 @@ export type MemoryDb = ReturnType<typeof createMemoryDb>;
 
 export function createMemoryDb(
   seed: Record<string, Row[]> = {},
-  opts: { rpc?: Record<string, (args: Record<string, unknown>, db: Record<string, Row[]>) => unknown>; unique?: Record<string, string[][]> } = {}
+  opts: {
+    rpc?: Record<string, (args: Record<string, unknown>, db: Record<string, Row[]>) => unknown>;
+    unique?: Record<string, string[][]>;
+    /** Row triggers, run after each matching row is written (see storeTriggers). */
+    triggers?: {
+      afterUpdate?: Record<string, (before: Row, after: Row, db: Record<string, Row[]>) => void>;
+      afterDelete?: Record<string, (row: Row, db: Record<string, Row[]>) => void>;
+    };
+  } = {}
 ) {
   const tables: Record<string, Row[]> = {};
   for (const [k, v] of Object.entries(seed)) tables[k] = v.map((r) => ({ ...r }));
@@ -93,10 +101,17 @@ export function createMemoryDb(
         out = rows;
       } else if (action === "update") {
         out = t(table).filter(match);
-        for (const r of out) Object.assign(r, payload);
+        const after = opts.triggers?.afterUpdate?.[table];
+        for (const r of out) {
+          const before = { ...r };
+          Object.assign(r, payload);
+          after?.(before, r, tables);
+        }
       } else if (action === "delete") {
         out = t(table).filter(match);
         tables[table] = t(table).filter((r) => !match(r));
+        const after = opts.triggers?.afterDelete?.[table];
+        for (const r of out) after?.(r, tables);
       } else {
         const rows = Array.isArray(payload) ? payload : [payload!];
         for (const r of rows) {
@@ -183,4 +198,54 @@ export const storeRpcs = {
     row.removed_at = new Date().toISOString();
     return true;
   },
+  // 413: the same checks, order and arithmetic as public.store_apply_coupon.
+  // Synchronous, so overlapping requests in a test can't both take the last use.
+  store_apply_coupon: (args: Record<string, unknown>, db: Record<string, Row[]>) => {
+    const code = String(args.p_code ?? "").trim().toUpperCase();
+    if (code.length < 3 || code.length > 40 || !/^[A-Z0-9]+(-[A-Z0-9]+)*$/.test(code)) return { outcome: "malformed" };
+    const order = (db.store_orders ?? []).find((o) => o.id === args.p_order_id);
+    if (!order || order.status !== "pending" || order.coupon_id) return { outcome: "order" };
+    const c = (db.store_coupons ?? []).find((r) => r.code === code);
+    if (!c) return { outcome: "unknown" };
+    if (!c.active) return { outcome: "inactive" };
+    if (c.expires_at && new Date(String(c.expires_at)).getTime() <= Date.now()) return { outcome: "expired" };
+    const used = (c.used_count as number) ?? 0;
+    if (c.max_uses != null && used >= (c.max_uses as number)) return { outcome: "used_up" };
+    const items = (db.store_order_items ?? []).filter((i) => i.order_id === order.id && (!c.product_id || i.product_id === c.product_id));
+    if (c.product_id && items.length === 0) return { outcome: "wrong_product" };
+    const eligible = Math.min(items.reduce((s, i) => s + (i.unit_price_cents as number) * (i.quantity as number), 0), order.subtotal_cents as number);
+    const discount = c.percent_off != null ? Math.floor((eligible * (c.percent_off as number)) / 100) : Math.min(c.amount_off_cents as number, eligible);
+    if (args.p_expected_discount_cents != null && discount !== args.p_expected_discount_cents) return { outcome: "changed", discount_cents: discount };
+    c.used_count = used + 1;
+    (db.store_coupon_redemptions ??= []).push({ id: randomUUID(), coupon_id: c.id, order_id: order.id, amount_cents: discount, created_at: new Date().toISOString() });
+    const total = (order.subtotal_cents as number) + ((order.delivery_cents as number) ?? 0) - discount;
+    Object.assign(order, { coupon_id: c.id, discount_cents: discount, total_cents: total });
+    return { outcome: "ok", coupon_id: c.id, discount_cents: discount, total_cents: total };
+  },
 };
+
+/** 413's release triggers: cancelling or deleting an order removes its
+ *  redemption, and removing a redemption gives the use back. Deleting an
+ *  order also drops its items (ON DELETE CASCADE). */
+export const storeTriggers = {
+  afterUpdate: {
+    store_orders: (before: Row, after: Row, db: Record<string, Row[]>) => {
+      if (after.status === "cancelled" && before.status !== "cancelled" && after.coupon_id) releaseRedemption(after.id, db);
+    },
+  },
+  afterDelete: {
+    store_orders: (row: Row, db: Record<string, Row[]>) => {
+      releaseRedemption(row.id, db);
+      db.store_order_items = (db.store_order_items ?? []).filter((i) => i.order_id !== row.id);
+    },
+  },
+};
+
+function releaseRedemption(orderId: unknown, db: Record<string, Row[]>) {
+  const gone = (db.store_coupon_redemptions ?? []).filter((r) => r.order_id === orderId);
+  db.store_coupon_redemptions = (db.store_coupon_redemptions ?? []).filter((r) => r.order_id !== orderId);
+  for (const r of gone) {
+    const c = (db.store_coupons ?? []).find((x) => x.id === r.coupon_id);
+    if (c && ((c.used_count as number) ?? 0) > 0) c.used_count = (c.used_count as number) - 1;
+  }
+}

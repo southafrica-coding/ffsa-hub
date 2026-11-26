@@ -34,7 +34,16 @@ export const checkoutSchema = z.object({
   }),
   // "delivery" still parses so priceCart can refuse it with a clear message.
   fulfilment: z.enum(["none", "delivery", "collect"]).default("none"),
-  paymentMethod: z.enum(["payfast", "eft", "stripe"]),
+  // Optional when a coupon brings the order to R0: the server decides that,
+  // never the browser ("free" is only ever set by the server).
+  paymentMethod: z.enum(["payfast", "eft", "stripe"]).optional(),
+  /** A coupon code as typed. Normalised and re-checked on the server. */
+  couponCode: z
+    .string()
+    .max(80)
+    .optional()
+    .nullable()
+    .transform((s) => (s && s.trim() ? s : null)),
 });
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
 

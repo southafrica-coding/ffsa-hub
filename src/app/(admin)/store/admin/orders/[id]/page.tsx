@@ -3,7 +3,7 @@ import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
 import { formatZar } from "@/lib/store/money";
 import { fulfilmentLabel, nextFulfilmentSteps } from "@/lib/store/settle";
 import type { StoreCode, StoreFulfilment, StoreOrder, StoreOrderItem } from "@/lib/store/types";
-import { getFulfilment, getOrder, getOrderItems, listCodesForItems } from "@/services/store";
+import { getCoupon, getFulfilment, getOrder, getOrderItems, listCodesForItems } from "@/services/store";
 import { storeAdminGuard } from "../../guard";
 import { OrderActions } from "./order-actions";
 
@@ -20,11 +20,15 @@ export default async function StoreOrderPage({ params }: { params: Promise<{ id:
   const fulfilment = f as StoreFulfilment | null;
   const { data: codeRows } = await listCodesForItems(supabase, items.map((i) => i.id));
   const codes = (codeRows ?? []) as StoreCode[];
+  // The coupon row is staff-readable (store.view); missing means 413 isn't applied or the read failed.
+  const { data: couponRow } = order.coupon_id ? await getCoupon(supabase, order.coupon_id) : { data: null };
+  const coupon = couponRow as { code: string } | null;
   const a = order.delivery_address;
+  const method = order.payment_method === "eft" ? "EFT" : order.payment_method === "stripe" ? "International card" : order.payment_method === "free" ? "Coupon, nothing to pay" : "SA card";
 
   return (
     <div className="ffsa-screen">
-      <Masthead context={`Store · ${order.payment_method === "eft" ? "EFT" : order.payment_method === "stripe" ? "International card" : "SA card"} · ${new Date(order.created_at).toLocaleString("en-ZA")}`} title={order.reference} />
+      <Masthead context={`Store · ${method} · ${new Date(order.created_at).toLocaleString("en-ZA")}`} title={order.reference} />
 
       <div className="grid border-b border-ink md:grid-cols-3">
         <div className="border-b border-rule px-5 py-4 md:border-b-0 md:border-r md:px-8">
@@ -42,6 +46,11 @@ export default async function StoreOrderPage({ params }: { params: Promise<{ id:
           <div className="mono-label mb-1.5">Total</div>
           <p className="numeral text-[34px]">{formatZar(order.total_cents)}</p>
           {order.delivery_cents > 0 && <p className="text-[12px] text-[color:var(--text-tertiary)]">incl. {formatZar(order.delivery_cents)} delivery</p>}
+          {(order.discount_cents ?? 0) > 0 && (
+            <p className="text-[12px] text-[color:var(--text-tertiary)]">
+              after {formatZar(order.discount_cents)} off{coupon ? ` with ${coupon.code}` : " with a coupon"}
+            </p>
+          )}
         </div>
       </div>
 

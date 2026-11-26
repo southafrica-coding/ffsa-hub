@@ -42,6 +42,9 @@ export default async function StoreAdminPage({ searchParams }: { searchParams: P
           <>
             <a href="/api/store/admin/orders/export" className="inline-flex min-h-11 items-center border border-ink bg-bone px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-ink hover:bg-bone-2">Export orders</a>
             <Link href="/store" className="inline-flex min-h-11 items-center border border-ink bg-bone px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-ink hover:bg-bone-2">View store</Link>
+            {canManage && (
+              <Link href="/store/admin/coupons" className="inline-flex min-h-11 items-center border border-ink bg-bone px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-ink hover:bg-bone-2">Coupons</Link>
+            )}
             {canManage && <MastheadAction href="/store/admin/products/new">New product</MastheadAction>}
           </>
         }

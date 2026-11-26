@@ -62,7 +62,13 @@ export function orderConfirmationEmail(order: StoreOrder, items: StoreOrderItem[
   const body = [
     feEyebrow(`Order ${order.reference}`),
     feHeading("Thank you. It's yours."),
-    feParagraph(`We've received ${formatZar(order.total_cents)} for your order.`),
+    feParagraph(
+      order.payment_method === "free"
+        ? "Your code covered the whole order, so there was nothing to pay."
+        : (order.discount_cents ?? 0) > 0
+          ? `We've received ${formatZar(order.total_cents)} for your order, with ${formatZar(order.discount_cents)} off from your code.`
+          : `We've received ${formatZar(order.total_cents)} for your order.`
+    ),
     feList(items.map(itemLine)),
     readable ? feButton(links.library, "Open My Library") : "",
     packs ? feParagraph(`Your pack codes are on <a href="${feEsc(links.orders)}">your orders page</a>. Hand one to each reader.`) : "",
@@ -128,7 +134,8 @@ export function mediaNoticeEmail(order: StoreOrder, items: StoreOrderItem[], adm
     feList(items.map(itemLine)),
     feCoords([
       { label: "Total", value: formatZar(order.total_cents) },
-      { label: "Paid by", value: order.payment_method === "eft" ? "EFT" : order.payment_method === "stripe" ? "International card (Stripe)" : "Card (PayFast)" },
+      ...((order.discount_cents ?? 0) > 0 ? [{ label: "Coupon discount", value: formatZar(order.discount_cents) }] : []),
+      { label: "Paid by", value: paymentMethodLabel(order.payment_method) },
       { label: "Fulfilment", value: order.fulfilment_method === "none" ? "Digital only" : order.fulfilment_method === "collect" ? "Collect at base" : "Delivery" },
     ]),
     extra ? feNotice("Check this", feEsc(extra)) : "",
@@ -156,6 +163,11 @@ export function signInEmail(signInUrl: string) {
     feParagraph("This link works once and expires in an hour. If you didn't ask for it, ignore this email."),
   ].join("");
   return { subject: "Your sign-in link for My Library", html: doc("Sign in to My Library", body) };
+}
+
+/** How an order was paid, in words. */
+export function paymentMethodLabel(m: StoreOrder["payment_method"]): string {
+  return m === "eft" ? "EFT" : m === "stripe" ? "International card (Stripe)" : m === "free" ? "Coupon, nothing to pay" : "Card (PayFast)";
 }
 
 export type EftDetails = { bank: string; accountName: string; accountNumber: string; branchCode: string };

@@ -40,6 +40,18 @@ export default async function ThanksPage({ searchParams }: { searchParams: Promi
 
       {paid && (
         <div className="mt-6 space-y-5">
+          {order.payment_method === "free" ? (
+            <div className="border-l-[3px] border-yellow bg-bone px-4 py-3">
+              <p className="mono-label">Nothing to pay</p>
+              <p className="mt-1 text-[15px]">Your code covered the whole order. It&apos;s settled, with nothing charged.</p>
+            </div>
+          ) : (
+            (order.discount_cents ?? 0) > 0 && (
+              <p className="text-[14px] text-[color:var(--text-secondary)]">
+                Paid {formatZar(order.total_cents)}, with {formatZar(order.discount_cents)} off from your code.
+              </p>
+            )
+          )}
           <p className="text-[15px] leading-relaxed text-[color:var(--text-secondary)]">
             We&apos;ve emailed a receipt to {order.buyer_email}. Anything you read is in My Library; sign in with that email.
           </p>

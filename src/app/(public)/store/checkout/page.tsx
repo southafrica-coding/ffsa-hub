@@ -17,7 +17,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
     <div className="px-4 pt-8 md:px-8 md:pt-12">
       <div className="masthead-context">Cart</div>
       <h1 className="masthead-title">Checkout</h1>
-      <CheckoutForm methods={{ card, eft, stripe }} cancelled={!!cancelled} />
+      <CheckoutForm methods={{ card, eft, stripe }} enabled={storePaymentsEnabled()} cancelled={!!cancelled} />
     </div>
   );
 }
