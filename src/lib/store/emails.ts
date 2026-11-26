@@ -128,7 +128,7 @@ export function mediaNoticeEmail(order: StoreOrder, items: StoreOrderItem[], adm
     feList(items.map(itemLine)),
     feCoords([
       { label: "Total", value: formatZar(order.total_cents) },
-      { label: "Paid by", value: order.payment_method === "eft" ? "EFT" : "Card (PayFast)" },
+      { label: "Paid by", value: order.payment_method === "eft" ? "EFT" : order.payment_method === "stripe" ? "International card (Stripe)" : "Card (PayFast)" },
       { label: "Fulfilment", value: order.fulfilment_method === "none" ? "Digital only" : order.fulfilment_method === "collect" ? "Collect at base" : "Delivery" },
     ]),
     extra ? feNotice("Check this", feEsc(extra)) : "",

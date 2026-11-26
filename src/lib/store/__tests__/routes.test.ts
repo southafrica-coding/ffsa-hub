@@ -1,8 +1,10 @@
+import Stripe from "stripe";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryDb, storeRpcs, type MemoryDb } from "../testing/memory-db";
 import { catalogue, IDS } from "../testing/fixtures";
 import { listPublishedProducts } from "@/services/store";
 import { thanksPath } from "../signing";
+import { storeStripeClient } from "../stripe";
 
 vi.mock("server-only", () => ({}));
 
@@ -42,7 +44,7 @@ function seed() {
       store_products: catalogue.products,
       store_variants: catalogue.variants,
     },
-    { rpc: storeRpcs, unique: { store_products: [["slug"]] } }
+    { rpc: storeRpcs, unique: { store_products: [["slug"]], store_stripe_events: [["event_id"]] } }
   );
 }
 
@@ -191,5 +193,95 @@ describe("checkout", () => {
     expect(db.table("store_entitlements")).toEqual([expect.objectContaining({ email: "buyer@example.org", product_id: IDS.review, includes_pdf: false })]);
     expect((await (await markPaid(json({}), { params: Promise.resolve({ id: out.orderId }) })).json()).outcome).toBe("already");
     expect(db.table("store_entitlements")).toHaveLength(1);
+  });
+});
+
+describe("Stripe Checkout (international card)", () => {
+  // Made-up test key and webhook secret; no network: sessions.create is stubbed.
+  const KEY = "sk_test_store_route_fake";
+  const WHSEC = "whsec_store_route_fake";
+  function enable() {
+    vi.stubEnv("STORE_PAYMENTS_ENABLED", "1");
+    vi.stubEnv("STORE_STRIPE_ENABLED", "1");
+    vi.stubEnv("STRIPE_SECRET_KEY", KEY);
+    vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_events_endpoint_fake");
+    vi.stubEnv("STORE_STRIPE_WEBHOOK_SECRET", WHSEC);
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://hub.test");
+  }
+  const body = { lines: [{ productId: IDS.review, quantity: 1, purpose: "self" }], buyer: { name: "Example Buyer", email: "buyer@example.org" }, fulfilment: "none", paymentMethod: "stripe" };
+  const hook = (payload: string, header: string | null) =>
+    new Request("https://hub.test/api/store/stripe/webhook", { method: "POST", headers: header ? { "stripe-signature": header } : {}, body: payload });
+
+  async function checkout() {
+    const create = vi.spyOn(storeStripeClient().checkout.sessions, "create").mockResolvedValue({ id: "cs_test_route_1", url: "https://checkout.stripe.com/c/pay/cs_test_route_1" } as never);
+    const { POST } = await import("@/app/api/store/checkout/route");
+    const res = await POST(json(body));
+    return { res, create };
+  }
+  function completed(orderId: string, over: Record<string, unknown> = {}, id = "evt_route_1") {
+    const payload = JSON.stringify({
+      id, object: "event", type: "checkout.session.completed", livemode: false,
+      data: { object: { id: "cs_test_route_1", object: "checkout.session", amount_total: 15000, currency: "zar", payment_status: "paid", client_reference_id: orderId, metadata: { order_id: orderId, ffsa_store: "1" }, ...over } },
+    });
+    return { payload, header: new Stripe(KEY).webhooks.generateTestHeaderString({ payload, secret: WHSEC }) };
+  }
+
+  it("is hidden unless STORE_STRIPE_ENABLED=1, and refuses a live key", async () => {
+    vi.stubEnv("STORE_PAYMENTS_ENABLED", "1");
+    const { POST } = await import("@/app/api/store/checkout/route");
+    expect((await POST(json(body))).status).toBe(503);
+    enable();
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_store_route_fake");
+    expect((await POST(json(body))).status).toBe(503);
+    expect(db.table("store_orders")).toHaveLength(0);
+  });
+
+  it("creates a pending Stripe order pinned to its session, returns the session URL; success comes back to the signed thanks page", async () => {
+    enable();
+    const { res, create } = await checkout();
+    expect(res.status).toBe(200);
+    const out = await res.json();
+    expect(out.next).toBe("https://checkout.stripe.com/c/pay/cs_test_route_1");
+    expect(db.table("store_orders")[0]).toMatchObject({ status: "pending", payment_method: "stripe", total_cents: 15000, provider_payment_id: "cs_test_route_1" });
+    const params = create.mock.calls[0][0] as Stripe.Checkout.SessionCreateParams;
+    expect(params.success_url).toBe(`https://hub.test${thanksPath(out.orderId)}`);
+    expect(params.cancel_url).toBe(`https://hub.test/store/checkout?cancelled=${out.orderId}`);
+    expect(params.currency).toBe("zar");
+  });
+
+  it("cancels the order when Stripe won't create a session", async () => {
+    enable();
+    vi.spyOn(storeStripeClient().checkout.sessions, "create").mockRejectedValue(new Error("boom"));
+    const { POST } = await import("@/app/api/store/checkout/route");
+    expect((await POST(json(body))).status).toBe(502);
+    expect(db.table("store_orders")[0]).toMatchObject({ status: "cancelled" });
+  });
+
+  it("webhook: settles through the Store path once, records the event, refuses a bad signature and a wrong amount", async () => {
+    enable();
+    const { res } = await checkout();
+    const { orderId } = await res.json();
+    const { POST } = await import("@/app/api/store/stripe/webhook/route");
+
+    // Signed with the events endpoint's secret, not the Store's: rejected.
+    const wrongSecret = completed(orderId);
+    const forged = new Stripe(KEY).webhooks.generateTestHeaderString({ payload: wrongSecret.payload, secret: "whsec_events_endpoint_fake" });
+    expect((await POST(hook(wrongSecret.payload, forged))).status).toBe(400);
+    expect((await POST(hook(wrongSecret.payload, null))).status).toBe(400);
+
+    const short = completed(orderId, { amount_total: 100 }, "evt_route_short");
+    expect((await POST(hook(short.payload, short.header))).status).toBe(200);
+    expect(db.table("store_orders")[0]).toMatchObject({ status: "pending" });
+    expect(db.table("store_entitlements")).toHaveLength(0);
+
+    const ok = completed(orderId);
+    expect((await POST(hook(ok.payload, ok.header))).status).toBe(200);
+    expect(db.table("store_orders")[0]).toMatchObject({ status: "paid", provider_payment_id: "cs_test_route_1" });
+    expect(db.table("store_entitlements")).toEqual([expect.objectContaining({ email: "buyer@example.org", product_id: IDS.review })]);
+
+    // Replay: deduped, still one entitlement.
+    expect((await POST(hook(ok.payload, ok.header))).status).toBe(200);
+    expect(db.table("store_entitlements")).toHaveLength(1);
+    expect(db.table("store_stripe_events").map((e) => e.event_id).sort()).toEqual(["evt_route_1", "evt_route_short"]);
   });
 });

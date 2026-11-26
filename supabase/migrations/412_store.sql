@@ -186,13 +186,13 @@ CREATE TABLE IF NOT EXISTS public.store_orders (
   buyer_phone          text,
   buyer_user_id        uuid REFERENCES auth.users (id) ON DELETE SET NULL,
   status               text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'cancelled', 'refunded')),
-  payment_method       text NOT NULL CHECK (payment_method IN ('payfast', 'eft')),
+  payment_method       text NOT NULL CHECK (payment_method IN ('payfast', 'eft', 'stripe')),  -- stripe = international card
   subtotal_cents       integer NOT NULL CHECK (subtotal_cents >= 0),
   delivery_cents       integer NOT NULL DEFAULT 0 CHECK (delivery_cents >= 0),
   total_cents          integer NOT NULL CHECK (total_cents >= 0),
   fulfilment_method    text NOT NULL DEFAULT 'none' CHECK (fulfilment_method IN ('none', 'delivery', 'collect')),
   delivery_address     jsonb,
-  provider_payment_id  text,
+  provider_payment_id  text,                       -- PayFast pf_payment_id; Stripe Checkout session id (cs_…)
   eft_proof_path       text,                       -- store-source/eft/<order>/<random>.<ext> (private; set once)
   paid_at              timestamptz,
   marked_paid_by       uuid REFERENCES public.users (id) ON DELETE SET NULL,
@@ -204,6 +204,10 @@ CREATE TABLE IF NOT EXISTS public.store_orders (
 CREATE INDEX IF NOT EXISTS store_orders_email_idx ON public.store_orders (buyer_email, status);
 CREATE INDEX IF NOT EXISTS store_orders_user_idx ON public.store_orders (buyer_user_id);
 CREATE INDEX IF NOT EXISTS store_orders_status_idx ON public.store_orders (status, created_at DESC);
+-- One Stripe Checkout session belongs to one order.
+CREATE UNIQUE INDEX IF NOT EXISTS store_orders_stripe_session_idx
+  ON public.store_orders (provider_payment_id)
+  WHERE payment_method = 'stripe' AND provider_payment_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS public.store_order_items (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -293,6 +297,18 @@ CREATE TABLE IF NOT EXISTS public.store_fulfilments (
 );
 CREATE INDEX IF NOT EXISTS store_fulfilments_status_idx ON public.store_fulfilments (status);
 
+-- Stripe webhook events the Store has handled. The primary key makes a
+-- replayed event a no-op (the webhook inserts first and stops on conflict).
+-- Service role only: no policies, no grants to anon / authenticated.
+CREATE TABLE IF NOT EXISTS public.store_stripe_events (
+  event_id     text PRIMARY KEY,                    -- evt_…
+  event_type   text NOT NULL,
+  session_id   text NOT NULL,                       -- cs_…
+  order_id     uuid REFERENCES public.store_orders (id) ON DELETE SET NULL,
+  received_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS store_stripe_events_session_idx ON public.store_stripe_events (session_id);
+
 -- ────────────────────────────────────────────────────────────
 -- 5. Row level security
 -- ────────────────────────────────────────────────────────────
@@ -306,6 +322,7 @@ ALTER TABLE public.store_entitlements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.store_codes        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.store_devices      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.store_fulfilments  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.store_stripe_events ENABLE ROW LEVEL SECURITY;  -- no policies: service role only
 
 -- Catalogue: anyone reads what's published; staff read and write everything.
 CREATE POLICY "store products: published are public"
@@ -432,11 +449,12 @@ CREATE POLICY "store fulfilments: staff write"
 --                   only where a staff (store.manage) policy exists.
 --                   store_orders: staff UPDATE only (mark paid, cancel).
 --                   store_order_items, store_codes, store_devices: SELECT only.
---   service_role  : everything (checkout, ITN, settle, devices, redeem).
+--   service_role  : everything (checkout, ITN, Stripe webhook, settle, devices, redeem).
+--   store_stripe_events: service role only.
 REVOKE ALL ON TABLE
   public.store_products, public.store_variants, public.store_assets, public.store_asset_pages,
   public.store_orders, public.store_order_items, public.store_entitlements, public.store_codes,
-  public.store_devices, public.store_fulfilments
+  public.store_devices, public.store_fulfilments, public.store_stripe_events
 FROM PUBLIC, anon, authenticated;
 
 GRANT SELECT ON TABLE public.store_products, public.store_variants TO anon;
@@ -451,7 +469,7 @@ GRANT SELECT ON TABLE public.store_order_items, public.store_codes, public.store
 GRANT ALL ON TABLE
   public.store_products, public.store_variants, public.store_assets, public.store_asset_pages,
   public.store_orders, public.store_order_items, public.store_entitlements, public.store_codes,
-  public.store_devices, public.store_fulfilments
+  public.store_devices, public.store_fulfilments, public.store_stripe_events
 TO service_role;
 
 -- ────────────────────────────────────────────────────────────

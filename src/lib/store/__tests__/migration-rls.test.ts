@@ -10,7 +10,7 @@ import { storeStaffLevel } from "../access";
 const root = path.resolve(__dirname, "../../../..");
 const sql = readFileSync(path.join(root, "supabase/migrations/412_store.sql"), "utf8");
 const code = sql.replace(/--.*$/gm, "");
-const TABLES = ["store_products", "store_variants", "store_assets", "store_asset_pages", "store_orders", "store_order_items", "store_entitlements", "store_codes", "store_devices", "store_fulfilments"];
+const TABLES = ["store_products", "store_variants", "store_assets", "store_asset_pages", "store_orders", "store_order_items", "store_entitlements", "store_codes", "store_devices", "store_fulfilments", "store_stripe_events"];
 const policies = [...code.matchAll(/CREATE POLICY "([^"]+)"\s+ON public\.(\w+) FOR (\w+) TO ([\w, ]+)\s+(USING|WITH CHECK)\s*\(([\s\S]*?)\);/g)].map((m) => ({ name: m[1], table: m[2], cmd: m[3], to: m[4], body: m[6] }));
 
 describe("412 Store migration", () => {
@@ -36,6 +36,14 @@ describe("412 Store migration", () => {
     }
     expect(code).not.toMatch(/_cents\s+numeric/);
     expect(code).toMatch(/price_cents\s+integer/);
+  });
+
+  it("Stripe: orders take 'stripe', events are deduped by id and are service-role only", () => {
+    expect(code).toMatch(/payment_method\s+text NOT NULL CHECK \(payment_method IN \('payfast', 'eft', 'stripe'\)\)/);
+    expect(code).toMatch(/event_id\s+text PRIMARY KEY/);
+    expect(code).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS store_orders_stripe_session_idx/);
+    expect(policies.filter((p) => p.table === "store_stripe_events")).toEqual([]);
+    expect(code).not.toMatch(/GRANT [^;]*store_stripe_events[^;]*TO (anon|authenticated)/);
   });
 
   it("anonymous visitors read the published catalogue and nothing else", () => {

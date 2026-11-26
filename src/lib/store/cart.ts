@@ -42,7 +42,7 @@ export const checkoutSchema = z.object({
   }),
   fulfilment: z.enum(["none", "delivery", "collect"]).default("none"),
   address: addressSchema.nullable().optional(),
-  paymentMethod: z.enum(["payfast", "eft"]),
+  paymentMethod: z.enum(["payfast", "eft", "stripe"]),
 });
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
 

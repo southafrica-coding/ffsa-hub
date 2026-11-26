@@ -24,7 +24,7 @@ export default async function StoreOrderPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="ffsa-screen">
-      <Masthead context={`Store · ${order.payment_method === "eft" ? "EFT" : "Card"} · ${new Date(order.created_at).toLocaleString("en-ZA")}`} title={order.reference} />
+      <Masthead context={`Store · ${order.payment_method === "eft" ? "EFT" : order.payment_method === "stripe" ? "International card" : "SA card"} · ${new Date(order.created_at).toLocaleString("en-ZA")}`} title={order.reference} />
 
       <div className="grid border-b border-ink md:grid-cols-3">
         <div className="border-b border-rule px-5 py-4 md:border-b-0 md:border-r md:px-8">

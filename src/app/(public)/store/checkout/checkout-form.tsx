@@ -26,14 +26,23 @@ type Quote = {
 
 const PROVINCES = ["Eastern Cape", "Free State", "Gauteng", "KwaZulu-Natal", "Limpopo", "Mpumalanga", "North West", "Northern Cape", "Western Cape"];
 
-export function CheckoutForm({ methods, cancelled }: { methods: { card: boolean; eft: boolean }; cancelled: boolean }) {
+type Method = "payfast" | "eft" | "stripe";
+
+const METHOD_COPY: Record<Method, { label: string; hint: string }> = {
+  payfast: { label: "SA card", hint: "South African cards, through PayFast" },
+  eft: { label: "EFT", hint: "Pay from a South African bank. We confirm it by hand." },
+  stripe: { label: "International card", hint: "Cards from outside South Africa, through Stripe. Charged in rand." },
+};
+
+export function CheckoutForm({ methods, cancelled }: { methods: { card: boolean; eft: boolean; stripe: boolean }; cancelled: boolean }) {
   const router = useRouter();
   const { lines, ready, remove, clear } = useCart();
   const [quote, setQuote] = useState<Quote | null>(null);
   const [fulfilment, setFulfilment] = useState<"none" | "delivery" | "collect">("none");
   const [address, setAddress] = useState({ line1: "", line2: "", city: "", province: "", postal_code: "" });
   const [buyer, setBuyer] = useState({ name: "", email: "", phone: "" });
-  const [method, setMethod] = useState<"payfast" | "eft">(methods.card ? "payfast" : "eft");
+  const available = ([methods.card && "payfast", methods.eft && "eft", methods.stripe && "stripe"] as const).filter((m): m is Method => !!m);
+  const [method, setMethod] = useState<Method>(available[0] ?? "payfast");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +71,7 @@ export function CheckoutForm({ methods, cancelled }: { methods: { card: boolean;
   }, [apiLines, fulfilment, address, ready]);
 
   const shown = quote?.needsShipping && fulfilment === "delivery" ? (quote.subtotalCents ?? 0) + (quote.deliveryFeeCents ?? 0) : (quote?.subtotalCents ?? 0);
-  const open = methods.card || methods.eft;
+  const open = available.length > 0;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -190,19 +199,13 @@ export function CheckoutForm({ methods, cancelled }: { methods: { card: boolean;
             {!open ? (
               <Notice>Checkout isn&apos;t open yet. Your cart will wait here.</Notice>
             ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {methods.card && (
-                  <button type="button" onClick={() => setMethod("payfast")} aria-pressed={method === "payfast"} className={cn("min-h-16 border px-4 py-3 text-left transition-colors", method === "payfast" ? "border-ink bg-bone" : "border-rule-strong hover:border-ink")}>
-                    <span className="block font-mono text-[11px] font-bold uppercase tracking-[0.14em]">Card</span>
-                    <span className="mt-1 block font-sans text-[13px] normal-case tracking-normal text-[color:var(--text-secondary)]">Secure checkout with PayFast</span>
+              <div className={cn("grid gap-2", available.length === 2 && "sm:grid-cols-2", available.length > 2 && "lg:grid-cols-3")}>
+                {available.map((m) => (
+                  <button key={m} type="button" onClick={() => setMethod(m)} aria-pressed={method === m} className={cn("min-h-16 border px-4 py-3 text-left transition-colors", method === m ? "border-ink bg-bone" : "border-rule-strong hover:border-ink")}>
+                    <span className="block font-mono text-[11px] font-bold uppercase tracking-[0.14em]">{METHOD_COPY[m].label}</span>
+                    <span className="mt-1 block font-sans text-[13px] normal-case tracking-normal text-[color:var(--text-secondary)]">{METHOD_COPY[m].hint}</span>
                   </button>
-                )}
-                {methods.eft && (
-                  <button type="button" onClick={() => setMethod("eft")} aria-pressed={method === "eft"} className={cn("min-h-16 border px-4 py-3 text-left transition-colors", method === "eft" ? "border-ink bg-bone" : "border-rule-strong hover:border-ink")}>
-                    <span className="block font-mono text-[11px] font-bold uppercase tracking-[0.14em]">EFT</span>
-                    <span className="mt-1 block font-sans text-[13px] normal-case tracking-normal text-[color:var(--text-secondary)]">Pay from your bank. We confirm it by hand.</span>
-                  </button>
-                )}
+                ))}
               </div>
             )}
           </div>
@@ -252,7 +255,7 @@ export function CheckoutForm({ methods, cancelled }: { methods: { card: boolean;
         <div className="mt-4 space-y-3">
           {error && <Notice tone="bad">{error}</Notice>}
           <PrimaryButton type="submit" disabled={busy || !open || !quote || quote.items.some((i) => !i.ok) || (quote.needsShipping && fulfilment === "none")}>
-            {busy ? "One moment…" : method === "eft" ? "Place order, pay by EFT" : "Pay with card"}
+            {busy ? "One moment…" : method === "eft" ? "Place order, pay by EFT" : method === "stripe" ? "Pay with international card" : "Pay with SA card"}
           </PrimaryButton>
           <p className="text-center text-[11px] text-[color:var(--text-tertiary)]">Prices in rand. We check every price again before you pay.</p>
         </div>

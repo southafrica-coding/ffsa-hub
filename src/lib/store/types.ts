@@ -9,7 +9,7 @@
 export type ProductKind = "digital" | "subscription" | "physical" | "bundle";
 export type ProductStatus = "draft" | "published" | "archived";
 export type OrderStatus = "pending" | "paid" | "cancelled" | "refunded";
-export type PaymentMethod = "payfast" | "eft";
+export type PaymentMethod = "payfast" | "eft" | "stripe";
 export type FulfilmentMethod = "none" | "delivery" | "collect";
 export type ItemPurpose = "self" | "gift" | "code_pack";
 export type FulfilmentStatus = "preorder" | "to_pack" | "ready_to_collect" | "shipped" | "collected" | "delivered";

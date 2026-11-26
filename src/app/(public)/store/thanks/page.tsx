@@ -31,7 +31,7 @@ export default async function ThanksPage({ searchParams }: { searchParams: Promi
 
   const paid = order.status === "paid";
   const pendingEft = order.status === "pending" && order.payment_method === "eft";
-  const pendingCard = order.status === "pending" && order.payment_method === "payfast";
+  const pendingCard = order.status === "pending" && (order.payment_method === "payfast" || order.payment_method === "stripe");
 
   return (
     <div className="mx-auto max-w-[640px] px-4 pt-10 md:pt-16">
@@ -52,7 +52,7 @@ export default async function ThanksPage({ searchParams }: { searchParams: Promi
 
       {pendingCard && (
         <div className="mt-6 space-y-3">
-          <p className="text-[15px] leading-relaxed text-[color:var(--text-secondary)]">PayFast is confirming your payment. This page updates by itself, usually within a minute.</p>
+          <p className="text-[15px] leading-relaxed text-[color:var(--text-secondary)]">{order.payment_method === "stripe" ? "Stripe" : "PayFast"} is confirming your payment. This page updates by itself, usually within a minute.</p>
           <PendingRefresh />
         </div>
       )}

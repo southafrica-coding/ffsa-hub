@@ -7,14 +7,16 @@ import { checkoutSchema, orderReference, priceCart } from "@/lib/store/cart";
 import { eftDetails, eftInstructionsEmail, sendStoreEmail } from "@/lib/store/emails";
 import { appUrl, storePaymentsEnabled } from "@/lib/store/flags";
 import { splitName, storePayfastAllowed } from "@/lib/store/payments";
+import { createStoreStripeSession, storeStripeAllowed, storeStripeClient } from "@/lib/store/stripe";
 import type { StoreProduct, StoreVariant } from "@/lib/store/types";
-import { createOrder, getProductsByIds, listVariants } from "@/services/store";
+import { cancelPendingOrder, createOrder, getProductsByIds, listVariants, setStripeSession } from "@/services/store";
 import { thanksPath } from "@/lib/store/signing";
 import { bad, NO_STORE, readJson } from "../_shared";
 
 // POST /api/store/checkout — public. Prices the cart on the server, creates
-// a pending order, and returns where to pay (PayFast sandbox) or the EFT
-// thanks page. Never marks anything paid: the ITN or Media does that.
+// a pending order, and returns where to pay (PayFast sandbox for SA cards,
+// Stripe Checkout test mode for international cards) or the EFT thanks page.
+// Never marks anything paid: the PayFast ITN, the Stripe webhook or Media does.
 export async function POST(request: Request) {
   if (!storePaymentsEnabled()) return bad("Checkout isn't open yet. Check back soon.", 503);
 
@@ -27,6 +29,10 @@ export async function POST(request: Request) {
 
   if (input.paymentMethod === "payfast") {
     const allowed = storePayfastAllowed();
+    if (!allowed.ok) return bad(allowed.reason, 503);
+  }
+  if (input.paymentMethod === "stripe") {
+    const allowed = storeStripeAllowed();
     if (!allowed.ok) return bad(allowed.reason, 503);
   }
   const bank = eftDetails();
@@ -92,6 +98,22 @@ export async function POST(request: Request) {
     const mail = eftInstructionsEmail(order, bank!, thanks);
     await sendStoreEmail({ to: order.buyer_email, ...mail, category: "store_eft_instructions", sourceId: order.id });
     return NextResponse.json({ ok: true, orderId: order.id, next: thanksAt }, { headers: NO_STORE });
+  }
+
+  if (input.paymentMethod === "stripe") {
+    try {
+      const session = await createStoreStripeSession(storeStripeClient().checkout.sessions, order, {
+        success: thanks,
+        cancel: `${base}/store/checkout?cancelled=${order.id}`,
+      });
+      const { data: pinned, error: pinErr } = await setStripeSession(admin, order.id, session.id);
+      if (pinErr || !pinned) throw new Error("Couldn't pin the Stripe session to the order.");
+      return NextResponse.json({ ok: true, orderId: order.id, next: session.url }, { headers: NO_STORE });
+    } catch (e) {
+      console.error("[store/checkout] Stripe session failed for", order.id, e instanceof Error ? e.message : "unknown");
+      await cancelPendingOrder(admin, order.id);
+      return bad("We couldn't start the card payment. Try again.", 502);
+    }
   }
 
   const { firstName, lastName } = splitName(order.buyer_name);

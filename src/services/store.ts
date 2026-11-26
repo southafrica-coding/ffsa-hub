@@ -181,6 +181,35 @@ export async function createOrder(
   return { data: { order: data as StoreOrder, items: res.data as StoreOrderItem[] }, error: null };
 }
 
+/** Pin the Stripe Checkout session to a pending Stripe order (set once). */
+export async function setStripeSession(supabase: Client, orderId: string, sessionId: string) {
+  return supabase
+    .from("store_orders")
+    .update({ provider_payment_id: sessionId })
+    .eq("id", orderId)
+    .eq("payment_method", "stripe")
+    .eq("status", "pending")
+    .is("provider_payment_id", null)
+    .select("id")
+    .maybeSingle();
+}
+
+/** Record a Stripe webhook event once. A unique-violation (23505) means we've seen it. */
+export async function claimStripeEvent(
+  supabase: Client,
+  e: { id: string; type: string; sessionId: string; orderId: string }
+): Promise<"new" | "duplicate" | "error"> {
+  const { error } = await supabase
+    .from("store_stripe_events")
+    .insert({ event_id: e.id, event_type: e.type, session_id: e.sessionId, order_id: e.orderId });
+  if (!error) return "new";
+  return error.code === "23505" ? "duplicate" : "error";
+}
+
+export async function releaseStripeEvent(supabase: Client, id: string) {
+  return supabase.from("store_stripe_events").delete().eq("event_id", id);
+}
+
 export async function getOrder(supabase: Client, id: string) {
   return supabase.from("store_orders").select("*").eq("id", id).maybeSingle();
 }

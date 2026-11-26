@@ -19,7 +19,7 @@ vi.mock("server-only", () => ({}));
 // ────────────────────────────────────────────────────────────
 const root = path.resolve(__dirname, "../../../..");
 const sql = readFileSync(path.join(root, "supabase/migrations/412_store.sql"), "utf8").replace(/--.*$/gm, "");
-const TABLES = ["store_products", "store_variants", "store_assets", "store_asset_pages", "store_orders", "store_order_items", "store_entitlements", "store_codes", "store_devices", "store_fulfilments"];
+const TABLES = ["store_products", "store_variants", "store_assets", "store_asset_pages", "store_orders", "store_order_items", "store_entitlements", "store_codes", "store_devices", "store_fulfilments", "store_stripe_events"];
 const list = (s: string) => s.split(",").map((x) => x.trim().replace(/^public\./, "")).filter(Boolean);
 
 /** Replay every GRANT / REVOKE ... ON TABLE in 412, in order. Starts from
@@ -88,6 +88,7 @@ describe("412 table privileges (pattern of 351_fleet_rls.sql)", () => {
     expect([...p.authenticated.store_codes]).toEqual(["SELECT"]);
     expect([...p.authenticated.store_order_items]).toEqual(["SELECT"]);
     expect([...p.authenticated.store_orders].sort()).toEqual(["SELECT", "UPDATE"]);
+    expect([...p.authenticated.store_stripe_events]).toEqual([]); // the Stripe webhook's dedupe log: service role only
     for (const t of TABLES) {
       expect([...p.anon[t]]).toEqual(["store_products", "store_variants"].includes(t) ? ["SELECT"] : []);
       expect([...p.PUBLIC[t]]).toEqual([]);

@@ -70,7 +70,7 @@ export function createMemoryDb(
     function checkUnique(row: Row, except?: Row) {
       for (const cols of opts.unique?.[table] ?? []) {
         const clash = t(table).find((r) => r !== except && cols.every((c) => r[c] != null && r[c] === row[c]));
-        if (clash) return { message: `duplicate key value violates unique constraint (${cols.join(",")})` };
+        if (clash) return { code: "23505", message: `duplicate key value violates unique constraint (${cols.join(",")})` };
       }
       return null;
     }

@@ -18,7 +18,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       <footer className="border-t border-ink">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-tertiary)] md:flex-row md:justify-between md:px-8">
           <span>Fire &amp; Fragrance South Africa</span>
-          <span>Prices in rand · Card or EFT</span>
+          <span>Prices in rand · Card or EFT · International cards welcome</span>
         </div>
       </footer>
     </div>
