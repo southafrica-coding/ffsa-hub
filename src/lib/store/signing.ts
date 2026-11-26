@@ -5,11 +5,11 @@
 //   /api/store/page?a=<asset>&p=<page>&v=<viewer>&e=<expiry>&s=<sig>
 // The library route checks the buyer's entitlement and device, then signs
 // one URL per page for PAGE_URL_TTL_SECONDS. The page route verifies the
-// HMAC and expiry only (cheap, cache-friendly) and stamps the watermark for
-// the viewer named in the token. `v` is "preview" for public previews.
+// HMAC and expiry only (cheap, cache-friendly) and serves the clean stored
+// page. `v` is "preview" for public previews, the buyer's email otherwise.
 //
-// The viewer email is inside the signed payload, so a URL can't be edited
-// to drop or change the watermark.
+// The viewer is inside the signed payload, so a preview URL can't be edited
+// into a link to a paid page.
 // ============================================================
 
 import { createHmac, timingSafeEqual } from "node:crypto";

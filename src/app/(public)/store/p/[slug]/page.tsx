@@ -92,7 +92,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
         {kindHasFlipbook(product.kind) && (
           <p className="mt-8 text-[12px] leading-relaxed text-[color:var(--text-tertiary)]">
-            Every page you read carries your email as a light watermark. That keeps it yours; it can&apos;t stop a screenshot, so please don&apos;t share pages.
+            Screenshots can&apos;t be fully prevented, so please don&apos;t share pages.
           </p>
         )}
       </div>

@@ -10,7 +10,7 @@ import { getActiveAsset, isDeviceActive, listEntitlementsFor, listPages } from "
 import { bad, NO_STORE } from "../../../_shared";
 
 // GET /api/store/library/[productId]/pages — the reader's page list: one
-// short-lived signed URL per page, stamped for this buyer. Needs an active
+// short-lived signed URL per page, signed for this buyer. Needs an active
 // entitlement and a registered device (x-store-device header).
 export async function GET(request: Request, { params }: { params: Promise<{ productId: string }> }) {
   const { productId } = await params;

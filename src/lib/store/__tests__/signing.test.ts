@@ -20,7 +20,7 @@ describe("signed page URLs", () => {
     expect(PAGE_URL_TTL_SECONDS).toBeLessThanOrEqual(15 * 60);
   });
 
-  it("can't be edited: another page, another viewer (dropping the watermark), or a later expiry", () => {
+  it("can't be edited: another page, another viewer (preview → paid page), or a later expiry", () => {
     const q = parse(pageUrl({ assetId: ASSET, page: 1, viewer: "r@example.org" }, { now: T0, key: KEY }));
     for (const [k, v] of [["p", "2"], ["v", PREVIEW_VIEWER], ["v", "someone@example.org"], ["e", String(T0 / 1000 + 99999)], ["a", "22222222-2222-4222-8222-222222222222"]]) {
       const edited = new URLSearchParams(q);

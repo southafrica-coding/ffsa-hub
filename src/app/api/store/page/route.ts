@@ -1,14 +1,14 @@
 import { storeAdminClient } from "@/lib/store/db";
 import { verifyPageQuery, PREVIEW_VIEWER } from "@/lib/store/signing";
-import { watermarkPage, watermarkText } from "@/lib/store/pdf/watermark";
 import { getAsset, getPage } from "@/services/store";
 
 export const runtime = "nodejs";
 
-// GET /api/store/page?a&p&v&e&s — one page image, watermarked for the
-// viewer named in the signed token. The token was issued only after an
-// entitlement check (or, for v=preview, only for a preview page — checked
-// again here). Unwatermarked pages never leave the server.
+// GET /api/store/page?a&p&v&e&s — one page image for the flipbook. The
+// token was issued only after an entitlement check (or, for v=preview, only
+// for a preview page — checked again here). The stored WebP is served as
+// is: on-site pages carry no watermark. Only the Print + Digital PDF is
+// stamped with the buyer's email (library/[productId]/pdf).
 export async function GET(request: Request) {
   const verdict = verifyPageQuery(new URL(request.url).searchParams);
   if (!verdict.ok) return new Response(verdict.reason === "expired" ? "Link expired" : "Not found", { status: verdict.reason === "expired" ? 410 : 404 });
@@ -23,13 +23,11 @@ export async function GET(request: Request) {
   const { data: file, error } = await admin.storage.from("store-pages").download(page.path);
   if (error || !file) return new Response("Not found", { status: 404 });
 
-  const label = isPreview ? "Preview · Fire & Fragrance Store" : watermarkText(claim.viewer);
-  const stamped = await watermarkPage(Buffer.from(await file.arrayBuffer()), label);
-  return new Response(new Uint8Array(stamped), {
+  return new Response(new Uint8Array(await file.arrayBuffer()), {
     headers: {
       "Content-Type": "image/webp",
-      // Private: the image carries the reader's email. The reader's service
-      // worker keeps its own copy for offline reading.
+      // Private and only as long as the signed link lives. The reader's
+      // service worker keeps its own copy for offline reading.
       "Cache-Control": `private, max-age=${Math.max(0, claim.expiresAt - Math.floor(Date.now() / 1000))}`,
       "Content-Disposition": "inline",
       "X-Robots-Tag": "noindex",

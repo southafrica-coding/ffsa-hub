@@ -1,7 +1,7 @@
 // The PDF upload flow end to end: sign-url API → the file PUT straight to
 // Storage (a local stand-in speaking Supabase's storage HTTP API, driven by
-// the real supabase-js client) → complete → background render → watermarked
-// page and Print + Digital PDF for a buyer.
+// the real supabase-js client) → complete → background render → a clean
+// page for the flipbook and the watermarked Print + Digital PDF for a buyer.
 //
 // CI runs it on the small fake sample. To run it on a real PDF locally
 // (never committed, never required in CI):
@@ -215,28 +215,47 @@ describe("upload rules", () => {
 describe("flipbook spreads", () => {
   const P = { w: 1080, h: 1527 };
   const L = { w: 1620, h: 1146 };
+  const whole = (...is: number[]) => is.map((i) => [{ i }]);
   it("phones show one page at a time", () => {
-    expect(buildSpreads([P, P, P], false)).toEqual([[0], [1], [2]]);
+    expect(buildSpreads([P, P, P], "narrow")).toEqual(whole(0, 1, 2));
+  });
+  it("phones split a landscape spread into its left then right half, in reading order", () => {
+    expect(buildSpreads([P, L, P, L, L], "narrow")).toEqual([
+      [{ i: 0 }],
+      [{ i: 1, half: "left" }],
+      [{ i: 1, half: "right" }],
+      [{ i: 2 }],
+      [{ i: 3, half: "left" }],
+      [{ i: 3, half: "right" }],
+      [{ i: 4, half: "left" }],
+      [{ i: 4, half: "right" }],
+    ]);
+  });
+  it("tablets show one page at a time and keep landscape spreads whole", () => {
+    expect(buildSpreads([P, L, P], "medium")).toEqual(whole(0, 1, 2));
   });
   it("wide screens pair portrait pages after the cover", () => {
-    expect(buildSpreads([P, P, P, P, P], true)).toEqual([[0], [1, 2], [3, 4]]);
+    expect(buildSpreads([P, P, P, P, P], "wide")).toEqual([[{ i: 0 }], [{ i: 1 }, { i: 2 }], [{ i: 3 }, { i: 4 }]]);
   });
-  it("a landscape page (a spread saved as one page) always stands alone", () => {
-    expect(buildSpreads([P, L, L, L, P], true)).toEqual([[0], [1], [2], [3], [4]]);
-    expect(buildSpreads([P, P, L, P, P], true)).toEqual([[0], [1], [2], [3, 4]]);
+  it("on wide screens a landscape page (a spread saved as one page) always stands alone, whole", () => {
+    expect(buildSpreads([P, L, L, L, P], "wide")).toEqual(whole(0, 1, 2, 3, 4));
+    expect(buildSpreads([P, P, L, P, P], "wide")).toEqual([[{ i: 0 }], [{ i: 1 }], [{ i: 2 }], [{ i: 3 }, { i: 4 }]]);
   });
 });
 
 describe("signed upload → render → watermark, on the small sample", () => {
-  it("renders, activates, stamps the buyer's page and builds their low-res PDF", { timeout: 120_000 }, async () => {
+  it("renders, activates, serves the buyer a clean page and builds their watermarked low-res PDF", { timeout: 120_000 }, async () => {
     const pdf = new Blob([readFileSync(SAMPLE)], { type: "application/pdf" });
     const { assetId, final } = await uploadAndRender(pdf, "sample-review.pdf");
     expect(final).toMatchObject({ status: "ready", pages: 4, error: null });
     expect(db.table("store_assets")[0]).toMatchObject({ is_active: true });
     expect(db.table("store_asset_pages").filter((p) => p.is_preview).map((p) => p.page_no)).toEqual([1, 2, 3]);
 
-    const stamped = await buyerPage(assetId, 1);
-    expect((await sharp(stamped).metadata()).format).toBe("webp");
+    // On-site pages carry no watermark: the route serves the stored WebP byte for byte.
+    const served = await buyerPage(assetId, 1);
+    expect((await sharp(served).metadata()).format).toBe("webp");
+    const stored = db.table("store_asset_pages").find((p) => p.page_no === 1) as { path: string };
+    expect(served.equals(readFileSync(storage.file("store-pages", stored.path)))).toBe(true);
 
     who = BUYER;
     grants = [];
@@ -268,7 +287,7 @@ describe.skipIf(!LOCAL_PDF)("signed upload → render → watermark, on a real l
     for (const p of pages) pageBytes += statSync(storage.file("store-pages", p.path)).size;
 
     const t1 = Date.now();
-    for (const n of [1, 2, Math.min(3, pages.length)]) writeFileSync(path.join(out, `watermarked-p${n}.webp`), await buyerPage(assetId, n));
+    for (const n of [1, 2, Math.min(3, pages.length)]) writeFileSync(path.join(out, `served-p${n}.webp`), await buyerPage(assetId, n));
     const wmMs = (Date.now() - t1) / 3;
 
     who = BUYER;
@@ -290,7 +309,7 @@ describe.skipIf(!LOCAL_PDF)("signed upload → render → watermark, on a real l
       signedUploadMs: uploadMs,
       renderMs,
       renderedPagesBytes: pageBytes,
-      watermarkPerPageMs: Math.round(wmMs),
+      servePerPageMs: Math.round(wmMs),
       buyerPdfMs: pdfMs,
       buyerPdfBytes: buyerPdfBytes.length,
       peakRssMB: Math.round(peak / 1e6),

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Flipbook, type FlipPage } from "./flipbook";
 
 // The product page's free preview: the pages Media marked as preview,
-// stamped "Preview". Signed links expire, so refetch if one fails.
+// served clean. Signed links expire, so refetch if one fails.
 export function PreviewFlipbook({ slug, fallback }: { slug: string; fallback: React.ReactNode }) {
   const [pages, setPages] = useState<FlipPage[] | null>(null);
   const [total, setTotal] = useState<number | undefined>();
