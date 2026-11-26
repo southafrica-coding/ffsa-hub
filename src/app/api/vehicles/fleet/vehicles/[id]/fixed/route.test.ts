@@ -114,6 +114,10 @@ describe("Mark as fixed", () => {
     rpc = "fail";
     const res = await POST(req({ itemId: "m25-balljoints", date: "2026-11-22", by: "Motech", work: "x" }), params);
     expect(res.status).toBe(500);
+    // The person sees what didn't happen, not the database's message (Jack's review of #723).
+    const body = await res.json();
+    expect(body.error).toBe("Couldn’t mark it fixed. Nothing was changed: try again.");
+    expect(body.error).not.toContain("condition couldn't be saved");
     expect(fixes).toHaveLength(0);
     expect(writes).toHaveLength(0);
     expect(removed).toHaveLength(0);

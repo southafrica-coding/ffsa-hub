@@ -91,3 +91,41 @@ describe("with VEHICLE_RENTAL_MESSAGES_ENABLED off", () => {
     expect(sent.length).toBeGreaterThan(0);
   });
 });
+
+// Jack's review of #727: a failed save says what didn't happen, never the database's message.
+describe("when a save fails", () => {
+  const DB_ERR = "permission denied for table vehicle_bookings";
+  const failing = {
+    ...db,
+    from: (t: string) => {
+      const q = db.from(t);
+      if (t !== "vehicle_bookings") return q;
+      return new Proxy(q, {
+        get(target, p) {
+          if (p === "update") {
+            const res = { error: { message: DB_ERR } };
+            const chain: Record<string, unknown> = { then: (ok: (v: unknown) => unknown) => Promise.resolve(res).then(ok) };
+            chain.eq = () => chain;
+            chain.is = () => chain;
+            return () => chain;
+          }
+          const v = (target as Record<string | symbol, unknown>)[p];
+          return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+        },
+      });
+    },
+  };
+
+  it("the early-return decision", async () => {
+    expect((await requestEarlyReturn(db, B, COORD, "2026-12-03", "2026-12-02")).ok).toBe(true);
+    const r = await decideEarlyReturn(failing, B, OTHER, true);
+    expect(r).toEqual({ ok: false, error: "Couldn’t save the decision on the early return. Nothing was changed: try again." });
+  });
+
+  it("Returned", async () => {
+    const r = await markReturned(failing, B, OTHER);
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error).toBe("Couldn’t mark it returned. Nothing was changed: try again.");
+    expect(JSON.stringify(r)).not.toContain(DB_ERR);
+  });
+});

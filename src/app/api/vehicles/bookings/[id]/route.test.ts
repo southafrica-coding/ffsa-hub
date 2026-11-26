@@ -53,6 +53,22 @@ describe("dates-only edit", () => {
     expect(updates[0]).toMatchObject({ return_date: "2026-12-08" });
   });
 
+  it("a purpose-only change to International Team checks the hold after it (Jack's review of #723)", async () => {
+    held = ["kombi"];
+    const res = await patch({ purpose: "international_team" });
+    expect(res.status).toBe(409);
+    // Due back Fri 4 Dec: the hold runs Sat 5 to Wed 9 Dec, so the window reaches the 9th.
+    expect(windows).toEqual([["2026-12-01", "2026-12-09"]]);
+    expect(updates).toHaveLength(0);
+  });
+
+  it("…and goes through when the vehicle is free through the hold", async () => {
+    const res = await patch({ purpose: "international_team" });
+    expect(res.status).toBe(200);
+    expect(windows).toEqual([["2026-12-01", "2026-12-09"]]);
+    expect(updates[0]).toMatchObject({ purpose: "international_team" });
+  });
+
   it("an edit that doesn't touch the dates doesn't check", async () => {
     held = ["kombi"];
     const res = await patch({ booking_name: "Youth camp" });

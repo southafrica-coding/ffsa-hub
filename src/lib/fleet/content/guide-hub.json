@@ -421,6 +421,10 @@
     [
       "2026-11-25",
       "No more locknut keys: FFSA’s vehicles don’t have locking wheel nuts, so the checklist help, the Guide and the in-car guide no longer mention them. The points are now “Keys and remote returned” and “All wheel nuts present”."
+    ],
+    [
+      "2026-11-26",
+      "If Mark as fixed, Returned, an early return or releasing a hold can’t be saved, the message now says plainly that nothing was changed and to try again."
     ]
   ]
 }

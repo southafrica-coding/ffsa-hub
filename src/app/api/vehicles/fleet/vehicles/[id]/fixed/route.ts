@@ -12,6 +12,13 @@ import { getFleetVehicle, insertFleetFix, isMissingFunction, markFleetFixed, rem
 // Body: { itemId, date, by, work }. The point goes back to OK as of `date`, with who fixed
 // it and what was done; the next inspection that checks it overrides it as usual. The fix
 // itself is kept for good in fleet_fixes (358), for the vehicle's History and its report.
+// A 500 says what didn't happen, not the database's own message (Jack's review of #723):
+// the detail goes to the server log.
+function saveFailed(step: string, e: { message?: string }) {
+  console.error(`[fleet] Mark as fixed failed at ${step}:`, e?.message);
+  return NextResponse.json({ error: "Couldn’t mark it fixed. Nothing was changed: try again." }, { status: 500 });
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await fleetAuth("manage");
   if (!auth.ok) return auth.response;
@@ -22,7 +29,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!itemId || itemId.length > 60) return bad("Unknown point");
 
   const { data: row, error: getErr } = await getFleetVehicle(auth.supabase, id);
-  if (getErr) return NextResponse.json({ error: getErr.message }, { status: 500 });
+  if (getErr) return saveFailed("read_vehicle", getErr);
   const details: any = row && (Array.isArray(row.details) ? row.details[0] : row.details);
   if (!details) return bad("Unknown vehicle", 404);
   const condition: Record<string, ConditionEntry> = details.condition || {};
@@ -43,7 +50,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     was: f.was,
     entry: r.entry as unknown as Record<string, unknown>,
   });
-  if (rpcErr && !isMissingFunction(rpcErr)) return NextResponse.json({ error: rpcErr.message }, { status: 500 });
+  if (rpcErr && !isMissingFunction(rpcErr)) return saveFailed("mark_fixed", rpcErr);
 
   if (rpcErr) {
     // Until 410 is applied: history first, then the point, undoing the fix if the point fails.
@@ -57,14 +64,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       was: f.was,
       recorded_by: auth.user.id,
     });
-    if (fixErr) return NextResponse.json({ error: fixErr.message }, { status: 500 });
+    if (fixErr) return saveFailed("insert_fix", fixErr);
     const { error } = await updateFleetVehicleDetails(auth.supabase, id, { condition: { ...condition, [itemId]: r.entry }, updated_by: auth.user.id });
     if (error) {
       if (fix?.id) {
         const { error: undoErr } = await removeUnfinishedFleetFix(createAdminClient(), fix.id);
         if (undoErr) console.error("[fleet] couldn't remove an unfinished fix", fix.id, undoErr.message);
       }
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return saveFailed("update_condition", error);
     }
   }
   await logTime(auth.supabase, auth.user.id, { kind: "workshop", vehicleId: id, mins: 1 });

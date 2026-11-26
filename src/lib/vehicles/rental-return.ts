@@ -252,7 +252,7 @@ export async function markReturned(admin: Client, bookingId: string, userId: str
   if (b.status !== "approved") return { ok: false, error: `This booking is ${b.status}.` };
   if (!b.returned_at) {
     const { error } = await admin.from("vehicle_bookings").update({ returned_at: new Date().toISOString(), returned_by: userId }).eq("id", bookingId).is("returned_at", null);
-    if (error) return { ok: false, error: error.message };
+    if (error) return saveFailed("Couldn’t mark it returned", error);
   }
   const by = await nameOf(admin, userId);
   await refreshRentalAlerts(admin, bookingId, { by });
@@ -297,13 +297,21 @@ export async function requestEarlyReturn(admin: Client, bookingId: string, userI
     .from("vehicle_bookings")
     .update({ early_return_date: date, early_return_status: "requested", early_return_requested_by: userId, early_return_requested_at: new Date().toISOString() })
     .eq("id", bookingId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return saveFailed("Couldn’t send the early-return request", error);
   // A new request replaces an older one: re-open the coordinator's message.
   await admin.from("vehicle_booking_slack_alerts").delete().eq("vehicle_booking_id", bookingId).eq("kind", "early-return");
   const fresh = rentalMessagesOn() ? await loadReturnBooking(admin, bookingId) : null;
   if (fresh && process.env.SLACK_BOT_TOKEN) await postTracked(admin, bookingId, "early-return", earlyReturnMessage(fresh, await nameOf(admin, userId)));
   return { ok: true, message: `Asked. The Vehicle Coordinator will confirm returning it on ${fmtLong(date)}.` };
 }
+
+// The person sees what didn't happen, not the database's message (Jack's review of #723);
+// the detail goes to the server log.
+function saveFailed(what: string, e: { message?: string }): Result {
+  console.error(`[vehicles] ${what}:`, e?.message);
+  return { ok: false, error: `${what}. Nothing was changed: try again.` };
+}
+const decisionFailed = (e: { message?: string }) => saveFailed("Couldn’t save the decision on the early return", e);
 
 /** The coordinator approves (the due-back day moves) or will call them. */
 export async function decideEarlyReturn(admin: Client, bookingId: string, userId: string, approve: boolean): Promise<Result> {
@@ -323,11 +331,11 @@ export async function decideEarlyReturn(admin: Client, bookingId: string, userId
   if (approve) {
     const from = b.return_date;
     const { error } = await admin.from("vehicle_bookings").update({ return_date: b.early_return_date, early_return_status: "approved" }).eq("id", bookingId);
-    if (error) return { ok: false, error: error.message };
+    if (error) return decisionFailed(error);
     if (send) await notifyVehicleRequester({ bookingId, kind: "changed", changes: [`Due back: ${fmtLong(from)} → ${fmtLong(b.early_return_date)}, before 12:00 (early return approved)`], sentBy: userId });
   } else {
     const { error } = await admin.from("vehicle_bookings").update({ early_return_status: "declined" }).eq("id", bookingId);
-    if (error) return { ok: false, error: error.message };
+    if (error) return decisionFailed(error);
     if (send) await notifyVehicleRequester({ bookingId, kind: "message", note: `About returning ${b.booking_name} early: ${by} will call you to arrange it. Until then it's still due back ${fmtLong(b.return_date)}, before 12:00.`, sentBy: userId });
   }
   await refreshRentalAlerts(admin, bookingId, { by });
@@ -356,7 +364,7 @@ export async function releaseHold(
     .from("vehicle_bookings")
     .update({ hold_released_at: new Date().toISOString(), hold_released_by: userId, hold_release_note: note })
     .eq("id", bookingId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return saveFailed("Couldn’t release the hold", error);
   await refreshRentalAlerts(admin, bookingId);
   return { ok: true };
 }
