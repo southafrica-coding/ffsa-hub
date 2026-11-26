@@ -6,7 +6,8 @@
 -- reject those rows), unless the session first runs
 --   SET song_library.rollback_drops_new_version = 'yes';
 -- in which case it deletes them and RAISEs a NOTICE with the count (and
--- the ids when there are 50 or fewer). They are send records: once
+-- the ids when there are 50 or fewer; a flagged run with nothing to
+-- delete reports 'deleted 0'). They are send records: once
 -- deleted, a re-applied 422 could DM those people again for the same
 -- versions.
 -- Export before this runs. From psql:
@@ -19,20 +20,25 @@ DO $guard$
 DECLARE
   n bigint;
   ids uuid[];
+  flagged boolean := COALESCE(current_setting('song_library.rollback_drops_new_version', true), '') = 'yes';
 BEGIN
   IF to_regclass('public.song_library_notifications') IS NOT NULL THEN
     EXECUTE $q$SELECT count(*) FROM public.song_library_notifications WHERE kind = 'new_version'$q$ INTO n;
-    IF n > 0 THEN
-      IF COALESCE(current_setting('song_library.rollback_drops_new_version', true), '') <> 'yes' THEN
-        RAISE EXCEPTION '422 rollback refused: % new_version notification(s) exist. Export them, then SET song_library.rollback_drops_new_version = ''yes'' in this session to delete them.', n
-          USING ERRCODE = '55000';
-      END IF;
+    IF n > 0 AND NOT flagged THEN
+      RAISE EXCEPTION '422 rollback refused: % new_version notification(s) exist. Export them, then SET song_library.rollback_drops_new_version = ''yes'' in this session to delete them.', n
+        USING ERRCODE = '55000';
+    END IF;
+    IF flagged THEN
+      -- array_agg over no rows is NULL; COALESCE so 0 rows reports 0.
       EXECUTE $q$WITH d AS (DELETE FROM public.song_library_notifications WHERE kind = 'new_version' RETURNING id)
-                 SELECT array_agg(id ORDER BY id) FROM d$q$ INTO ids;
-      IF cardinality(ids) <= 50 THEN
-        RAISE NOTICE '422 rollback: deleted % new_version notification(s): %', cardinality(ids), array_to_string(ids, ', ');
+                 SELECT COALESCE(array_agg(id ORDER BY id), '{}'::uuid[]) FROM d$q$ INTO ids;
+      n := cardinality(ids);
+      IF n = 0 THEN
+        RAISE NOTICE '422 rollback: deleted 0 new_version notification(s)';
+      ELSIF n <= 50 THEN
+        RAISE NOTICE '422 rollback: deleted % new_version notification(s): %', n, array_to_string(ids, ', ');
       ELSE
-        RAISE NOTICE '422 rollback: deleted % new_version notification(s) (ids not listed, more than 50)', cardinality(ids);
+        RAISE NOTICE '422 rollback: deleted % new_version notification(s) (ids not listed, more than 50)', n;
       END IF;
     END IF;
   END IF;

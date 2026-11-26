@@ -362,10 +362,23 @@ describe("rollback 422 reports what it deletes", () => {
     expect(r422).toMatch(
       /DELETE FROM public\.song_library_notifications WHERE kind = 'new_version' RETURNING id/,
     );
-    expect(r422).toMatch(/cardinality\(ids\) <= 50/);
+    expect(r422).toMatch(/n <= 50/);
     expect(r422).toMatch(
       /RAISE NOTICE '422 rollback: deleted % new_version notification\(s\): %'/,
     );
     expect(r422).toMatch(/ids not listed, more than 50/);
+  });
+
+  it("reports 'deleted 0' when a flagged run has nothing to delete", () => {
+    // array_agg over no rows is NULL, so it must be coalesced (and the
+    // count taken from the array), or 0 rows falls into the > 50 branch.
+    expect(r422).toMatch(
+      /COALESCE\(array_agg\(id ORDER BY id\), '\{\}'::uuid\[\]\)/,
+    );
+    expect(r422).toMatch(/n := cardinality\(ids\);\s+IF n = 0 THEN/);
+    expect(r422).toContain(
+      "RAISE NOTICE '422 rollback: deleted 0 new_version notification(s)';",
+    );
+    expect(r422).not.toMatch(/cardinality\(ids\) <= 50/);
   });
 });
