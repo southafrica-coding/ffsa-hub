@@ -17,6 +17,7 @@ const h = vi.hoisted(() => {
     canManage: true,
     canRead: true,
     tables: {} as Record<string, HRow[]>,
+    emails: [] as Array<{ stage: string; staff: { email: string | null } }>,
   };
 
   function read(row: HRow, path: string): unknown {
@@ -90,7 +91,9 @@ vi.mock("@/lib/auth/application-expiry", () => ({
   APPLICATIONS_EXPIRED_MESSAGE: "These applications have expired",
 }));
 vi.mock("@/lib/email/send-staff-assignment", () => ({
-  sendStaffAssignmentEmails: async () => {},
+  sendStaffAssignmentEmails: async (opts: { stage: string; staff: { email: string | null } }) => {
+    h.state.emails.push(opts);
+  },
 }));
 
 import { PUT } from "./route";
@@ -122,6 +125,7 @@ beforeEach(() => {
   h.state.user = { id: "actor" };
   h.state.canManage = true;
   h.state.canRead = true;
+  h.state.emails = [];
 
   const amy = person("amy", "Amy");
   const ben = person("ben", "Ben");
@@ -156,6 +160,7 @@ beforeEach(() => {
       { user_id: "evan", program_id: PROGRAM_B, users: evan },
     ],
     application_responses: [responseRow],
+    enrollments: [],
     audit_logs: [],
   };
 });
@@ -224,5 +229,116 @@ describe("PUT /api/schools/applications/responses/assign-staff", () => {
     h.state.canManage = false;
     expect((await put("amy")).status).toBe(403);
     expect(assigned()).toBeNull();
+  });
+});
+
+describe("Assigned keeps Walking with in step", () => {
+  function enrolment(overrides: Row = {}): Row {
+    const row: Row = {
+      id: "enr-a",
+      user_id: "student",
+      program_id: PROGRAM_A,
+      assigned_staff_id: null,
+      removed_at: null,
+      staff_viewed_at: "2026-11-01T00:00:00Z",
+      ...overrides,
+    };
+    h.state.tables.enrollments.push(row);
+    return row;
+  }
+
+  it("sets Walking with on the same person's enrolment in the same school", async () => {
+    const enr = enrolment();
+    expect((await put("amy")).status).toBe(200);
+    expect(assigned()).toBe("amy");
+    expect(enr.assigned_staff_id).toBe("amy");
+    expect(enr.staff_assigned_by).toBe("actor");
+    expect(enr.staff_viewed_at).toBeNull();
+    expect(h.state.tables.audit_logs).toContainEqual(
+      expect.objectContaining({
+        action: "assign_enrollment_staff",
+        resource_id: "enr-a",
+        changes: expect.objectContaining({ synced_from: "application", new_staff_id: "amy" }),
+      })
+    );
+  });
+
+  it("leaves enrolments in other schools, other people and removed rows alone", async () => {
+    const otherSchool = enrolment({ id: "enr-b", program_id: PROGRAM_B });
+    const otherPerson = enrolment({ id: "enr-c", user_id: "someone-else" });
+    expect((await put("amy")).status).toBe(200);
+    expect(otherSchool.assigned_staff_id).toBeNull();
+    expect(otherPerson.assigned_staff_id).toBeNull();
+
+    h.state.tables.enrollments = [];
+    const removed = enrolment({ removed_at: "2026-10-01T00:00:00Z" });
+    expect((await put("ben")).status).toBe(200);
+    expect(assigned()).toBe("ben");
+    expect(removed.assigned_staff_id).toBeNull();
+  });
+
+  it("still assigns when there is no enrolment, or no linked account", async () => {
+    expect((await put("amy")).status).toBe(200);
+    expect(assigned()).toBe("amy");
+
+    responseRow.user_id = null;
+    const enr = enrolment({ user_id: null });
+    expect((await put("ben")).status).toBe(200);
+    expect(assigned()).toBe("ben");
+    expect(enr.assigned_staff_id).toBeNull();
+  });
+
+  it("replaces a different Walking with (the caller manages this school)", async () => {
+    const enr = enrolment({ assigned_staff_id: "ben" });
+    expect((await put("amy")).status).toBe(200);
+    expect(enr.assigned_staff_id).toBe("amy");
+  });
+
+  it("clears Walking with only when it held the same person", async () => {
+    responseRow.assigned_staff_id = "amy";
+    const enr = enrolment({ assigned_staff_id: "amy" });
+    expect((await put(null)).status).toBe(200);
+    expect(assigned()).toBeNull();
+    expect(enr.assigned_staff_id).toBeNull();
+    expect(enr.staff_assigned_by).toBeNull();
+
+    responseRow.assigned_staff_id = "amy";
+    enr.assigned_staff_id = "ben";
+    expect((await put(null)).status).toBe(200);
+    expect(assigned()).toBeNull();
+    expect(enr.assigned_staff_id).toBe("ben");
+  });
+
+  it("does not sync when the caller is refused on the application", async () => {
+    const enr = enrolment({ assigned_staff_id: "ben" });
+    h.state.canRead = false;
+    expect((await put("amy")).status).toBe(403);
+    expect(enr.assigned_staff_id).toBe("ben");
+
+    h.state.canRead = true;
+    expect((await put("evan")).status).toBe(400);
+    expect(enr.assigned_staff_id).toBe("ben");
+  });
+
+  it("sends one assignment email when Walking with is synced to the same person", async () => {
+    const enr = enrolment();
+    expect((await put("amy")).status).toBe(200);
+    expect(enr.assigned_staff_id).toBe("amy");
+    expect(h.state.emails).toHaveLength(1);
+    expect(h.state.emails[0].stage).toBe("application");
+  });
+
+  it("sends no email when Walking with already held that person", async () => {
+    enrolment({ assigned_staff_id: "amy" });
+    expect((await put("amy")).status).toBe(200);
+    expect(assigned()).toBe("amy");
+    expect(h.state.emails).toHaveLength(0);
+  });
+
+  it("sends no email when clearing", async () => {
+    responseRow.assigned_staff_id = "amy";
+    enrolment({ assigned_staff_id: "amy" });
+    expect((await put(null)).status).toBe(200);
+    expect(h.state.emails).toHaveLength(0);
   });
 });

@@ -9,6 +9,10 @@ import {
   SELF_REFEREE_MESSAGE,
 } from "@/lib/references/self-referee";
 import { redactInterviewNotesForViewer } from "@/lib/schools/interview-review-form";
+import {
+  copyApplicationAssigneeToEnrollment,
+  type StaffAssignment,
+} from "@/lib/schools/staff-assignment-sync";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -364,8 +368,50 @@ export async function removeEnrollmentForApplicant(
  * between "already fine", "created", "restored", "no account to enrol" and
  * "the enrolment write failed". A database error is enroll_failed, never
  * no_account. Call with the service-role client.
+ *
+ * When this call creates or restores the enrolment and the application has
+ * an Assigned staff member, it is copied onto Walking with
+ * (copyApplicationAssigneeToEnrollment). Callers have checked
+ * userCanManageProgram on this program, the enrolment assign route's
+ * permission. An enrolment that was already live keeps its Walking with:
+ * the assign routes keep the two in step, and re-saving "accepted" must not
+ * undo a later change.
  */
 export async function ensureEnrollmentForApplicant(
+  supabase: Client,
+  response: {
+    id: string;
+    user_id: string | null;
+    program_id: string;
+    applicant_email: string | null;
+  } & Partial<StaffAssignment>,
+  actorId: string
+): Promise<{
+  enrollmentId: string | null;
+  outcome: "existing" | "created" | "restored" | "no_account" | "enroll_failed";
+}> {
+  const result = await findOrCreateEnrollmentForApplicant(supabase, response, actorId);
+  if (
+    result.enrollmentId &&
+    (result.outcome === "created" || result.outcome === "restored") &&
+    response.assigned_staff_id
+  ) {
+    // Best effort: a failed copy is logged and never undoes the acceptance.
+    await copyApplicationAssigneeToEnrollment(supabase, {
+      enrollmentId: result.enrollmentId,
+      programId: response.program_id,
+      application: {
+        assigned_staff_id: response.assigned_staff_id,
+        staff_assigned_at: response.staff_assigned_at ?? null,
+        staff_assigned_by: response.staff_assigned_by ?? null,
+      },
+      actorId,
+    });
+  }
+  return result;
+}
+
+async function findOrCreateEnrollmentForApplicant(
   supabase: Client,
   response: { id: string; user_id: string | null; program_id: string; applicant_email: string | null },
   actorId: string
