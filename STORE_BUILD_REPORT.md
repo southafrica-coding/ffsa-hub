@@ -195,6 +195,10 @@ Local outputs (gitignored under `tmp/`): `tmp/store-local-pdf/report.json`, `wat
 
 They were taken with `next dev` against a **local mock** of Supabase's REST and storage endpoints (fake products, your rendered pages). There was no real database and no credentials. None of the pages scrolls sideways at 390 px (checked as 0 px overflow).
 
+### Phones (26 Nov 2026)
+
+Under `md`, the Store admin's products and orders lists are now stacked cards. Each card is a link and shows the same facts as the table row. The tables are still used from `md` up. The sizes-and-stock editor is stacked on phones too. The reader now has a one-line honesty note under the title ("Pages carry your email. Screenshots can't be fully blocked."), so it's visible in the first screen. The full note is still under the flipbook. I re-shot `jack-5-admin.png`, `jack-5c-admin-order.png` and `jack-5d-admin-product.png` at 390 px. The order and product shots show the whole page. All three have 0 px overflow.
+
 ## How Jack tests with this PDF
 
 **Locally, no database needed:**

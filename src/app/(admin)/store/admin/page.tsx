@@ -83,8 +83,27 @@ export default async function StoreAdminPage({ searchParams }: { searchParams: P
       {products.length === 0 ? (
         <p className="px-5 py-6 text-[14px] text-[color:var(--text-secondary)] md:px-8">No products yet.{canManage && " Add the first one with New product."}</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] text-[13px]">
+        <>
+        {/* Phones: one card per product, the whole card a link. The table is md and up. */}
+        <ul className="md:hidden">
+          {products.map((p) => (
+            <li key={p.id} className="border-b border-rule">
+              <Link href={`/store/admin/products/${p.id}`} className="block min-w-0 px-5 py-3.5 active:bg-bone">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="min-w-0 font-semibold leading-snug">{p.title}</span>
+                  <span className="shrink-0 tabular-nums font-semibold">{formatZar(p.price_cents)}</span>
+                </div>
+                <div className="mt-0.5 truncate font-mono text-[10px] text-[color:var(--text-tertiary)]">/store/p/{p.slug}</div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
+                  <StatusPill tone={p.status === "published" ? "good" : p.status === "draft" ? "warn" : "quiet"}>{p.status}</StatusPill>
+                  <span className="text-[color:var(--text-secondary)]">{kindLabel(p.kind)}{p.is_preorder ? " · preorder" : ""}</span>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden md:block">
+          <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-rule text-left">
                 {["Product", "Kind", "Price", "Status"].map((h) => (
@@ -109,14 +128,40 @@ export default async function StoreAdminPage({ searchParams }: { searchParams: P
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <SectionBar title={view === "eft" ? "Waiting on EFT" : view === "pack" ? "To pack or hand over" : "Recent orders"} meta={view ? <Link href="/store/admin" className="underline">ALL ORDERS</Link> : `${orders.length}`} />
       {shown.length === 0 ? (
         <p className="px-5 py-6 text-[14px] text-[color:var(--text-secondary)] md:px-8">No orders here.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-[13px]">
+        <>
+        <ul className="md:hidden">
+          {shown.map((o) => {
+            const f = fulfilmentOf(o);
+            return (
+              <li key={o.id} className="border-b border-rule">
+                <Link href={`/store/admin/orders/${o.id}`} className="block min-w-0 px-5 py-3.5 active:bg-bone">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="font-mono font-bold">{o.reference}</span>
+                    <span className="shrink-0 tabular-nums font-semibold">{formatZar(o.total_cents)}</span>
+                  </div>
+                  <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[13px]">
+                    <span className="min-w-0 truncate">{o.buyer_name}</span>
+                    <span className="shrink-0 font-mono text-[10px] text-[color:var(--text-tertiary)]">{new Date(o.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}</span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-[13px] text-[color:var(--text-secondary)]">{o.store_order_items.map((i) => `${i.quantity > 1 ? `${i.quantity}× ` : ""}${i.title}`).join(", ")}</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <StatusPill tone={o.status === "paid" ? "good" : o.status === "pending" ? "warn" : "quiet"}>{o.status === "pending" && o.payment_method === "eft" ? "EFT due" : o.status}</StatusPill>
+                    {f && <StatusPill tone="quiet">{fulfilmentLabel(f.status)}</StatusPill>}
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="hidden md:block">
+          <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-rule text-left">
                 {["Order", "Buyer", "Items", "Total", "Status"].map((h) => (
@@ -146,6 +191,7 @@ export default async function StoreAdminPage({ searchParams }: { searchParams: P
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

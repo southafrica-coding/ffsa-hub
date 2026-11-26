@@ -187,37 +187,47 @@ export function VariantsEditor({ productId, variants }: { productId: string; var
   return (
     <div className="px-5 py-5 md:px-8">
       {variants.length > 0 && (
-        <table className="mb-4 w-full max-w-[640px] text-[13px]">
-          <thead>
-            <tr className="border-b border-rule text-left">
-              {["Size", "Stock", "Price", ""].map((h) => <th key={h} className="mono-label py-2 pr-3 font-bold">{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
+        <>
+          {/* Phones: one stacked row per size. The table is md and up. */}
+          <ul className="mb-4 border-t border-rule md:hidden">
             {variants.map((v) => (
-              <tr key={v.id} className={cn("border-b border-rule", !v.active && "opacity-50")}>
-                <td className="py-2 pr-3 font-semibold">{v.label}{!v.active && " (hidden)"}</td>
-                <td className="py-2 pr-3">
-                  <Input
-                    type="number"
-                    min={0}
-                    defaultValue={v.stock ?? ""}
-                    placeholder="∞"
-                    className="h-9 w-24 tabular-nums"
-                    onBlur={(e) => {
-                      const val = e.target.value === "" ? null : Math.max(0, Number(e.target.value));
-                      if (val !== v.stock) post({ id: v.id, label: v.label, stock: val });
-                    }}
-                  />
-                </td>
-                <td className="py-2 pr-3 tabular-nums">{v.price_cents == null ? "Product price" : `R ${(v.price_cents / 100).toFixed(2)}`}</td>
-                <td className="py-2 text-right">
-                  <button type="button" onClick={() => remove(v.id)} className="min-h-9 px-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-tertiary)] hover:text-destructive">Remove</button>
-                </td>
-              </tr>
+              <li key={v.id} className={cn("border-b border-rule py-3", !v.active && "opacity-50")}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 font-semibold">{v.label}{!v.active && " (hidden)"}</span>
+                  <span className="shrink-0 text-[13px] tabular-nums">{priceText(v)}</span>
+                </div>
+                <div className="mt-2 flex items-end justify-between gap-3">
+                  <label className="block">
+                    <span className="mono-label mb-1 block">Stock</span>
+                    <StockInput v={v} onSave={(stock) => post({ id: v.id, label: v.label, stock })} />
+                  </label>
+                  <RemoveButton onClick={() => remove(v.id)} />
+                </div>
+              </li>
             ))}
-          </tbody>
-        </table>
+          </ul>
+          <table className="mb-4 hidden w-full max-w-[640px] text-[13px] md:table">
+            <thead>
+              <tr className="border-b border-rule text-left">
+                {["Size", "Stock", "Price", ""].map((h) => <th key={h} className="mono-label py-2 pr-3 font-bold">{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {variants.map((v) => (
+                <tr key={v.id} className={cn("border-b border-rule", !v.active && "opacity-50")}>
+                  <td className="py-2 pr-3 font-semibold">{v.label}{!v.active && " (hidden)"}</td>
+                  <td className="py-2 pr-3">
+                    <StockInput v={v} onSave={(stock) => post({ id: v.id, label: v.label, stock })} />
+                  </td>
+                  <td className="py-2 pr-3 tabular-nums">{priceText(v)}</td>
+                  <td className="py-2 text-right">
+                    <RemoveButton onClick={() => remove(v.id)} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
       <form onSubmit={add} className="flex flex-wrap items-end gap-2">
         <div><span className="mono-label mb-1 block">Size</span><Input required value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} placeholder="M" className="h-10 w-28" /></div>
@@ -227,5 +237,32 @@ export function VariantsEditor({ productId, variants }: { productId: string; var
       </form>
       <p className="mt-2 text-[12px] text-[color:var(--text-tertiary)]">Leave stock empty to stop counting. Preorders ignore stock.</p>
     </div>
+  );
+}
+
+const priceText = (v: StoreVariant) => (v.price_cents == null ? "Product price" : `R ${(v.price_cents / 100).toFixed(2)}`);
+
+function StockInput({ v, onSave }: { v: StoreVariant; onSave: (stock: number | null) => void }) {
+  return (
+    <Input
+      type="number"
+      min={0}
+      defaultValue={v.stock ?? ""}
+      placeholder="∞"
+      aria-label={`Stock for ${v.label}`}
+      className="h-10 w-24 tabular-nums md:h-9"
+      onBlur={(e) => {
+        const val = e.target.value === "" ? null : Math.max(0, Number(e.target.value));
+        if (val !== v.stock) onSave(val);
+      }}
+    />
+  );
+}
+
+function RemoveButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="min-h-11 px-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-tertiary)] hover:text-destructive md:min-h-9">
+      Remove
+    </button>
   );
 }
