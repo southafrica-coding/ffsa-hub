@@ -20,8 +20,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { createMemoryDb, storeRpcs, type MemoryDb } from "../testing/memory-db";
 import { catalogue, IDS } from "../testing/fixtures";
 import { startLocalStorage, type LocalStorage } from "../testing/local-storage";
-import { checkStoredObject, MAX_PDF_BYTES, SIGNED_UPLOAD_TTL_SECONDS, validatePdfUpload } from "../upload";
-import { buildSpreads } from "@/app/(public)/store/_components/flipbook";
+import { checkStoredObject, isAudioPathFor, MAX_AUDIO_BYTES, MAX_PDF_BYTES, SIGNED_UPLOAD_TTL_SECONDS, validateAudioUpload, validatePdfUpload } from "../upload";
+import { hashDeviceId } from "../devices";
 
 vi.mock("server-only", () => ({}));
 
@@ -71,7 +71,7 @@ function seed() {
 }
 
 beforeAll(async () => {
-  storage = await startLocalStorage(path.join(os.tmpdir(), `store-upload-${process.pid}`), { "store-source": MAX_PDF_BYTES });
+  storage = await startLocalStorage(path.join(os.tmpdir(), `store-upload-${process.pid}`), { "store-source": MAX_PDF_BYTES, "store-audio": MAX_AUDIO_BYTES });
   sb = createSupabase(storage.url, "local-test-key", { auth: { persistSession: false } });
 });
 afterAll(async () => {
@@ -212,34 +212,69 @@ describe("upload rules", () => {
   });
 });
 
-describe("flipbook spreads", () => {
-  const P = { w: 1080, h: 1527 };
-  const L = { w: 1620, h: 1146 };
-  const whole = (...is: number[]) => is.map((i) => [{ i }]);
-  it("phones show one page at a time", () => {
-    expect(buildSpreads([P, P, P], "narrow")).toEqual(whole(0, 1, 2));
+describe("background music", () => {
+  const DEVICE = "reader-device-0123456789";
+  const withDevice = (url: string) => new Request(`https://hub.test${url}`, { headers: { "x-store-device": DEVICE } });
+  const pctx = (productId: string) => ({ params: Promise.resolve({ productId }) });
+  const put = (url: string, body: unknown) =>
+    new Request(`https://hub.test${url}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+  it("takes audio files only, up to 20 MB", () => {
+    expect(validateAudioUpload({ filename: "song.mp3", contentType: "audio/mpeg", size: 5_000_000 })).toMatchObject({ ok: true, value: { ext: "mp3" } });
+    expect(validateAudioUpload({ filename: "song.m4a", contentType: "audio/x-m4a", size: 5_000_000 })).toMatchObject({ ok: true, value: { ext: "m4a" } });
+    expect(validateAudioUpload({ filename: "x.pdf", contentType: "application/pdf", size: 10 })).toMatchObject({ ok: false, status: 400 });
+    expect(validateAudioUpload({ filename: "big.wav", contentType: "audio/wav", size: MAX_AUDIO_BYTES + 1 })).toMatchObject({ ok: false, status: 413 });
+    expect(isAudioPathFor(IDS.bundle, `${IDS.bundle}/aaaaaaaa-0000-4000-8000-000000000001.mp3`)).toBe(true);
+    expect(isAudioPathFor(IDS.bundle, `${IDS.review}/aaaaaaaa-0000-4000-8000-000000000001.mp3`)).toBe(false);
+    expect(isAudioPathFor(IDS.bundle, `${IDS.bundle}/../x.mp3`)).toBe(false);
   });
-  it("phones split a landscape spread into its left then right half, in reading order", () => {
-    expect(buildSpreads([P, L, P, L, L], "narrow")).toEqual([
-      [{ i: 0 }],
-      [{ i: 1, half: "left" }],
-      [{ i: 1, half: "right" }],
-      [{ i: 2 }],
-      [{ i: 3, half: "left" }],
-      [{ i: 3, half: "right" }],
-      [{ i: 4, half: "left" }],
-      [{ i: 4, half: "right" }],
-    ]);
+
+  it("uploads straight to the private bucket and serves an entitled reader a signed link; nobody else", async () => {
+    const route = await import("@/app/api/store/admin/products/[id]/audio/route");
+    const library = await import("@/app/api/store/library/[productId]/audio/route");
+    const song = new Blob([Buffer.alloc(4096, 7)], { type: "audio/mpeg" });
+
+    // Staff: sign, PUT to Storage, confirm.
+    const res = await route.POST(post(`/api/store/admin/products/${IDS.bundle}/audio`, { filename: "Worship.mp3", contentType: "audio/mpeg", size: song.size }), ctx(IDS.bundle));
+    expect(res.status).toBe(200);
+    const s = await res.json();
+    expect(s.bucket).toBe("store-audio");
+    expect(isAudioPathFor(IDS.bundle, s.path)).toBe(true); // our path, not the file name
+    expect((await sb.storage.from(s.bucket).uploadToSignedUrl(s.path, s.token, song, { contentType: "audio/mpeg" })).error).toBeNull();
+    // A path for another product is refused.
+    expect((await route.PUT(put("/x", { path: s.path }), ctx(IDS.review))).status).toBe(400);
+    expect((await route.PUT(put("/x", { path: s.path }), ctx(IDS.bundle))).status).toBe(200);
+    expect(db.table("store_products").find((p) => p.id === IDS.bundle)?.audio_path).toBe(s.path);
+
+    // Merch has no flipbook, so no music.
+    expect((await route.POST(post("/x", { filename: "a.mp3", contentType: "audio/mpeg", size: 10 }), ctx(IDS.tee))).status).toBe(400);
+    // Not staff.
+    grants = [];
+    who = BUYER;
+    expect((await route.POST(post("/x", { filename: "a.mp3", contentType: "audio/mpeg", size: 10 }), ctx(IDS.bundle))).status).toBe(403);
+
+    // Reader: needs a registered device…
+    expect((await library.GET(withDevice("/x"), pctx(IDS.bundle))).status).toBe(403);
+    db.table("store_devices").push({ id: "dev-1", user_id: BUYER.id, device_hash: hashDeviceId(DEVICE), removed_at: null });
+    const ok = await library.GET(withDevice("/x"), pctx(IDS.bundle));
+    expect(ok.status).toBe(200);
+    const { url } = await ok.json();
+    expect(url.startsWith(storage.url)).toBe(true);
+    expect((await (await fetch(url)).arrayBuffer()).byteLength).toBe(4096);
+    // …and the product in their library.
+    expect((await library.GET(withDevice("/x"), pctx(IDS.review))).status).toBe(403);
+    // Signed out.
+    who = null;
+    expect((await library.GET(withDevice("/x"), pctx(IDS.bundle))).status).toBe(401);
   });
-  it("tablets show one page at a time and keep landscape spreads whole", () => {
-    expect(buildSpreads([P, L, P], "medium")).toEqual(whole(0, 1, 2));
-  });
-  it("wide screens pair portrait pages after the cover", () => {
-    expect(buildSpreads([P, P, P, P, P], "wide")).toEqual([[{ i: 0 }], [{ i: 1 }, { i: 2 }], [{ i: 3 }, { i: 4 }]]);
-  });
-  it("on wide screens a landscape page (a spread saved as one page) always stands alone, whole", () => {
-    expect(buildSpreads([P, L, L, L, P], "wide")).toEqual(whole(0, 1, 2, 3, 4));
-    expect(buildSpreads([P, P, L, P, P], "wide")).toEqual([[{ i: 0 }], [{ i: 1 }], [{ i: 2 }], [{ i: 3 }, { i: 4 }]]);
+
+  it("no music uploaded: the reader gets url null", async () => {
+    const library = await import("@/app/api/store/library/[productId]/audio/route");
+    who = BUYER;
+    db.table("store_devices").push({ id: "dev-1", user_id: BUYER.id, device_hash: hashDeviceId(DEVICE), removed_at: null });
+    const res = await library.GET(withDevice("/x"), pctx(IDS.bundle));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ url: null });
   });
 });
 

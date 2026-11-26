@@ -58,6 +58,20 @@ export async function updateProduct(supabase: Client, id: string, row: Partial<P
     .single();
 }
 
+/** The product's background music path (store-audio bucket), if any. Not in PRODUCT_COLUMNS: only routes that need it read it. */
+export async function getProductAudio(supabase: Client, id: string) {
+  return supabase.from("store_products").select("id, audio_path").eq("id", id).maybeSingle();
+}
+
+export async function setProductAudio(supabase: Client, id: string, audioPath: string | null) {
+  return supabase
+    .from("store_products")
+    .update({ audio_path: audioPath, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id, audio_path")
+    .single();
+}
+
 // ────────────────────────────────────────────────────────────
 // Variants
 // ────────────────────────────────────────────────────────────

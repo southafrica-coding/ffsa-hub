@@ -73,7 +73,7 @@ describe("412 Store migration", () => {
 
   it("keeps every bucket private", () => {
     const buckets = [...code.matchAll(/\('(store-[a-z]+)',\s*'store-[a-z]+',\s*(true|false)/g)];
-    expect(buckets.map((b) => [b[1], b[2]])).toEqual([["store-source", "false"], ["store-pages", "false"], ["store-covers", "false"]]);
+    expect(buckets.map((b) => [b[1], b[2]])).toEqual([["store-source", "false"], ["store-pages", "false"], ["store-covers", "false"], ["store-audio", "false"]]);
     expect(code).toMatch(/SET public\s+= false/);
     expect(code).not.toMatch(/ON storage\.objects/);
   });

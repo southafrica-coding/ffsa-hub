@@ -25,6 +25,8 @@ export type StoreProduct = {
   price_cents: number;
   currency: "ZAR";
   cover_image_url: string | null;
+  /** Optional flipbook music in the private store-audio bucket. Read only where needed (getProductAudio). */
+  audio_path?: string | null;
   subscription_months: number | null;
   ships: boolean;
   allow_delivery: boolean;

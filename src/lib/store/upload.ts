@@ -87,3 +87,65 @@ export function checkStoredObject(
 /** A render that started this long ago and never finished was killed
  *  (function timeout); it may be claimed again. Matches maxDuration. */
 export const RENDER_STALE_MS = 6 * 60 * 1000;
+
+// ────────────────────────────────────────────────────────────
+// Background music (optional, per product)
+// ────────────────────────────────────────────────────────────
+// Same signed, direct-to-storage flow as the PDF (a song can be bigger than
+// Vercel's 4.5 MB body cap), into the PRIVATE store-audio bucket:
+//   1. POST   /api/store/admin/products/[id]/audio  {filename, contentType, size}
+//   2. the browser PUTs the file to Storage
+//   3. PUT    /api/store/admin/products/[id]/audio  {path}  → checks it landed, saves audio_path
+//   DELETE    /api/store/admin/products/[id]/audio          → no music
+// Readers get it from GET /api/store/library/[productId]/audio, a
+// short-lived signed URL, only with an entitlement and a registered device.
+
+/** Largest music file. The store-audio bucket enforces it too (migration 412). */
+export const MAX_AUDIO_BYTES = 20 * 1024 * 1024; // 20 MB
+
+/** How long a reader's signed music link lasts; the reader asks again when it fails. */
+export const AUDIO_URL_TTL_SECONDS = 15 * 60;
+
+/** Audio types we take, and the extension each is stored under (never the uploaded name). */
+export const AUDIO_TYPES: Record<string, string> = {
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "aac",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/wave": "wav",
+  "audio/ogg": "ogg",
+  "audio/webm": "webm",
+};
+
+/** The type Storage is told (its allowed list has no audio/mp3). */
+export const storedAudioType = (contentType: string) => (contentType === "audio/mp3" ? "audio/mpeg" : contentType);
+
+export type AudioUploadRequest = { filename: string; contentType: string; size: number; ext: string };
+
+/** Check the metadata the browser sends before it gets a music upload URL. */
+export function validateAudioUpload(
+  body: unknown
+): { ok: true; value: AudioUploadRequest } | { ok: false; error: string; status: 400 | 413 } {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const filename = typeof b.filename === "string" ? b.filename.trim() : "";
+  const contentType = typeof b.contentType === "string" ? b.contentType.trim().toLowerCase() : "";
+  const size = typeof b.size === "number" ? b.size : NaN;
+  if (!filename || filename.length > 200) return { ok: false, error: "Give the file a name (up to 200 characters).", status: 400 };
+  const ext = AUDIO_TYPES[contentType];
+  if (!ext) return { ok: false, error: "That isn't an audio file. Use MP3, M4A, WAV or OGG.", status: 400 };
+  if (!Number.isInteger(size) || size <= 0) return { ok: false, error: "That file is empty.", status: 400 };
+  if (size > MAX_AUDIO_BYTES) {
+    return { ok: false, error: `That file is ${formatMb(size)}. The limit is ${formatMb(MAX_AUDIO_BYTES)}; export it smaller and try again.`, status: 413 };
+  }
+  return { ok: true, value: { filename, contentType, size, ext } };
+}
+
+/** An audio path this product may point at: `<product id>/<uuid>.<ext>`, as the start route makes them. */
+export function isAudioPathFor(productId: string, path: unknown): path is string {
+  if (typeof path !== "string") return false;
+  const m = /^([0-9a-f-]{36})\/[0-9a-f-]{36}\.(mp3|m4a|aac|wav|ogg|oga|webm)$/.exec(path);
+  return !!m && m[1] === productId;
+}

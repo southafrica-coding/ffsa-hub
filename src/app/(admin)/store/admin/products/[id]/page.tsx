@@ -5,10 +5,11 @@ import { kindHasFlipbook } from "@/lib/store/catalogue";
 import { pageUrl } from "@/lib/store/signing";
 import type { StoreAsset, StoreAssetPage, StoreProduct, StoreVariant } from "@/lib/store/types";
 import { storeAdminClient } from "@/lib/store/db";
-import { getProduct, listAssets, listPages, listVariants } from "@/services/store";
+import { getProduct, getProductAudio, listAssets, listPages, listVariants } from "@/services/store";
+import { AUDIO_URL_TTL_SECONDS } from "@/lib/store/upload";
 import { storeAdminGuard } from "../../guard";
 import { ProductForm } from "../product-form";
-import { CoverUpload, PdfUpload, PreviewPicker, VariantsEditor } from "./editors";
+import { AudioUpload, CoverUpload, PdfUpload, PreviewPicker, VariantsEditor } from "./editors";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,10 @@ export default async function ProductAdminPage({ params }: { params: Promise<{ i
   const { data: pages } = active ? await listPages(supabase, active.id) : { data: [] };
   const { data: me } = await storeAdminClient().auth.admin.getUserById(userId);
   const viewer = me.user?.email ?? "staff";
+  // Staff (store.manage) listen back to the music on a short-lived signed link.
+  const { data: audioRow } = canManage && kindHasFlipbook(product.kind) ? await getProductAudio(supabase, id) : { data: null };
+  const audioPath = (audioRow?.audio_path as string | null | undefined) ?? null;
+  const { data: audioSigned } = audioPath ? await storeAdminClient().storage.from("store-audio").createSignedUrl(audioPath, AUDIO_URL_TTL_SECONDS) : { data: null };
 
   return (
     <div className="ffsa-screen">
@@ -83,6 +88,8 @@ export default async function ProductAdminPage({ params }: { params: Promise<{ i
                   }))}
                 />
               )}
+              <SectionBar title="Background music" meta={audioPath ? "ON" : "NONE"} />
+              <AudioUpload productId={id} current={audioSigned?.signedUrl ? { url: audioSigned.signedUrl } : null} />
             </>
           )}
         </>

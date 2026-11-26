@@ -16,6 +16,18 @@ type State =
 export function Reader({ productId }: { productId: string }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [offline, setOffline] = useState(false);
+  const [musicUrl, setMusicUrl] = useState<string | null>(null);
+
+  // Optional background music: a short-lived signed link, asked for again when it fails (expired).
+  const loadMusic = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/store/library/${productId}/audio`, { headers: { "x-store-device": getDeviceId() } });
+      const body = await res.json().catch(() => ({}));
+      setMusicUrl(res.ok && typeof body.url === "string" ? body.url : null);
+    } catch {
+      setMusicUrl(null);
+    }
+  }, [productId]);
 
   const load = useCallback(async () => {
     try {
@@ -29,10 +41,11 @@ export function Reader({ productId }: { productId: string }) {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) return setState({ kind: "error", message: body.error ?? "This won't open right now. Try again." });
       setState({ kind: "ready", pages: body.pages, pdf: !!body.pdf });
+      loadMusic();
     } catch {
       setState({ kind: "error", message: "You're offline and this hasn't been opened on this device yet." });
     }
-  }, [productId]);
+  }, [productId, loadMusic]);
 
   useEffect(() => {
     registerOfflineReader();
@@ -70,6 +83,8 @@ export function Reader({ productId }: { productId: string }) {
       <Flipbook
         pages={state.pages}
         onNeedRefresh={() => !offline && load()}
+        musicUrl={musicUrl}
+        onMusicExpired={() => !offline && loadMusic()}
         footer={
           state.pdf ? (
             <a href={`/api/store/library/${productId}/pdf`} className="inline-flex min-h-9 items-center gap-1.5 text-ink underline decoration-yellow decoration-2 underline-offset-4">

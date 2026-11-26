@@ -34,7 +34,7 @@
 --     Supabase default-grants ALL to anon/authenticated, so RLS alone is not
 --     the fence.
 --   * Anonymous: published products, their variants and preview page rows.
---   * Storage: three PRIVATE buckets. Nobody but the service role reads them;
+--   * Storage: four PRIVATE buckets. Nobody but the service role reads them;
 --     pages leave only through the watermarking route.
 -- ============================================================
 
@@ -105,6 +105,9 @@ CREATE TABLE IF NOT EXISTS public.store_products (
   price_cents          integer NOT NULL CHECK (price_cents >= 0),
   currency             text NOT NULL DEFAULT 'ZAR' CHECK (currency = 'ZAR'),
   cover_image_url      text,
+  -- Optional background music for the flipbook: a path in the PRIVATE
+  -- store-audio bucket, served to entitled readers on a short-lived signed URL.
+  audio_path           text CHECK (audio_path IS NULL OR audio_path ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.(mp3|m4a|aac|wav|ogg|oga|webm)$'),
   subscription_months  integer CHECK (subscription_months IS NULL OR subscription_months BETWEEN 1 AND 36),
   -- Physical / bundle only
   ships                boolean NOT NULL DEFAULT false,
@@ -534,10 +537,14 @@ GRANT EXECUTE ON FUNCTION public.store_remove_device(uuid, uuid) TO service_role
 --                  (matches MAX_PDF_BYTES in src/lib/store/upload.ts).
 --   store-pages  : rendered WebP pages. Served only watermarked, via route.
 --   store-covers : cover images. Private too; served by /api/store/cover.
+--   store-audio  : optional flipbook background music. 20 MB cap (matches
+--                  MAX_AUDIO_BYTES in src/lib/store/upload.ts). Served to
+--                  entitled readers only, on a short-lived signed URL.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types) VALUES
   ('store-source', 'store-source', false, 52428800,  ARRAY['application/pdf', 'image/jpeg', 'image/png']),
   ('store-pages',  'store-pages',  false, 10485760,  ARRAY['image/webp', 'application/pdf']),
-  ('store-covers', 'store-covers', false, 5242880,   ARRAY['image/jpeg', 'image/png', 'image/webp'])
+  ('store-covers', 'store-covers', false, 5242880,   ARRAY['image/jpeg', 'image/png', 'image/webp']),
+  ('store-audio',  'store-audio',  false, 20971520,  ARRAY['audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/ogg', 'audio/webm'])
 ON CONFLICT (id) DO UPDATE
   SET public             = false,
       file_size_limit    = EXCLUDED.file_size_limit,
@@ -555,7 +562,7 @@ COMMIT;
 --    WHERE relname LIKE 'store\_%' AND relkind = 'r';
 --     -- expect relrowsecurity = true on all ten
 --   SELECT id, public FROM storage.buckets WHERE id LIKE 'store-%';
---     -- expect three rows, public = false
+--     -- expect four rows, public = false
 --   SELECT grantee, table_name, string_agg(privilege_type, ',' ORDER BY privilege_type)
 --     FROM information_schema.role_table_grants
 --    WHERE table_name LIKE 'store\_%' AND grantee IN ('anon', 'authenticated', 'PUBLIC')
