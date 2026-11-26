@@ -16,7 +16,7 @@ const KINDS: Array<{ id: ProductKind; label: string; hint: string }> = [
   { id: "digital", label: "Digital", hint: "Read in the browser flipbook. No download." },
   { id: "subscription", label: "Subscription", hint: "Flipbook access for a set time (12 months = yearly)." },
   { id: "bundle", label: "Print + Digital", hint: "Printed copy, the flipbook, and a low-res PDF." },
-  { id: "physical", label: "Merch", hint: "Sizes, stock, delivery or collect at base." },
+  { id: "physical", label: "Merch", hint: "Sizes, stock, collect at base." },
 ];
 
 export function ProductForm({ product }: { product?: StoreProduct }) {
@@ -30,9 +30,6 @@ export function ProductForm({ product }: { product?: StoreProduct }) {
     status: (product?.status ?? "draft") as ProductStatus,
     price: product ? String(product.price_cents / 100) : "",
     subscription_months: String(product?.subscription_months ?? 12),
-    allow_delivery: product?.allow_delivery ?? false,
-    allow_collect: product?.allow_collect ?? true,
-    delivery_fee: product ? String(product.delivery_fee_cents / 100) : "0",
     is_preorder: product?.is_preorder ?? false,
     preorder_ships_on: product?.preorder_ships_on ?? "",
     allow_gift: product?.allow_gift ?? true,
@@ -47,9 +44,7 @@ export function ProductForm({ product }: { product?: StoreProduct }) {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const price = parseRandsToCents(f.price);
-    const fee = parseRandsToCents(f.delivery_fee || "0");
     if (price === null) return toast.error("Price should be a number of rand, like 250 or 89.50");
-    if (fee === null) return toast.error("Delivery fee should be a number of rand");
     setBusy(true);
     const body = {
       title: f.title,
@@ -60,9 +55,7 @@ export function ProductForm({ product }: { product?: StoreProduct }) {
       status: f.status,
       price_cents: price,
       subscription_months: f.kind === "subscription" ? Number(f.subscription_months) || 12 : null,
-      allow_delivery: f.allow_delivery,
-      allow_collect: f.allow_collect,
-      delivery_fee_cents: fee,
+      allow_collect: ships,
       is_preorder: f.is_preorder,
       preorder_ships_on: f.is_preorder && f.preorder_ships_on ? f.preorder_ships_on : null,
       allow_gift: f.allow_gift,
@@ -140,14 +133,7 @@ export function ProductForm({ product }: { product?: StoreProduct }) {
 
         {ships && (
           <div className="space-y-3 border-l-2 border-ink pl-4">
-            <label className="flex items-center gap-2 text-[14px]"><Checkbox checked={f.allow_collect} onCheckedChange={(v) => set("allow_collect", !!v)} /> Collect at base</label>
-            <label className="flex items-center gap-2 text-[14px]"><Checkbox checked={f.allow_delivery} onCheckedChange={(v) => set("allow_delivery", !!v)} /> Delivery</label>
-            {f.allow_delivery && (
-              <div className="w-40">
-                <Label htmlFor="fee">Delivery fee (R)</Label>
-                <Input id="fee" inputMode="decimal" value={f.delivery_fee} onChange={(e) => set("delivery_fee", e.target.value)} />
-              </div>
-            )}
+            <p className="text-[13px] text-[color:var(--text-secondary)]">Collected from reception at the base. We don&apos;t deliver right now. The buyer gets an email when you mark the order ready for collection.</p>
             <label className="flex items-center gap-2 text-[14px]"><Checkbox checked={f.is_preorder} onCheckedChange={(v) => set("is_preorder", !!v)} /> Preorder (not in stock yet)</label>
             {f.is_preorder && (
               <div className="w-48">

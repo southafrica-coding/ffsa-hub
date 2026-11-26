@@ -8,7 +8,7 @@
 // ============================================================
 
 import { z } from "zod";
-import type { DeliveryAddress, FulfilmentMethod, ItemPurpose, StoreProduct, StoreVariant } from "./types";
+import type { FulfilmentMethod, ItemPurpose, StoreProduct, StoreVariant } from "./types";
 
 export const MAX_CART_LINES = 20;
 export const MAX_PACK_CODES = 500;
@@ -25,14 +25,6 @@ export const cartLineSchema = z.object({
 });
 export type CartLine = z.infer<typeof cartLineSchema>;
 
-export const addressSchema = z.object({
-  line1: z.string().trim().min(3).max(200),
-  line2: z.string().trim().max(200).optional(),
-  city: z.string().trim().min(2).max(100),
-  province: z.string().trim().min(2).max(60),
-  postal_code: z.string().trim().regex(/^\d{4}$/, "Postal code is four digits"),
-});
-
 export const checkoutSchema = z.object({
   lines: z.array(cartLineSchema).min(1, "Your cart is empty").max(MAX_CART_LINES),
   buyer: z.object({
@@ -40,8 +32,8 @@ export const checkoutSchema = z.object({
     email,
     phone: z.string().trim().max(30).optional().nullable(),
   }),
+  // "delivery" still parses so priceCart can refuse it with a clear message.
   fulfilment: z.enum(["none", "delivery", "collect"]).default("none"),
-  address: addressSchema.nullable().optional(),
   paymentMethod: z.enum(["payfast", "eft", "stripe"]),
 });
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
@@ -65,8 +57,8 @@ export type PricedCart = {
   totalCents: number;
   fulfilment: FulfilmentMethod;
   needsShipping: boolean;
-  /** Fulfilment choices every shipping line allows. */
-  fulfilmentOptions: Array<"delivery" | "collect">;
+  /** Always ["collect"] when something needs fulfilling: no delivery for now. */
+  fulfilmentOptions: Array<"collect">;
 };
 
 export type PriceResult = { ok: true; cart: PricedCart } | { ok: false; error: string };
@@ -75,7 +67,6 @@ export function priceCart(
   input: {
     lines: CartLine[];
     fulfilment?: FulfilmentMethod;
-    address?: DeliveryAddress | null;
     buyerEmail?: string;
   },
   catalogue: { products: StoreProduct[]; variants: StoreVariant[] }
@@ -153,35 +144,17 @@ export function priceCart(
     });
   }
 
+  // FFSA doesn't deliver right now: anything that needs fulfilling is
+  // collected at the base. Delivery is refused outright, never priced.
   const shipping = priced.filter((l) => l.ships);
   const needsShipping = shipping.length > 0;
-  const options: Array<"delivery" | "collect"> = [];
-  if (needsShipping) {
-    if (shipping.every((l) => l.product.allow_delivery)) options.push("delivery");
-    if (shipping.every((l) => l.product.allow_collect)) options.push("collect");
-  }
+  const options: Array<"collect"> = needsShipping ? ["collect"] : [];
 
-  let fulfilment: FulfilmentMethod = "none";
-  let deliveryCents = 0;
-  if (needsShipping) {
-    if (options.length === 0) {
-      return { ok: false, error: "These items can't go out together. Check out separately" };
-    }
-    const chosen = input.fulfilment;
-    if (chosen !== "delivery" && chosen !== "collect") {
-      return { ok: false, error: "Choose delivery or collect at base" };
-    }
-    if (!options.includes(chosen)) {
-      return { ok: false, error: chosen === "delivery" ? "Something in your cart is collect at base only" : "Something in your cart is delivery only" };
-    }
-    if (chosen === "delivery") {
-      const parsed = addressSchema.safeParse(input.address ?? null);
-      if (!parsed.success) return { ok: false, error: "Add a delivery address" };
-      // One parcel: the highest delivery fee in the cart, not a sum.
-      deliveryCents = Math.max(...shipping.map((l) => l.product.delivery_fee_cents));
-    }
-    fulfilment = chosen;
+  if (input.fulfilment === "delivery") {
+    return { ok: false, error: "We don't deliver right now. Everything is collected at the base" };
   }
+  const fulfilment: FulfilmentMethod = needsShipping ? "collect" : "none";
+  const deliveryCents = 0;
 
   const subtotalCents = priced.reduce((s, l) => s + l.lineTotalCents, 0);
   return {

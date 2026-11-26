@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   if (pErr || vErr) return bad("We couldn't load the store. Try again.", 500);
 
   const priced = priceCart(
-    { lines: input.lines, fulfilment: input.fulfilment, address: input.address ?? null, buyerEmail: input.buyer.email },
+    { lines: input.lines, fulfilment: input.fulfilment, buyerEmail: input.buyer.email },
     { products: (products ?? []) as StoreProduct[], variants: (variants ?? []) as StoreVariant[] }
   );
   if (!priced.ok) return bad(priced.error, 409);
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       delivery_cents: cart.deliveryCents,
       total_cents: cart.totalCents,
       fulfilment_method: cart.fulfilment,
-      delivery_address: cart.fulfilment === "delivery" ? (input.address ?? null) : null,
+      delivery_address: null,
     },
     cart.lines.map((l) => ({
       product_id: l.product.id,

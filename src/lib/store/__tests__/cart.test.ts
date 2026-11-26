@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { orderReference, priceCart } from "../cart";
-import { ADDRESS, catalogue, IDS } from "../testing/fixtures";
+import { catalogue, IDS } from "../testing/fixtures";
 
 const line = (productId: string, extra: Record<string, unknown> = {}) => ({ productId, quantity: 1, purpose: "self" as const, ...extra });
 
@@ -32,22 +32,33 @@ describe("cart pricing (server-side truth)", () => {
       expect(r.ok && r.cart.totalCents).toBe(27500 * 40);
     });
 
-    it("collect at base is free; delivery adds one fee and needs an address", () => {
+    it("collection only: anything that ships is collected at the base, free", () => {
       const collect = priceCart({ lines: [line(IDS.tee, { variantId: IDS.teeM, quantity: 2 })], fulfilment: "collect" }, catalogue);
-      expect(collect.ok && collect.cart).toMatchObject({ fulfilment: "collect", deliveryCents: 0, totalCents: 50000, needsShipping: true });
-      expect(priceCart({ lines: [line(IDS.tee, { variantId: IDS.teeM })], fulfilment: "delivery" }, catalogue)).toMatchObject({ ok: false, error: "Add a delivery address" });
-      const deliver = priceCart({ lines: [line(IDS.tee, { variantId: IDS.teeM }), line(IDS.bundle)], fulfilment: "delivery", address: ADDRESS }, catalogue);
-      // One parcel: the highest fee, not the sum.
-      expect(deliver.ok && deliver.cart).toMatchObject({ deliveryCents: 9900, subtotalCents: 25000 + 35000, totalCents: 25000 + 35000 + 9900 });
+      expect(collect.ok && collect.cart).toMatchObject({ fulfilment: "collect", deliveryCents: 0, totalCents: 50000, needsShipping: true, fulfilmentOptions: ["collect"] });
+      // No choice to make: an unset or "none" fulfilment on a physical cart is still collect.
+      for (const f of [undefined, "none"] as const) {
+        const r = priceCart({ lines: [line(IDS.tee, { variantId: IDS.teeM }), line(IDS.bundle)], fulfilment: f }, catalogue);
+        expect(r.ok && r.cart).toMatchObject({ fulfilment: "collect", deliveryCents: 0, subtotalCents: 25000 + 35000, totalCents: 25000 + 35000 });
+      }
+      // Print + Digital alone is collected too.
+      const bundle = priceCart({ lines: [line(IDS.bundle)] }, catalogue);
+      expect(bundle.ok && bundle.cart.fulfilment).toBe("collect");
     });
 
-    it("must choose a method, and only one every shipping item allows", () => {
-      expect(priceCart({ lines: [line(IDS.tee, { variantId: IDS.teeM })] }, catalogue)).toMatchObject({ ok: false, error: "Choose delivery or collect at base" });
-      // The hoodie preorder is collect-only.
-      const mixed = priceCart({ lines: [line(IDS.hoodie), line(IDS.tee, { variantId: IDS.teeM })], fulfilment: "delivery", address: ADDRESS }, catalogue);
-      expect(mixed).toMatchObject({ ok: false, error: "Something in your cart is collect at base only" });
-      const ok = priceCart({ lines: [line(IDS.hoodie, { quantity: 2 })], fulfilment: "collect" }, catalogue);
-      expect(ok.ok && ok.cart.fulfilmentOptions).toEqual(["collect"]);
+    it("refuses delivery, even for a product with an old delivery flag and fee", () => {
+      const refused = { ok: false, error: "We don't deliver right now. Everything is collected at the base" };
+      expect(priceCart({ lines: [line(IDS.tee, { variantId: IDS.teeM })], fulfilment: "delivery" }, catalogue)).toEqual(refused);
+      const legacy = { ...catalogue, products: catalogue.products.map((p) => (p.id === IDS.tee ? { ...p, allow_delivery: true, allow_collect: false, delivery_fee_cents: 6500 } : p)) };
+      expect(priceCart({ lines: [line(IDS.tee, { variantId: IDS.teeM })], fulfilment: "delivery" }, legacy)).toEqual(refused);
+      const collected = priceCart({ lines: [line(IDS.tee, { variantId: IDS.teeM })] }, legacy);
+      expect(collected.ok && collected.cart).toMatchObject({ fulfilment: "collect", deliveryCents: 0, totalCents: 25000 });
+      // Digital-only: no fulfilment, and asking for delivery is still refused.
+      expect(priceCart({ lines: [line(IDS.review)], fulfilment: "delivery" }, catalogue)).toEqual(refused);
+    });
+
+    it("digital-only carts stay 'none' with nothing to collect", () => {
+      const r = priceCart({ lines: [line(IDS.review), line(IDS.sub)], fulfilment: "collect" }, catalogue);
+      expect(r.ok && r.cart).toMatchObject({ fulfilment: "none", needsShipping: false, deliveryCents: 0, fulfilmentOptions: [] });
     });
 
     it("preorders ignore stock", () => {

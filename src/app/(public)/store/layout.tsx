@@ -7,7 +7,7 @@ import { StoreHeader } from "./_components/store-header";
 
 export const metadata: Metadata = {
   title: { default: "Store · Fire & Fragrance", template: "%s · Fire & Fragrance Store" },
-  description: "Reviews, books and merch from Fire & Fragrance South Africa. Read in your browser, or have it delivered.",
+  description: "Reviews, books and merch from Fire & Fragrance South Africa. Read in your browser, or collect print and merch at the base.",
 };
 
 export default function StoreLayout({ children }: { children: React.ReactNode }) {

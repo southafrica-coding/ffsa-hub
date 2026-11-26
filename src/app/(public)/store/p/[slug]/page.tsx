@@ -31,9 +31,7 @@ function whatYouGet(p: StoreProduct): string[] {
   if (p.kind === "subscription") out.push(`Everything we publish for ${p.subscription_months === 12 ? "a year" : `${p.subscription_months} months`}`, "Read in your browser, on up to 3 devices");
   if (p.kind === "bundle") out.push("The printed copy", "The digital edition in your browser", "A low-res PDF");
   if (p.kind === "physical" || p.kind === "bundle") {
-    if (p.allow_delivery && p.allow_collect) out.push("Delivered, or collect at the base");
-    else if (p.allow_delivery) out.push("Delivered to you");
-    else out.push("Collect at the base in Potchefstroom");
+    out.push("Collect at the base in Potchefstroom. We'll email you when it's ready");
   }
   if (p.is_preorder && p.preorder_ships_on) out.push(`Ships from ${new Date(`${p.preorder_ships_on}T12:00:00Z`).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}`);
   return out;

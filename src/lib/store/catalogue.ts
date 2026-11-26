@@ -73,9 +73,6 @@ export function normaliseProductInput(
   if (!slug) return { ok: false, error: "The link name needs at least one letter or number" };
 
   const ships = kindShips(p.kind);
-  if (ships && !p.allow_delivery && !p.allow_collect) {
-    return { ok: false, error: "Choose delivery, collect at base, or both" };
-  }
   if (p.kind === "subscription" && !p.subscription_months) {
     return { ok: false, error: "A subscription needs a length (12 months for yearly)" };
   }
@@ -96,9 +93,11 @@ export function normaliseProductInput(
       cover_image_url: p.cover_image_url || null,
       subscription_months: p.kind === "subscription" ? (p.subscription_months ?? 12) : null,
       ships,
-      allow_delivery: ships && p.allow_delivery,
-      allow_collect: ships && p.allow_collect,
-      delivery_fee_cents: ships && p.allow_delivery ? p.delivery_fee_cents : 0,
+      // No delivery for now: everything that ships is collected at the base.
+      // The columns stay for old rows; new saves always write collect only.
+      allow_delivery: false,
+      allow_collect: ships,
+      delivery_fee_cents: 0,
       is_preorder: ships && p.is_preorder,
       preorder_ships_on: ships && p.is_preorder ? (p.preorder_ships_on ?? null) : null,
       allow_gift: p.allow_gift,

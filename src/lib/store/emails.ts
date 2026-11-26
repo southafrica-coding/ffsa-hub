@@ -66,7 +66,7 @@ export function orderConfirmationEmail(order: StoreOrder, items: StoreOrderItem[
     feList(items.map(itemLine)),
     readable ? feButton(links.library, "Open My Library") : "",
     packs ? feParagraph(`Your pack codes are on <a href="${feEsc(links.orders)}">your orders page</a>. Hand one to each reader.`) : "",
-    order.fulfilment_method === "collect" ? feNotice("Collect at base", "We'll email you when it's ready to collect.") : "",
+    order.fulfilment_method === "collect" ? feNotice("Collect at base", "We'll email you when your order is ready to collect. Collect it from reception at the base.") : "",
     order.fulfilment_method === "delivery" ? feNotice("Delivery", "We'll email you when it's on its way.") : "",
   ].join("");
   return { subject: `Your Fire & Fragrance order ${order.reference}`, html: doc("Your order is confirmed", body) };
@@ -104,9 +104,9 @@ export function giftEmail(input: { fromName: string; title: string; code: string
 
 export function fulfilmentEmail(order: Pick<StoreOrder, "reference">, status: FulfilmentStatus, tracking: string | null, ordersUrl: string) {
   const lines: Record<FulfilmentStatus, string> = {
-    preorder: "Your preorder is in. We'll let you know when it ships.",
+    preorder: "Your preorder is in. We'll email you when your order is ready to collect.",
     to_pack: "We're packing your order now.",
-    ready_to_collect: "Your order is ready. Collect it from reception at the base.",
+    ready_to_collect: "Your order is ready to collect. Pick it up from reception at the base in Potchefstroom.",
     shipped: "Your order is on its way.",
     collected: "You've collected your order. Enjoy it.",
     delivered: "Your order has been delivered.",

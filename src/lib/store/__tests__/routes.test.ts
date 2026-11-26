@@ -27,6 +27,8 @@ function requestClient() {
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => requestClient() }));
 vi.mock("@/lib/store/db", () => ({ storeAdminClient: () => db.client }));
+const sendTransactional = vi.hoisted(() => vi.fn(async (email: Record<string, unknown>) => ({ ok: true as const, to: email.to })));
+vi.mock("@/lib/email/send-transactional", () => ({ sendTransactional }));
 vi.mock("@/lib/rate-limit", async (orig) => {
   const real = await orig<typeof import("@/lib/rate-limit")>();
   const limiter = new real.InMemoryRateLimiter();
@@ -159,13 +161,26 @@ describe("checkout", () => {
     expect((await POST(json(body()))).status).toBe(503);
   });
 
-  it("rejects a sold-out size and a cart that needs a fulfilment choice", async () => {
+  it("rejects a sold-out size", async () => {
     sandbox();
     const { POST } = await import("@/app/api/store/checkout/route");
     const soldOut = await POST(json(body({ lines: [{ productId: IDS.tee, variantId: IDS.teeS, quantity: 1, purpose: "self" }] })));
     expect(soldOut.status).toBe(409);
-    const noChoice = await POST(json(body({ fulfilment: "none" })));
-    expect(noChoice.status).toBe(409);
+  });
+
+  it("collection only: refuses delivery, saves a physical cart as collect with no fee or address", async () => {
+    sandbox();
+    const { POST } = await import("@/app/api/store/checkout/route");
+    const address = { line1: "1 Example Street", city: "Exampleton", province: "North West", postal_code: "0000" };
+    const delivery = await POST(json(body({ fulfilment: "delivery", address })));
+    expect(delivery.status).toBe(409);
+    expect((await delivery.json()).error).toBe("We don't deliver right now. Everything is collected at the base");
+    expect(db.table("store_orders")).toHaveLength(0);
+
+    // No choice needed: a physical cart sent as "none" (or with a stray address) is collect.
+    const res = await POST(json(body({ fulfilment: "none", address })));
+    expect(res.status).toBe(200);
+    expect(db.table("store_orders")[0]).toMatchObject({ fulfilment_method: "collect", delivery_cents: 0, delivery_address: null, total_cents: 15000 + 2 * 25000 });
   });
 
   it("EFT: a pending order with the bank reference, until Media marks it paid", async () => {
@@ -193,6 +208,87 @@ describe("checkout", () => {
     expect(db.table("store_entitlements")).toEqual([expect.objectContaining({ email: "buyer@example.org", product_id: IDS.review, includes_pdf: false })]);
     expect((await (await markPaid(json({}), { params: Promise.resolve({ id: out.orderId }) })).json()).outcome).toBe("already");
     expect(db.table("store_entitlements")).toHaveLength(1);
+  });
+});
+
+describe("quote: collection only", () => {
+  const quote = async (body: unknown) => (await import("@/app/api/store/quote/route")).POST(json(body));
+
+  it("a physical or Print + Digital cart is collect at base with no delivery fee", async () => {
+    const res = await quote({ lines: [{ productId: IDS.bundle, quantity: 1, purpose: "self" }, { productId: IDS.tee, variantId: IDS.teeM, quantity: 1, purpose: "self" }] });
+    expect(res.status).toBe(200);
+    const q = await res.json();
+    expect(q).toMatchObject({ ok: true, needsShipping: true, fulfilment: "collect", subtotalCents: 35000 + 25000, totalCents: 35000 + 25000 });
+    expect(q).not.toHaveProperty("deliveryFeeCents");
+    expect(q).not.toHaveProperty("fulfilmentOptions");
+  });
+
+  it("digital-only stays 'none'", async () => {
+    const q = await (await quote({ lines: [{ productId: IDS.review, quantity: 1, purpose: "self" }] })).json();
+    expect(q).toMatchObject({ ok: true, needsShipping: false, fulfilment: "none", totalCents: 15000 });
+  });
+
+  it("refuses delivery", async () => {
+    const res = await quote({ lines: [{ productId: IDS.tee, variantId: IDS.teeM, quantity: 1, purpose: "self" }], fulfilment: "delivery" });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/don't deliver/);
+  });
+});
+
+describe("product admin: merch is collect at base only", () => {
+  it("saves a physical product as collect, ignoring any delivery flag or fee sent", async () => {
+    const { POST } = await import("@/app/api/store/admin/products/route");
+    who = STAFF;
+    grants = ["store.manage"];
+    const res = await POST(json({ title: "Example Cap", kind: "physical", price_cents: 15000, allow_delivery: true, delivery_fee_cents: 9900 }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).product).toMatchObject({ ships: true, allow_collect: true, allow_delivery: false, delivery_fee_cents: 0 });
+  });
+});
+
+describe("ready to collect: the buyer email", () => {
+  const ORDER = "11111111-1111-4111-8111-111111111111";
+  function seedOrder() {
+    db.table("store_orders").push({ id: ORDER, reference: "ST-READY2", buyer_email: "buyer@example.org", buyer_name: "Example Buyer", buyer_user_id: null, status: "paid", payment_method: "payfast", fulfilment_method: "collect", subtotal_cents: 25000, delivery_cents: 0, total_cents: 25000, delivery_address: null });
+    db.table("store_fulfilments").push({ order_id: ORDER, method: "collect", status: "to_pack", tracking: null, notes: null });
+  }
+  const move = async (status: string) => (await import("@/app/api/store/admin/orders/[id]/fulfilment/route")).POST(json({ status }), { params: Promise.resolve({ id: ORDER }) });
+
+  beforeEach(() => {
+    sendTransactional.mockClear();
+    seedOrder();
+    who = STAFF;
+    grants = ["store.manage"];
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://hub.test");
+  });
+
+  it("sends the ready-to-collect email when STORE_EMAILS_ENABLED=1", async () => {
+    vi.stubEnv("STORE_EMAILS_ENABLED", "1");
+    const res = await move("ready_to_collect");
+    expect(res.status).toBe(200);
+    expect(db.table("store_fulfilments")[0]).toMatchObject({ status: "ready_to_collect", updated_by: STAFF.id });
+    expect(sendTransactional).toHaveBeenCalledTimes(1);
+    const sent = sendTransactional.mock.calls[0][0] as { to: string; subject: string; html: string; category: string; sourceId: string };
+    expect(sent).toMatchObject({ to: "buyer@example.org", subject: "Order ST-READY2: ready to collect", category: "store_fulfilment", sourceId: ORDER });
+    expect(sent.html).toContain("Your order is ready to collect");
+    expect(sent.html).toContain("reception at the base");
+  });
+
+  it("skips and logs (no send) when the flag is off", async () => {
+    vi.stubEnv("STORE_EMAILS_ENABLED", "");
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const res = await move("ready_to_collect");
+    expect(res.status).toBe(200);
+    expect(db.table("store_fulfilments")[0]).toMatchObject({ status: "ready_to_collect" });
+    expect(sendTransactional).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith("[store/email] not sent (STORE_EMAILS_ENABLED is off): store_fulfilment");
+    info.mockRestore();
+  });
+
+  it("a collect order can't be marked shipped", async () => {
+    vi.stubEnv("STORE_EMAILS_ENABLED", "1");
+    expect((await move("shipped")).status).toBe(409);
+    expect(sendTransactional).not.toHaveBeenCalled();
   });
 });
 

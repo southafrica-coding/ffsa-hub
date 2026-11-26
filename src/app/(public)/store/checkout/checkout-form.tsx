@@ -17,14 +17,10 @@ type Quote = {
   ok: boolean;
   error: string | null;
   subtotalCents: number;
-  deliveryCents: number;
   totalCents: number | null;
   needsShipping: boolean;
-  fulfilmentOptions: Array<"delivery" | "collect">;
-  deliveryFeeCents: number;
+  fulfilment: "none" | "collect";
 };
-
-const PROVINCES = ["Eastern Cape", "Free State", "Gauteng", "KwaZulu-Natal", "Limpopo", "Mpumalanga", "North West", "Northern Cape", "Western Cape"];
 
 type Method = "payfast" | "eft" | "stripe";
 
@@ -38,8 +34,6 @@ export function CheckoutForm({ methods, cancelled }: { methods: { card: boolean;
   const router = useRouter();
   const { lines, ready, remove, clear } = useCart();
   const [quote, setQuote] = useState<Quote | null>(null);
-  const [fulfilment, setFulfilment] = useState<"none" | "delivery" | "collect">("none");
-  const [address, setAddress] = useState({ line1: "", line2: "", city: "", province: "", postal_code: "" });
   const [buyer, setBuyer] = useState({ name: "", email: "", phone: "" });
   const available = ([methods.card && "payfast", methods.eft && "eft", methods.stripe && "stripe"] as const).filter((m): m is Method => !!m);
   const [method, setMethod] = useState<Method>(available[0] ?? "payfast");
@@ -58,19 +52,16 @@ export function CheckoutForm({ methods, cancelled }: { methods: { card: boolean;
     fetch("/api/store/quote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lines: apiLines, fulfilment, address: fulfilment === "delivery" ? address : null }),
+      body: JSON.stringify({ lines: apiLines }),
       signal: ctrl.signal,
     })
       .then((r) => r.json())
-      .then((q: Quote) => {
-        setQuote(q);
-        if (q.needsShipping && fulfilment === "none" && q.fulfilmentOptions.length === 1) setFulfilment(q.fulfilmentOptions[0]);
-      })
+      .then((q: Quote) => setQuote(q))
       .catch(() => {});
     return () => ctrl.abort();
-  }, [apiLines, fulfilment, address, ready]);
+  }, [apiLines, ready]);
 
-  const shown = quote?.needsShipping && fulfilment === "delivery" ? (quote.subtotalCents ?? 0) + (quote.deliveryFeeCents ?? 0) : (quote?.subtotalCents ?? 0);
+  const shown = quote?.subtotalCents ?? 0;
   const open = available.length > 0;
 
   async function submit(e: React.FormEvent) {
@@ -84,8 +75,7 @@ export function CheckoutForm({ methods, cancelled }: { methods: { card: boolean;
         body: JSON.stringify({
           lines: apiLines,
           buyer: { name: buyer.name, email: buyer.email, phone: buyer.phone || null },
-          fulfilment: quote?.needsShipping ? fulfilment : "none",
-          address: fulfilment === "delivery" ? { ...address, line2: address.line2 || undefined } : null,
+          fulfilment: quote?.needsShipping ? "collect" : "none",
           paymentMethod: method,
         }),
       });
@@ -139,56 +129,13 @@ export function CheckoutForm({ methods, cancelled }: { methods: { card: boolean;
 
         {quote?.needsShipping && (
           <section>
-            <div className="section-bar"><span className="section-bar-title">Getting it to you</span></div>
-            <div className="space-y-4 border-x border-b border-rule p-4">
-              {quote.fulfilmentOptions.length === 0 ? (
-                <Notice tone="bad">These items can&apos;t go out together. Check them out separately.</Notice>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {quote.fulfilmentOptions.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setFulfilment(opt)}
-                      aria-pressed={fulfilment === opt}
-                      className={cn("min-h-16 border px-4 py-3 text-left transition-colors", fulfilment === opt ? "border-ink bg-bone" : "border-rule-strong hover:border-ink")}
-                    >
-                      <span className="block font-mono text-[11px] font-bold uppercase tracking-[0.14em]">{opt === "delivery" ? "Delivery" : "Collect at base"}</span>
-                      <span className="mt-1 block font-sans text-[13px] normal-case tracking-normal text-[color:var(--text-secondary)]">
-                        {opt === "delivery" ? (quote.deliveryFeeCents ? `${formatZar(quote.deliveryFeeCents)} anywhere in SA` : "Free") : "Free · Potchefstroom"}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {fulfilment === "delivery" && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <Field label="Street address">
-                      <input required autoComplete="address-line1" value={address.line1} onChange={(e) => setAddress({ ...address, line1: e.target.value })} className={inputClass} />
-                    </Field>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Field label="Complex, unit (optional)">
-                      <input autoComplete="address-line2" value={address.line2} onChange={(e) => setAddress({ ...address, line2: e.target.value })} className={inputClass} />
-                    </Field>
-                  </div>
-                  <Field label="City or town">
-                    <input required autoComplete="address-level2" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} className={inputClass} />
-                  </Field>
-                  <Field label="Province">
-                    <select required value={address.province} onChange={(e) => setAddress({ ...address, province: e.target.value })} className={inputClass}>
-                      <option value="">Choose…</option>
-                      {PROVINCES.map((p) => (
-                        <option key={p}>{p}</option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Postal code">
-                    <input required inputMode="numeric" pattern="\d{4}" autoComplete="postal-code" value={address.postal_code} onChange={(e) => setAddress({ ...address, postal_code: e.target.value })} className={cn(inputClass, "w-32")} />
-                  </Field>
-                </div>
-              )}
+            <div className="section-bar"><span className="section-bar-title">Collect at base</span><span className="section-bar-meta">FREE</span></div>
+            <div className="border-x border-b border-rule p-4">
+              <div className="border-l-[3px] border-yellow pl-3">
+                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.14em]">Collect from reception at the base</p>
+                <p className="mt-1 text-[14px]">We&apos;ll email you when your order is ready to collect.</p>
+                <p className="mt-1 text-[12px] text-[color:var(--text-tertiary)]">Potchefstroom. We don&apos;t deliver right now.</p>
+              </div>
             </div>
           </section>
         )}
@@ -244,8 +191,8 @@ export function CheckoutForm({ methods, cancelled }: { methods: { card: boolean;
           })}
         </ul>
         <div className="space-y-1.5 border-x border-b border-ink bg-bone px-3 py-4">
-          {quote?.needsShipping && fulfilment === "delivery" && (
-            <div className="flex justify-between text-[13px]"><span>Delivery</span><span className="tabular-nums">{formatZar(quote.deliveryFeeCents)}</span></div>
+          {quote?.needsShipping && (
+            <div className="flex justify-between text-[13px]"><span>Collect at base</span><span>Free</span></div>
           )}
           <div className="flex items-end justify-between">
             <span className="mono-label">Total</span>
@@ -254,7 +201,7 @@ export function CheckoutForm({ methods, cancelled }: { methods: { card: boolean;
         </div>
         <div className="mt-4 space-y-3">
           {error && <Notice tone="bad">{error}</Notice>}
-          <PrimaryButton type="submit" disabled={busy || !open || !quote || quote.items.some((i) => !i.ok) || (quote.needsShipping && fulfilment === "none")}>
+          <PrimaryButton type="submit" disabled={busy || !open || !quote || quote.items.some((i) => !i.ok)}>
             {busy ? "One moment…" : method === "eft" ? "Place order, pay by EFT" : method === "stripe" ? "Pay with international card" : "Pay with SA card"}
           </PrimaryButton>
           <p className="text-center text-[11px] text-[color:var(--text-tertiary)]">Prices in rand. We check every price again before you pay.</p>
