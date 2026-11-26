@@ -26,7 +26,7 @@ export default async function DesignSystemPage() {
         owner="Hub"
         steps={["Open a sample", "Check the type and the rules", "Say if something looks wrong"]}
         action={
-          <button type="button" className="h-9 rounded-md bg-brand-black px-3 text-ui text-bg">
+          <button type="button" className="h-9 rounded-md bg-brand-black px-3 text-ui text-primary-foreground">
             Book
           </button>
         }
