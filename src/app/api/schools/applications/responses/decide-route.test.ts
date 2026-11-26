@@ -8,6 +8,9 @@ const h = vi.hoisted(() => ({
   updates: 0,
   updatedIds: [] as string[],
   enrollCalls: [] as string[],
+  /** What each ensureEnrollmentForApplicant call was given. */
+  enrollArgs: [] as Array<Record<string, unknown>>,
+  assignmentEmails: 0,
   emails: 0,
   notesError: null as string | null,
   previousStatus: "submitted",
@@ -37,6 +40,9 @@ vi.mock("@/lib/supabase/admin", () => ({
               status: h.previousStatus,
               user_id: h.outcomeById[id] === "no_account" || h.enrollOutcome === "no_account" ? null : "user-1",
               applicant_email: "ada@example.com",
+              assigned_staff_id: "amy",
+              staff_assigned_at: "2026-10-01T09:00:00.000Z",
+              staff_assigned_by: "lead",
             })),
             error: null,
           });
@@ -61,6 +67,9 @@ function applicantRow(id: string) {
     program_id: "p1",
     user_id: outcome === "no_account" ? null : "user-1",
     applicant_email: "ada@example.com",
+    assigned_staff_id: "amy",
+    staff_assigned_at: "2026-10-01T09:00:00.000Z",
+    staff_assigned_by: "lead",
     applicant_info: { first_name: "Ada" },
     users: { first_name: "Ada", email: "ada@example.com" },
     programs: { name: "SBI", acceptance_email_subject: null, acceptance_email_body: null },
@@ -94,6 +103,7 @@ vi.mock("@/services/schools", () => ({
   },
   ensureEnrollmentForApplicant: async (_supabase: unknown, response: { id: string }) => {
     h.enrollCalls.push(response.id);
+    h.enrollArgs.push(response);
     const outcome = h.outcomeById[response.id] ?? h.enrollOutcome;
     return {
       enrollmentId: outcome === "no_account" || outcome === "enroll_failed" ? null : "enr-1",
@@ -119,6 +129,11 @@ vi.mock("@/lib/email/send-transactional", () => ({
 vi.mock("@/lib/email/render-program-email", () => ({
   resolveProgramEmail: async () => ({ skip: false, subject: "Hi", html: "<p>Hi</p>" }),
 }));
+vi.mock("@/lib/email/send-staff-assignment", () => ({
+  sendStaffAssignmentEmails: async () => {
+    h.assignmentEmails += 1;
+  },
+}));
 vi.mock("@/lib/email/send-reference-invite", () => ({ sendReferenceInvite: async () => {} }));
 vi.mock("@/lib/email/send-reference-reminder", () => ({ sendReferenceReminder: async () => {} }));
 vi.mock("@/lib/email/reference-email", () => ({ referenceSendConfirmed: () => false }));
@@ -134,6 +149,8 @@ beforeEach(() => {
   h.updates = 0;
   h.updatedIds = [];
   h.enrollCalls = [];
+  h.enrollArgs = [];
+  h.assignmentEmails = 0;
   h.emails = 0;
   h.notesError = null;
   h.previousStatus = "submitted";
@@ -346,5 +363,23 @@ describe("application status changes", () => {
     expect(res.status).toBe(403);
     expect(h.enrollCalls).toEqual([]);
     expect(h.updatedIds).toEqual([]);
+  });
+
+  it("hands Assigned to the enrolment on accept, without an assignment email", async () => {
+    const assignment = {
+      assigned_staff_id: "amy",
+      staff_assigned_at: "2026-10-01T09:00:00.000Z",
+      staff_assigned_by: "lead",
+    };
+    expect((await put({ id: "app1", status: "accepted" })).status).toBe(200);
+    expect(h.enrollArgs).toEqual([expect.objectContaining({ id: "app1", ...assignment })]);
+
+    expect((await put({ ids: ["app2", "app3"], status: "accepted" })).status).toBe(200);
+    expect(h.enrollArgs.slice(1)).toEqual([
+      expect.objectContaining({ id: "app2", ...assignment }),
+      expect.objectContaining({ id: "app3", ...assignment }),
+    ]);
+    expect(h.emails).toBe(3);
+    expect(h.assignmentEmails).toBe(0);
   });
 });

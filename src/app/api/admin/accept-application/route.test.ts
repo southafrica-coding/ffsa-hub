@@ -24,6 +24,10 @@ const h = vi.hoisted(() => ({
   createUsers: 0,
   invites: 0,
   notesError: null as string | null,
+  /** Assigned on the application. */
+  assignedStaffId: null as string | null,
+  copies: [] as Array<{ enrollmentId: string; programId: string; application: unknown }>,
+  assignmentEmails: 0,
 }));
 
 function builder(table: string) {
@@ -106,6 +110,9 @@ function applicationRow() {
     program_id: "p1",
     applicant_email: h.email,
     reviewed_at: h.reviewedAt,
+    assigned_staff_id: h.assignedStaffId,
+    staff_assigned_at: h.assignedStaffId ? "2026-10-01T09:00:00.000Z" : null,
+    staff_assigned_by: h.assignedStaffId ? "lead" : null,
     applicant_info: { first_name: "Ada", last_name: "Smith", email: h.email },
     programs: {
       id: "p1",
@@ -159,6 +166,21 @@ vi.mock("@/lib/email/send-transactional", () => ({
   },
 }));
 
+vi.mock("@/lib/schools/staff-assignment-sync", () => ({
+  copyApplicationAssigneeToEnrollment: async (
+    _admin: unknown,
+    opts: { enrollmentId: string; programId: string; application: unknown }
+  ) => {
+    h.copies.push(opts);
+    return "copied";
+  },
+}));
+vi.mock("@/lib/email/send-staff-assignment", () => ({
+  sendStaffAssignmentEmails: async () => {
+    h.assignmentEmails += 1;
+  },
+}));
+
 import { POST } from "./route";
 
 function post(extra: Record<string, unknown> = {}) {
@@ -190,6 +212,9 @@ describe("POST /api/admin/accept-application email match", () => {
     h.createUsers = 0;
     h.invites = 0;
     h.notesError = null;
+    h.assignedStaffId = null;
+    h.copies = [];
+    h.assignmentEmails = 0;
   });
 
   it("matches an existing user with an escaped case-insensitive email", async () => {
@@ -344,5 +369,43 @@ describe("POST /api/admin/accept-application email match", () => {
     expect(await res.json()).toEqual({ error: "This applicant's email can't be matched safely." });
     expect(h.filters.some((f) => f.table === "users")).toBe(false);
     expect(h.filters.some((f) => f.op === "ilike")).toBe(false);
+  });
+
+  it("copies Assigned onto the new enrolment without an assignment email", async () => {
+    h.assignedStaffId = "amy";
+    const res = await post();
+    expect(res.status).toBe(200);
+    expect(h.copies).toEqual([
+      {
+        enrollmentId: "enr-1",
+        programId: "p1",
+        application: {
+          assigned_staff_id: "amy",
+          staff_assigned_at: "2026-10-01T09:00:00.000Z",
+          staff_assigned_by: "lead",
+        },
+        actorId: "admin",
+      },
+    ]);
+    expect(h.assignmentEmails).toBe(0);
+  });
+
+  it("copies Assigned onto a restored enrolment", async () => {
+    h.assignedStaffId = "amy";
+    h.enrollInsertError = { message: "duplicate key value violates unique constraint" };
+    h.enrollment = { id: "enr-old", removed_at: "2026-09-01T00:00:00Z" };
+    const res = await post();
+    expect(res.status).toBe(200);
+    expect(h.copies.map((c) => c.enrollmentId)).toEqual(["enr-old"]);
+    expect(h.assignmentEmails).toBe(0);
+  });
+
+  it("leaves an enrolment that was already live alone", async () => {
+    h.assignedStaffId = "amy";
+    h.enrollInsertError = { message: "duplicate key value violates unique constraint" };
+    h.enrollment = { id: "enr-old", removed_at: null };
+    const res = await post();
+    expect(res.status).toBe(200);
+    expect(h.copies).toEqual([]);
   });
 });

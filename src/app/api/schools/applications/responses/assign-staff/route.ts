@@ -5,11 +5,13 @@ import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
 import { unassignableContactError } from "@/lib/auth/assignable-contacts";
 import { sendStaffAssignmentEmails } from "@/lib/email/send-staff-assignment";
+import { syncEnrollmentFromApplication } from "@/lib/schools/staff-assignment-sync";
 
 // Assigns (or clears) the point-of-contact staff member for an application
 // response. Fires notification emails to both parties when the assignee
 // actually changes, and resets the staff_viewed_at flag so the new assignee's
-// dashboard shows an unread badge.
+// dashboard shows an unread badge. Walking with on the same person's
+// enrolment in this school follows (see staff-assignment-sync).
 export async function PUT(request: Request) {
   const supabase = await createClient();
   const {
@@ -101,8 +103,21 @@ export async function PUT(request: Request) {
     },
   });
 
-  // Notifications (only when the assignee actually changed and we have a new staff member)
-  if (changed && newStaffId) {
+  // Keep Walking with in step. The enrolment route only requires
+  // userCanManageProgram on this same program, checked above.
+  const sync = await syncEnrollmentFromApplication(adminSupabase, {
+    userId: (existing as unknown as { user_id: string | null }).user_id,
+    programId: responseProgramId,
+    previousStaffId,
+    newStaffId,
+    actorId: authUser.id,
+    canWriteEnrollment: true,
+  });
+
+  // Notifications (only when the assignee actually changed and we have a new
+  // staff member). If Walking with already held this person, they and the
+  // student were told then, so one email is enough.
+  if (changed && newStaffId && sync.outcome !== "same") {
     const { data: staffUser } = await adminSupabase
       .from("users")
       .select("id, first_name, last_name, preferred_name, email")

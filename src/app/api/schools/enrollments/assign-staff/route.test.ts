@@ -14,7 +14,10 @@ const h = vi.hoisted(() => {
   const state = {
     user: { id: "actor" } as { id: string } | null,
     canManage: true,
+    /** userCanReadApplication, per application id: the application route's expiry lock. */
+    readableApplications: new Set<string>(),
     tables: {} as Record<string, HRow[]>,
+    emails: [] as Array<{ stage: string; staff: { email: string | null } }>,
   };
 
   function read(row: HRow, path: string): unknown {
@@ -83,8 +86,14 @@ vi.mock("@/lib/supabase/admin", () => ({
 vi.mock("@/lib/auth/check-schools-access", () => ({
   userCanManageProgram: async () => h.state.canManage,
 }));
+vi.mock("@/lib/auth/application-expiry", () => ({
+  userCanReadApplication: async (_supabase: unknown, id: string) =>
+    h.state.readableApplications.has(id),
+}));
 vi.mock("@/lib/email/send-staff-assignment", () => ({
-  sendStaffAssignmentEmails: async () => {},
+  sendStaffAssignmentEmails: async (opts: { stage: string; staff: { email: string | null } }) => {
+    h.state.emails.push(opts);
+  },
 }));
 
 import { PUT } from "./route";
@@ -105,6 +114,8 @@ let enrollment: Row;
 beforeEach(() => {
   h.state.user = { id: "actor" };
   h.state.canManage = true;
+  h.state.readableApplications = new Set(["app-a"]);
+  h.state.emails = [];
   const amy = person("amy", "Amy");
   const ben = person("ben", "Ben");
   const cara = person("cara", "Cara");
@@ -136,6 +147,7 @@ beforeEach(() => {
       { user_id: "evan", program_id: PROGRAM_B, users: evan },
     ],
     enrollments: [enrollment],
+    application_responses: [],
     audit_logs: [],
   };
 });
@@ -174,5 +186,107 @@ describe("PUT /api/schools/enrollments/assign-staff", () => {
     enrollment.assigned_staff_id = "amy";
     expect((await put(null)).status).toBe(200);
     expect(enrollment.assigned_staff_id).toBeNull();
+  });
+});
+
+describe("Walking with keeps Assigned in step", () => {
+  function application(overrides: Row = {}): Row {
+    const row: Row = {
+      id: "app-a",
+      user_id: "student",
+      program_id: PROGRAM_A,
+      assigned_staff_id: null,
+      staff_viewed_at: "2026-11-01T00:00:00Z",
+      ...overrides,
+    };
+    h.state.tables.application_responses.push(row);
+    return row;
+  }
+
+  it("sets Assigned on the same person's application in the same school", async () => {
+    const app = application();
+    const otherSchool = application({ id: "app-b", program_id: PROGRAM_B });
+    const otherPerson = application({ id: "app-c", user_id: "someone-else" });
+    expect((await put("amy")).status).toBe(200);
+    expect(enrollment.assigned_staff_id).toBe("amy");
+    expect(app.assigned_staff_id).toBe("amy");
+    expect(app.staff_assigned_by).toBe("actor");
+    expect(app.staff_viewed_at).toBeNull();
+    expect(otherSchool.assigned_staff_id).toBeNull();
+    expect(otherPerson.assigned_staff_id).toBeNull();
+    expect(h.state.tables.audit_logs).toContainEqual(
+      expect.objectContaining({
+        action: "assign_application_staff",
+        resource_id: "app-a",
+        changes: expect.objectContaining({ synced_from: "enrollment", new_staff_id: "amy" }),
+      })
+    );
+  });
+
+  it("still assigns when there is no application", async () => {
+    expect((await put("amy")).status).toBe(200);
+    expect(enrollment.assigned_staff_id).toBe("amy");
+  });
+
+  it("replaces a different Assigned when the caller can open the application", async () => {
+    const app = application({ assigned_staff_id: "ben" });
+    expect((await put("amy")).status).toBe(200);
+    expect(app.assigned_staff_id).toBe("amy");
+  });
+
+  it("leaves a different Assigned alone when the application is locked to the caller", async () => {
+    h.state.readableApplications = new Set();
+    const app = application({ assigned_staff_id: "ben" });
+    const res = await put("amy");
+    expect(res.status).toBe(200);
+    expect(enrollment.assigned_staff_id).toBe("amy");
+    expect(app.assigned_staff_id).toBe("ben");
+    // An empty Assigned is not written either: the application route would refuse.
+    app.assigned_staff_id = null;
+    expect((await put("cara")).status).toBe(200);
+    expect(enrollment.assigned_staff_id).toBe("cara");
+    expect(app.assigned_staff_id).toBeNull();
+  });
+
+  it("clears Assigned only when it held the same person", async () => {
+    enrollment.assigned_staff_id = "amy";
+    const app = application({ assigned_staff_id: "amy" });
+    expect((await put(null)).status).toBe(200);
+    expect(app.assigned_staff_id).toBeNull();
+
+    enrollment.assigned_staff_id = "amy";
+    app.assigned_staff_id = "ben";
+    expect((await put(null)).status).toBe(200);
+    expect(enrollment.assigned_staff_id).toBeNull();
+    expect(app.assigned_staff_id).toBe("ben");
+  });
+
+  it("writes nothing on either side when the caller cannot manage the school", async () => {
+    h.state.canManage = false;
+    const app = application({ assigned_staff_id: "ben" });
+    expect((await put("amy")).status).toBe(403);
+    expect(enrollment.assigned_staff_id).toBeNull();
+    expect(app.assigned_staff_id).toBe("ben");
+  });
+
+  it("does not sync an ineligible person", async () => {
+    const app = application();
+    expect((await put("evan")).status).toBe(400);
+    expect(app.assigned_staff_id).toBeNull();
+  });
+
+  it("sends one assignment email when Assigned is synced to the same person", async () => {
+    const app = application();
+    expect((await put("amy")).status).toBe(200);
+    expect(app.assigned_staff_id).toBe("amy");
+    expect(h.state.emails).toHaveLength(1);
+    expect(h.state.emails[0].stage).toBe("enrollment");
+  });
+
+  it("sends no email when Assigned already held that person", async () => {
+    application({ assigned_staff_id: "amy" });
+    expect((await put("amy")).status).toBe(200);
+    expect(enrollment.assigned_staff_id).toBe("amy");
+    expect(h.state.emails).toHaveLength(0);
   });
 });

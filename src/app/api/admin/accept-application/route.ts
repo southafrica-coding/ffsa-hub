@@ -18,6 +18,7 @@ import {
   plainTextToEmailHtml,
 } from "@/lib/email/placeholders";
 import { applicantEmailIlikePattern } from "@/lib/applications/applicant-identity";
+import { copyApplicationAssigneeToEnrollment } from "@/lib/schools/staff-assignment-sync";
 
 type EnrollmentLookup = {
   from: (table: string) => {
@@ -563,6 +564,7 @@ export async function POST(request: Request) {
 
   // Resolve the enrolment id (new, or existing if it was a duplicate).
   let enrollmentId: string | null = enrollRow?.id ?? null;
+  let restoredThisRequest = false;
   if (!enrollmentId) {
     const { data: existing } = await adminSupabase
       .from("enrollments")
@@ -580,7 +582,29 @@ export async function POST(request: Request) {
         .from("enrollments")
         .update({ removed_at: null, removed_by: null })
         .eq("id", enrollmentId);
+      restoredThisRequest = true;
     }
+  }
+
+  // Assigned on the application becomes Walking with on the enrolment this
+  // request created or restored. No assignment email: that went out when
+  // Assigned was set. A failed copy never blocks acceptance.
+  if (enrollmentId && (insertedThisRequest || restoredThisRequest)) {
+    const assignment = appResponse as unknown as {
+      assigned_staff_id?: string | null;
+      staff_assigned_at?: string | null;
+      staff_assigned_by?: string | null;
+    };
+    await copyApplicationAssigneeToEnrollment(adminSupabase, {
+      enrollmentId,
+      programId: appResponse.program_id,
+      application: {
+        assigned_staff_id: assignment.assigned_staff_id ?? null,
+        staff_assigned_at: assignment.staff_assigned_at ?? null,
+        staff_assigned_by: assignment.staff_assigned_by ?? null,
+      },
+      actorId: authUser.id,
+    });
   }
 
   // Carry the applicant's chosen track (migration 221) onto the new

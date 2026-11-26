@@ -11,7 +11,7 @@
 
 import { z } from "zod";
 import { dayCount, isIsoDate } from "./dates";
-import { CONTACT_ERRORS, CONTACT_SHAPE, FULFILMENT, labelOf, type HelperSummary, type ParseResult } from "./helper";
+import { CONTACT_ERRORS, CONTACT_SHAPE, FULFILMENT, HIRE_EMAIL, labelOf, type HelperSummary, type ParseResult } from "./helper";
 import { rands } from "./money";
 
 export const MAX_PICK_LINES = 40;
@@ -50,7 +50,7 @@ export function parsePickRequest(body: unknown, today: string): ParseResult<Pick
   const p = parsed.data;
   if (p.from < today) return { ok: false, error: "The collection date can't be in the past." };
   if (p.to < p.from) return { ok: false, error: "The return date can't be before the collection date." };
-  if (dayCount(p.from, p.to) > MAX_DAYS) return { ok: false, error: "For more than a month, email us directly." };
+  if (dayCount(p.from, p.to) > MAX_DAYS) return { ok: false, error: `For more than a month, email ${HIRE_EMAIL}.` };
   // The same product twice is one line.
   const merged = new Map<string, number>();
   for (const l of p.lines) merged.set(l.productId, (merged.get(l.productId) ?? 0) + l.quantity);
@@ -61,7 +61,7 @@ export function parsePickRequest(body: unknown, today: string): ParseResult<Pick
 export type StockItem = {
   id: string;
   title: string;
-  /** False: on show only (migration 398). Always refused. */
+  /** False: on show only (migration 400). Always refused. */
   forHire: boolean;
   free: number;
   /** Per unit, for the whole period, excl. VAT. */
