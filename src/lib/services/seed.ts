@@ -23,6 +23,7 @@ export const SERVICE_CATALOG: ReadonlyArray<{ service_key: string; label: string
   { service_key: "spaces", label: "Spaces", admin_href: "/bookings/spaces" },
   { service_key: "vehicles", label: "Vehicles", admin_href: "/bookings/vehicles" },
   { service_key: "brand_kit", label: "Brand kit", admin_href: "/brand-kit" },
+  { service_key: "song_library", label: "Song Library", admin_href: "/song-library" },
 ];
 
 const href = Object.fromEntries(SERVICE_CATALOG.map((row) => [row.service_key, row.admin_href]));
@@ -85,6 +86,8 @@ export const SERVICE_OWNER_SEED: readonly ServiceSeedRow[] = [
   ...owned("vehicles", "operations"),
   openToAll("vehicles"),
   ...owned("brand_kit", "media"),
+  ...owned("song_library", "prayer_and_worship"),
+  openToAll("song_library"),
 ];
 
 export type ServiceOwnerRow = ServiceOwner;

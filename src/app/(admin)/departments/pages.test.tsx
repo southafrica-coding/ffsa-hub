@@ -30,9 +30,14 @@ vi.mock("@/lib/departments/session", () => ({
 }));
 
 const departmentHasL10Teams = vi.hoisted(() => vi.fn<(client: unknown, slug: string) => Promise<boolean>>());
+const departmentHasSongwriting = vi.hoisted(() => vi.fn<(client: unknown, slug: string) => Promise<boolean>>());
 
 vi.mock("./[slug]/l10/has-l10-teams", () => ({
   departmentHasL10Teams: (client: unknown, slug: string) => departmentHasL10Teams(client, slug),
+}));
+
+vi.mock("./[slug]/songwriting/has-songwriting", () => ({
+  departmentHasSongwriting: (client: unknown, slug: string) => departmentHasSongwriting(client, slug),
 }));
 
 import DepartmentsIndexPage from "./page";
@@ -84,6 +89,8 @@ describe("department pages with loader fixtures", () => {
     requireSignedIn.mockResolvedValue({ id: "donors-dev-member" });
     departmentHasL10Teams.mockReset();
     departmentHasL10Teams.mockResolvedValue(false);
+    departmentHasSongwriting.mockReset();
+    departmentHasSongwriting.mockResolvedValue(false);
   });
 
   it("links to L10 from the overview when the department has an active L10 team", async () => {
@@ -111,6 +118,36 @@ describe("department pages with loader fixtures", () => {
     const markup = renderToStaticMarkup(element);
     expect(markup).not.toContain("/l10");
     expect(markup).not.toContain("Weekly Level 10 meetings");
+  });
+
+  it("links to Songwriting from the overview when the department has songwriting data", async () => {
+    const home = foldedFinanceHome();
+    home.department.slug = "prayer_and_worship";
+    home.department.name = "Prayer & Worship";
+    loadDepartmentHomeForViewer.mockResolvedValue({ kind: "ok", data: home });
+    departmentHasSongwriting.mockResolvedValue(true);
+    const element = await DepartmentPage({
+      params: Promise.resolve({ slug: "prayer_and_worship" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(departmentHasSongwriting).toHaveBeenCalledWith({ kind: "session" }, "prayer_and_worship");
+    expect(element.props.hasSongwriting).toBe(true);
+    const markup = renderToStaticMarkup(element);
+    expect(markup).toContain('href="/departments/prayer_and_worship/songwriting"');
+    expect(markup).toContain("Nations, trainings and the Song Library");
+  });
+
+  it("has no Songwriting link when the department has no songwriting data", async () => {
+    loadDepartmentHomeForViewer.mockResolvedValue({ kind: "ok", data: foldedFinanceHome() });
+    departmentHasSongwriting.mockResolvedValue(false);
+    const element = await DepartmentPage({
+      params: Promise.resolve({ slug: "finances_legal" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(element.props.hasSongwriting).toBe(false);
+    const markup = renderToStaticMarkup(element);
+    expect(markup).not.toContain("/songwriting");
+    expect(markup).not.toContain("Nations, trainings and the Song Library");
   });
 
   it("renders detail for a donors_dev member when the loader sets canSeeDepartmentDetail", async () => {
