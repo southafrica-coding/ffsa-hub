@@ -3,11 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { unassignableContactError } from "@/lib/auth/assignable-contacts";
+import { userCanReadApplication } from "@/lib/auth/application-expiry";
 import { sendStaffAssignmentEmails } from "@/lib/email/send-staff-assignment";
+import { syncApplicationFromEnrollment } from "@/lib/schools/staff-assignment-sync";
 
 // Assigns (or clears) the point-of-contact staff member for an enrollment.
-// Intentionally independent of the application-stage assignment — a staff
-// member does NOT automatically follow an applicant when they're enrolled.
+// Assigned on the same person's application in this school follows, and
+// Accept copies Assigned onto the enrolment (see staff-assignment-sync).
 export async function PUT(request: Request) {
   const supabase = await createClient();
   const {
@@ -92,7 +94,20 @@ export async function PUT(request: Request) {
     },
   });
 
-  if (changed && newStaffId) {
+  // Keep Assigned in step. The application route also needs the expiry
+  // check on that application; without it the application is left alone.
+  const sync = await syncApplicationFromEnrollment(adminSupabase, {
+    userId: (existing as unknown as { user_id: string | null }).user_id,
+    programId: enrollmentProgramId,
+    previousStaffId,
+    newStaffId,
+    actorId: authUser.id,
+    canWriteApplication: (applicationId) => userCanReadApplication(supabase, applicationId),
+  });
+
+  // If Assigned already held this person, they and the student were told
+  // then, so one email is enough.
+  if (changed && newStaffId && sync.outcome !== "same") {
     const { data: staffUser } = await adminSupabase
       .from("users")
       .select("id, first_name, last_name, preferred_name, email")

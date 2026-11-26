@@ -420,6 +420,9 @@ type ApplicantForEnrollment = {
   user_id?: string | null;
   program_id?: string | null;
   applicant_email?: string | null;
+  assigned_staff_id?: string | null;
+  staff_assigned_at?: string | null;
+  staff_assigned_by?: string | null;
 };
 
 // Status, acceptance, and admin notes stay with people who manage the
@@ -477,7 +480,7 @@ export async function PUT(request: Request) {
     const adminSupabase = createAdminClient();
     const { data: existingRows, error: existingError } = await adminSupabase
       .from("application_responses")
-      .select("id, status, user_id, program_id, applicant_email")
+      .select("id, status, user_id, program_id, applicant_email, assigned_staff_id, staff_assigned_at, staff_assigned_by")
       .in("id", ids);
     if (existingError) {
       return NextResponse.json({ error: existingError.message }, { status: 500 });
@@ -527,6 +530,9 @@ export async function PUT(request: Request) {
             user_id: row?.user_id ?? null,
             program_id: row?.program_id ?? "",
             applicant_email: row?.applicant_email ?? null,
+            assigned_staff_id: row?.assigned_staff_id ?? null,
+            staff_assigned_at: row?.staff_assigned_at ?? null,
+            staff_assigned_by: row?.staff_assigned_by ?? null,
           },
           user.id
         );
@@ -654,7 +660,7 @@ export async function PUT(request: Request) {
   const adminSupabase = createAdminClient();
   const { data: prevResponse, error: prevError } = await adminSupabase
     .from("application_responses")
-    .select("id, status, user_id, program_id, applicant_email")
+    .select("id, status, user_id, program_id, applicant_email, assigned_staff_id, staff_assigned_at, staff_assigned_by")
     .eq("id", id)
     .single();
   if (prevError) return NextResponse.json({ error: prevError.message }, { status: 500 });
@@ -685,6 +691,9 @@ export async function PUT(request: Request) {
         user_id: current?.user_id ?? null,
         program_id: current?.program_id ?? "",
         applicant_email: current?.applicant_email ?? null,
+        assigned_staff_id: current?.assigned_staff_id ?? null,
+        staff_assigned_at: current?.staff_assigned_at ?? null,
+        staff_assigned_by: current?.staff_assigned_by ?? null,
       },
       user.id
     );
