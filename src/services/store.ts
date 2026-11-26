@@ -323,6 +323,22 @@ export async function registerDevice(supabase: Client, input: { userId: string; 
   });
 }
 
+/**
+ * Take one PDF download from the oldest of these entitlements that has one
+ * left (store_take_pdf_download, service role only; one UPDATE ... WHERE
+ * pdf_downloads_used < limit). data: the entitlement id charged, or null
+ * when they're all used up.
+ */
+export async function takePdfDownload(supabase: Client, entitlementIds: string[], limit: number) {
+  const { data, error } = await supabase.rpc("store_take_pdf_download", { p_entitlement_ids: entitlementIds, p_limit: limit });
+  return { data: (typeof data === "string" ? data : null) as string | null, error };
+}
+
+/** Give back a download taken for a PDF that then couldn't be prepared. */
+export async function returnPdfDownload(supabase: Client, entitlementId: string) {
+  return supabase.rpc("store_return_pdf_download", { p_entitlement_id: entitlementId });
+}
+
 export async function listDevices(supabase: Client, userId: string) {
   return supabase
     .from("store_devices")

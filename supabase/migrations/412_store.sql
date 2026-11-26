@@ -238,6 +238,10 @@ CREATE TABLE IF NOT EXISTS public.store_entitlements (
   code_id        uuid,
   -- Print + Digital only: may download the low-res PDF.
   includes_pdf   boolean NOT NULL DEFAULT false,
+  -- PDF downloads issued for this entitlement (cap of 3 lives in code:
+  -- PDF_DOWNLOAD_LIMIT). Only store_take_pdf_download / store_return_pdf_download
+  -- (service role) change it; nobody signed in can UPDATE the column.
+  pdf_downloads_used integer NOT NULL DEFAULT 0 CHECK (pdf_downloads_used >= 0),
   starts_at      timestamptz NOT NULL DEFAULT now(),
   expires_at     timestamptz,                  -- subscriptions
   revoked_at     timestamptz,
@@ -464,6 +468,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   public.store_entitlements, public.store_fulfilments
 TO authenticated;
 GRANT SELECT, UPDATE ON TABLE public.store_orders TO authenticated;
+-- The PDF download counter is service-role only: staff may UPDATE every other
+-- entitlement column (revoke, extend), never pdf_downloads_used.
+REVOKE UPDATE ON TABLE public.store_entitlements FROM authenticated;
+GRANT UPDATE (product_id, email, user_id, source, order_item_id, code_id, includes_pdf, starts_at, expires_at, revoked_at)
+  ON TABLE public.store_entitlements TO authenticated;
 GRANT SELECT ON TABLE public.store_order_items, public.store_codes, public.store_devices TO authenticated;
 
 GRANT ALL ON TABLE
@@ -540,6 +549,55 @@ BEGIN
 END;
 $$;
 
+-- Take one PDF download from the buyer's oldest Print + Digital entitlement
+-- (of the ids given) that still has one left. Each attempt is one
+-- UPDATE ... WHERE pdf_downloads_used < p_limit, re-checked after any row lock,
+-- so concurrent requests can never go past the limit. Returns the entitlement
+-- id charged, or NULL when every one is used up.
+CREATE OR REPLACE FUNCTION public.store_take_pdf_download(p_entitlement_ids uuid[], p_limit integer DEFAULT 3)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_candidate uuid;
+  v_id uuid;
+BEGIN
+  FOR v_candidate IN
+    SELECT c.id FROM public.store_entitlements c
+     WHERE c.id = ANY (p_entitlement_ids)
+       AND c.includes_pdf
+       AND c.revoked_at IS NULL
+       AND c.pdf_downloads_used < p_limit
+     ORDER BY c.created_at, c.id
+  LOOP
+    UPDATE public.store_entitlements
+       SET pdf_downloads_used = pdf_downloads_used + 1
+     WHERE id = v_candidate AND pdf_downloads_used < p_limit
+    RETURNING id INTO v_id;
+    IF v_id IS NOT NULL THEN
+      RETURN v_id;
+    END IF;
+  END LOOP;
+  RETURN NULL;
+END;
+$$;
+
+-- Give a download back when the PDF couldn't be prepared after one was taken.
+CREATE OR REPLACE FUNCTION public.store_return_pdf_download(p_entitlement_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_rows integer;
+BEGIN
+  UPDATE public.store_entitlements
+     SET pdf_downloads_used = pdf_downloads_used - 1
+   WHERE id = p_entitlement_id AND pdf_downloads_used > 0;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  RETURN v_rows = 1;
+END;
+$$;
+
 -- Service role only. REVOKE from every role first, then grant the one.
 REVOKE ALL ON FUNCTION public.store_take_stock(uuid, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.store_register_device(uuid, text, text, integer) FROM PUBLIC, anon, authenticated;
@@ -547,6 +605,10 @@ REVOKE ALL ON FUNCTION public.store_remove_device(uuid, uuid) FROM PUBLIC, anon,
 GRANT EXECUTE ON FUNCTION public.store_take_stock(uuid, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.store_register_device(uuid, text, text, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.store_remove_device(uuid, uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.store_take_pdf_download(uuid[], integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.store_return_pdf_download(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.store_take_pdf_download(uuid[], integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.store_return_pdf_download(uuid) TO service_role;
 
 -- ────────────────────────────────────────────────────────────
 -- 7. Storage — all private

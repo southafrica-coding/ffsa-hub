@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { storeAdminClient } from "@/lib/store/db";
 import { getBuyer } from "@/lib/store/access";
 import { hashDeviceId } from "@/lib/store/devices";
-import { accessFor } from "@/lib/store/entitlements";
+import { accessFor, pdfDownloadsLeft, pdfEntitlementsFor } from "@/lib/store/entitlements";
 import { pageUrl, PAGE_URL_TTL_SECONDS } from "@/lib/store/signing";
 import type { StoreAssetPage, StoreEntitlement } from "@/lib/store/types";
 import { getActiveAsset, isDeviceActive, listEntitlementsFor, listPages } from "@/services/store";
@@ -25,7 +25,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ prod
   }
 
   const { data: ents } = await listEntitlementsFor(admin, buyer);
-  const access = accessFor((ents ?? []) as StoreEntitlement[], buyer, productId);
+  const all = (ents ?? []) as StoreEntitlement[];
+  const access = accessFor(all, buyer, productId);
   if (!access.read) return bad("This isn't in your library", 403);
 
   const { data: asset } = await getActiveAsset(admin, productId);
@@ -42,6 +43,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ prod
         key: `${asset.id}:${p.page_no}`,
       })),
       pdf: access.pdf,
+      // PDF downloads left across the buyer's active Print + Digital entitlements (3 each).
+      downloadsLeft: access.pdf ? pdfDownloadsLeft(pdfEntitlementsFor(all, buyer, productId)) : 0,
       expiresIn: PAGE_URL_TTL_SECONDS,
     },
     { headers: NO_STORE }

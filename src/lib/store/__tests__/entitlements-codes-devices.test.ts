@@ -18,9 +18,11 @@ const ent = (extra: Partial<StoreEntitlement>): StoreEntitlement => ({
   order_item_id: null,
   code_id: null,
   includes_pdf: false,
+  pdf_downloads_used: 0,
   starts_at: "2026-01-01T00:00:00Z",
   expires_at: null,
   revoked_at: null,
+  created_at: "2026-01-01T00:00:00Z",
   ...extra,
 });
 

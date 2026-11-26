@@ -38,6 +38,37 @@ export function accessFor(
   return { read: true, pdf: mine.some((e) => e.includes_pdf), expiresAt: latest };
 }
 
+// ────────────────────────────────────────────────────────────
+// PDF downloads — 3 per Print + Digital entitlement
+// ────────────────────────────────────────────────────────────
+
+export const PDF_DOWNLOAD_LIMIT = 3;
+export const PDF_DOWNLOADS_USED_UP = "You've used all 3 downloads for this purchase. You can still read it in your library.";
+
+/** The reader's active PDF entitlements for one product, oldest first (the order downloads are taken in). */
+export function pdfEntitlementsFor(
+  entitlements: StoreEntitlement[],
+  who: { userId: string | null; email: string },
+  productId: string,
+  now = new Date()
+): StoreEntitlement[] {
+  const email = who.email.toLowerCase();
+  return entitlements
+    .filter(
+      (e) =>
+        e.product_id === productId &&
+        e.includes_pdf &&
+        (e.email === email || (!!who.userId && e.user_id === who.userId)) &&
+        isEntitlementActive(e, now)
+    )
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : 1));
+}
+
+/** Downloads left across those entitlements: 3 per entitlement, less what each has used. */
+export function pdfDownloadsLeft(pdfEntitlements: Pick<StoreEntitlement, "pdf_downloads_used">[]): number {
+  return pdfEntitlements.reduce((n, e) => n + Math.max(0, PDF_DOWNLOAD_LIMIT - (e.pdf_downloads_used ?? 0)), 0);
+}
+
 /** When a subscription bought now runs out. Renewing early extends from the current end. */
 export function subscriptionEnd(months: number, from: Date, currentEnd?: Date | null): Date {
   const base = currentEnd && currentEnd > from ? new Date(currentEnd) : new Date(from);

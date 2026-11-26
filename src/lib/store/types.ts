@@ -127,9 +127,12 @@ export type StoreEntitlement = {
   order_item_id: string | null;
   code_id: string | null;
   includes_pdf: boolean;
+  /** PDF downloads issued so far (cap PDF_DOWNLOAD_LIMIT). Service role only. */
+  pdf_downloads_used: number;
   starts_at: string;
   expires_at: string | null;
   revoked_at: string | null;
+  created_at: string;
 };
 
 export type StoreCode = {

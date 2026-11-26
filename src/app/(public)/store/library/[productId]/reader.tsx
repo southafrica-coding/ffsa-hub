@@ -9,7 +9,7 @@ import { Notice } from "../../_components/ui";
 
 type State =
   | { kind: "loading" }
-  | { kind: "ready"; pages: FlipPage[]; pdf: boolean }
+  | { kind: "ready"; pages: FlipPage[]; pdf: boolean; downloadsLeft: number }
   | { kind: "device-limit"; message: string }
   | { kind: "error"; message: string };
 
@@ -40,7 +40,7 @@ export function Reader({ productId }: { productId: string }) {
       const res = await fetch(`/api/store/library/${productId}/pages`, { headers: { "x-store-device": deviceId } });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) return setState({ kind: "error", message: body.error ?? "This won't open right now. Try again." });
-      setState({ kind: "ready", pages: body.pages, pdf: !!body.pdf });
+      setState({ kind: "ready", pages: body.pages, pdf: !!body.pdf, downloadsLeft: typeof body.downloadsLeft === "number" ? body.downloadsLeft : 0 });
       loadMusic();
     } catch {
       setState({ kind: "error", message: "You're offline and this hasn't been opened on this device yet." });
@@ -87,9 +87,23 @@ export function Reader({ productId }: { productId: string }) {
         onMusicExpired={() => !offline && loadMusic()}
         footer={
           state.pdf ? (
-            <a href={`/api/store/library/${productId}/pdf`} className="inline-flex min-h-9 items-center gap-1.5 text-ink underline decoration-yellow decoration-2 underline-offset-4">
-              <FileDown className="h-3.5 w-3.5" /> Your PDF
-            </a>
+            <span className="flex min-w-0 flex-col items-end leading-tight" data-pdf-downloads={state.downloadsLeft}>
+              {state.downloadsLeft > 0 ? (
+                <a
+                  href={`/api/store/library/${productId}/pdf`}
+                  // One download used per click: refresh the count once it's been taken.
+                  onClick={() => setTimeout(() => setState((s) => (s.kind === "ready" ? { ...s, downloadsLeft: Math.max(0, s.downloadsLeft - 1) } : s)), 0)}
+                  className="inline-flex min-h-7 items-center gap-1.5 whitespace-nowrap text-ink underline decoration-yellow decoration-2 underline-offset-4"
+                >
+                  <FileDown className="h-3.5 w-3.5" /> Your PDF
+                </a>
+              ) : (
+                <span className="inline-flex min-h-7 items-center gap-1.5 whitespace-nowrap text-[color:var(--text-quiet)]" aria-disabled="true" title="You can still read it here">
+                  <FileDown className="h-3.5 w-3.5" /> Your PDF
+                </span>
+              )}
+              <span className="whitespace-nowrap text-[9px] tabular-nums text-[color:var(--text-tertiary)]">Downloads left: {state.downloadsLeft}</span>
+            </span>
           ) : undefined
         }
       />

@@ -103,8 +103,8 @@ describe("412 table privileges (pattern of 351_fleet_rls.sql)", () => {
   });
 
   it("every Store RPC revokes PUBLIC, anon and authenticated before granting service_role", () => {
-    for (const sig of ["store_take_stock(uuid, integer)", "store_register_device(uuid, text, text, integer)", "store_remove_device(uuid, uuid)"]) {
-      const esc = sig.replace(/[()]/g, "\\$&");
+    for (const sig of ["store_take_stock(uuid, integer)", "store_register_device(uuid, text, text, integer)", "store_remove_device(uuid, uuid)", "store_take_pdf_download(uuid[], integer)", "store_return_pdf_download(uuid)"]) {
+      const esc = sig.replace(/[()[\]]/g, "\\$&");
       const revoke = sql.search(new RegExp(`REVOKE ALL ON FUNCTION public\\.${esc} FROM PUBLIC, anon, authenticated;`));
       const grant = sql.search(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${esc} TO service_role;`));
       expect(revoke).toBeGreaterThan(-1);
@@ -117,6 +117,20 @@ describe("412 table privileges (pattern of 351_fleet_rls.sql)", () => {
         sql.search(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${esc} TO`))
       );
     }
+  });
+
+  it("pdf_downloads_used: nobody signed in can UPDATE it; the take is one UPDATE ... WHERE used < limit", () => {
+    expect(sql).toMatch(/pdf_downloads_used integer NOT NULL DEFAULT 0 CHECK \(pdf_downloads_used >= 0\)/);
+    // No table-wide UPDATE for authenticated on entitlements; the column grant leaves the counter out.
+    expect(tablePrivileges().authenticated.store_entitlements.has("UPDATE")).toBe(false);
+    const cols = sql.match(/GRANT UPDATE \(([^)]*)\)\s+ON TABLE public\.store_entitlements TO authenticated;/);
+    expect(cols).not.toBeNull();
+    expect(list(cols![1])).not.toContain("pdf_downloads_used");
+    expect(list(cols![1])).toContain("revoked_at");
+    const take = sql.match(/FUNCTION public\.store_take_pdf_download[\s\S]*?\$\$([\s\S]*?)\$\$/)![1];
+    expect(take).toMatch(/SET pdf_downloads_used = pdf_downloads_used \+ 1\s+WHERE id = v_candidate AND pdf_downloads_used < p_limit/);
+    const give = sql.match(/FUNCTION public\.store_return_pdf_download[\s\S]*?\$\$([\s\S]*?)\$\$/)![1];
+    expect(give).toMatch(/pdf_downloads_used > 0/);
   });
 
   it("store_remove_device only ever sets removed_at, on the user's own active row", () => {

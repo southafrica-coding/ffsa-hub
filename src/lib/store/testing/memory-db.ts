@@ -1,6 +1,6 @@
 // ============================================================
 // Test-only: a tiny in-memory stand-in for the Supabase query builder,
-// enough of PostgREST for the Store services (eq / neq / in / is / or /
+// enough of PostgREST for the Store services (eq / neq / in / lt / gt / is / or /
 // order / limit / single / maybeSingle, insert / update / delete / upsert,
 // rpc). Seeds and fixtures live in tests only — never in a migration.
 // ============================================================
@@ -56,6 +56,8 @@ export function createMemoryDb(
       eq(c: string, v: unknown) { filters.push((r) => r[c] === v); return b; },
       neq(c: string, v: unknown) { filters.push((r) => r[c] !== v); return b; },
       in(c: string, v: unknown[]) { filters.push((r) => v.includes(r[c])); return b; },
+      lt(c: string, v: number) { filters.push((r) => ((r[c] as number) ?? 0) < v); return b; },
+      gt(c: string, v: number) { filters.push((r) => ((r[c] as number) ?? 0) > v); return b; },
       is(c: string, v: unknown) { filters.push((r) => (r[c] ?? null) === v); return b; },
       or(expr: string) { filters.push(parseOr(expr)); return b; },
       order(col: string, o?: { ascending?: boolean }) { order ??= { col, asc: o?.ascending !== false }; return b; },
@@ -153,6 +155,26 @@ export const storeRpcs = {
     if (mine.length >= ((args.p_limit as number) ?? 3)) return "limit";
     rows.push({ id: randomUUID(), user_id: args.p_user_id, device_hash: args.p_device_hash, label: args.p_label, created_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), removed_at: null });
     return "ok";
+  },
+  // One UPDATE ... WHERE used < limit per candidate, oldest first: synchronous
+  // here, so overlapping requests in a test can't both take the last slot.
+  store_take_pdf_download: (args: Record<string, unknown>, db: Record<string, Row[]>) => {
+    const ids = (args.p_entitlement_ids as string[]) ?? [];
+    const limit = (args.p_limit as number) ?? 3;
+    const used = (r: Row) => (r.pdf_downloads_used as number | undefined) ?? 0;
+    const candidates = (db.store_entitlements ?? [])
+      .filter((r) => ids.includes(r.id as string) && r.includes_pdf === true && !r.revoked_at && used(r) < limit)
+      .sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")) || String(a.id).localeCompare(String(b.id)));
+    const row = candidates[0];
+    if (!row) return null;
+    row.pdf_downloads_used = used(row) + 1;
+    return row.id;
+  },
+  store_return_pdf_download: (args: Record<string, unknown>, db: Record<string, Row[]>) => {
+    const row = (db.store_entitlements ?? []).find((r) => r.id === args.p_entitlement_id && ((r.pdf_downloads_used as number) ?? 0) > 0);
+    if (!row) return false;
+    row.pdf_downloads_used = (row.pdf_downloads_used as number) - 1;
+    return true;
   },
   // Only ever sets removed_at, only on the user's own active row.
   store_remove_device: (args: Record<string, unknown>, db: Record<string, Row[]>) => {
