@@ -97,10 +97,12 @@ export type SongHelpStatus = (typeof SONG_HELP_STATUSES)[number];
 export const SONG_SUBSCRIPTION_TARGETS = ["all_uploads", "writer"] as const;
 export type SongSubscriptionTarget = (typeof SONG_SUBSCRIPTION_TARGETS)[number];
 
+/** new_version: migration 422 (DMs for each version from v2 onward). */
 export const SONG_NOTIFICATION_KINDS = [
   "new_upload",
   "stage_moved",
   "help_asked",
+  "new_version",
 ] as const;
 export type SongNotificationKind = (typeof SONG_NOTIFICATION_KINDS)[number];
 export const SONG_NOTIFICATION_REASONS = [
@@ -383,7 +385,14 @@ export interface SongLibrarySubscription {
 /**
  * song_library_notifications. DM outbox / idempotency claim, service role
  * writes. Unique per (user_id, song_id) for new_upload, (user_id,
- * stage_event_id) for stage_moved, (user_id, help_request_id) for help_asked.
+ * stage_event_id) for stage_moved and new_version, (user_id,
+ * help_request_id) for help_asked.
+ *
+ * stage_event_id is set exactly for stage_moved and new_version. For
+ * new_version it is the kind 'version' stage event that every version
+ * upload logs (payload { version_id, n, label, is_demo }); senders skip
+ * n = 1, which new_upload covers. help_request_id is set exactly for
+ * help_asked.
  */
 export interface SongLibraryNotification {
   id: string;
