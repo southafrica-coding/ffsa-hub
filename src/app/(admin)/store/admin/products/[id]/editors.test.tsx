@@ -72,6 +72,8 @@ describe("AudioUpload", () => {
     expect(el.id).toBeTruthy();
     expect(label?.getAttribute("for") ?? label?.htmlFor).toBe(el.id);
     expect(el.disabled).toBe(false);
+    expect(el.getAttribute("accept") ?? "").toContain("audio/wave");
+    expect(el.getAttribute("accept") ?? "").toContain("audio/wav");
   });
 
   it("an audio/mpeg file of about 6.9 MB starts the signed upload, not a route-body POST", async () => {
@@ -138,6 +140,14 @@ describe("AudioUpload", () => {
   it("toasts when the file is not audio", async () => {
     render();
     await choose(new File([new Uint8Array(16)], "notes.pdf", { type: "application/pdf" }));
+    expect(toast.error).toHaveBeenCalledWith("That isn't an audio file. Use MP3, M4A, WAV or OGG.");
+    expect(host.querySelector("[role='alert']")?.textContent).toMatch(/isn't an audio file/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("toasts when a non-audio MIME is named like an MP3, instead of falling back to the extension", async () => {
+    render();
+    await choose(new File([new Uint8Array(16)], "song.mp3", { type: "text/plain" }));
     expect(toast.error).toHaveBeenCalledWith("That isn't an audio file. Use MP3, M4A, WAV or OGG.");
     expect(host.querySelector("[role='alert']")?.textContent).toMatch(/isn't an audio file/);
     expect(fetchMock).not.toHaveBeenCalled();

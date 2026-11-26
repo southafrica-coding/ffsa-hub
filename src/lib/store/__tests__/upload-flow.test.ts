@@ -231,6 +231,9 @@ describe("background music", () => {
       ok: true,
       value: { ext: "mp3", contentType: "audio/mpeg" },
     });
+    expect(validateAudioUpload({ filename: "song.wav", contentType: "audio/wave", size: 1000 })).toMatchObject({ ok: true, value: { ext: "wav" } });
+    // A real non-audio MIME is refused even if the name looks like an MP3.
+    expect(validateAudioUpload({ filename: "song.mp3", contentType: "text/plain", size: 1000 })).toMatchObject({ ok: false, status: 400 });
     expect(validateAudioUpload({ filename: "x.pdf", contentType: "application/pdf", size: 10 })).toMatchObject({ ok: false, status: 400 });
     expect(validateAudioUpload({ filename: "x.pdf", contentType: "", size: 10 })).toMatchObject({ ok: false, status: 400 });
     expect(validateAudioUpload({ filename: "big.wav", contentType: "audio/wav", size: MAX_AUDIO_BYTES + 1 })).toMatchObject({ ok: false, status: 413 });
