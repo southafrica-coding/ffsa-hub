@@ -2,6 +2,7 @@
  * POST /api/slack/interactions — Slack Interactivity request URL.
  *
  * Vehicle coordinator DM buttons are routed to lib/vehicles/slack-interactions.
+ * People Manager leave cards (pm_leave_*) are routed to lib/people-manager/slack-interactions.
  *
  * Handles the buttons on the prayer-room booking DM alerts
  * (lib/prayer-room/booking-alerts):
@@ -40,6 +41,7 @@ import {
 } from "@/lib/prayer-room/booking-alerts";
 import { isVehicleAction } from "@/lib/vehicles/slack-alerts";
 import { handleVehicleInteraction, isVehicleView, type VehicleInteraction } from "@/lib/vehicles/slack-interactions";
+import { handleLeaveInteraction, isLeaveInteraction, type LeaveInteraction } from "@/lib/people-manager/slack-interactions";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -135,6 +137,11 @@ export async function POST(request: Request) {
     (payload.type === "block_actions" && payload.actions?.[0] && isVehicleAction(payload.actions[0].action_id))
   ) {
     return handleVehicleInteraction(admin, payload as unknown as VehicleInteraction);
+  }
+
+  // ── People Manager leave approvals (lib/slack/leave-approval) ──
+  if (isLeaveInteraction(payload)) {
+    return handleLeaveInteraction(admin, payload as unknown as LeaveInteraction);
   }
 
   // ── the "Other…" modal ──
