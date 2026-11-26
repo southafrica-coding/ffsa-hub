@@ -457,10 +457,15 @@ export type PwLeadStatus = (typeof PW_LEAD_STATUSES)[number];
  */
 export const PW_SONGWRITING_ACTOR_LOCKED = "pw_songwriting_actor_locked" as const;
 
-/** Postgres error message (SQLSTATE 42501) when a signed-in caller sets pw_songwriting_leads.last_contact_at. */
+/**
+ * Postgres error message (SQLSTATE 42501) when anyone sets
+ * pw_songwriting_leads.last_contact_at directly. It is fully derived: a
+ * signed-in caller can never write it; service_role may only write the
+ * derived value (a repair).
+ */
 export const PW_LEAD_LAST_CONTACT_DERIVED = "pw_lead_last_contact_derived" as const;
 
-/** Postgres error message (SQLSTATE 23514) when service_role writes a lead event without by. */
+/** Postgres error message (SQLSTATE 23514) when service_role (or a direct DB write) logs a lead event without by. */
 export const PW_LEAD_EVENT_ACTOR_REQUIRED = "pw_lead_event_actor_required" as const;
 
 /** pw_nations. slug is unique; iso_code is unique where set (424). */
@@ -473,7 +478,11 @@ export interface PwNation {
   notes: string | null;
   /** ISO 3166-1 alpha-2, two capital letters ("ZA"). Null = not set yet (424). */
   iso_code: string | null;
-  /** The nation's languages as display strings; [] when none recorded (424). */
+  /**
+   * The nation's languages as display strings; [] when none recorded (424).
+   * Entries must be non-blank and trimmed (no leading/trailing whitespace):
+   * trim before sending, or the write fails with 23514.
+   */
   languages: string[];
   created_at: string;
   updated_at: string;
@@ -499,6 +508,7 @@ export interface PwSongwritingTraining {
   songs_workshop: number | null;
   songs_post: number | null;
   notes: string | null;
+  /** Non-blank, trimmed entries, as on PwNation.languages (CHECK added in 424; 23514). */
   languages: string[];
   status: PwTrainingStatus;
   source: PwTrainingSource;
@@ -555,9 +565,11 @@ export interface PwSongwritingLead {
   owner_user_id: string | null;
   status: PwLeadStatus;
   /**
-   * Derived: the latest lead event's `at` (null when there are none). Kept
-   * by the database; signed-in callers cannot set it (42501
-   * pw_lead_last_contact_derived). Log a contact instead.
+   * Derived: the latest lead event's `at` (null when there are none),
+   * recomputed by the database under a row lock on every event insert,
+   * delete and edit, so it stays right with concurrent writers. Read-only
+   * for every client (42501 pw_lead_last_contact_derived). Log a contact
+   * instead.
    */
   last_contact_at: string | null;
   /** Set to the signed-in caller on insert (whatever is sent); cannot change (42501 pw_songwriting_actor_locked). */
@@ -569,7 +581,7 @@ export interface PwSongwritingLead {
 /**
  * pw_songwriting_lead_events (424): one "Log contact". Append-only for
  * signed-in callers (no update; 42501). Delete = the author or an admin, and
- * last_contact_at is recomputed. Deleting the lead deletes these.
+ * last_contact_at is recomputed from the remaining events. Deleting the lead deletes these.
  */
 export interface PwSongwritingLeadEvent {
   id: string;

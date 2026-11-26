@@ -12,7 +12,8 @@
 --   DELETE FROM public.pw_songwriting_lead_events; DELETE FROM public.pw_songwriting_leads;
 --   UPDATE public.pw_nations SET iso_code = NULL, languages = '{}';
 --   UPDATE public.pw_songwriting_trainings SET training_date = NULL WHERE training_date IS NOT NULL;
--- Touches nothing from 417 except the three added columns.
+-- Touches nothing from 417 except the three added columns and the
+-- languages CHECK added to pw_songwriting_trainings.
 
 BEGIN;
 
@@ -49,6 +50,7 @@ DROP FUNCTION IF EXISTS public.pw_songwriting_leads_guard();
 DROP FUNCTION IF EXISTS public.pw_can_delete_lead_event(uuid);
 
 ALTER TABLE IF EXISTS public.pw_songwriting_trainings DROP CONSTRAINT IF EXISTS pw_songwriting_trainings_date_in_month;
+ALTER TABLE IF EXISTS public.pw_songwriting_trainings DROP CONSTRAINT IF EXISTS pw_songwriting_trainings_languages_no_blanks;
 ALTER TABLE IF EXISTS public.pw_songwriting_trainings DROP COLUMN IF EXISTS training_date;
 
 DROP INDEX IF EXISTS public.pw_nations_iso_code_key;
