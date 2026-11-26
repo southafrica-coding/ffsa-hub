@@ -114,6 +114,8 @@ export interface Rock {
 /**
  * leadership_ministry_rollup. One rock or one current-cycle OKR objective.
  * source is `rock` or `okr_objective`. objective_scope is null for a rock.
+ * Rocks are department rocks only (rocks.team_id IS NULL, 416); L10 team
+ * rocks are not in this view.
  */
 export interface LeadershipMinistryRollup {
   staff_ministry_id: string;
@@ -164,6 +166,18 @@ export interface DepartmentBudgetLink {
 /** Postgres error message (SQLSTATE 42501) when a caller may not set an attendee rating. */
 export const L10_RATING_NOT_ALLOWED = "l10_rating_not_allowed" as const;
 
+/** Postgres error message (SQLSTATE 42501) when a signed-in user writes a locked auto headline. */
+export const L10_AUTO_HEADLINE_LOCKED = "l10_auto_headline_locked" as const;
+
+/** Postgres error message (SQLSTATE 23514) when service_role writes an auto headline without both meeting ids. */
+export const L10_AUTO_HEADLINE_INCOMPLETE = "l10_auto_headline_incomplete" as const;
+
+/** Unique index hit (SQLSTATE 23505) when a team already has an open meeting. */
+export const L10_ONE_OPEN_MEETING_INDEX = "l10_meetings_one_open_per_team" as const;
+
+/** Unique index hit (SQLSTATE 23505) for a second auto recap of the same meeting in the same meeting. */
+export const L10_ONE_AUTO_RECAP_INDEX = "l10_headlines_one_auto_recap" as const;
+
 export const L10_TEAM_ROLES = ["member", "leader"] as const;
 export type L10TeamRole = (typeof L10_TEAM_ROLES)[number];
 
@@ -211,6 +225,12 @@ export interface L10Team {
   facilitator_id: string | null;
   /** Slack channel id for the post-meeting recap. Null = no channel recap. */
   slack_channel_id: string | null;
+  /**
+   * Paired team (same department, never itself) whose latest ended meeting
+   * is recapped as an auto headline when this team's meeting starts.
+   * Seeded production ↔ live; team-3 null. Cleared if that team is deleted.
+   */
+  recap_source_team_id: string | null;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -227,7 +247,11 @@ export interface L10TeamMember {
   updated_at: string;
 }
 
-/** l10_meetings. ended_at is null while the meeting runs. */
+/**
+ * l10_meetings. ended_at is null while the meeting runs. A team has at most
+ * one open meeting (unique index l10_meetings_one_open_per_team): starting
+ * a second one before ending the first fails with 23505.
+ */
 export interface L10Meeting {
   id: string;
   team_id: string;
@@ -336,13 +360,29 @@ export interface L10Issue {
   updated_at: string;
 }
 
-/** l10_headlines. */
+/**
+ * l10_headlines. A normal headline has an author. An auto headline
+ * (is_auto) is the Hub's cross-team recap: only service_role creates,
+ * edits or deletes it, and signed-in team members may change only
+ * dismissed_at (anything else: 42501 `l10_auto_headline_locked`).
+ */
 export interface L10Headline {
   id: string;
   team_id: string;
   body: string;
+  /** Required unless is_auto. Deleting the user deletes their headlines. */
   author_id: string | null;
+  /** Meeting the headline appears in. Always set on auto rows when written. */
   source_meeting_id: string | null;
+  is_auto: boolean;
+  /**
+   * The paired team's ended meeting this auto row recaps. Only on auto rows;
+   * unique per (source_meeting_id, recap_of_meeting_id). Becomes null if
+   * that meeting is deleted.
+   */
+  recap_of_meeting_id: string | null;
+  /** Null = showing. Any team member may set or clear it. */
+  dismissed_at: string | null;
   created_at: string;
   updated_at: string;
 }
