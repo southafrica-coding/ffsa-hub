@@ -10,6 +10,9 @@ import type { DepartmentHome, HubService, RockStatus } from "@/lib/departments/u
 import type { DepartmentTab } from "@/lib/departments/data";
 import { StatusPill } from "@/components/ffsa";
 import { DataTable, EmptyNote, LocalTabs, PageHeading, SectionHeading, StackLink } from "../local-ui";
+import { sessionClient } from "@/lib/departments/load";
+import { L10_TABLES } from "@/lib/l10/types";
+import { l10Pages } from "@/components/departments/l10/api";
 
 const ROCK_LABEL: Record<RockStatus, string> = {
   on_track: "On track",
@@ -22,11 +25,14 @@ export function DepartmentView({
   tab,
   tabs,
   services,
+  hasL10Teams,
 }: {
   model: DepartmentHome;
   tab: DepartmentTab;
   tabs: { key: string; label: string; href: string }[];
   services: HubService[];
+  /** When set, skip the l10_teams lookup (tests and fixture shots). */
+  hasL10Teams?: boolean;
 }) {
   const { department, access } = model;
   const leaders = (model.people ?? []).filter((person) => person.capacity === "leader");
@@ -56,6 +62,11 @@ export function DepartmentView({
               />
             )}
           </dl>
+          {hasL10Teams === true ? (
+            <L10HomeLinkView slug={department.slug} />
+          ) : hasL10Teams === false ? null : (
+            <L10HomeLink slug={department.slug} />
+          )}
         </>
       )}
       {tab === "people" && access.canSeeDepartmentDetail && <PeopleTab model={model} />}
@@ -268,3 +279,25 @@ function ServicesTab({ model, services: catalogue }: { model: DepartmentHome; se
     </>
   );
 }
+
+export function L10HomeLinkView({ slug }: { slug: string }) {
+  return <StackLink href={l10Pages(slug).teams} title="L10" meta="Weekly Level 10 meetings" />;
+}
+
+/** Shown only when this department has at least one L10 team. Department-agnostic. */
+async function L10HomeLink({ slug }: { slug: string }) {
+  const supabase = await sessionClient();
+  // 416 / l10_teams is not in the generated Database type yet.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any;
+  const ministry = await db.from("staff_ministries").select("id").eq("slug", slug).maybeSingle();
+  if (ministry.error || !ministry.data?.id) return null;
+  const teams = await db
+    .from(L10_TABLES.teams)
+    .select("id", { count: "exact", head: true })
+    .eq("department_id", ministry.data.id)
+    .eq("is_active", true);
+  if (teams.error || !teams.count) return null;
+  return <L10HomeLinkView slug={slug} />;
+}
+

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TeamNotFound, AutoRecapCard } from "./ui";
+import { L10HomeLinkView } from "@/app/(admin)/departments/[slug]/department-view";
 import { TeamPickerScreen, type TeamPickerCard } from "./team-picker";
 import type { L10Headline, L10Team } from "./types";
 
@@ -91,6 +92,14 @@ describe("L10 is department-agnostic", () => {
     expect(dismissed).not.toMatch(/>Dismiss</);
     expect(dismissed).not.toMatch(/>Edit</);
     expect(dismissed).not.toMatch(/>Delete</);
+  });
+
+  it("renders a department-home L10 link for any slug, with no department or team names hardcoded", () => {
+    const html = renderToStaticMarkup(<L10HomeLinkView slug="operations" />);
+    expect(html).toContain("/departments/operations/l10");
+    expect(html).toContain("L10");
+    expect(html).toContain("Weekly Level 10 meetings");
+    expect(html).not.toMatch(/Prayer|Worship|Production/i);
   });
 
   it("offers a Join the open meeting action without hardcoding a department or team", () => {

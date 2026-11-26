@@ -1,9 +1,17 @@
-// L10 types for the UI. Row and response shapes follow Hub Backend PR #741
-// at a4a6002e (src/lib/departments/db.types.ts, src/lib/l10/types.ts, and
-// the /api/departments/[slug]/l10/** handlers). They are copied here, not
-// imported, so this folder builds before that PR lands on the base branch.
-//
-// api.ts is the only place that reads the wire responses.
+// L10 types for the UI. Row types and error codes come from the merged #741
+// modules (src/lib/l10/types.ts and src/lib/departments/db.types.ts).
+// Response shapes and a few UI-only fields live here; api.ts reads the wire.
+
+import type { AutoHeadlineOutcome } from "@/lib/l10/auto-headline";
+export type { AutoHeadlineOutcome };
+export {
+  L10_MEETING_ALREADY_OPEN,
+  L10_AUTO_HEADLINE_LOCKED,
+  L10_AUTO_HEADLINE_FIELD,
+  L10_RATING_NOT_ALLOWED,
+  L10_AUTO_HEADLINE_INCOMPLETE,
+  L10_ONE_AUTO_RECAP_INDEX as L10_ONE_AUTO_RECAP,
+} from "@/lib/l10/types";
 
 export const L10_SEGMENTS = [
   "segue",
@@ -175,24 +183,6 @@ export interface L10Headline {
   /** Not on the #741 row; filled by the client from the paired team's name. */
   recap_source_team_name?: string | null;
 }
-
-/** Outcome of ensureAutoHeadline, returned as `auto_headline` on meeting responses. */
-export type AutoHeadlineOutcome =
-  | "inserted"
-  | "exists"
-  | "no-source-team"
-  | "no-ended-source-meeting"
-  | "meeting-ended"
-  | "not-found"
-  | "error";
-
-/** API error `code` values from #741. Map these; never render the `error` text. */
-export const L10_MEETING_ALREADY_OPEN = "l10_meeting_already_open" as const;
-export const L10_AUTO_HEADLINE_LOCKED = "l10_auto_headline_locked" as const;
-export const L10_AUTO_HEADLINE_FIELD = "l10_auto_headline_field" as const;
-export const L10_RATING_NOT_ALLOWED = "l10_rating_not_allowed" as const;
-export const L10_AUTO_HEADLINE_INCOMPLETE = "l10_auto_headline_incomplete" as const;
-export const L10_ONE_AUTO_RECAP = "l10_headlines_one_auto_recap" as const;
 
 /** A public.rocks row with team_id set. owner_user_id is the #741 column. */
 export interface L10Rock {
