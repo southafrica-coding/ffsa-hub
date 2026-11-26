@@ -47,7 +47,7 @@ Whether and when to apply it is your call. Until then, `/store` shows "can't loa
 ## Tests
 
 - `npx tsc --noEmit`: **0 errors**.
-- `npx vitest run` on the full suite: **4,316 passed, 5 failed, 10 skipped**.
+- `npx vitest run` on the full suite: **4,278 passed, 5 failed, 10 skipped**.
   - The 5 failures also fail on untouched `HEAD` (I checked in a throwaway worktree). They are the duplicate `398_*` migration checks (×2), fleet `fmtR` locale formatting, a fleet model date test, and fleet parity. None touch Store files.
 - Store and middleware tests: **107 passed**. They cover:
   - catalogue as data
