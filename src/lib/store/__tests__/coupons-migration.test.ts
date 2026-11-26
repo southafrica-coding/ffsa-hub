@@ -2,10 +2,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-// Migration 413 isn't applied anywhere yet. Like migration-rls.test.ts for
-// 412, these read the SQL so the coupon access model can't drift: buyers
+// These read the SQL so the coupon access model can't drift: buyers
 // read nothing, staff can't write used_count, the use is taken by a locked,
-// service-role-only function, and the migration adds no rows.
+// service-role-only function, and the migrations add no rows. 413 is on
+// production; 414 (take / give-back audit) is not applied.
 const root = path.resolve(__dirname, "../../../..");
 const sql = readFileSync(path.join(root, "supabase/migrations/413_store_coupons.sql"), "utf8");
 const code = sql.replace(/--.*$/gm, "");
@@ -116,5 +116,54 @@ describe("413 Store coupons migration", () => {
     for (const f of ["store_coupons_before_write", "store_coupons_audit", "store_coupon_redemption_released", "store_order_cancel_releases_coupon"]) {
       expect(fn(f)).toMatch(/SECURITY DEFINER SET search_path = ''/);
     }
+  });
+});
+
+describe("414 Store coupon use audit migration", () => {
+  const sql414 = readFileSync(path.join(root, "supabase/migrations/414_store_coupon_use_audit.sql"), "utf8");
+  const code414 = sql414.replace(/--.*$/gm, "");
+  const fn414 = (name: string) => code414.match(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\([\\s\\S]*?\\n\\$\\$;`))?.[0] ?? "";
+
+  it("is the only 414, one transaction, and says it isn't applied", () => {
+    const files = readdirSync(path.join(root, "supabase/migrations"));
+    expect(files.filter((f) => f.startsWith("414_"))).toEqual(["414_store_coupon_use_audit.sql"]);
+    expect(code414.trim().startsWith("BEGIN;")).toBe(true);
+    expect(code414.trim().endsWith("COMMIT;")).toBe(true);
+    expect(sql414).toMatch(/NOT APPLIED\. Vercel previews share the production database/);
+    expect(sql414).toMatch(/Jack's call/);
+    expect(sql414).toMatch(/after 413/);
+  });
+
+  it("adds no rows", () => {
+    const inserts = [...code414.matchAll(/INSERT INTO ([\w.]+)/gi)].map((m) => m[1]).sort();
+    expect(inserts).toEqual(["public.store_coupon_audit", "public.store_coupon_audit", "public.store_coupon_redemptions"]);
+    const topLevel = code414.replace(/\$\$[\s\S]*?\$\$/g, "");
+    expect(topLevel).not.toMatch(/INSERT INTO/i);
+  });
+
+  it("widens the action check to take and give_back, idempotently", () => {
+    expect(code414).toMatch(/DROP CONSTRAINT IF EXISTS store_coupon_audit_action_check/);
+    expect(code414).toMatch(/pg_get_constraintdef[\s\S]*DROP CONSTRAINT %I/);
+    expect(code414).toMatch(/CHECK \(action IN \('create', 'update', 'activate', 'deactivate', 'take', 'give_back'\)\)/);
+  });
+
+  it("store_apply_coupon writes a take audit row after a successful use, still service role only", () => {
+    const body = fn414("store_apply_coupon");
+    expect(body).toMatch(/SECURITY DEFINER SET search_path = ''/);
+    expect(body).toMatch(/FROM public\.store_coupons WHERE code = v_code FOR UPDATE/);
+    expect(body).toMatch(/SET used_count = used_count \+ 1\s+WHERE id = v_coupon\.id\s+AND \(max_uses IS NULL OR used_count < max_uses\)/);
+    expect(body).toMatch(/INSERT INTO public\.store_coupon_audit \(coupon_id, action, actor, old_row, new_row\)\s+VALUES \(v_coupon\.id, 'take', auth\.uid\(\), to_jsonb\(v_coupon\), to_jsonb\(v_after\)\)/);
+    expect(body).toMatch(/INSERT INTO public\.store_coupon_redemptions/);
+    expect(code414).toMatch(/REVOKE ALL ON FUNCTION public\.store_apply_coupon\(uuid, text, integer\) FROM PUBLIC, anon, authenticated;/);
+    expect(code414).toMatch(/GRANT EXECUTE ON FUNCTION public\.store_apply_coupon\(uuid, text, integer\) TO service_role;/);
+  });
+
+  it("releasing a redemption writes a give_back audit row only when used_count moved", () => {
+    const body = fn414("store_coupon_redemption_released");
+    expect(body).toMatch(/SECURITY DEFINER SET search_path = ''/);
+    expect(body).toMatch(/SET used_count = used_count - 1\s+WHERE id = OLD\.coupon_id AND used_count > 0/);
+    expect(body).toMatch(/IF FOUND THEN/);
+    expect(body).toMatch(/INSERT INTO public\.store_coupon_audit \(coupon_id, action, actor, old_row, new_row\)\s+VALUES \(OLD\.coupon_id, 'give_back', auth\.uid\(\), to_jsonb\(v_old\), to_jsonb\(v_new\)\)/);
+    expect(code414).toMatch(/REVOKE ALL ON FUNCTION public\.store_coupon_redemption_released\(\) FROM PUBLIC, anon, authenticated;/);
   });
 });
