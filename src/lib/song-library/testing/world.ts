@@ -239,6 +239,7 @@ export function makeSongWorld(extra: Record<string, Row[]> = {}): SongWorld {
       if (pk[table] && all.some((r) => r.song_id === row.song_id && r[pk[table]] === row[pk[table]])) return `${table}_pkey`;
       if (table === "song_library_notifications") {
         if (row.kind === "new_upload" && all.some((n) => n.kind === "new_upload" && n.user_id === row.user_id && n.song_id === row.song_id)) return "song_library_notifications_new_upload_key";
+        if (row.kind === "help_asked" && all.some((n) => n.kind === "help_asked" && n.user_id === row.user_id && n.help_request_id === row.help_request_id)) return "song_library_notifications_help_asked_key";
         if (row.kind === "new_version" && all.some((n) => n.kind === "new_version" && n.user_id === row.user_id && n.stage_event_id === row.stage_event_id)) return "song_library_notifications_new_version_key";
       }
       return true;

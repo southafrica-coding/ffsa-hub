@@ -1,7 +1,7 @@
 // Help requests, "I can help" sign-ups, helper categories, subscriptions
 // and writer profiles. Shapes follow Hub UI's client (#745).
 //
-//   POST   /api/song-library/songs/:id/help-requests       { categories, body } (the song's writers, managers)
+//   POST   /api/song-library/songs/:id/help-requests       { categories, body } (the song's writers, managers); DMs matching helpers
 //   GET    /api/song-library/help-requests                 { helpRequests } ?status=open|filled|closed|all (default open) ?category=
 //   PATCH  /api/song-library/help-requests/:rid            { status?, helper_user_id?, body?, categories? } (requester, managers)
 //   DELETE /api/song-library/help-requests/:rid            (requester, managers)
@@ -25,6 +25,7 @@ import { canAskForHelp, canManageHelpRequest } from "@/lib/song-library/access";
 import { badRequest, coded, dbError, forbidden, notFound, invalid } from "@/lib/song-library/http";
 import { parseHelpCreate, parseHelpPatch, parseHelperCategories, parseHelperNote, parseSignup, parseSubscription } from "@/lib/song-library/validate";
 import { SL_CODES, SL_REASONS, SL_COLUMNS, SL_TABLES, SONG_HELP_CATEGORIES, SONG_HELP_STATUSES, type Row, type SongLibrarySong } from "@/lib/song-library/types";
+import { runHelpAskedDms } from "@/lib/slack/song-library-help-notify";
 import { body, isLoaded, isOpen, listItems, namesFor, openSong, openSongLibrary } from "./shared";
 import type { SongLibraryContext } from "./context";
 
@@ -44,7 +45,17 @@ export async function createHelpRequest(request: Request, songId: string) {
     .select(SL_COLUMNS.helpRequests)
     .single();
   if (ins.error) return dbError(ins.error);
-  return NextResponse.json({ help_request: ins.data }, { status: 201 });
+  const helpRequest = ins.data as { id: string };
+  // DM the helpers for these categories (production only, once each).
+  let notified: unknown = null;
+  try {
+    const run = await runHelpAskedDms(loaded.ctx.admin, helpRequest.id);
+    notified = { outcome: run.outcome, sent: run.results.filter((r) => r.outcome === "sent").length };
+  } catch (error) {
+    console.error("[song-library-dm]", error);
+    notified = { outcome: "error" };
+  }
+  return NextResponse.json({ help_request: helpRequest, notified }, { status: 201 });
 }
 
 export async function listHelpRequests(request: Request) {

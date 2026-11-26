@@ -501,6 +501,28 @@ describe("audio upload and subscriber DMs", () => {
     expect(h.db.raw("song_library_notifications")).toHaveLength(0);
   });
 
+  it("DMs the helpers for a new help request's categories, not the asker, on production only", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    h.db.raw("song_library_helpers").push({ user_id: WRITER, category: "bass", note: null, created_at: "2026-11-02T10:00:00.000Z" });
+    h.db.raw("song_library_helpers").push({ user_id: SUB_ALL, category: "keys", note: null, created_at: "2026-11-02T10:00:00.000Z" });
+    as(WRITER);
+    const r = await songHelp.POST(req({ categories: ["bass", "drums"], body: "Low end for the demo" }), S());
+    expect(r.status).toBe(201);
+    const out = await r.json();
+    expect(out.notified).toEqual({ outcome: "done", sent: 1 });
+    expect(h.dms.map((d) => d.to)).toEqual(["D_U_BASE"]);
+    expect(h.dms[0].text).toContain(`/song-library/songs/${SONG}`);
+    expect(h.db.raw("song_library_notifications")).toEqual([expect.objectContaining({ user_id: BASE, kind: "help_asked", help_request_id: out.help_request.id, reason: "helper_category" })]);
+  });
+
+  it("sends no help DMs off production", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    as(WRITER);
+    const out = await (await songHelp.POST(req({ categories: ["bass"], body: "Bass?" }), S())).json();
+    expect(out.notified.outcome).toBe("off");
+    expect(h.dms).toHaveLength(0);
+  });
+
   it("gives any reader a short-lived audio link", async () => {
     h.db.objects.set(h.db.raw("song_library_versions")[0]!.storage_path as string, 1000);
     const r = await audio.GET(get(), S({ versionId: V1 }));
@@ -596,6 +618,13 @@ describe("Hub UI's client contract (#745)", () => {
     expect((await refineRoute.PUT(req({ checked: true }, "PUT"), S({ q: "12" }))).status).toBe(400);
     as(PW_MEMBER);
     expect(await why(await refineRoute.PUT(req({ checked: true }, "PUT"), S({ q: "11" })))).toEqual(["forbidden", "not_writer"]);
+    expect((await (await song.GET(get(), S())).json()).viewer.canTickRefine).toBe(false);
+    as(PW_LEADER);
+    expect((await refineRoute.PUT(req({ checked: true }, "PUT"), S({ q: "11" }))).status).toBe(403);
+    expect((await (await song.GET(get(), S())).json()).viewer.canTickRefine).toBe(false);
+    as(ADMIN);
+    expect((await refineRoute.PUT(req({ checked: true }, "PUT"), S({ q: "11" }))).status).toBe(200);
+    expect((await (await song.GET(get(), S())).json()).viewer.canTickRefine).toBe(true);
   });
 
   it("pathway and share steps are ticked by writers, idempotently", async () => {
