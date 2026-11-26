@@ -8,7 +8,7 @@ import { SONGWRITING_DEPARTMENT_SLUG } from "@/components/departments/songwritin
 import { callerCanManageSongLibrary, canManageFromRpc } from "./can-manage";
 
 export type LibraryViewer = {
-  /** A member of the owning department (or an admin): moves stage and placement, sees the lead board. */
+  /** song_library_can_manage (not pw_can_access_songwriting). Used for library chrome (board, etc.). A song's own viewer.canManage comes from GET /songs/:id. */
   canManage: boolean;
   /** The owning department's display name, when the viewer can see it. */
   ownerName: string | null;

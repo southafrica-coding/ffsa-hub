@@ -61,7 +61,7 @@ export async function requestJson<T>(
     body = null;
   }
   if (!response.ok) {
-    const code = readCode(body) ?? (response.status === 401 ? "unauthenticated" : response.status === 403 ? "forbidden" : response.status === 404 ? "not_found" : null);
+    const code = readCode(body) ?? (response.status === 401 ? "unauthenticated" : response.status === 403 ? "forbidden" : response.status === 404 ? "not_found" : response.status === 413 ? "too_large" : response.status === 415 ? "use_signed_upload" : null);
     return { ok: false, status: response.status, code, fields: readFields(body) };
   }
   return { ok: true, data: body as T };
@@ -105,6 +105,14 @@ export function errorCopy(code: string | null | undefined): string {
       return "You can't move this song to that stage.";
     case "too_large":
       return "That file is too big. Try a shorter clip or an mp3.";
+    case "song_moved":
+      return "Someone else moved this song first. We'll refresh it.";
+    case "help_closed":
+      return "This help request is no longer open.";
+    case "upload_missing":
+      return "The file didn't finish uploading. Try again.";
+    case "use_signed_upload":
+      return "This file has to be uploaded to a signed URL. Try again.";
     case "rate_limited":
       return "Too many tries. Wait a minute and try again.";
     case "network":

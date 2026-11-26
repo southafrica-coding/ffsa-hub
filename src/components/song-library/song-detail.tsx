@@ -107,35 +107,43 @@ function SongBody({
   const [following, setFollowing] = useState(detail.viewerFollowsLead);
   const [asking, setAsking] = useState(false);
 
-  const mover = moverFor(canManage, detail.viewerIsWriter);
+  const canManageSong = detail.viewer?.canManage ?? canManage;
+  const canTick = detail.viewer?.canTickRefine === true;
+  const mover = moverFor(canManageSong, detail.viewerIsWriter);
   const moves = stageMoveOptions(mover, song.stage);
   const next = nextStage(song.stage);
   const n = stageNumber(song.stage);
   const info = stuckInfo(song.stage, song.last_activity_at, now, detail.status);
   const lead = detail.writers.find((w) => w.is_lead) ?? detail.writers[0];
-  const canTick = canManage || detail.viewerIsWriter;
   const splitCheck = checkSplits(detail.writers);
   const refine = refineProgress(detail.refine);
   const doneSteps = new Set(detail.pathwaySteps.map((s) => s.step));
   const demo = detail.versions.find((v) => v.is_demo);
   const memberWord = ownerName ? `Any ${ownerName} member` : "A team lead";
 
+  async function refetchSong() {
+    const result = await songLibraryApi.song(song.id);
+    if (result.data) setDetail(result.data);
+  }
+
   async function run<T>(action: () => Promise<{ ok: true; data: T } | { ok: false; code: string | null }>, apply: (data: T) => void) {
     if (busy) return;
     setBusy(true);
     setMessage(null);
     const result = await action();
-    setBusy(false);
     if (!result.ok) {
       setMessage(errorCopy(result.code));
+      if (result.code === "song_moved") await refetchSong();
+      setBusy(false);
       return;
     }
+    setBusy(false);
     apply(result.data);
   }
 
   const moveStage = (to: SongStage) =>
     run(
-      () => songLibraryApi.moveStage(song.id, to),
+      () => songLibraryApi.moveStage(song.id, to, song.stage),
       (data) => {
         setStageMenu(false);
         setDetail({ ...detail, song: data?.song ?? { ...song, stage: to, last_activity_at: new Date().toISOString() } });
@@ -143,7 +151,7 @@ function SongBody({
     );
   const movePlacement = (to: SongPlacement) =>
     run(
-      () => songLibraryApi.movePlacement(song.id, to),
+      () => songLibraryApi.movePlacement(song.id, to, song.placement),
       (data) => setDetail({ ...detail, song: data?.song ?? { ...song, placement: to, last_activity_at: new Date().toISOString() } })
     );
   const tick = (q: number, checked: boolean) =>
@@ -219,6 +227,7 @@ function SongBody({
                   {initials(w.name)}
                 </span>
                 {w.name}
+                <span className={`${pw.small} ${pw.muted}`}>No Hub account</span>
               </span>
             )
           )}
@@ -344,7 +353,7 @@ function SongBody({
 
       <div className={pw.sectionBar}>
         <h2 className={pw.sectionTitle}>Placement</h2>
-        <span className={pw.sectionMeta}>{canManage ? `any ${ownerName ?? "team"} member` : "set by the team"}</span>
+        <span className={pw.sectionMeta}>{canManageSong ? `any ${ownerName ?? "team"} member` : "set by the team"}</span>
       </div>
       <div className={sl.placeflow} role="group" aria-label="Placement">
         {PLACEMENT_FLOW.map((p, i) => {

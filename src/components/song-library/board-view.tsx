@@ -58,9 +58,16 @@ export function BoardView({ scope, ownerName, initial }: { scope: LibraryScope; 
   async function move(row: Row, kind: "stage" | "placement", to: string) {
     setMessage(null);
     const result =
-      kind === "stage" ? await songLibraryApi.moveStage(row.song.id, to as SongStage) : await songLibraryApi.movePlacement(row.song.id, to as SongPlacement);
+      kind === "stage"
+        ? await songLibraryApi.moveStage(row.song.id, to as SongStage, row.song.stage)
+        : await songLibraryApi.movePlacement(row.song.id, to as SongPlacement, row.song.placement);
     if (!result.ok) {
       setMessage(errorCopy(result.code));
+      if (result.code === "song_moved") {
+        const board = await songLibraryApi.board();
+        if (board.data) setItems(board.data);
+        setDenied(board.denied);
+      }
       return;
     }
     const stamp = new Date().toISOString();

@@ -80,6 +80,20 @@ export interface SongPerson {
   name: string;
 }
 
+/** A co-writer on create: Hub users by user_id; a free-text name only for people with no Hub account. */
+export type CoWriterInput =
+  | { user_id: string; display_name?: string | null; role?: string | null }
+  | { user_id?: null; display_name: string; role?: string | null };
+
+/** Permissions on one song, from GET /songs/:id `viewer`. canManage is song_library_can_manage. */
+export interface SongViewer {
+  isWriter: boolean;
+  isLeadWriter?: boolean;
+  canManage: boolean;
+  canTickRefine: boolean;
+  allowedStages?: string[];
+}
+
 /** One row on the library list, writer page, and board. */
 export interface SongListItem {
   song: SongLibrarySong;
@@ -102,6 +116,8 @@ export interface SongDetail {
   viewerIsWriter: boolean;
   /** The viewer follows this song's lead writer. */
   viewerFollowsLead: boolean;
+  /** From the song payload. canManage and canTickRefine are used; other flags are ignored here. */
+  viewer?: SongViewer;
 }
 
 export interface WriterProfile {

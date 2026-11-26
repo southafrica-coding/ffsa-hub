@@ -161,8 +161,8 @@ describe("auto headlines", () => {
     ).toBe("Production");
     expect(recapSourceName({ is_auto: true }, live, [production, live])).toBe("Production");
     const rows = [
-      { id: "a", body: "Recap", author_id: null, source_meeting_id: null, created_at: "2026-11-26T08:00:00.000Z", is_auto: true, recap_of_meeting_id: "m1", dismissed_at: null },
-      { id: "b", body: "Old", author_id: null, source_meeting_id: null, created_at: "2026-11-26T07:00:00.000Z", is_auto: true, recap_of_meeting_id: "m0", dismissed_at: "2026-11-26T10:00:00.000Z" },
+      { id: "a", department_id: "d1", body: "Recap", author_id: null, source_meeting_id: null, created_at: "2026-11-26T08:00:00.000Z", is_auto: true, recap_of_meeting_id: "m1", dismissed_at: null },
+      { id: "b", department_id: "d1", body: "Old", author_id: null, source_meeting_id: null, created_at: "2026-11-26T07:00:00.000Z", is_auto: true, recap_of_meeting_id: "m0", dismissed_at: "2026-11-26T10:00:00.000Z" },
     ];
     expect(visibleHeadlines(rows).map((h) => h.id)).toEqual(["a"]);
     expect(recapHeadlines(rows).map((h) => h.id)).toEqual(["a"]);

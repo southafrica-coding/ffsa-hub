@@ -9,7 +9,7 @@ import { songLibraryApi, uploadVersion } from "./api";
 import { errorCopy, fieldCopy } from "./client";
 import { libraryPaths, type LibraryScope } from "./paths";
 import { ENTRY_LABEL, pathwayLabel } from "./stages";
-import { SONG_ENTRY_POINTS, SONG_PATHWAYS, type SongEntryPoint, type SongPathway } from "./types";
+import { SONG_ENTRY_POINTS, SONG_PATHWAYS, type CoWriterInput, type SongEntryPoint, type SongPathway } from "./types";
 
 const ENTRY_ICON: Record<SongEntryPoint, string> = { lyric: "✎", melody: "♪", instrumental: "♫" };
 const ENTRY_HINT: Record<SongEntryPoint, string> = { lyric: "Words first", melody: "A tune first", instrumental: "Playing first" };
@@ -20,9 +20,24 @@ export type UploadPreset = {
   entry?: SongEntryPoint;
   pathway?: SongPathway;
   holySpirit?: boolean;
-  coWriters?: string[];
+  /** Hub users include user_id; a bare name is a person with no Hub account. */
+  coWriters?: Array<string | CoWriterInput>;
   lyrics?: string;
 };
+
+function asCoWriter(value: string | CoWriterInput): CoWriterInput {
+  if (typeof value === "string") return { display_name: value };
+  return value;
+}
+
+function coWriterKey(c: CoWriterInput): string {
+  return c.user_id ? `user:${c.user_id}` : `name:${c.display_name}`;
+}
+
+function coWriterPayload(c: CoWriterInput): CoWriterInput {
+  if (c.user_id) return { user_id: c.user_id };
+  return { display_name: c.display_name ?? "" };
+}
 
 export function UploadForm({
   scope,
@@ -41,7 +56,7 @@ export function UploadForm({
   const [entry, setEntry] = useState<SongEntryPoint>(preset?.entry ?? "melody");
   const [pathway, setPathway] = useState<SongPathway>(preset?.pathway ?? "b1");
   const [holySpirit, setHolySpirit] = useState(preset?.holySpirit ?? false);
-  const [coWriters, setCoWriters] = useState<string[]>(preset?.coWriters ?? []);
+  const [coWriters, setCoWriters] = useState<CoWriterInput[]>(() => (preset?.coWriters ?? []).map(asCoWriter));
   const [coText, setCoText] = useState("");
   const [lyrics, setLyrics] = useState(preset?.lyrics ?? "");
   const [fields, setFields] = useState<string[]>([]);
@@ -51,7 +66,12 @@ export function UploadForm({
 
   function addCoWriter() {
     const name = coText.trim();
-    if (name && !coWriters.includes(name)) setCoWriters([...coWriters, name]);
+    if (!name) return;
+    if (coWriters.some((c) => !c.user_id && c.display_name === name)) {
+      setCoText("");
+      return;
+    }
+    setCoWriters([...coWriters, { display_name: name }]);
     setCoText("");
   }
 
@@ -73,7 +93,7 @@ export function UploadForm({
       holy_spirit_interrupt: holySpirit,
       lyrics_md: lyrics.trim() || null,
       source_training_id: sourceTrainingId,
-      co_writers: coWriters,
+      co_writers: coWriters.map(coWriterPayload),
     });
     if (!created.ok || !created.data?.song) {
       setBusy(false);
@@ -199,13 +219,24 @@ export function UploadForm({
         </span>
         {coWriters.length ? (
           <ul className={pw.chips} aria-labelledby={`${id}-co`} style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {coWriters.map((name) => (
-              <li key={name}>
-                <button type="button" className={`${pw.chipBtn} ${pw.chipBtnOn}`} onClick={() => setCoWriters(coWriters.filter((n) => n !== name))} aria-label={`Remove ${name}`}>
-                  {name} <span aria-hidden="true">×</span>
-                </button>
-              </li>
-            ))}
+            {coWriters.map((c) => {
+              const name = c.display_name ?? "Co-writer";
+              const noAccount = !c.user_id;
+              return (
+                <li key={coWriterKey(c)}>
+                  <button
+                    type="button"
+                    className={`${pw.chipBtn} ${pw.chipBtnOn}`}
+                    onClick={() => setCoWriters(coWriters.filter((x) => coWriterKey(x) !== coWriterKey(c)))}
+                    aria-label={noAccount ? `Remove ${name} (no Hub account)` : `Remove ${name}`}
+                  >
+                    {name}
+                    {noAccount ? <span className={`${pw.small} ${pw.muted}`}> No Hub account</span> : null}{" "}
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         ) : null}
         <div className={pw.addRow}>
@@ -219,13 +250,16 @@ export function UploadForm({
                 addCoWriter();
               }
             }}
-            placeholder="Co-writer's name"
-            aria-label="Add a co-writer"
+            placeholder="Name (no Hub account)"
+            aria-label="Add a co-writer with no Hub account"
           />
           <button type="button" className={pw.btn} onClick={addCoWriter}>
             + Add
           </button>
         </div>
+        <p className={`${pw.small} ${pw.muted}`} style={{ marginTop: 8 }}>
+          A person with no Hub account can&apos;t follow the song or sign off on credits.
+        </p>
       </div>
 
       <div className={pw.field}>

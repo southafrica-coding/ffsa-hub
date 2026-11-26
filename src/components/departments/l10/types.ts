@@ -91,6 +91,8 @@ export interface L10Member {
 export interface L10Meeting {
   id: string;
   team_id: string;
+  /** Owning department. Always present on API responses. */
+  department_id: string;
   started_at: string;
   ended_at: string | null;
   facilitator_id: string | null;
@@ -170,6 +172,8 @@ export interface L10Issue {
 export interface L10Headline {
   id: string;
   team_id?: string;
+  /** Owning department. Always present on API responses. */
+  department_id: string;
   body: string;
   author_id: string | null;
   source_meeting_id: string | null;
