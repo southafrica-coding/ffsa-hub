@@ -4,7 +4,12 @@
 -- Depends on 318 (dept_* helpers) and 320 (public.rocks). Applied by
 -- hand, on prod only with Jack's explicit OK.
 --
--- A department (a staff_ministries row) can run several L10 teams. P&W
+-- Any department (a staff_ministries row) can run L10 teams. Nothing
+-- below the seed section names a department: every helper, policy and
+-- trigger finds the overseer through l10_teams.department_id (admin, or
+-- a leader of THAT team's department). The P&W rows are seed data only.
+--
+-- A department can run several L10 teams. P&W
 -- runs three: Production, Live and Team 3. Each team has its own roster,
 -- rocks, scorecard, to-dos, issues (IDS), headlines and meetings.
 --
@@ -98,7 +103,7 @@ CREATE INDEX IF NOT EXISTS l10_teams_recap_source_idx
   ON public.l10_teams (department_id, recap_source_team_id) WHERE recap_source_team_id IS NOT NULL;
 
 COMMENT ON TABLE public.l10_teams IS
-  'An EOS L10 team inside one department (staff_ministries). P&W has production, live and team-3.';
+  'An EOS L10 team inside one department (staff_ministries). Access is worked out from department_id: team members, leaders of that department, admins.';
 COMMENT ON COLUMN public.l10_teams.department_id IS 'staff_ministries.id of the owning department.';
 COMMENT ON COLUMN public.l10_teams.meeting_weekday IS 'ISO weekday, 1 = Monday … 7 = Sunday. Null until set.';
 COMMENT ON COLUMN public.l10_teams.meeting_time IS 'Local start time in meeting_timezone. Null until set.';
