@@ -44,6 +44,9 @@ END $$;
 DROP TABLE IF EXISTS public.pw_songwriting_lead_events;
 DROP TABLE IF EXISTS public.pw_songwriting_leads;
 DROP FUNCTION IF EXISTS public.pw_songwriting_lead_events_touch_lead();
+DROP FUNCTION IF EXISTS public.pw_songwriting_lead_events_guard();
+DROP FUNCTION IF EXISTS public.pw_songwriting_leads_guard();
+DROP FUNCTION IF EXISTS public.pw_can_delete_lead_event(uuid);
 
 ALTER TABLE IF EXISTS public.pw_songwriting_trainings DROP CONSTRAINT IF EXISTS pw_songwriting_trainings_date_in_month;
 ALTER TABLE IF EXISTS public.pw_songwriting_trainings DROP COLUMN IF EXISTS training_date;
@@ -53,5 +56,6 @@ ALTER TABLE IF EXISTS public.pw_nations DROP CONSTRAINT IF EXISTS pw_nations_iso
 ALTER TABLE IF EXISTS public.pw_nations DROP CONSTRAINT IF EXISTS pw_nations_languages_no_blanks;
 ALTER TABLE IF EXISTS public.pw_nations DROP COLUMN IF EXISTS iso_code;
 ALTER TABLE IF EXISTS public.pw_nations DROP COLUMN IF EXISTS languages;
+DROP FUNCTION IF EXISTS public.pw_text_array_no_blanks(text[]);
 
 COMMIT;
