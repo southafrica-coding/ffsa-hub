@@ -1,0 +1,146 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+import {
+  SONG_CHECKPOINT_KINDS,
+  SONG_HELP_CATEGORIES,
+  SONG_PLACEMENTS,
+  SONG_SHARE_KINDS,
+  SONG_STAGES,
+} from "./db.types";
+
+// Migration 419 is applied by hand. CI does not start Postgres; the RLS
+// and constraint checks run on a throwaway Postgres 17 (see the PR). These
+// pin the SQL and keep the TS enums in step with its CHECKs.
+
+const ROOT = path.resolve(__dirname, "../../..");
+const migration = readFileSync(
+  path.join(ROOT, "supabase/migrations/419_song_library.sql"),
+  "utf8",
+);
+const rollback = readFileSync(
+  path.join(ROOT, "supabase/rollbacks/419_song_library_rollback.sql"),
+  "utf8",
+);
+// Executable SQL only; the header documents a follow-up FK in comments.
+const code = migration.replace(/--.*$/gm, "");
+const [schemaWithComments, seed] = migration.split("-- 8. Service catalogue");
+// Header comments document the seed; only executable SQL must stay slug-free.
+const schema = schemaWithComments.replace(/--.*$/gm, "");
+
+function quoted(list: readonly string[]): string {
+  return list.map((v) => `'${v}'`).join(", ");
+}
+
+function squash(sql: string): string {
+  return sql.replace(/\s+/g, " ");
+}
+
+describe("migration 419 song library", () => {
+  it("does not mention a live Supabase project", () => {
+    expect(migration + rollback).not.toMatch(/\.supabase\.co/);
+    expect(migration + rollback).not.toMatch(/\b[a-z]{20}\b/);
+  });
+
+  it("names a ministry only in the seed", () => {
+    expect(seed).toBeDefined();
+    expect(schema).not.toMatch(/prayer_and_worship|'media'|'hulk'/);
+    expect(seed).toMatch(/'prayer_and_worship', 'own',\s+'member'/);
+    expect(seed).toMatch(/'prayer_and_worship', 'manage', 'member'/);
+    expect(seed).toMatch(/\(NULL,\s+'use',\s+NULL,\s+true\)/);
+  });
+
+  it("registers song_library in the existing service tables", () => {
+    expect(seed).toMatch(
+      /INSERT INTO public\.services \(service_key, label, admin_href\)/,
+    );
+    expect(seed).toMatch(/'song_library', 'Song Library'/);
+    expect(migration).not.toMatch(/CREATE TABLE[^;]*public\.services?\b/i);
+  });
+
+  it("keeps the TS enums in step with the CHECKs", () => {
+    const sql = squash(migration);
+    expect(sql).toContain(squash(`stage IN ( ${quoted(SONG_STAGES)})`));
+    expect(sql).toContain(squash(`placement IN ( ${quoted(SONG_PLACEMENTS)})`));
+    expect(sql).toContain(`kind IN (${quoted(SONG_SHARE_KINDS)})`);
+    expect(sql).toContain(squash(`kind IN (${quoted(SONG_CHECKPOINT_KINDS)})`));
+    expect(sql).toContain(
+      squash(`category IN (${quoted(SONG_HELP_CATEGORIES)})`),
+    );
+  });
+
+  it("revokes every helper from PUBLIC and anon, with an empty search_path", () => {
+    const helpers = [
+      ...migration.matchAll(
+        /CREATE OR REPLACE FUNCTION public\.(song_library_\w+)\(/g,
+      ),
+    ].map((m) => m[1]);
+    expect(helpers.length).toBeGreaterThan(20);
+    const bodies = migration.split("CREATE OR REPLACE FUNCTION").slice(1);
+    for (const body of bodies) {
+      expect(body.slice(0, 400)).toMatch(/SET search_path = ''/);
+    }
+    for (const name of [
+      "song_library_is_admin",
+      "song_library_can_read",
+      "song_library_can_manage",
+      "song_library_my_song_ids",
+      "song_library_storage_can_read",
+      "song_library_storage_can_write",
+    ]) {
+      expect(migration).toMatch(
+        new RegExp(
+          `REVOKE ALL ON FUNCTION public\\.${name}\\([^)]*\\) FROM PUBLIC, anon;`,
+        ),
+      );
+    }
+  });
+
+  it("wraps no-argument helpers in SELECT inside policies", () => {
+    const policies = migration
+      .split("CREATE POLICY")
+      .slice(1)
+      .map((p) => p.split(";")[0]);
+    expect(policies.length).toBeGreaterThan(20);
+    for (const p of policies) {
+      expect(p).not.toMatch(
+        /(?<!\(SELECT )public\.song_library_(can_read|is_admin|can_manage)\(\)/,
+      );
+    }
+  });
+
+  it("never grants anon anything", () => {
+    expect(code).not.toMatch(/GRANT[^;]*\bTO\b[^;]*\banon\b/);
+  });
+
+  it("keeps the bucket private with no overwrite policy", () => {
+    expect(migration).toMatch(/'song-library',\s+'song-library',\s+false/);
+    expect(migration).not.toMatch(/ON storage\.objects FOR (UPDATE|ALL)/);
+  });
+
+  it("enforces splits with a deferred constraint trigger", () => {
+    expect(migration).toMatch(
+      /CREATE CONSTRAINT TRIGGER song_library_writers_splits_agreed[\s\S]*?DEFERRABLE INITIALLY DEFERRED/,
+    );
+    expect(migration).toMatch(
+      /CREATE CONSTRAINT TRIGGER song_library_checkpoints_splits_agreed[\s\S]*?DEFERRABLE INITIALLY DEFERRED/,
+    );
+  });
+
+  it("does not FK source_training_id to 417 yet", () => {
+    expect(code).not.toMatch(/REFERENCES public\.pw_songwriting_trainings/);
+    expect(code).toMatch(/source_training_id\s+uuid,/);
+  });
+
+  it("rollback refuses while songs exist and keeps a non-empty bucket", () => {
+    expect(rollback).toMatch(/419 rollback refused/);
+    expect(rollback).toMatch(/song_library\.rollback_drops_songs/);
+    expect(rollback).toMatch(
+      /DELETE FROM storage\.buckets WHERE id = 'song-library'/,
+    );
+    expect(rollback).toMatch(
+      /DELETE FROM public\.services WHERE service_key = 'song_library'/,
+    );
+  });
+});
