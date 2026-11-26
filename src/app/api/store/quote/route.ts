@@ -34,8 +34,17 @@ export async function POST(request: Request) {
   const ids = [...new Set(lines.map((l) => l.productId))];
   const [{ data: products }, { data: variants }] = await Promise.all([getProductsByIds(supabase, ids), listVariants(supabase, ids)]);
   const catalogue = { products: (products ?? []) as StoreProduct[], variants: (variants ?? []) as StoreVariant[] };
+  // The admin client throws if the service-role env is missing. Build it
+  // inside a try so a public quote still returns prices (covers and a
+  // coupon check just drop out) instead of 500ing every cart.
+  let admin = null;
+  try {
+    admin = storeAdminClient();
+  } catch {
+    admin = null;
+  }
   // Uploaded cover, else the signed page-1 preview render, else null.
-  const covers = await coverSrcsFor(storeAdminClient(), catalogue.products);
+  const covers = admin ? await coverSrcsFor(admin, catalogue.products) : {};
 
   // Price each line alone too, so one bad line doesn't blank the whole cart.
   const items = lines.map((line) => {
@@ -58,11 +67,15 @@ export async function POST(request: Request) {
     if (!(await couponGuessAllowed(request))) {
       couponError = "Too many tries. Wait a few minutes and try again.";
     } else {
-      const check = await checkCouponCode(storeAdminClient(), parsed.data.couponCode, whole.cart);
-      if (check.ok) {
-        discountCents = check.discountCents;
-        coupon = { code: check.coupon.code, summary: check.summary };
-      } else couponError = check.error;
+      if (!admin) {
+        couponError = "We couldn't check that code. Try again in a moment.";
+      } else {
+        const check = await checkCouponCode(admin, parsed.data.couponCode, whole.cart);
+        if (check.ok) {
+          discountCents = check.discountCents;
+          coupon = { code: check.coupon.code, summary: check.summary };
+        } else couponError = check.error;
+      }
     }
   }
 
