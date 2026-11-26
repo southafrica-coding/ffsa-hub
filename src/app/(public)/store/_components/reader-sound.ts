@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createFlipSound, type FlipSound } from "@/lib/store/flip-sound";
 
 // The flipbook's sound: a short page-flip on each turn, and the product's
 // background music if Media uploaded one. One speaker toggle mutes or
@@ -10,12 +11,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // touched it, so nothing plays until the first tap, click or key press,
 // whatever the saved choice. Every play() that starts sound is called from
 // inside that gesture's own handler, never from an effect afterwards.
+//
+// The flip itself is src/lib/store/flip-sound.ts: a Web Audio engine that
+// loads the clip on mount, is woken by every gesture, and starts a short
+// slice the moment a turn starts.
 
 const KEY = "ffsa-store-sound";
-const FLIP_URL = "/store/sounds/page-flip.wav";
 const MUSIC_VOLUME = 0.35;
-
-type AnyAudioContext = AudioContext;
+const GESTURES = ["touchstart", "touchend", "pointerdown", "click", "keydown"] as const;
 
 export function useReaderSound({ musicUrl, onMusicExpired }: { musicUrl?: string | null; onMusicExpired?: () => void }) {
   const [wantOn, setWantOn] = useState(true); // the saved choice (default on)
@@ -26,9 +29,7 @@ export function useReaderSound({ musicUrl, onMusicExpired }: { musicUrl?: string
   const wantRef = useRef(wantOn);
   wantRef.current = wantOn;
 
-  const ctx = useRef<AnyAudioContext | null>(null);
-  const buffer = useRef<AudioBuffer | null>(null);
-  const fallback = useRef<HTMLAudioElement | null>(null);
+  const flipSound = useRef<FlipSound | null>(null);
   const music = useRef<HTMLAudioElement | null>(null);
   const expired = useRef(onMusicExpired);
   const lastExpired = useRef(0);
@@ -42,32 +43,30 @@ export function useReaderSound({ musicUrl, onMusicExpired }: { musicUrl?: string
     }
   }, []);
 
-  /** Make (or wake) the audio context and load the flip sample. Call inside a gesture. */
-  const wake = useCallback(() => {
-    if (typeof window === "undefined") return;
-    if (!ctx.current) {
-      const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (AC) {
-        try {
-          ctx.current = new AC();
-          fetch(FLIP_URL)
-            .then((r) => r.arrayBuffer())
-            .then((b) => new Promise<AudioBuffer>((res, rej) => ctx.current!.decodeAudioData(b, res, rej)))
-            .then((b) => (buffer.current = b))
-            .catch(() => {});
-        } catch {
-          ctx.current = null;
-        }
-      }
-    }
-    // Plays the flip until the sample is decoded (and where there's no Web Audio).
-    if (!fallback.current) {
-      fallback.current = new Audio(FLIP_URL);
-      fallback.current.preload = "auto";
-      fallback.current.load();
-    }
-    if (ctx.current?.state === "suspended") ctx.current.resume().catch(() => {});
+  // Load the flip clip as soon as the reader opens, so it's decoded before the first turn.
+  useEffect(() => {
+    const e = createFlipSound();
+    flipSound.current = e;
+    e.init();
+    return () => {
+      e.dispose();
+      if (flipSound.current === e) flipSound.current = null;
+    };
   }, []);
+
+  /** Wake the audio context (iOS suspends it). Call inside a gesture. */
+  const wake = useCallback(() => {
+    flipSound.current?.unlock();
+  }, []);
+
+  // Every gesture wakes the context again if the browser has suspended it since.
+  useEffect(() => {
+    const opts = { capture: true, passive: true } as const;
+    for (const g of GESTURES) window.addEventListener(g, wake, opts);
+    return () => {
+      for (const g of GESTURES) window.removeEventListener(g, wake, opts);
+    };
+  }, [wake]);
 
   const playMusic = useCallback(() => {
     const m = music.current;
@@ -137,7 +136,6 @@ export function useReaderSound({ musicUrl, onMusicExpired }: { musicUrl?: string
 
   useEffect(() => () => {
     music.current?.pause();
-    ctx.current?.close().catch(() => {});
   }, []);
 
   const toggle = useCallback(() => {
@@ -159,26 +157,12 @@ export function useReaderSound({ musicUrl, onMusicExpired }: { musicUrl?: string
     }
   }, [unlocked, wake, playMusic]);
 
-  /** The page-flip effect. Silent while muted or before the first tap. */
+  /** The page-flip effect, started at once. Silent while muted or before the first tap. */
   const flip = useCallback(() => {
-    if (!onRef.current) return;
-    const c = ctx.current;
-    const b = buffer.current;
-    if (c && b) {
-      const src = c.createBufferSource();
-      src.buffer = b;
-      src.playbackRate.value = 0.94 + Math.random() * 0.12;
-      const g = c.createGain();
-      g.gain.value = 0.7;
-      src.connect(g).connect(c.destination);
-      src.start();
-      return;
-    }
-    const f = fallback.current;
-    if (f) {
-      f.currentTime = 0;
-      f.play().catch(() => {});
-    }
+    const e = flipSound.current;
+    if (!e) return;
+    e.enabled = onRef.current;
+    e.play();
   }, []);
 
   return { on, toggle, flip, hasMusic: !!musicUrl };
