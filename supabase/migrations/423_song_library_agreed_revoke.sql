@@ -22,8 +22,22 @@
 --     stage_events row (song_library_checkpoints_log, unchanged);
 --   * refine ticks stay writers and admins (419's writer-tables policies).
 --
--- Independent of 422 (which only touches song_library_notifications).
--- CREATE OR REPLACE, so safe to run twice.
+-- Also (Review nit on #751 / 422): a 'new_version' notification must point
+-- at a version stage event of the same song, even for the service role.
+-- A version event is the one 419's song_library_versions_after_insert
+-- writes for every upload: song_library_stage_events.kind = 'version',
+-- same song_id as the version. New BEFORE INSERT / UPDATE trigger
+-- song_library_notifications_version_event raises 23514 (check_violation,
+-- constraint name song_library_notifications_new_version_event) otherwise.
+-- Applying 423 refuses (23514) if an existing new_version row already
+-- breaks the rule. Other kinds are not checked (stage_moved keeps 419's
+-- trust in the service role).
+--
+-- Does not depend on 422: the trigger only compares kind with the text
+-- 'new_version', which 419's kind CHECK never admits, so on a 419-only
+-- database it is a no-op until 422 is applied. Apply order 422/423 does
+-- not matter. CREATE OR REPLACE / DROP TRIGGER IF EXISTS, so safe to run
+-- twice.
 -- Rollback: supabase/rollbacks/423_song_library_agreed_revoke_rollback.sql
 -- (restores 419's function body exactly).
 
@@ -157,6 +171,56 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+-- new_version claims reference a version event of the same song.
+CREATE OR REPLACE FUNCTION public.song_library_notifications_version_event()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.kind = 'new_version' AND NOT EXISTS (
+       SELECT 1 FROM public.song_library_stage_events e
+        WHERE e.id = NEW.stage_event_id
+          AND e.kind = 'version'
+          AND e.song_id = NEW.song_id
+     ) THEN
+    RAISE EXCEPTION 'A new_version notification must reference a version stage event of the same song (stage_event_id %, song %)',
+      NEW.stage_event_id, NEW.song_id
+      USING ERRCODE = 'check_violation',
+            CONSTRAINT = 'song_library_notifications_new_version_event',
+            TABLE = 'song_library_notifications';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.song_library_notifications_version_event() FROM PUBLIC, anon, authenticated;
+COMMENT ON FUNCTION public.song_library_notifications_version_event() IS
+  '423: a new_version notification must reference a kind ''version'' stage event of the same song (23514 song_library_notifications_new_version_event), service role included.';
+
+DO $existing$
+DECLARE
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n
+    FROM public.song_library_notifications x
+   WHERE x.kind = 'new_version'
+     AND NOT EXISTS (
+       SELECT 1 FROM public.song_library_stage_events e
+        WHERE e.id = x.stage_event_id AND e.kind = 'version' AND e.song_id = x.song_id
+     );
+  IF n > 0 THEN
+    RAISE EXCEPTION '423 refused: % existing new_version notification(s) do not reference a version event of their song; fix or delete them first', n
+      USING ERRCODE = 'check_violation', CONSTRAINT = 'song_library_notifications_new_version_event';
+  END IF;
+END
+$existing$;
+
+DROP TRIGGER IF EXISTS song_library_notifications_version_event ON public.song_library_notifications;
+CREATE TRIGGER song_library_notifications_version_event
+  BEFORE INSERT OR UPDATE OF kind, stage_event_id, song_id ON public.song_library_notifications
+  FOR EACH ROW EXECUTE FUNCTION public.song_library_notifications_version_event();
 
 COMMENT ON FUNCTION public.song_library_writers_before() IS
   'Writers BEFORE trigger: stamps, song/person fixed, credit lock while agreed, confirmation rules. 423: once agreed, only managers and admins (or the service role) revoke a confirmation.';

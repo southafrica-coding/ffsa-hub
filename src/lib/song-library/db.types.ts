@@ -397,8 +397,10 @@ export interface SongLibrarySubscription {
  * stage_event_id is set exactly for stage_moved and new_version. For
  * new_version it is the kind 'version' stage event that every version
  * upload logs (payload { version_id, n, label, is_demo }); senders skip
- * n = 1, which new_upload covers. help_request_id is set exactly for
- * help_asked.
+ * n = 1, which new_upload covers. Since 423 a trigger refuses (23514,
+ * song_library_notifications_new_version_event) a new_version row whose
+ * stage_event_id is not a kind 'version' event of the same song, service
+ * role included. help_request_id is set exactly for help_asked.
  */
 export interface SongLibraryNotification {
   id: string;

@@ -1,9 +1,13 @@
 -- Undo migration 423: puts back 419's song_library_writers_before()
 -- exactly (a writer may again withdraw their own confirmation after the
--- splits are agreed, which revokes the agreement). No data changes.
--- Safe to run twice.
+-- splits are agreed, which revokes the agreement), and drops the
+-- new_version event trigger and its function. No data changes; new_version
+-- rows stay (422's rollback is what removes those). Safe to run twice.
 
 BEGIN;
+
+DROP TRIGGER IF EXISTS song_library_notifications_version_event ON public.song_library_notifications;
+DROP FUNCTION IF EXISTS public.song_library_notifications_version_event();
 
 CREATE OR REPLACE FUNCTION public.song_library_writers_before()
 RETURNS trigger
