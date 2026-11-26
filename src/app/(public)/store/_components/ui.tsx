@@ -65,18 +65,6 @@ export function Notice({ tone = "quiet", children }: { tone?: "quiet" | "good" |
   );
 }
 
-export function CoverImage({ src, title, className }: { src: string | null; title: string; className?: string }) {
-  return (
-    <div className={cn("relative aspect-[3/4] overflow-hidden bg-bone-2", className)}>
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]" />
-      ) : (
-        <div className="flex h-full w-full flex-col justify-end bg-ink p-4">
-          <span className="font-display text-[clamp(22px,5vw,34px)] font-black uppercase leading-[0.9] text-white">{title}</span>
-          <span className="mt-3 h-[3px] w-8 bg-yellow" />
-        </div>
-      )}
-    </div>
-  );
-}
+// The cover moved to ./cover-image (a client component: it falls back to
+// the title box if the image fails).
+export { CoverImage } from "./cover-image";

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { storeAdminClient } from "@/lib/store/db";
 import { getBuyer } from "@/lib/store/access";
 import { kindLabel } from "@/lib/store/catalogue";
+import { coverSrcsFor } from "@/lib/store/cover";
 import { accessFor } from "@/lib/store/entitlements";
 import type { StoreEntitlement, StoreProduct } from "@/lib/store/types";
 import { getProductsByIds, linkEntitlementsToUser, linkOrdersToUser, listEntitlementsFor } from "@/services/store";
@@ -50,6 +51,8 @@ export default async function LibraryPage() {
   const items = ((prods ?? []) as StoreProduct[])
     .map((p) => ({ product: p, access: accessFor(entitlements, buyer, p.id) }))
     .filter((x) => x.access.read || entitlements.some((e) => e.product_id === x.product.id && e.expires_at));
+  // The buyer owns these, so a product taken off sale keeps its cover here.
+  const covers = await coverSrcsFor(admin, items.map((x) => x.product), { requirePublished: false });
 
   return (
     <>
@@ -67,8 +70,8 @@ export default async function LibraryPage() {
           <ul className="grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-4 md:gap-x-6">
             {items.map(({ product, access }) => (
               <li key={product.id}>
-                <Link href={access.read ? `/store/library/${product.id}` : `/store/p/${product.slug}`} className="group block">
-                  <CoverImage src={product.cover_image_url ? `/api/store/cover/${product.id}` : null} title={product.title} className="border border-ink" />
+                <Link href={access.read ? `/store/library/${product.id}` : `/store/p/${product.slug}`} className="group block min-w-0 outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink">
+                  <CoverImage src={covers[product.id] ?? null} title={product.title} className="border border-ink" />
                   <span className="chip mt-3">{kindLabel(product.kind)}</span>
                   <h2 className="mt-2 font-display text-[18px] font-black uppercase leading-[0.95] decoration-yellow decoration-[3px] underline-offset-4 group-hover:underline">{product.title}</h2>
                   <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-tertiary)]">

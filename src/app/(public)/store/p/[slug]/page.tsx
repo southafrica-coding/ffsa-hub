@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { kindHasFlipbook, kindLabel } from "@/lib/store/catalogue";
+import { coverSrcFor } from "@/lib/store/cover";
+import { storeAdminClient } from "@/lib/store/db";
 import type { StoreProduct, StoreVariant } from "@/lib/store/types";
 import { getProductBySlug, listVariants } from "@/services/store";
 import { BuyBox } from "../../_components/buy-box";
@@ -41,7 +43,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const loaded = await load((await params).slug);
   if (!loaded) notFound();
   const { product, variants } = loaded;
-  const cover = <CoverImage src={product.cover_image_url ? `/api/store/cover/${product.id}` : null} title={product.title} className="mx-auto max-w-[420px] border border-ink" />;
+  // Shown when there's no preview flipbook (or while it can't load). The
+  // page's main image, so not lazy.
+  const coverSrc = await coverSrcFor(storeAdminClient(), product);
+  const cover = <CoverImage src={coverSrc} title={product.title} priority className="mx-auto max-w-[420px] border border-ink" />;
 
   return (
     <article className="md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] md:gap-10 md:px-8 md:pt-8">

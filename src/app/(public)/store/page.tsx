@@ -4,6 +4,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { kindLabel } from "@/lib/store/catalogue";
+import { coverSrcsFor } from "@/lib/store/cover";
+import { storeAdminClient } from "@/lib/store/db";
 import { formatZar } from "@/lib/store/money";
 import type { StoreProduct } from "@/lib/store/types";
 import { listPublishedProducts } from "@/services/store";
@@ -21,6 +23,7 @@ export default async function StorePage() {
   const supabase = await createClient();
   const { data, error } = await listPublishedProducts(supabase);
   const products = (data ?? []) as StoreProduct[];
+  const covers: Record<string, string | null> = error ? {} : await coverSrcsFor(storeAdminClient(), products);
   // The one band: the soonest preorder, if there is one. Never invented.
   const preorder = products.filter((p) => p.is_preorder).sort((a, b) => (a.preorder_ships_on ?? "9").localeCompare(b.preorder_ships_on ?? "9"))[0];
 
@@ -61,8 +64,8 @@ export default async function StorePage() {
           <ul className="grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-3 md:gap-x-6 md:gap-y-12">
             {products.map((p, i) => (
               <li key={p.id} className="animate-fade-up" style={{ animationDelay: `${Math.min(i, 8) * 40}ms`, animationFillMode: "both" }}>
-                <Link href={`/store/p/${p.slug}`} className="group block">
-                  <CoverImage src={p.cover_image_url ? `/api/store/cover/${p.id}` : null} title={p.title} className="border border-ink" />
+                <Link href={`/store/p/${p.slug}`} className="group block min-w-0 outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink">
+                  <CoverImage src={covers[p.id] ?? null} title={p.title} className="border border-ink" />
                   <div className="mt-3 flex flex-wrap items-center gap-1.5">
                     <span className="chip">{kindLabel(p.kind)}</span>
                     {p.is_preorder && <span className="chip" data-active="true">Preorder</span>}
