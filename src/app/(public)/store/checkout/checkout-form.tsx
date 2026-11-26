@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils/cn";
 import { formatZar } from "@/lib/store/money";
 import { PROVIDER_MIN_CENTS } from "@/lib/store/coupons";
 import { useCart } from "../_components/cart";
+import { CoverImage } from "../_components/cover-image";
 import { Field, inputClass, Notice, PrimaryButton } from "../_components/ui";
 
 type QuoteItem =
@@ -324,6 +325,13 @@ export function CheckoutForm({
             const q = quote?.items[i];
             return (
               <li key={line.key} className="flex gap-3 border-b border-rule p-3">
+                <div className="w-12 shrink-0">
+                  {q ? (
+                    <CoverImage src={q.ok ? q.cover : null} title={q.title} compact className="border border-ink" />
+                  ) : (
+                    <div aria-hidden="true" className="aspect-[210/297] w-full animate-pulse bg-bone-2" />
+                  )}
+                </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-display text-[16px] font-black uppercase leading-tight">{q?.title ?? "…"}</p>
                   <p className="mt-0.5 text-[12px] text-[color:var(--text-tertiary)]">

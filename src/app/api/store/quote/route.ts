@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { cartLineSchema, priceCart } from "@/lib/store/cart";
+import { coverSrcsFor } from "@/lib/store/cover";
 import { checkCouponCode, couponGuessAllowed } from "@/lib/store/coupon-server";
 import { couponCodeField } from "@/lib/store/coupons";
 import { storeAdminClient } from "@/lib/store/db";
@@ -33,6 +34,8 @@ export async function POST(request: Request) {
   const ids = [...new Set(lines.map((l) => l.productId))];
   const [{ data: products }, { data: variants }] = await Promise.all([getProductsByIds(supabase, ids), listVariants(supabase, ids)]);
   const catalogue = { products: (products ?? []) as StoreProduct[], variants: (variants ?? []) as StoreVariant[] };
+  // Uploaded cover, else the signed page-1 preview render, else null.
+  const covers = await coverSrcsFor(storeAdminClient(), catalogue.products);
 
   // Price each line alone too, so one bad line doesn't blank the whole cart.
   const items = lines.map((line) => {
@@ -40,7 +43,7 @@ export async function POST(request: Request) {
     const product = catalogue.products.find((p) => p.id === line.productId);
     const variant = catalogue.variants.find((v) => v.id === line.variantId);
     return one.ok
-      ? { ok: true, title: product!.title, kind: product!.kind, variant: variant?.label ?? null, quantity: one.cart.lines[0].quantity, unitCents: one.cart.lines[0].unitPriceCents, totalCents: one.cart.lines[0].lineTotalCents, ships: one.cart.lines[0].ships, productId: line.productId, cover: product!.cover_image_url ? `/api/store/cover/${product!.id}` : null }
+      ? { ok: true, title: product!.title, kind: product!.kind, variant: variant?.label ?? null, quantity: one.cart.lines[0].quantity, unitCents: one.cart.lines[0].unitPriceCents, totalCents: one.cart.lines[0].lineTotalCents, ships: one.cart.lines[0].ships, productId: line.productId, cover: covers[product!.id] ?? null }
       : { ok: false, title: product?.title ?? "Unavailable", error: one.error, productId: line.productId };
   });
 
