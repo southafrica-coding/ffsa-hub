@@ -19,8 +19,10 @@ function relative(file: string): string {
   return path.relative(ROOT, file).split(path.sep).join("/");
 }
 
+// `from "…"`, a bare side-effect `import "…"`, `import(…)` and `require(…)`,
+// with single, double or backtick quotes.
 const IMPORTS_INTERNAL =
-  /(?:from\s+|import\s*\(\s*|require\(\s*)["'][^"']*(?:\/internal(?:["'/])|departments\/http)/;
+  /(?:\bfrom\s+|\bimport\s+|\bimport\s*\(\s*|\brequire\s*\(\s*)["'`][^"'`]*(?:\/internal(?:["'`/])|departments\/http)/;
 
 const OURS = [
   "src/app/(admin)/departments/",
@@ -54,5 +56,27 @@ describe("department page boundary", () => {
       if (IMPORTS_INTERNAL.test(text)) offenders.push(relative(file));
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("recognises every import form, and ignores URLs that merely contain /internal", () => {
+    const flagged = [
+      'import { x } from "@/lib/departments/internal";',
+      "import x from '@/lib/departments/internal/rows';",
+      'import "@/lib/departments/internal";',
+      "import '@/lib/departments/internal/setup';",
+      'const m = await import("@/lib/departments/internal");',
+      "const m = await import(`@/lib/departments/internal`);",
+      'const m = require("@/lib/departments/internal");',
+      'import { get } from "@/lib/departments/http";',
+      'import "@/lib/departments/http";',
+    ];
+    const ignored = [
+      'new Request("http://internal.local/serve", { headers })',
+      'const url = "https://example.com/internal";',
+      'import { load } from "@/lib/departments/load";',
+      'import "@/lib/internalise";',
+    ];
+    for (const line of flagged) expect(IMPORTS_INTERNAL.test(line), line).toBe(true);
+    for (const line of ignored) expect(IMPORTS_INTERNAL.test(line), line).toBe(false);
   });
 });

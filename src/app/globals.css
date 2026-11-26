@@ -315,8 +315,12 @@
    palette so HubShell pages and DS primitives flip with them. --border and
    --accent are hex here (DS-1 uses them as colours, not HSL triplets), so
    they are re-declared after the shadcn HSL values above. --brand-black
-   stays black so primary buttons keep white text. Pinned-light blocks
-   (.theme-light, yellow surfaces) get the light values back. */
+   is not swapped, so black fills (default Button, bg-brand-black) stay
+   black in dark mode. Text on those fills must not use --bg / text-bg,
+   which turns near-black here: use text-primary-foreground (white in both
+   modes, see tailwind.config.ts) or var(--on-ink). The black sidebar and
+   tab bar are .theme-light, so their text-bg stays white. Pinned-light
+   blocks (.theme-light, yellow surfaces) get the light values back. */
 @layer base {
   html.dark {
     --bg:             #0A0A0A;

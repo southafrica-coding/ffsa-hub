@@ -8,8 +8,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "border border-brand-black bg-brand-black text-bg hover:bg-brand-black/90",
-        destructive: "border border-danger bg-transparent text-danger hover:bg-danger hover:text-bg",
+        // text-primary-foreground is white in both modes; --bg goes near-black in dark mode.
+        default: "border border-brand-black bg-brand-black text-primary-foreground hover:bg-brand-black/90",
+        destructive: "border border-danger bg-transparent text-danger hover:bg-danger hover:text-destructive-foreground",
         outline: "border border-rule-strong bg-bg text-ink hover:bg-bg-subtle",
         secondary: "bg-bg-subtle text-ink hover:bg-border",
         ghost: "text-[color:var(--text-secondary)] hover:bg-bg-subtle hover:text-ink",
