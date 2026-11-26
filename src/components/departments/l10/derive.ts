@@ -44,9 +44,9 @@ export function membersAsPeople(members: readonly L10Member[]): Person[] {
   return members.map((member) => ({ id: member.profile_id, name: personName(member.user, member.name) }));
 }
 
-/** The running meeting row from a #741 live_meeting payload. */
-export function liveMeetingOf(detail: Pick<L10TeamDetail, "live_meeting">) {
-  return detail.live_meeting?.meeting ?? null;
+/** The open meeting from a #741 running_meeting payload. */
+export function runningMeetingOf(detail: Pick<L10TeamDetail, "running_meeting">) {
+  return detail.running_meeting?.meeting ?? null;
 }
 
 export function isAutoHeadline(headline: Pick<L10Headline, "is_auto">): boolean {
@@ -55,6 +55,18 @@ export function isAutoHeadline(headline: Pick<L10Headline, "is_auto">): boolean 
 
 export function isShowingHeadline(headline: Pick<L10Headline, "dismissed_at">): boolean {
   return headline.dismissed_at == null;
+}
+
+/**
+ * Auto recaps to show in Headlines: every showing auto row, and if none
+ * are showing, the newest dismissed one so the person can Undo / Restore.
+ */
+export function recapHeadlines(headlines: readonly L10Headline[]): L10Headline[] {
+  const autos = headlines.filter(isAutoHeadline);
+  const showing = autos.filter(isShowingHeadline);
+  if (showing.length > 0) return showing;
+  const newest = [...autos].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  return newest ? [newest] : [];
 }
 
 /**

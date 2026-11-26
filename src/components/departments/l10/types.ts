@@ -1,14 +1,9 @@
-// L10 types for the UI. Row shapes follow Hub Data migration 416 as published
-// in PR #739 / included by Hub Backend PR #741 (src/lib/departments/db.types.ts
-// and src/lib/l10/types.ts). They are copied here, not imported, so this
-// folder builds before those PRs land on feat/departments-services.
+// L10 types for the UI. Row and response shapes follow Hub Backend PR #741
+// at a4a6002e (src/lib/departments/db.types.ts, src/lib/l10/types.ts, and
+// the /api/departments/[slug]/l10/** handlers). They are copied here, not
+// imported, so this folder builds before that PR lands on the base branch.
 //
-// Response shapes follow #741's route handlers under
-// /api/departments/[slug]/l10/**. api.ts is the only place that reads them.
-//
-// Auto headlines (is_auto, dismissed_at, recap_of_meeting_id, and
-// l10_teams.recap_source_team_id) are in #739's latest 416 types and are
-// "coming next" on #741. They are typed here ahead of that landing.
+// api.ts is the only place that reads the wire responses.
 
 export const L10_SEGMENTS = [
   "segue",
@@ -57,10 +52,9 @@ export interface L10Team {
   slack_channel_id: string | null;
   /**
    * Paired team in the same department whose latest ended meeting is recapped
-   * as an auto headline when this team's meeting starts. From #739; not yet
-   * in #741's column list.
+   * as an auto headline when this team's meeting starts. Null = no pairing.
    */
-  recap_source_team_id?: string | null;
+  recap_source_team_id: string | null;
   sort_order: number;
   is_active: boolean;
   my_role?: L10TeamRole | null;
@@ -160,8 +154,9 @@ export interface L10Issue {
 }
 
 /**
- * l10_headlines. body is the #741 field (there is no title/kind).
- * is_auto, recap_of_meeting_id and dismissed_at are in #739 and coming on #741.
+ * l10_headlines. body is the field (there is no title/kind).
+ * Auto rows (is_auto) cannot be edited or deleted (409 l10_auto_headline_locked).
+ * Dismiss is POST .../headlines/:id/dismiss; restore is DELETE on that route.
  */
 export interface L10Headline {
   id: string;
@@ -172,14 +167,32 @@ export interface L10Headline {
   created_at: string;
   updated_at?: string;
   /** System cross-team recap. Cannot be edited or deleted by a member. */
-  is_auto?: boolean;
-  /** The paired team's ended meeting this auto row recaps. */
-  recap_of_meeting_id?: string | null;
-  /** Null = showing. Any team member may set it. */
-  dismissed_at?: string | null;
-  /** Optional until the API includes the paired team's name on the row. */
+  is_auto: boolean;
+  /** The paired team's ended meeting this auto row recaps. Only on auto rows. */
+  recap_of_meeting_id: string | null;
+  /** Null = showing. Any team member may set or clear it. */
+  dismissed_at: string | null;
+  /** Not on the #741 row; filled by the client from the paired team's name. */
   recap_source_team_name?: string | null;
 }
+
+/** Outcome of ensureAutoHeadline, returned as `auto_headline` on meeting responses. */
+export type AutoHeadlineOutcome =
+  | "inserted"
+  | "exists"
+  | "no-source-team"
+  | "no-ended-source-meeting"
+  | "meeting-ended"
+  | "not-found"
+  | "error";
+
+/** API error `code` values from #741. Map these; never render the `error` text. */
+export const L10_MEETING_ALREADY_OPEN = "l10_meeting_already_open" as const;
+export const L10_AUTO_HEADLINE_LOCKED = "l10_auto_headline_locked" as const;
+export const L10_AUTO_HEADLINE_FIELD = "l10_auto_headline_field" as const;
+export const L10_RATING_NOT_ALLOWED = "l10_rating_not_allowed" as const;
+export const L10_AUTO_HEADLINE_INCOMPLETE = "l10_auto_headline_incomplete" as const;
+export const L10_ONE_AUTO_RECAP = "l10_headlines_one_auto_recap" as const;
 
 /** A public.rocks row with team_id set. owner_user_id is the #741 column. */
 export interface L10Rock {
@@ -196,8 +209,8 @@ export interface L10Access {
   canManage?: boolean;
 }
 
-/** #741 live_meeting: the running meeting, its attendees, and its headlines. */
-export interface L10LiveMeeting {
+/** #741 running_meeting: the open meeting, its attendees, and its headlines. */
+export interface L10RunningMeeting {
   meeting: L10Meeting;
   attendees: L10Attendee[];
   headlines: L10Headline[];
@@ -222,11 +235,12 @@ export interface L10TeamDetail {
   todos: L10Todo[];
   issues: L10Issue[];
   /**
-   * Not on GET /teams/:id in #741 (only live_meeting.headlines is).
-   * The client loads GET .../headlines and fills this in.
+   * Team-level headlines. GET /teams/:id does not send a top-level list;
+   * running_meeting.headlines is the open meeting's list. The client also
+   * GETs .../headlines and merges them here for the team page.
    */
   headlines: L10Headline[];
-  live_meeting: L10LiveMeeting | null;
+  running_meeting: L10RunningMeeting | null;
   recent_meetings?: L10Meeting[];
 }
 
@@ -234,6 +248,8 @@ export interface L10MeetingDetail {
   meeting: L10Meeting;
   attendees: L10Attendee[];
   average_rating?: number | null;
+  headlines: L10Headline[];
+  auto_headline?: AutoHeadlineOutcome | null;
 }
 
 /** Per-person DM outcome after End. */

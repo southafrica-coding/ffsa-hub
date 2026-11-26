@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createL10Api, l10Pages, type FailureKind } from "./api";
+import { createL10Api, l10Pages, L10_MEETING_ALREADY_OPEN, type FailureKind } from "./api";
 import {
   formatDay,
   formatDueDay,
@@ -11,7 +12,8 @@ import {
   goalLabel,
   hasTrend,
   isAutoHeadline,
-  liveMeetingOf,
+  recapHeadlines,
+  runningMeetingOf,
   measureStatus,
   membersAsPeople,
   nameOf,
@@ -24,7 +26,7 @@ import {
   visibleHeadlines,
 } from "./derive";
 import { MEETING_MINUTES, SEGMENTS } from "./segments";
-import type { L10Rock, L10Team, L10TeamDetail } from "./types";
+import type { L10Headline, L10Rock, L10Team, L10TeamDetail } from "./types";
 import { AutoRecapCard, Avatar, BackLink, Checkbox, Empty, Masthead, Notice, SectionBar, TeamNotFound, failureCopy, useNow } from "./ui";
 import styles from "./l10.module.css";
 
@@ -52,6 +54,8 @@ export function TeamView({ slug, departmentName, teamId }: { slug: string; depar
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<FailureKind | null>(null);
+  const [problemCode, setProblemCode] = useState<string | null>(null);
+  const [joinMeetingId, setJoinMeetingId] = useState<string | null>(null);
   const [pendingTodo, setPendingTodo] = useState<string | null>(null);
   const [pendingHeadline, setPendingHeadline] = useState<string | null>(null);
   const [siblingTeams, setSiblingTeams] = useState<L10Team[]>([]);
@@ -82,7 +86,7 @@ export function TeamView({ slug, departmentName, teamId }: { slug: string; depar
   const { detail } = load;
   const { team } = detail;
   const people = membersAsPeople(detail.members);
-  const live = liveMeetingOf(detail);
+  const live = runningMeetingOf(detail);
   const start = nextMeetingStart(team, now);
   const schedule = scheduleLabel(team);
   const week = reportWeek(now, team.meeting_timezone);
@@ -95,29 +99,52 @@ export function TeamView({ slug, departmentName, teamId }: { slug: string; depar
     .filter((issue) => issue.status !== "solved")
     .sort((a, b) => (a.priority ?? 9) - (b.priority ?? 9));
   const allHeadlines = visibleHeadlines(detail.headlines).sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const recaps = allHeadlines.filter(isAutoHeadline);
+  const recaps = recapHeadlines(detail.headlines).sort((a, b) => b.created_at.localeCompare(a.created_at));
   const headlines = allHeadlines.filter((headline) => !isAutoHeadline(headline)).slice(0, 10);
 
 
-  async function dismissHeadline(id: string) {
-    setPendingHeadline(id);
-    const result = await api.dismissHeadline(teamId, id, new Date().toISOString());
-    setPendingHeadline(null);
-    if (!result.ok) return setProblem(result.kind);
-    const at = result.data.headline?.dismissed_at ?? new Date().toISOString();
+  function applyHeadline(id: string, headline: L10Headline | undefined, dismissedAt: string | null) {
     setLoad((prev) =>
       prev.state === "ready"
         ? {
             state: "ready",
             detail: {
               ...prev.detail,
-              headlines: prev.detail.headlines.map((headline) =>
-                headline.id === id ? { ...headline, ...result.data.headline, dismissed_at: at } : headline
+              headlines: prev.detail.headlines.map((row) =>
+                row.id === id ? { ...row, ...headline, dismissed_at: dismissedAt } : row
               ),
             },
           }
         : prev
     );
+  }
+
+  async function dismissHeadline(id: string) {
+    setPendingHeadline(id);
+    setProblem(null);
+    setProblemCode(null);
+    const result = await api.dismissHeadline(teamId, id);
+    setPendingHeadline(null);
+    if (!result.ok) {
+      setProblem(result.kind);
+      setProblemCode(result.code);
+      return;
+    }
+    applyHeadline(id, result.data.headline, result.data.headline?.dismissed_at ?? new Date().toISOString());
+  }
+
+  async function restoreHeadline(id: string) {
+    setPendingHeadline(id);
+    setProblem(null);
+    setProblemCode(null);
+    const result = await api.restoreHeadline(teamId, id);
+    setPendingHeadline(null);
+    if (!result.ok) {
+      setProblem(result.kind);
+      setProblemCode(result.code);
+      return;
+    }
+    applyHeadline(id, result.data.headline, null);
   }
 
   async function startOrResume() {
@@ -127,29 +154,39 @@ export function TeamView({ slug, departmentName, teamId }: { slug: string; depar
     }
     setBusy(true);
     setProblem(null);
+    setProblemCode(null);
+    setJoinMeetingId(null);
     const result = await api.startMeeting(teamId);
     if (result.ok && result.data?.meeting?.id) {
       router.push(pages.meeting(teamId, result.data.meeting.id));
       return;
     }
-    // A meeting someone else just started: pick it up instead of a second one.
-    if (!result.ok && result.kind === "conflict") {
-      const again = await refresh();
-      const running = again.ok ? liveMeetingOf(again.data) : null;
-      if (running) {
-        router.push(pages.meeting(teamId, running.id));
-        return;
-      }
-    }
     setBusy(false);
-    setProblem(result.ok ? "error" : result.kind);
+    if (!result.ok) {
+      setProblem(result.kind);
+      setProblemCode(result.code);
+      if (result.code === L10_MEETING_ALREADY_OPEN) {
+        let openId = result.meetingId;
+        if (!openId) {
+          const again = await refresh();
+          openId = again.ok ? runningMeetingOf(again.data)?.id ?? null : null;
+        }
+        setJoinMeetingId(openId);
+      }
+      return;
+    }
+    setProblem("error");
   }
 
   async function toggleTodo(id: string, done: boolean) {
     setPendingTodo(id);
     const result = await api.setTodoDone(teamId, id, done);
     setPendingTodo(null);
-    if (!result.ok) return setProblem(result.kind);
+    if (!result.ok) {
+      setProblem(result.kind);
+      setProblemCode(result.code);
+      return;
+    }
     setLoad((prev) =>
       prev.state === "ready"
         ? {
@@ -203,7 +240,14 @@ export function TeamView({ slug, departmentName, teamId }: { slug: string; depar
           {MEETING_MINUTES} min · {SEGMENTS.length} segments
         </span>
       </div>
-      {problem ? <Notice>{failureCopy(problem)}</Notice> : null}
+      {problem ? <Notice>{failureCopy(problem, problemCode)}</Notice> : null}
+      {joinMeetingId ? (
+        <p className={styles.joinOpen}>
+          <Link href={pages.meeting(teamId, joinMeetingId)} className={styles.btnYellow}>
+            Join the open meeting
+          </Link>
+        </p>
+      ) : null}
 
       <nav className={styles.jump} aria-label="Sections">
         {JUMPS.map((jump) => (
@@ -313,7 +357,8 @@ export function TeamView({ slug, departmentName, teamId }: { slug: string; depar
           headline={headline}
           sourceTeamName={recapSourceName(headline, team, siblingTeams)}
           onDismiss={() => void dismissHeadline(headline.id)}
-          dismissing={pendingHeadline === headline.id}
+          onRestore={() => void restoreHeadline(headline.id)}
+          pending={pendingHeadline === headline.id}
         />
       ))}
       <ul className={styles.list}>

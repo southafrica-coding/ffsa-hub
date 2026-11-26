@@ -186,7 +186,7 @@ describe("follow-up outcomes", () => {
       status: 409,
       ok: false,
       body: {
-        error: "already_ended",
+        already_ended: true,
         followup: { results: [{ user_id: AMY.id, outcome: "already_sent" }, { bad: true }] },
         recap: { outcome: "already_posted" },
       },
@@ -209,12 +209,20 @@ describe("follow-up outcomes", () => {
       ok: false,
       body: { error: "raw db text", fieldErrors: { ratings: "server words", secret_field: "x" } },
     });
-    expect(failed).toEqual({ ok: false, kind: "invalid", fieldErrors: { ratings: "Ratings are whole numbers from 1 to 10." } });
+    expect(failed).toEqual({
+      ok: false,
+      kind: "invalid",
+      fieldErrors: { ratings: "Ratings are whole numbers from 1 to 10." },
+      code: null,
+      meetingId: null,
+    });
     expect(readEndResult({ status: 409, ok: false, body: { error: "other" } })).toEqual({
       ok: false,
       kind: "conflict",
       fieldErrors: {},
+      code: null,
+      meetingId: null,
     });
-    expect(readEndResult(null)).toEqual({ ok: false, kind: "error", fieldErrors: {} });
+    expect(readEndResult(null)).toEqual({ ok: false, kind: "error", fieldErrors: {}, code: null, meetingId: null });
   });
 });

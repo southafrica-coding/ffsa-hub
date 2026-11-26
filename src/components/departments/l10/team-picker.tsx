@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createL10Api, l10Pages, type FailureKind } from "./api";
-import { formatDay, formatHm, liveMeetingOf, nextMeetingStart, teamStats, type TeamStats } from "./derive";
+import { createL10Api, l10Pages, L10_MEETING_ALREADY_OPEN, type FailureKind } from "./api";
+import { formatDay, formatHm, runningMeetingOf, nextMeetingStart, teamStats, type TeamStats } from "./derive";
 import type { L10Meeting, L10Team } from "./types";
 import { BackLink, Masthead, Notice, failureCopy, useNow } from "./ui";
 import styles from "./l10.module.css";
@@ -28,6 +28,8 @@ export function TeamPicker({ slug, departmentName }: { slug: string; departmentN
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [starting, setStarting] = useState<string | null>(null);
   const [startError, setStartError] = useState<FailureKind | null>(null);
+  const [startErrorCode, setStartErrorCode] = useState<string | null>(null);
+  const [joinOpen, setJoinOpen] = useState<{ teamId: string; meetingId: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +46,7 @@ export function TeamPicker({ slug, departmentName }: { slug: string; departmentN
         cards: teams.map((team, index) => {
           const detail = details[index];
           return detail?.ok
-            ? { team, stats: teamStats(detail.data), live: liveMeetingOf(detail.data) }
+            ? { team, stats: teamStats(detail.data), live: runningMeetingOf(detail.data) }
             : { team, stats: null, live: null };
         }),
       });
@@ -72,17 +74,28 @@ export function TeamPicker({ slug, departmentName }: { slug: string; departmentN
   async function start(teamId: string) {
     setStarting(teamId);
     setStartError(null);
+    setStartErrorCode(null);
+    setJoinOpen(null);
     const result = await api.startMeeting(teamId);
     if (result.ok && result.data?.meeting?.id) {
       router.push(pages.meeting(teamId, result.data.meeting.id));
       return;
     }
     setStarting(null);
-    if (!result.ok && result.kind === "conflict") {
-      router.push(pages.team(teamId));
+    if (!result.ok) {
+      setStartError(result.kind);
+      setStartErrorCode(result.code);
+      if (result.code === L10_MEETING_ALREADY_OPEN) {
+        let meetingId = result.meetingId;
+        if (!meetingId) {
+          const again = await api.getTeam(teamId);
+          meetingId = again.ok ? runningMeetingOf(again.data)?.id ?? null : null;
+        }
+        if (meetingId) setJoinOpen({ teamId, meetingId });
+      }
       return;
     }
-    setStartError(result.ok ? "error" : result.kind);
+    setStartError("error");
   }
 
   const count = load.state === "ready" ? load.cards.length : null;
@@ -101,7 +114,14 @@ export function TeamPicker({ slug, departmentName }: { slug: string; departmentN
         }
       />
 
-      {startError ? <Notice>{failureCopy(startError)}</Notice> : null}
+      {startError ? <Notice>{failureCopy(startError, startErrorCode)}</Notice> : null}
+      {joinOpen ? (
+        <p className={styles.joinOpen}>
+          <Link href={pages.meeting(joinOpen.teamId, joinOpen.meetingId)} className={styles.btnYellow}>
+            Join the open meeting
+          </Link>
+        </p>
+      ) : null}
 
       {load.state === "loading" ? <p className={styles.empty}>Loading teams…</p> : null}
       {load.state === "failed" ? <Notice>{failureCopy(load.kind)}</Notice> : null}
@@ -229,6 +249,8 @@ export function TeamPickerScreen({
   now,
   highlighted = null,
   startError = null,
+  startErrorCode = null,
+  joinHref = null,
   starting = null,
   onStart,
 }: {
@@ -238,6 +260,8 @@ export function TeamPickerScreen({
   now: number;
   highlighted?: string | null;
   startError?: FailureKind | null;
+  startErrorCode?: string | null;
+  joinHref?: string | null;
   starting?: string | null;
   onStart?: (teamId: string) => void;
 }) {
@@ -256,7 +280,14 @@ export function TeamPickerScreen({
           </>
         }
       />
-      {startError ? <Notice>{failureCopy(startError)}</Notice> : null}
+      {startError ? <Notice>{failureCopy(startError, startErrorCode)}</Notice> : null}
+      {joinHref ? (
+        <p className={styles.joinOpen}>
+          <Link href={joinHref} className={styles.btnYellow}>
+            Join the open meeting
+          </Link>
+        </p>
+      ) : null}
       {count === 0 ? <p className={styles.empty}>No L10 teams yet.</p> : null}
       {count > 0 ? (
         <ul className={styles.cards}>

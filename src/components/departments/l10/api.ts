@@ -9,10 +9,11 @@ import type {
   L10Attendee,
   L10EndResponse,
   L10Headline,
+  AutoHeadlineOutcome,
   L10Issue,
-  L10LiveMeeting,
   L10Meeting,
   L10MeetingDetail,
+  L10RunningMeeting,
   L10Member,
   L10PersonName,
   L10Segment,
@@ -25,13 +26,84 @@ import type {
   NewMeasurableValueInput,
   NewTodoInput,
 } from "./types";
+import {
+  L10_AUTO_HEADLINE_FIELD,
+  L10_AUTO_HEADLINE_LOCKED,
+  L10_MEETING_ALREADY_OPEN,
+  L10_ONE_AUTO_RECAP,
+  L10_RATING_NOT_ALLOWED,
+} from "./types";
 import { personName } from "./derive";
+
+export {
+  L10_AUTO_HEADLINE_FIELD,
+  L10_AUTO_HEADLINE_LOCKED,
+  L10_MEETING_ALREADY_OPEN,
+  L10_ONE_AUTO_RECAP,
+  L10_RATING_NOT_ALLOWED,
+};
 
 export type FailureKind = "unauthenticated" | "forbidden" | "not_found" | "conflict" | "invalid" | "error";
 
-export type ApiResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; kind: FailureKind; fieldErrors: Record<string, string> };
+export type ApiFailure = {
+  ok: false;
+  kind: FailureKind;
+  fieldErrors: Record<string, string>;
+  /** Machine-readable #741 `code`. Null when the body had none. */
+  code: string | null;
+  /** Open meeting id, when the code is l10_meeting_already_open. */
+  meetingId: string | null;
+};
+
+export type ApiResult<T> = { ok: true; data: T } | ApiFailure;
+
+/** Our copy for each known #741 `code`. The server's `error` text is never used. */
+export const CODE_COPY: Record<string, string> = {
+  [L10_MEETING_ALREADY_OPEN]: "This team already has a meeting running.",
+  [L10_AUTO_HEADLINE_LOCKED]: "This headline can't be edited or deleted. Dismiss it instead.",
+  [L10_AUTO_HEADLINE_FIELD]: "That field is set by the Hub, not by a person on the team.",
+  [L10_RATING_NOT_ALLOWED]: "You can only set your own rating.",
+  [L10_ONE_AUTO_RECAP]: "This meeting already has that recap.",
+};
+
+/** Reads `code` only — never `error`. */
+export function readErrorCode(body: unknown): string | null {
+  if (!isRecord(body)) return null;
+  return typeof body.code === "string" && body.code.length > 0 ? body.code : null;
+}
+
+export function readMeetingId(body: unknown): string | null {
+  if (!isRecord(body) || typeof body.meeting_id !== "string" || body.meeting_id.length === 0) return null;
+  return body.meeting_id;
+}
+
+/** Friendly copy for a known code, or null. Never returns the server's `error` string. */
+export function copyForCode(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return CODE_COPY[code] ?? null;
+}
+
+/**
+ * Map a JSON error body to our copy by `code` only. A body with only `error`
+ * (or an unknown code) yields null, so the caller can fall back to kind copy.
+ */
+export function copyFromErrorBody(body: unknown): string | null {
+  return copyForCode(readErrorCode(body));
+}
+
+function apiFailure(status: number, body: unknown): ApiFailure {
+  return {
+    ok: false,
+    kind: kindFor(status),
+    fieldErrors: mapFieldErrors(body),
+    code: readErrorCode(body),
+    meetingId: readMeetingId(body),
+  };
+}
+
+function networkFailure(): ApiFailure {
+  return { ok: false, kind: "error", fieldErrors: {}, code: null, meetingId: null };
+}
 
 /** Friendly copy when POST measurable_values hits 409 (unique week). */
 export const WEEK_VALUE_EXISTS_COPY = "That week already has a number.";
@@ -70,8 +142,8 @@ export function mapFieldErrors(body: unknown): Record<string, string> {
  * 409 on a scorecard week value. The unique key is (measurable_id, week_start).
  * Always our copy — never the server's "That already exists" (or any other) text.
  */
-export function weekValueConflictResult(): ApiResult<never> {
-  return { ok: false, kind: "conflict", fieldErrors: { week_start: WEEK_VALUE_EXISTS_COPY } };
+export function weekValueConflictResult(): ApiFailure {
+  return { ok: false, kind: "conflict", fieldErrors: { week_start: WEEK_VALUE_EXISTS_COPY }, code: null, meetingId: null };
 }
 
 function kindFor(status: number): FailureKind {
@@ -107,15 +179,15 @@ async function send(path: string, init: RequestInit): Promise<{ status: number; 
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<ApiResult<T>> {
   const response = await send(path, init);
-  if (!response) return { ok: false, kind: "error", fieldErrors: {} };
-  if (!response.ok) return { ok: false, kind: kindFor(response.status), fieldErrors: mapFieldErrors(response.body) };
+  if (!response) return networkFailure();
+  if (!response.ok) return apiFailure(response.status, response.body);
   return { ok: true, data: response.body as T };
 }
 
-/** Code-only check: the server's text is never shown. */
+/** End already happened: the boolean field or a `code`, never the `error` text. */
 function saysAlreadyEnded(body: unknown): boolean {
   if (!isRecord(body)) return false;
-  return body.already_ended === true || body.code === "already_ended" || body.error === "already_ended";
+  return body.already_ended === true || body.code === "already_ended";
 }
 
 /**
@@ -124,7 +196,7 @@ function saysAlreadyEnded(body: unknown): boolean {
  * follow-up outcomes it reports are shown, and missing ones read as unknown.
  */
 export function readEndResult(response: { status: number; ok: boolean; body: unknown } | null): ApiResult<L10EndResponse> {
-  if (!response) return { ok: false, kind: "error", fieldErrors: {} };
+  if (!response) return networkFailure();
   const body = isRecord(response.body) ? response.body : {};
   if (response.ok || (response.status === 409 && saysAlreadyEnded(body))) {
     const followup = isRecord(body.followup) && Array.isArray(body.followup.results)
@@ -140,7 +212,7 @@ export function readEndResult(response: { status: number; ok: boolean; body: unk
     const meeting = isRecord(body.meeting) ? normalizeMeeting(body.meeting) : undefined;
     return { ok: true, data: { meeting, already_ended: saysAlreadyEnded(body), followup, recap } };
   }
-  return { ok: false, kind: kindFor(response.status), fieldErrors: mapFieldErrors(body) };
+  return apiFailure(response.status, body);
 }
 
 function json(method: string, body: unknown): RequestInit {
@@ -176,7 +248,7 @@ function normalizeAttendee(raw: L10Attendee): L10Attendee {
   return { ...raw, name: named(raw.user, raw.name) ?? raw.name ?? null };
 }
 
-function normalizeLive(raw: unknown): L10LiveMeeting | null {
+function normalizeRunning(raw: unknown): L10RunningMeeting | null {
   if (!isRecord(raw)) return null;
   if (isRecord(raw.meeting) && typeof raw.meeting.id === "string") {
     return {
@@ -192,14 +264,39 @@ function normalizeLive(raw: unknown): L10LiveMeeting | null {
   return null;
 }
 
+const AUTO_OUTCOMES: readonly AutoHeadlineOutcome[] = [
+  "inserted",
+  "exists",
+  "no-source-team",
+  "no-ended-source-meeting",
+  "meeting-ended",
+  "not-found",
+  "error",
+];
+
+function normalizeAutoOutcome(value: unknown): AutoHeadlineOutcome | null {
+  return typeof value === "string" && (AUTO_OUTCOMES as readonly string[]).includes(value)
+    ? (value as AutoHeadlineOutcome)
+    : null;
+}
+
+function normalizeHeadline(raw: L10Headline): L10Headline {
+  return {
+    ...raw,
+    is_auto: raw.is_auto === true,
+    recap_of_meeting_id: raw.recap_of_meeting_id ?? null,
+    dismissed_at: raw.dismissed_at ?? null,
+  };
+}
+
 export function normalizeTeamDetail(raw: unknown, listedHeadlines?: L10Headline[]): L10TeamDetail {
   const row = isRecord(raw) ? raw : {};
-  const live = normalizeLive(row.live_meeting);
-  const fromLive = live?.headlines ?? [];
+  const running = normalizeRunning(row.running_meeting);
+  const fromRunning = running?.headlines ?? [];
   const listed = listedHeadlines ?? asList<L10Headline>(row.headlines);
   const byId = new Map<string, L10Headline>();
-  for (const headline of [...fromLive, ...listed]) {
-    if (headline?.id) byId.set(headline.id, headline);
+  for (const headline of [...fromRunning, ...listed]) {
+    if (headline?.id) byId.set(headline.id, normalizeHeadline(headline));
   }
   return {
     team: row.team as L10Team,
@@ -213,7 +310,9 @@ export function normalizeTeamDetail(raw: unknown, listedHeadlines?: L10Headline[
     todos: asList(row.todos),
     issues: asList(row.issues),
     headlines: [...byId.values()],
-    live_meeting: live,
+    running_meeting: running
+      ? { ...running, headlines: running.headlines.map(normalizeHeadline) }
+      : null,
     recent_meetings: asList(row.recent_meetings).map(normalizeMeeting),
   };
 }
@@ -224,6 +323,8 @@ export function normalizeMeetingDetail(raw: unknown): L10MeetingDetail {
     meeting: normalizeMeeting(row.meeting ?? row),
     attendees: asList<L10Attendee>(row.attendees).map(normalizeAttendee),
     average_rating: typeof row.average_rating === "number" ? row.average_rating : null,
+    headlines: asList<L10Headline>(row.headlines).map(normalizeHeadline),
+    auto_headline: normalizeAutoOutcome(row.auto_headline),
   };
 }
 
@@ -251,6 +352,7 @@ export function l10Paths(slug: string) {
     issue: (teamId: string, id: string) => item(teamId, "issues", id),
     headlines: (teamId: string) => kind(teamId, "headlines"),
     headline: (teamId: string, id: string) => item(teamId, "headlines", id),
+    headlineDismiss: (teamId: string, id: string) => `${item(teamId, "headlines", id)}/dismiss`,
     measurableValues: (teamId: string) => kind(teamId, "measurable_values"),
     measurableValue: (teamId: string, id: string) => item(teamId, "measurable_values", id),
   };
@@ -327,20 +429,20 @@ export function createL10Api(slug: string) {
     deleteIssue: (teamId: string, id: string) => request<unknown>(paths.issue(teamId, id), { method: "DELETE" }),
     addHeadline: (teamId: string, input: NewHeadlineInput) =>
       request<{ headline: L10Headline }>(paths.headlines(teamId), json("POST", input)),
-    /**
-     * Dismiss an auto headline. #741's current headline PATCH does not yet
-     * list dismissed_at (coming next); the call is still this shape.
-     */
-    dismissHeadline: (teamId: string, id: string, at: string) =>
-      request<{ headline: L10Headline }>(paths.headline(teamId, id), json("PATCH", { dismissed_at: at })),
+    /** POST .../headlines/:id/dismiss sets dismissed_at. */
+    dismissHeadline: (teamId: string, id: string) =>
+      request<{ headline: L10Headline }>(paths.headlineDismiss(teamId, id), { method: "POST" }),
+    /** DELETE .../headlines/:id/dismiss clears dismissed_at (Undo / Restore). */
+    restoreHeadline: (teamId: string, id: string) =>
+      request<{ headline: L10Headline }>(paths.headlineDismiss(teamId, id), { method: "DELETE" }),
     async addMeasurableValue(
       teamId: string,
       input: NewMeasurableValueInput
     ): Promise<ApiResult<{ measurable_value: unknown }>> {
       const response = await send(paths.measurableValues(teamId), json("POST", input));
-      if (!response) return { ok: false, kind: "error", fieldErrors: {} };
+      if (!response) return networkFailure();
       if (response.status === 409) return weekValueConflictResult();
-      if (!response.ok) return { ok: false, kind: kindFor(response.status), fieldErrors: mapFieldErrors(response.body) };
+      if (!response.ok) return apiFailure(response.status, response.body);
       return { ok: true, data: response.body as { measurable_value: unknown } };
     },
   };

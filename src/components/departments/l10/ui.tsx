@@ -2,13 +2,15 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import type { FailureKind } from "./api";
+import { copyForCode, type FailureKind } from "./api";
 import type { L10Headline } from "./types";
 import { initials } from "./derive";
 import styles from "./l10.module.css";
 
-/** Fixed copy per failure. Server text is never shown. */
-export function failureCopy(kind: FailureKind): string {
+/** Fixed copy per failure. Maps `code` when present; never uses server text. */
+export function failureCopy(kind: FailureKind, code?: string | null): string {
+  const fromCode = copyForCode(code);
+  if (fromCode) return fromCode;
   switch (kind) {
     case "unauthenticated":
       return "Your session has ended. Sign in again to carry on.";
@@ -141,25 +143,35 @@ export function AutoRecapCard({
   headline,
   sourceTeamName,
   onDismiss,
-  dismissing,
+  onRestore,
+  pending,
 }: {
   headline: L10Headline;
   sourceTeamName: string | null;
   onDismiss?: () => void;
-  dismissing?: boolean;
+  onRestore?: () => void;
+  pending?: boolean;
 }) {
+  const dismissed = headline.dismissed_at != null;
   const title = sourceTeamName ? `Auto recap from ${sourceTeamName}` : "Auto recap";
   return (
-    <details className={styles.autoRecap}>
+    <details className={`${styles.autoRecap} ${dismissed ? styles.autoRecapDismissed : ""}`}>
       <summary className={styles.autoRecapSummary}>
         <span className={styles.autoTag}>Auto</span>
         <span className={styles.autoRecapTitle}>{title}</span>
       </summary>
       <div className={styles.autoRecapBody}>{headline.body}</div>
-      {onDismiss ? (
+      {dismissed && onRestore ? (
         <div className={styles.autoRecapActions}>
-          <button type="button" className={styles.btn} onClick={onDismiss} disabled={dismissing}>
-            {dismissing ? "Dismissing…" : "Dismiss"}
+          <button type="button" className={styles.btn} onClick={onRestore} disabled={pending}>
+            {pending ? "Restoring…" : "Undo"}
+          </button>
+        </div>
+      ) : null}
+      {!dismissed && onDismiss ? (
+        <div className={styles.autoRecapActions}>
+          <button type="button" className={styles.btn} onClick={onDismiss} disabled={pending}>
+            {pending ? "Dismissing…" : "Dismiss"}
           </button>
         </div>
       ) : null}

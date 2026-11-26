@@ -1146,3 +1146,15 @@
   justify-content: flex-end;
   padding: 0 12px 14px;
 }
+.autoRecapDismissed {
+  border-style: dashed;
+  background: var(--surface-1);
+}
+.autoRecapDismissed .autoTag {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.joinOpen {
+  margin: 0 0 16px;
+}
+

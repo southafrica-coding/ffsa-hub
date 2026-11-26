@@ -15,7 +15,7 @@ import {
   reportWeek,
   scoreRows,
   todayIn,
-  visibleHeadlines,
+  visibleHeadlines, recapHeadlines,
   type IdsRow,
 } from "./derive";
 import { averageRating, formatAverage, isValidRating, meetingTotals, type Person } from "./followup";
@@ -35,6 +35,7 @@ export interface MeetingActions {
   setRating: (userId: string, rating: number | null) => void;
   requestEnd: () => void;
   dismissHeadline: (id: string) => void;
+  restoreHeadline: (id: string) => void;
 }
 
 export interface MeetingCtx {
@@ -217,11 +218,11 @@ export function RocksBody({ ctx }: { ctx: MeetingCtx }) {
 
 export function HeadlinesBody({ ctx }: { ctx: MeetingCtx }) {
   const since = Date.parse(ctx.meetingStartedAt) - 7 * 86_400_000;
-  const headlines = visibleHeadlines(ctx.detail.headlines)
-    .filter((h) => h.source_meeting_id === ctx.meetingId || Date.parse(h.created_at) >= since || h.is_auto)
+  const notes = visibleHeadlines(ctx.detail.headlines)
+    .filter((h) => !isAutoHeadline(h))
+    .filter((h) => h.source_meeting_id === ctx.meetingId || Date.parse(h.created_at) >= since)
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
-  const recaps = headlines.filter(isAutoHeadline);
-  const notes = headlines.filter((h) => !isAutoHeadline(h));
+  const recaps = recapHeadlines(ctx.detail.headlines).sort((a, b) => a.created_at.localeCompare(b.created_at));
   return (
     <>
       <Intro>Good news and FYIs, one line each. Anything needing discussion is an issue.</Intro>
@@ -231,7 +232,8 @@ export function HeadlinesBody({ ctx }: { ctx: MeetingCtx }) {
           headline={headline}
           sourceTeamName={recapSourceName(headline, ctx.detail.team, ctx.teams)}
           onDismiss={() => ctx.actions.dismissHeadline(headline.id)}
-          dismissing={ctx.busy.has(`headline:${headline.id}`)}
+          onRestore={() => ctx.actions.restoreHeadline(headline.id)}
+          pending={ctx.busy.has(`headline:${headline.id}`)}
         />
       ))}
       <ul className={styles.list}>

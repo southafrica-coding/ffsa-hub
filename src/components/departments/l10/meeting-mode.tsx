@@ -133,7 +133,10 @@ export function MeetingMode({
       for (const a of listed) initial[a.profile_id] = a.rating;
       setRatings(initial);
       setTimer(timerFromMeeting(meeting.data.meeting));
-      setLoad({ state: "ready", detail: team.data, meeting: meeting.data.meeting, attendees, teams });
+      const byId = new Map(team.data.headlines.map((h) => [h.id, h]));
+      for (const h of meeting.data.headlines) byId.set(h.id, h);
+      const detail = { ...team.data, headlines: [...byId.values()] };
+      setLoad({ state: "ready", detail, meeting: meeting.data.meeting, attendees, teams });
       if (meeting.data.meeting.ended_at) {
         // Opened after the end: outcomes aren't known here, so none are claimed.
         setSent({
@@ -306,14 +309,25 @@ export function MeetingMode({
     },
     dismissHeadline: (id) => {
       void withBusy(`headline:${id}`, async () => {
-        const at = new Date().toISOString();
-        const result = await api.dismissHeadline(teamId, id, at);
+        const result = await api.dismissHeadline(teamId, id);
         if (!result.ok) return setProblem(result.kind);
-        const stamped = result.data.headline?.dismissed_at ?? at;
+        const stamped = result.data.headline?.dismissed_at ?? new Date().toISOString();
         setDetail((d) => ({
           ...d,
           headlines: d.headlines.map((headline) =>
             headline.id === id ? { ...headline, ...result.data.headline, dismissed_at: stamped } : headline
+          ),
+        }));
+      });
+    },
+    restoreHeadline: (id) => {
+      void withBusy(`headline:${id}`, async () => {
+        const result = await api.restoreHeadline(teamId, id);
+        if (!result.ok) return setProblem(result.kind);
+        setDetail((d) => ({
+          ...d,
+          headlines: d.headlines.map((headline) =>
+            headline.id === id ? { ...headline, ...result.data.headline, dismissed_at: null } : headline
           ),
         }));
       });

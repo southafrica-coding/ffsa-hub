@@ -15,6 +15,7 @@ function team(id: string, name: string, slug: string): L10Team {
     meeting_timezone: "Africa/Johannesburg",
     facilitator_id: null,
     slack_channel_id: null,
+    recap_source_team_id: null,
     sort_order: 0,
     is_active: true,
   };
@@ -74,8 +75,39 @@ describe("L10 is department-agnostic", () => {
     expect(html).toContain("Auto recap from Production");
     expect(html).toContain("Auto");
     expect(html).toContain("Production rated 8.5");
-    expect(html).toContain("Dismiss");
+    expect(html).toMatch(/>Dismiss</);
     expect(html).toContain("<details");
-    expect(html).not.toContain("Edit");
+    expect(html).not.toMatch(/>Edit</);
+    expect(html).not.toMatch(/>Delete</);
+    expect(html).not.toMatch(/>Undo</);
+    const dismissed = renderToStaticMarkup(
+      <AutoRecapCard
+        headline={{ ...headline, dismissed_at: "2026-11-26T09:00:00.000Z" }}
+        sourceTeamName="Production"
+        onRestore={() => undefined}
+      />
+    );
+    expect(dismissed).toMatch(/>Undo</);
+    expect(dismissed).not.toMatch(/>Dismiss</);
+    expect(dismissed).not.toMatch(/>Edit</);
+    expect(dismissed).not.toMatch(/>Delete</);
+  });
+
+  it("offers a Join the open meeting action without hardcoding a department or team", () => {
+    const html = renderToStaticMarkup(
+      <TeamPickerScreen
+        slug="operations"
+        departmentName="Operations"
+        cards={[card(team("host", "Host", "host"))]}
+        now={now}
+        startError="conflict"
+        startErrorCode="l10_meeting_already_open"
+        joinHref="/departments/operations/l10/host/meetings/meet-open"
+      />
+    );
+    expect(html).toContain("This team already has a meeting running.");
+    expect(html).toContain("Join the open meeting");
+    expect(html).toContain("/departments/operations/l10/host/meetings/meet-open");
+    expect(html).not.toMatch(/Prayer|Worship|Production/i);
   });
 });
