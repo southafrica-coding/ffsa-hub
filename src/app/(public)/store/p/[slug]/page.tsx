@@ -29,7 +29,7 @@ function whatYouGet(p: StoreProduct): string[] {
   const out: string[] = [];
   if (p.kind === "digital") out.push("Read it in your browser, on up to 3 devices", "Opened pages stay readable offline");
   if (p.kind === "subscription") out.push(`Everything we publish for ${p.subscription_months === 12 ? "a year" : `${p.subscription_months} months`}`, "Read in your browser, on up to 3 devices");
-  if (p.kind === "bundle") out.push("The printed copy", "The digital edition in your browser", "A personal low-res PDF");
+  if (p.kind === "bundle") out.push("The printed copy", "The digital edition in your browser", "A low-res PDF");
   if (p.kind === "physical" || p.kind === "bundle") {
     if (p.allow_delivery && p.allow_collect) out.push("Delivered, or collect at the base");
     else if (p.allow_delivery) out.push("Delivered to you");

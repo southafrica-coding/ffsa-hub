@@ -15,7 +15,7 @@ import type { ProductKind, ProductStatus, StoreProduct } from "@/lib/store/types
 const KINDS: Array<{ id: ProductKind; label: string; hint: string }> = [
   { id: "digital", label: "Digital", hint: "Read in the browser flipbook. No download." },
   { id: "subscription", label: "Subscription", hint: "Flipbook access for a set time (12 months = yearly)." },
-  { id: "bundle", label: "Print + Digital", hint: "Printed copy, the flipbook, and a watermarked low-res PDF." },
+  { id: "bundle", label: "Print + Digital", hint: "Printed copy, the flipbook, and a low-res PDF." },
   { id: "physical", label: "Merch", hint: "Sizes, stock, delivery or collect at base." },
 ];
 

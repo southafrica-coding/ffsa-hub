@@ -35,7 +35,7 @@
 --     the fence.
 --   * Anonymous: published products, their variants and preview page rows.
 --   * Storage: four PRIVATE buckets. Nobody but the service role reads them;
---     pages leave only through the watermarking route.
+--     pages leave only through the signed page route.
 -- ============================================================
 
 BEGIN;
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS public.store_products (
   subtitle             text,
   description          text,
   -- digital: flipbook only · subscription: yearly flipbook access ·
-  -- physical: merch · bundle: Print + Digital (print copy + flipbook + watermarked PDF)
+  -- physical: merch · bundle: Print + Digital (print copy + flipbook + low-res PDF)
   kind                 text NOT NULL CHECK (kind IN ('digital', 'subscription', 'physical', 'bundle')),
   status               text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
   price_cents          integer NOT NULL CHECK (price_cents >= 0),
@@ -236,7 +236,7 @@ CREATE TABLE IF NOT EXISTS public.store_entitlements (
   source         text NOT NULL CHECK (source IN ('purchase', 'gift', 'code', 'staff')),
   order_item_id  uuid REFERENCES public.store_order_items (id) ON DELETE SET NULL,
   code_id        uuid,
-  -- Print + Digital only: may download the per-buyer watermarked low-res PDF.
+  -- Print + Digital only: may download the low-res PDF.
   includes_pdf   boolean NOT NULL DEFAULT false,
   starts_at      timestamptz NOT NULL DEFAULT now(),
   expires_at     timestamptz,                  -- subscriptions
@@ -362,7 +362,7 @@ CREATE POLICY "store assets: staff delete"
   ON public.store_assets FOR DELETE TO authenticated USING (public.store_can_manage());
 
 -- Page rows: staff read all. Images themselves only ever leave through the
--- signed, watermarking route, which uses the service role.
+-- signed page route, which uses the service role.
 CREATE POLICY "store pages: staff read"
   ON public.store_asset_pages FOR SELECT TO authenticated USING (public.store_can_view());
 CREATE POLICY "store pages: staff write"
@@ -553,7 +553,7 @@ GRANT EXECUTE ON FUNCTION public.store_remove_device(uuid, uuid) TO service_role
 -- ────────────────────────────────────────────────────────────
 --   store-source : uploaded PDFs + EFT proofs. Never served. 50 MB cap
 --                  (matches MAX_PDF_BYTES in src/lib/store/upload.ts).
---   store-pages  : rendered WebP pages. Served only watermarked, via route.
+--   store-pages  : rendered WebP pages. Served only via the signed route.
 --   store-covers : cover images. Private too; served by /api/store/cover.
 --   store-audio  : optional flipbook background music. 20 MB cap (matches
 --                  MAX_AUDIO_BYTES in src/lib/store/upload.ts). Served to

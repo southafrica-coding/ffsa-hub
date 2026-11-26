@@ -7,8 +7,7 @@ export const runtime = "nodejs";
 // GET /api/store/page?a&p&v&e&s — one page image for the flipbook. The
 // token was issued only after an entitlement check (or, for v=preview, only
 // for a preview page — checked again here). The stored WebP is served as
-// is: on-site pages carry no watermark. Only the Print + Digital PDF is
-// stamped with the buyer's email (library/[productId]/pdf).
+// is: nothing in the store carries a watermark, on-site pages included.
 export async function GET(request: Request) {
   const verdict = verifyPageQuery(new URL(request.url).searchParams);
   if (!verdict.ok) return new Response(verdict.reason === "expired" ? "Link expired" : "Not found", { status: verdict.reason === "expired" ? 410 : 404 });

@@ -64,7 +64,7 @@ export default async function ProductAdminPage({ params }: { params: Promise<{ i
               />
               <div className="space-y-4 px-5 py-5 md:px-8">
                 <p className="max-w-[640px] text-[13px] leading-relaxed text-[color:var(--text-secondary)]">
-                  Upload the final PDF. It&apos;s kept private; the Hub turns each page into a phone-sized image for the flipbook (shown without a watermark). Only the Print + Digital PDF download carries the buyer&apos;s email.
+                  Upload the final PDF. It&apos;s kept private; the Hub turns each page into a phone-sized image for the flipbook. Print + Digital buyers can also download a low-res PDF built from those pages. Nothing carries a watermark.
                   Uploading again replaces the flipbook for everyone.
                 </p>
                 {latest && latest.status === "failed" && (

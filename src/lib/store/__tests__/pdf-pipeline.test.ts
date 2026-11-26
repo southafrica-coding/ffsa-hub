@@ -7,20 +7,9 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { countPdfPages, defaultPreviewPages, renderPdfToWebp } from "../pdf/render";
-import { buildWatermarkedPdf, watermarkPage, watermarkText } from "../pdf/watermark";
+import { buildLowResPdf } from "../pdf/low-res-pdf";
 
 const sample = new Uint8Array(readFileSync(path.join(__dirname, "../fixtures/sample-review.pdf")));
-
-async function meanDiff(a: Buffer, b: Buffer): Promise<number> {
-  const [ra, rb] = await Promise.all([
-    sharp(a).removeAlpha().raw().toBuffer({ resolveWithObject: true }),
-    sharp(b).removeAlpha().raw().toBuffer({ resolveWithObject: true }),
-  ]);
-  expect(ra.info.width).toBe(rb.info.width);
-  let sum = 0;
-  for (let i = 0; i < ra.data.length; i++) sum += Math.abs(ra.data[i] - rb.data[i]);
-  return sum / ra.data.length;
-}
 
 describe("Store PDF pipeline on the sample Review", () => {
   it("counts pages and picks the first three as previews", async () => {
@@ -44,23 +33,19 @@ describe("Store PDF pipeline on the sample Review", () => {
     expect(stats.channels[0].mean).toBeLessThan(80);
   });
 
-  it("stamps a visible, per-buyer watermark", { timeout: 60_000 }, async () => {
-    const [page] = await renderPdfToWebp(sample, { width: 540 });
-    const a = await watermarkPage(page.webp, watermarkText("Reader.One@example.org"));
-    const b = await watermarkPage(page.webp, watermarkText("reader.two@example.org"));
-    expect(watermarkText("Reader.One@example.org")).toBe("Licensed to reader.one@example.org");
-    expect((await sharp(a).metadata()).format).toBe("webp");
-    expect(await meanDiff(page.webp, a)).toBeGreaterThan(0.2); // changed the page
-    expect(await meanDiff(a, b)).toBeGreaterThan(0.05); // different buyer, different stamp
-  });
-
-  it("builds a low-res watermarked PDF with the buyer in its metadata", { timeout: 60_000 }, async () => {
+  it("builds a clean low-res PDF: no watermark, no buyer details", { timeout: 60_000 }, async () => {
     const pages = await renderPdfToWebp(sample, { width: 540 });
-    const bytes = await buildWatermarkedPdf(pages.map((p) => p.webp), "reader.one@example.org", "Example Review");
+    const bytes = await buildLowResPdf(pages.map((p) => p.webp), "Example Review");
     const doc = await PDFDocument.load(bytes);
     expect(doc.getPageCount()).toBe(4);
-    expect(doc.getSubject()).toBe("Licensed to reader.one@example.org");
-    expect(doc.getTitle()).toContain("Licensed to reader.one@example.org");
+    expect(doc.getTitle()).toBe("Example Review");
+    expect(doc.getSubject()).toBeUndefined();
+    expect(doc.getKeywords()).toBeUndefined();
+    // One image per page and nothing drawn over it.
+    const raw = Buffer.from(bytes).toString("latin1");
+    expect(raw).not.toMatch(/licensed/i);
+    expect(raw).not.toMatch(/@example\.org/);
+    expect(raw).not.toMatch(/\/Font/);
     // Low-res: far smaller than shipping 4 full-size pages.
     expect(bytes.length).toBeLessThan(600_000);
   });

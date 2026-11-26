@@ -1,7 +1,7 @@
 // The PDF upload flow end to end: sign-url API → the file PUT straight to
 // Storage (a local stand-in speaking Supabase's storage HTTP API, driven by
 // the real supabase-js client) → complete → background render → a clean
-// page for the flipbook and the watermarked Print + Digital PDF for a buyer.
+// page for the flipbook and the clean low-res Print + Digital PDF for a buyer.
 //
 // CI runs it on the small fake sample. To run it on a real PDF locally
 // (never committed, never required in CI):
@@ -278,15 +278,15 @@ describe("background music", () => {
   });
 });
 
-describe("signed upload → render → watermark, on the small sample", () => {
-  it("renders, activates, serves the buyer a clean page and builds their watermarked low-res PDF", { timeout: 120_000 }, async () => {
+describe("signed upload → render → buyer PDF, on the small sample", () => {
+  it("renders, activates, serves the buyer a clean page and builds their clean low-res PDF", { timeout: 120_000 }, async () => {
     const pdf = new Blob([readFileSync(SAMPLE)], { type: "application/pdf" });
     const { assetId, final } = await uploadAndRender(pdf, "sample-review.pdf");
     expect(final).toMatchObject({ status: "ready", pages: 4, error: null });
     expect(db.table("store_assets")[0]).toMatchObject({ is_active: true });
     expect(db.table("store_asset_pages").filter((p) => p.is_preview).map((p) => p.page_no)).toEqual([1, 2, 3]);
 
-    // On-site pages carry no watermark: the route serves the stored WebP byte for byte.
+    // No watermark anywhere: the route serves the stored WebP byte for byte.
     const served = await buyerPage(assetId, 1);
     expect((await sharp(served).metadata()).format).toBe("webp");
     const stored = db.table("store_asset_pages").find((p) => p.page_no === 1) as { path: string };
@@ -297,11 +297,17 @@ describe("signed upload → render → watermark, on the small sample", () => {
     const bytes = await buyerPdf();
     const doc = await PDFDocument.load(bytes);
     expect(doc.getPageCount()).toBe(4);
-    expect(doc.getSubject()).toBe(`Licensed to ${BUYER.email}`);
+    // No buyer details and no "Licensed to" anywhere in the file.
+    expect(doc.getSubject()).toBeUndefined();
+    expect(doc.getKeywords()).toBeUndefined();
+    expect(doc.getTitle()).toBe("Example Print + Digital");
+    const raw = Buffer.from(bytes).toString("latin1");
+    expect(raw).not.toMatch(/licensed/i);
+    expect(raw).not.toContain(BUYER.email);
   });
 });
 
-describe.skipIf(!LOCAL_PDF)("signed upload → render → watermark, on a real local PDF (STORE_LOCAL_PDF)", () => {
+describe.skipIf(!LOCAL_PDF)("signed upload → render → buyer PDF, on a real local PDF (STORE_LOCAL_PDF)", () => {
   it("handles the real file", { timeout: 1_800_000 }, async () => {
     const out = path.resolve("tmp/store-local-pdf");
     rmSync(out, { recursive: true, force: true });
@@ -323,14 +329,14 @@ describe.skipIf(!LOCAL_PDF)("signed upload → render → watermark, on a real l
 
     const t1 = Date.now();
     for (const n of [1, 2, Math.min(3, pages.length)]) writeFileSync(path.join(out, `served-p${n}.webp`), await buyerPage(assetId, n));
-    const wmMs = (Date.now() - t1) / 3;
+    const serveMs = (Date.now() - t1) / 3;
 
     who = BUYER;
     grants = [];
     const t2 = Date.now();
     const buyerPdfBytes = await buyerPdf();
     const pdfMs = Date.now() - t2;
-    writeFileSync(path.join(out, "buyer-low-res-watermarked.pdf"), buyerPdfBytes);
+    writeFileSync(path.join(out, "buyer-low-res.pdf"), buyerPdfBytes);
     const doc = await PDFDocument.load(buyerPdfBytes);
     expect(doc.getPageCount()).toBe(final.pages);
 
@@ -344,7 +350,7 @@ describe.skipIf(!LOCAL_PDF)("signed upload → render → watermark, on a real l
       signedUploadMs: uploadMs,
       renderMs,
       renderedPagesBytes: pageBytes,
-      servePerPageMs: Math.round(wmMs),
+      servePerPageMs: Math.round(serveMs),
       buyerPdfMs: pdfMs,
       buyerPdfBytes: buyerPdfBytes.length,
       peakRssMB: Math.round(peak / 1e6),

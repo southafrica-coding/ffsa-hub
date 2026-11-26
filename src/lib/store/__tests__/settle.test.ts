@@ -33,7 +33,7 @@ describe("what a paid order grants", () => {
     expect(plan.codes).toEqual([]);
   });
 
-  it("Print + Digital: the only entitlement with the watermarked PDF, plus a parcel", () => {
+  it("Print + Digital: the only entitlement with the low-res PDF, plus a parcel", () => {
     const plan = planSettlement({ ...order, fulfilment_method: "delivery" }, [item(IDS.bundle)], catalogue.products, { now: NOW });
     expect(plan.entitlements[0].includes_pdf).toBe(true);
     expect(plan.fulfilment).toEqual({ method: "delivery", status: "to_pack" });

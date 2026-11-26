@@ -126,17 +126,15 @@ There's no `.env.local` here, so I didn't start against a real Supabase project.
 | Signed PUT to Storage | 42 ms (local loopback; a real upload depends on your connection) |
 | Render → WebP pages | **35 pages in 9.9 s** (~0.28 s a page) |
 | Rendered pages total | 3.26 MB (2 portrait pages at 1080×1527, 33 landscape spreads at 1620×1146) |
-| Watermarking one page for a buyer | ~127 ms |
-| Print + Digital low-res watermarked PDF | 35 pages, **1.80 MB**, built in 2.9 s |
+| Print + Digital low-res PDF | 35 pages, **1.80 MB**, built in 2.9 s (measured with the old watermark; the clean build does less work) |
 | Peak memory (whole test process) | ~1.03 GB RSS, from ~0.64 GB at the start: ~400 MB for the render |
 
 That fits Vercel's limits comfortably: `maxDuration` 300 s on the complete/render routes, and the default function memory.
 
 What your PDF taught the code:
 - **Most of its pages are two-page spreads saved as one landscape page.** The flipbook used to pair pages two-up on wide screens, which would have put two spreads side by side. Now a landscape page always shows alone, and every page keeps its own shape (`buildSpreads`, tested). Landscape pages render 1.5× wider (1620 px), so each half stays sharp.
-- **The pages are mostly dark photography**, and the diagonal "Licensed to …" repeat was dark ink only, so it was invisible on them. It now has a faint light outline too, so it shows on dark and light pages. The footer tab was already legible.
 
-Local outputs (gitignored under `tmp/`): `tmp/store-local-pdf/report.json`, `watermarked-p1..3.webp`, `buyer-low-res-watermarked.pdf`, and `pages/` (the clean renders).
+Local outputs (gitignored under `tmp/`): `tmp/store-local-pdf/report.json`, `served-p1..3.webp`, `buyer-low-res.pdf`, and `pages/` (the clean renders).
 
 ## Built
 
@@ -147,10 +145,10 @@ Local outputs (gitignored under `tmp/`): `tmp/store-local-pdf/report.json`, `wat
   - EFT: a pending order, bank details, proof upload, and Media's "Mark EFT paid".
 - **Buyers:**
   - Magic-link sign-in. Buyers get no `users` row or roles, and middleware keeps them out of staff pages and APIs.
-  - **My Library** flipbook: signed page URLs that expire after 10 minutes, a per-buyer watermark, offline reading through a service worker, and 3 devices max with a Devices tab.
+  - **My Library** flipbook: signed page URLs that expire after 10 minutes, no watermark, offline reading through a service worker, and 3 devices max with a Devices tab.
   - Orders page with pack codes.
 - **Gifts and group code packs**, with single-use codes.
-- **Print + Digital**: a per-buyer low-res watermarked PDF behind a 120-second signed URL. Digital and subscription buyers get flipbook only.
+- **Print + Digital**: a clean low-res PDF (no watermark, no buyer details) behind a 120-second signed URL. Digital and subscription buyers get flipbook only.
 - **Resend my purchases**: one email with every paid purchase and a sign-in link. The answer is always neutral. Limits are 3 per email and 10 per IP, per hour.
 - **Admin** `/store/admin`:
   - `store` module, gated by `store.manage` / `store.view`; admins get it automatically.
@@ -180,9 +178,13 @@ Local outputs (gitignored under `tmp/`): `tmp/store-local-pdf/report.json`, `wat
   - Storage refuses a PUT over the bucket limit.
   - `complete` fails an upload whose stored size doesn't match, and one that never finished.
   - Flipbook spread rules.
-  - The **full flow on the small sample**: sign, signed PUT, complete (202, and a double-click gets 409), background render, active asset, preview pages, the buyer's watermarked page through `/api/store/page`, and the buyer's Print + Digital PDF through the library route and a signed URL.
+  - The **full flow on the small sample**: sign, signed PUT, complete (202, and a double-click gets 409), background render, active asset, preview pages, the buyer's clean page through `/api/store/page`, and the buyer's Print + Digital PDF through the library route and a signed URL.
   - The same flow on a **real PDF**, only when `STORE_LOCAL_PDF` is set. It's skipped in CI and never needs your file.
 - Local note: this Mac's Node 22.11 needs `NODE_OPTIONS=--experimental-require-module` to load vitest 4's config. That's unrelated to this PR.
+
+## Watermarks: all gone
+
+Nothing in the Store carries a watermark any more. The flipbook and previews were already clean; the Print + Digital PDF is now a clean low-res PDF built from the stored page images, with no overlay, footer or "Licensed to" metadata, cached once per asset (`pdf/clean/<asset>.pdf`). The watermark code (`src/lib/store/pdf/watermark.ts`) is deleted. The private source PDF is still never served.
 
 ## Screenshots (390×844, untracked)
 
@@ -209,7 +211,7 @@ NODE_OPTIONS=--experimental-require-module \
 npx vitest run src/lib/store/__tests__/upload-flow.test.ts
 ```
 
-This runs sign → signed PUT → complete → render → watermark → buyer PDF on your file. It writes timings and outputs to `tmp/store-local-pdf/` (gitignored).
+This runs sign → signed PUT → complete → render → buyer PDF on your file. It writes timings and outputs to `tmp/store-local-pdf/` (gitignored).
 
 **In the real Hub** (after 412 is applied to the database the app uses):
 
@@ -223,7 +225,7 @@ This runs sign → signed PUT → complete → render → watermark → buyer PD
 5. Buy it with your own email.
    - EFT: open the order in `/store/admin` and **Mark EFT paid**.
    - PayFast sandbox: pay with the sandbox wallet. The ITN marks it paid.
-6. Go to `/store/library` and **Email me a sign-in link**. With `STORE_EMAILS_ENABLED` off the email is only logged, so turn it on for this step. Then open the flipbook and check the "Licensed to …" watermark. For Print + Digital, check **Your PDF**.
+6. Go to `/store/library` and **Email me a sign-in link**. With `STORE_EMAILS_ENABLED` off the email is only logged, so turn it on for this step. Then open the flipbook. For Print + Digital, check **Your PDF** downloads (it has no watermark).
 7. To replace the PDF later, upload again. The new flipbook replaces the old one for everyone.
 
 The fake sample is `src/lib/store/fixtures/sample-review.pdf`. Rebuild it with `node scripts/store/make-sample-pdf.mjs`.

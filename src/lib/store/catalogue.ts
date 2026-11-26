@@ -54,7 +54,7 @@ export function kindHasFlipbook(k: ProductKind): boolean {
   return k === "digital" || k === "subscription" || k === "bundle";
 }
 
-/** Only Print + Digital buyers get the watermarked PDF. */
+/** Only Print + Digital buyers get the low-res PDF. */
 export function kindIncludesPdf(k: ProductKind): boolean {
   return k === "bundle";
 }

@@ -5,9 +5,9 @@
 // phones. pdfjs-dist (legacy build, the one that runs in Node) draws onto
 // an @napi-rs/canvas surface; sharp encodes the result. Server-only.
 //
-// Pages are stored CLEAN (no watermark) in the private store-pages bucket
-// and the flipbook serves them as is, so one render serves every buyer.
-// Only the Print + Digital PDF is stamped, by watermark.ts.
+// Pages are stored clean in the private store-pages bucket and the
+// flipbook serves them as is, so one render serves every buyer. The
+// Print + Digital PDF is built from these same pages (low-res-pdf.ts).
 // ============================================================
 
 import "server-only";
