@@ -77,6 +77,19 @@ export interface PersonTodos {
   count: number;
 }
 
+/**
+ * How the Conclude copy names the team's recap channel, or null when the team
+ * has none (an explicit null slack_channel_id; a field not sent counts as set,
+ * matching hasRecapChannel). l10_teams stores only the Slack id, never a name,
+ * and we don't call Slack for one, so it's named after the team: "Live channel".
+ * Never the raw id.
+ */
+export function recapChannelLabel(team: { name: string; slack_channel_id?: string | null }): string | null {
+  if (team.slack_channel_id === null) return null;
+  const name = team.name.trim();
+  return name ? `${name} channel` : "team channel";
+}
+
 export interface ConfirmSummary {
   /** People who get a DM with their open to-dos. */
   dmCount: number;

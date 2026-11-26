@@ -50,6 +50,15 @@ describe("L10 is department-agnostic", () => {
     expect(html).not.toMatch(/Prayer|Worship|Production|Team 3/i);
   });
 
+  it("shows no Add-team placeholder (no create-team API yet) and lets the rocks label wrap", () => {
+    const html = renderToStaticMarkup(
+      <TeamPickerScreen slug="operations" departmentName="Operations" cards={[card(team("host", "Host", "host"))]} now={now} />
+    );
+    expect(html).not.toMatch(/Add an L10 team/i);
+    expect(html).not.toContain("aria-disabled");
+    expect(html).toMatch(/class="[^"]*statLabelWrap[^"]*">Rocks on track</);
+  });
+
   it("shows a friendly not-found on a team page (non-members get a 404)", () => {
     const html = renderToStaticMarkup(<TeamNotFound href="/departments/operations/l10" />);
     expect(html).toContain("L10 team not found");

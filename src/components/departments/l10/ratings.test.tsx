@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { L10_ATTENDEE_IMMUTABLE, L10_RATING_NOT_ALLOWED } from "./api";
-import { buildEndMeetingPayload, type Person } from "./followup";
+import { buildConfirmSummary, buildEndMeetingPayload, recapChannelLabel, type Person } from "./followup";
 import { ConcludeBody, type MeetingActions, type MeetingCtx } from "./meeting-segments";
 import { ConfirmDialog } from "./meeting-sheets";
 import { allowedRatingEntries, canRateAttendee, canRateOthers, type RatingRights } from "./ratings";
@@ -84,7 +84,11 @@ describe("end payload follows the rating rule", () => {
   });
 });
 
-function ctxFor(rights: RatingRights, ratings: Record<string, number | null> = {}): MeetingCtx {
+function ctxFor(
+  rights: RatingRights,
+  ratings: Record<string, number | null> = {},
+  recapChannel: string | null = null
+): MeetingCtx {
   const actions: MeetingActions = {
     raiseIssue: vi.fn(async () => true),
     toggleTodo: vi.fn(),
@@ -107,6 +111,7 @@ function ctxFor(rights: RatingRights, ratings: Record<string, number | null> = {
     attendees,
     ratings,
     ratingRights: rights,
+    recapChannel,
     now: Date.UTC(2026, 10, 26, 7, 30),
     busy: new Set(),
     actions,
@@ -195,5 +200,72 @@ describe("end failures use the #741 code before the kind", () => {
 
   it("keeps the kind fallback in the End dialog when there is no code", () => {
     expect(dialog(null)).toContain("not on this team");
+  });
+});
+
+describe("Conclude and End copy follow the team's recap channel", () => {
+  const live = { name: "Live", slack_channel_id: "C0123ABCD" };
+  const quiet = { name: "Live", slack_channel_id: null };
+
+  it("names the channel after the team, never the Slack id", () => {
+    expect(recapChannelLabel(live)).toBe("Live channel");
+    expect(recapChannelLabel({ name: "  Live  ", slack_channel_id: "C0123ABCD" })).toBe("Live channel");
+    // A field the payload didn't send counts as set, as hasRecapChannel does.
+    expect(recapChannelLabel({ name: "Live" })).toBe("Live channel");
+    expect(recapChannelLabel(quiet)).toBeNull();
+  });
+
+  function conclude(team: { name: string; slack_channel_id: string | null }) {
+    return renderToStaticMarkup(<ConcludeBody ctx={ctxFor(member, {}, recapChannelLabel(team))} />);
+  }
+
+  function endDialog(team: { name: string; slack_channel_id: string | null }) {
+    const recapChannel = recapChannelLabel(team);
+    return renderToStaticMarkup(
+      <ConfirmDialog
+        summary={buildConfirmSummary({
+          attendees,
+          ratings: {},
+          todos: [],
+          issues: [],
+          hasRecapChannel: recapChannel !== null,
+        })}
+        recapChannel={recapChannel}
+        ending={false}
+        failure={null}
+        onBack={() => undefined}
+        onConfirm={() => undefined}
+      />
+    );
+  }
+
+  it("with a channel set: Conclude says the recap is posted, to the named channel", () => {
+    const html = conclude(live);
+    expect(html).toContain("Ending sends each person a Slack DM with their to-dos and posts the recap to the Live channel.");
+    expect(html).not.toContain("C0123ABCD");
+    expect(html).not.toContain("team channel");
+  });
+
+  it("with no channel: Conclude leaves the recap line out", () => {
+    const html = conclude(quiet);
+    expect(html).toContain("Ending sends each person a Slack DM with their to-dos. Kept issues and unfinished to-dos");
+    expect(html).not.toMatch(/recap to|posts the recap|channel/i);
+  });
+
+  it("with a channel set: the End dialog names it and counts one post", () => {
+    const html = endDialog(live);
+    expect(html).toContain("Everyone with an open to-do gets a Slack DM listing theirs, and the recap goes to the Live channel.");
+    expect(html).toContain("Recap to Live channel");
+    expect(html).toMatch(/>1<\/span> <span[^>]*>post</);
+    expect(html).not.toContain("C0123ABCD");
+  });
+
+  it("with no channel: the End dialog doesn't promise a recap", () => {
+    const html = endDialog(quiet);
+    expect(html).toContain("Everyone with an open to-do gets a Slack DM listing theirs.");
+    expect(html).not.toContain("recap goes to");
+    expect(html).not.toContain("no recap channel set");
+    expect(html).toContain("Recap to team channel");
+    expect(html).toMatch(/>0<\/span> <span[^>]*>posts</);
   });
 });

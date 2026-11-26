@@ -51,6 +51,8 @@ export interface MeetingCtx {
   ratings: Record<string, number | null>;
   /** Who this viewer may rate (#741: self, or leader / overseer / facilitator for anyone). */
   ratingRights: RatingRights;
+  /** recapChannelLabel(team): "Live channel", or null when the team has no recap channel. */
+  recapChannel: string | null;
   now: number;
   busy: ReadonlySet<string>;
   actions: MeetingActions;
@@ -623,8 +625,9 @@ export function ConcludeBody({ ctx }: { ctx: MeetingCtx }) {
         End meeting & send follow-ups
       </button>
       <p className={styles.slackNote}>
-        Ending sends each person a Slack DM with their to-dos and posts the recap to the team channel. Kept issues and
-        unfinished to-dos carry over to next week by themselves.
+        Ending sends each person a Slack DM with their to-dos
+        {ctx.recapChannel ? ` and posts the recap to the ${ctx.recapChannel}` : ""}. Kept issues and unfinished to-dos
+        carry over to next week by themselves.
       </p>
     </>
   );
