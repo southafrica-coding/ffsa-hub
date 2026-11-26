@@ -222,7 +222,17 @@ describe("background music", () => {
   it("takes audio files only, up to 20 MB", () => {
     expect(validateAudioUpload({ filename: "song.mp3", contentType: "audio/mpeg", size: 5_000_000 })).toMatchObject({ ok: true, value: { ext: "mp3" } });
     expect(validateAudioUpload({ filename: "song.m4a", contentType: "audio/x-m4a", size: 5_000_000 })).toMatchObject({ ok: true, value: { ext: "m4a" } });
+    // Empty or generic browser MIME: still accept a known audio extension.
+    expect(validateAudioUpload({ filename: "Patrick_Davies_-_Entering_Autumn.mp3", contentType: "", size: 6_857_857 })).toMatchObject({
+      ok: true,
+      value: { ext: "mp3", contentType: "audio/mpeg", size: 6_857_857 },
+    });
+    expect(validateAudioUpload({ filename: "song.mp3", contentType: "application/octet-stream", size: 1000 })).toMatchObject({
+      ok: true,
+      value: { ext: "mp3", contentType: "audio/mpeg" },
+    });
     expect(validateAudioUpload({ filename: "x.pdf", contentType: "application/pdf", size: 10 })).toMatchObject({ ok: false, status: 400 });
+    expect(validateAudioUpload({ filename: "x.pdf", contentType: "", size: 10 })).toMatchObject({ ok: false, status: 400 });
     expect(validateAudioUpload({ filename: "big.wav", contentType: "audio/wav", size: MAX_AUDIO_BYTES + 1 })).toMatchObject({ ok: false, status: 413 });
     expect(isAudioPathFor(IDS.bundle, `${IDS.bundle}/aaaaaaaa-0000-4000-8000-000000000001.mp3`)).toBe(true);
     expect(isAudioPathFor(IDS.bundle, `${IDS.review}/aaaaaaaa-0000-4000-8000-000000000001.mp3`)).toBe(false);
