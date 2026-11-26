@@ -211,7 +211,8 @@
     --popover:       45 9% 8%;
     --popover-foreground: 48 30% 94%;
     --primary:       48 30% 94%;
-    --primary-foreground: 0 0% 4%;
+    /* White in both modes, like --on-ink and Tailwind's primary.foreground. */
+    --primary-foreground: 0 0% 100%;
     --secondary:     45 10% 11%;
     --secondary-foreground: 45 10% 80%;
     --muted:         45 10% 11%;

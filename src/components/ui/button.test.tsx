@@ -31,4 +31,16 @@ describe("Button text on filled variants", () => {
     const white = /foreground: "rgb\(255 255 255 \/ <alpha-value>\)"/g;
     expect(config.match(white)?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
+
+  it("--primary-foreground stays white under html.dark and inside .theme-light", () => {
+    const css = readFileSync(path.join(ROOT, "src/app/globals.css"), "utf8");
+    const block = (selector: string) => {
+      const start = css.indexOf(`${selector} {`);
+      expect(start, selector).toBeGreaterThanOrEqual(0);
+      return css.slice(start, css.indexOf("}", start));
+    };
+    for (const selector of ["  html.dark", "  html.dark .theme-light"]) {
+      expect(block(selector)).toMatch(/--primary-foreground:\s*0 0% 100%;/);
+    }
+  });
 });
