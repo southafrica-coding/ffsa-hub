@@ -3,13 +3,24 @@ import type { ReactNode } from "react";
 import { PlayIcon } from "@/components/departments/songwriting/icons";
 import pw from "./pw.module.css";
 import sl from "./sl.module.css";
-import type { LibraryPaths } from "./paths";
+import { SERVICE_LIBRARY_PATHS, type LibraryPaths } from "./paths";
+
+/** Example ids used only to show the shape of Slack's links. Nothing is sent. */
+const EXAMPLE = {
+  harbourLights: "00000000-0000-4000-8000-000000000001",
+  mercyLikeMorning: "00000000-0000-4000-8000-000000000002",
+  daniBlood: "00000000-0000-4000-8000-000000000011",
+} as const;
 
 /**
  * A preview of the three Slack DMs. Nothing is sent from here: this page
- * shows the copy so it can be reviewed. Example names only.
+ * shows the copy so it can be reviewed. Example names only. Links match
+ * what Slack sends: /song-library/songs/:id, and the writer's page to
+ * unsubscribe from a writer subscription.
  */
-export function DmPreview({ paths }: { paths: Pick<LibraryPaths, "home" | "helpers"> }) {
+export function DmPreview({ paths: _paths }: { paths: Pick<LibraryPaths, "home" | "helpers"> }) {
+  const song = SERVICE_LIBRARY_PATHS.song;
+  const writer = SERVICE_LIBRARY_PATHS.writer;
   return (
     <>
       <div className={sl.mocklabel}>Preview of the Slack DMs. Generic layout, not Slack&apos;s own look. Nothing is sent from this page.</div>
@@ -35,19 +46,19 @@ export function DmPreview({ paths }: { paths: Pick<LibraryPaths, "home" | "helpe
             </span>
             <span>verse-and-chorus-idea.mp3 · 1:42</span>
           </div>
-          <Buttons primary="Listen in Hub" href={paths.home} secondary="Unsubscribe" />
+          <Buttons primary="Listen in Hub" href={song(EXAMPLE.harbourLights)} secondary="Unsubscribe" secondaryHref={writer(EXAMPLE.daniBlood)} />
           <div className={sl.why}>You get this because you subscribe to Dani Blood.</div>
         </Dm>
         <Dm time="11:40">
           <div className={sl.bubbleH}>“Mercy Like Morning” is Demo ready</div>
           <div className={sl.bubbleP}>Moved from Written, needs demo. Placement: Ministry Nights.</div>
-          <Buttons primary="Hear the demo" href={paths.home} secondary="Unsubscribe" />
+          <Buttons primary="Hear the demo" href={song(EXAMPLE.mercyLikeMorning)} secondary="Unsubscribe" secondaryHref={SERVICE_LIBRARY_PATHS.home} />
           <div className={sl.why}>You get this because you follow all uploads.</div>
         </Dm>
         <Dm time="14:05" help>
           <div className={sl.bubbleH}>Kiri asked for help: bass and drums</div>
           <div className={sl.bubbleP}>For the demo of “Lanterns in the Valley”.</div>
-          <Buttons primary="I can help" href={paths.helpers} secondary="Unsubscribe" />
+          <Buttons primary="I can help" href={SERVICE_LIBRARY_PATHS.helpers} />
           <div className={sl.why}>You get this because you signed up to help with Bass.</div>
         </Dm>
       </div>
@@ -72,15 +83,27 @@ function Dm({ time, help, children }: { time: string; help?: boolean; children: 
   );
 }
 
-function Buttons({ primary, href, secondary }: { primary: string; href: string; secondary: string }) {
+function Buttons({
+  primary,
+  href,
+  secondary,
+  secondaryHref,
+}: {
+  primary: string;
+  href: string;
+  secondary?: string;
+  secondaryHref?: string;
+}) {
   return (
     <div className={pw.btnrow} style={{ marginTop: 10 }}>
       <Link className={`${pw.btn} ${pw.primary} ${pw.grow}`} href={href}>
         {primary}
       </Link>
-      <span className={`${pw.btn} ${pw.grow}`} aria-disabled="true">
-        {secondary}
-      </span>
+      {secondary && secondaryHref ? (
+        <Link className={`${pw.btn} ${pw.grow}`} href={secondaryHref}>
+          {secondary}
+        </Link>
+      ) : null}
     </div>
   );
 }

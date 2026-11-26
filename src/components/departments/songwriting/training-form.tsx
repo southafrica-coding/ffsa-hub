@@ -10,6 +10,7 @@ import { formatSaDate } from "@/lib/format/sa-time";
 import { songwritingApi } from "./api";
 import { songwritingHref } from "./header";
 import type { SongwritingData, TrainingInput } from "./types";
+import { NoAccessNote } from "@/components/song-library/no-access";
 import { useSongwriting } from "./use-songwriting";
 
 type Draft = {
@@ -94,7 +95,8 @@ export function TrainingForm({
   trainingId: string | null;
   initial?: SongwritingData;
 }) {
-  const { loading, data } = useSongwriting(slug, initial);
+  const { loading, data, denied } = useSongwriting(slug, initial);
+  if (denied) return <NoAccessNote />;
   if (trainingId && loading) return <p className={pw.hint}>Loading the training…</p>;
   const training = trainingId ? (data.trainings.find((t) => t.id === trainingId) ?? null) : null;
   if (trainingId && !training) {

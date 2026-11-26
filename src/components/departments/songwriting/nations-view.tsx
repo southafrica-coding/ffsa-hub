@@ -8,10 +8,12 @@ import { nationCode, plural, summariseNations, trainedText, type NationSummary }
 import { monthLabel, reachedPercent, WORLD_NATIONS } from "./overview";
 import { trainingTitle } from "./trainings";
 import type { SongwritingData } from "./types";
+import { NoAccessNote } from "@/components/song-library/no-access";
 import { useSongwriting } from "./use-songwriting";
 
 export function NationsView({ slug, initial }: { slug: string; initial?: SongwritingData }) {
-  const { loading, data } = useSongwriting(slug, initial);
+  const { loading, data, denied } = useSongwriting(slug, initial);
+  if (denied) return <NoAccessNote />;
   const summaries = summariseNations(data.nations, data.trainings).filter((s) => s.trainings > 0);
   const tentative = summaries.filter((s) => s.nation.status === "tentative").length;
   const reached = summaries.length;

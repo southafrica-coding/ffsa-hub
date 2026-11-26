@@ -7,6 +7,7 @@ import { songwritingHref, trainingHref } from "./header";
 import { computeOverview, heroBlurb, monthLabel, openLeadCount, reachedPercent, WORLD_NATIONS } from "./overview";
 import { countText, trainingTitle } from "./trainings";
 import type { SongwritingData } from "./types";
+import { NoAccessNote } from "@/components/song-library/no-access";
 import { useSongwriting } from "./use-songwriting";
 
 export function OverviewView({
@@ -18,7 +19,8 @@ export function OverviewView({
   uploadHref: string;
   initial?: SongwritingData;
 }) {
-  const { loading, data } = useSongwriting(slug, initial);
+  const { loading, data, denied } = useSongwriting(slug, initial);
+  if (denied) return <NoAccessNote />;
   const totals = computeOverview({
     nations: data.nations,
     trainings: data.trainings,

@@ -1,6 +1,7 @@
 // Songwriting client, aimed at the future
 // /api/departments/[slug]/songwriting routes. There is no backend PR yet:
 // a missing route reads as empty and the pages show their empty states.
+// A 403 is denied, not empty.
 
 import { readOr, requestJson } from "@/components/song-library/client";
 import type { PwSongwritingTraining } from "@/lib/departments/db.types";

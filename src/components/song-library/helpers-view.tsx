@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import pw from "./pw.module.css";
 import sl from "./sl.module.css";
 import { EMPTY_HELPERS, songLibraryApi } from "./api";
+import { NoAccessNote } from "./no-access";
 import { errorCopy } from "./client";
 import { ago } from "./format";
 import { libraryPaths, type LibraryScope } from "./paths";
@@ -16,6 +17,7 @@ export function HelpersView({ scope, initial }: { scope: LibraryScope; initial?:
   const paths = libraryPaths(scope);
   const [data, setData] = useState<HelpersPage>(initial ?? EMPTY_HELPERS);
   const [loading, setLoading] = useState(!initial);
+  const [denied, setDenied] = useState(false);
   const [mine, setMine] = useState<SongHelpCategory[]>(initial?.mySignups ?? []);
   const [offered, setOffered] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -28,6 +30,7 @@ export function HelpersView({ scope, initial }: { scope: LibraryScope; initial?:
       if (controller.signal.aborted) return;
       setData(result.data);
       setMine(result.data.mySignups);
+      setDenied(result.denied);
       setLoading(false);
     });
     return () => controller.abort();
@@ -53,6 +56,8 @@ export function HelpersView({ scope, initial }: { scope: LibraryScope; initial?:
     }
     setOffered((cur) => [...cur, requestId]);
   }
+
+  if (denied) return <NoAccessNote />;
 
   return (
     <div aria-busy={loading || undefined}>

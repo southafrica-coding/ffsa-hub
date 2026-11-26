@@ -70,6 +70,7 @@ describe("L10 is department-agnostic", () => {
   it("renders an expandable auto recap from the paired team, dismissable and not editable", () => {
     const headline: L10Headline = {
       id: "auto-1",
+      department_id: "dept-ops",
       body: "Production rated 8.5. Four new to-dos, two issues kept.",
       author_id: null,
       source_meeting_id: "meet-live",

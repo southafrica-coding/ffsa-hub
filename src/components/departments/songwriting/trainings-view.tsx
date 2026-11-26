@@ -18,13 +18,14 @@ import {
   type TrainingFilter,
 } from "./trainings";
 import type { SongwritingData } from "./types";
+import { NoAccessNote } from "@/components/song-library/no-access";
 import { useSongwriting } from "./use-songwriting";
 
 /** Cards shown before "N earlier trainings". */
 const FIRST_PAGE = 12;
 
 export function TrainingsView({ slug, initial }: { slug: string; initial?: SongwritingData }) {
-  const { loading, data } = useSongwriting(slug, initial);
+  const { loading, data, denied } = useSongwriting(slug, initial);
   const [filterKey, setFilterKey] = useState("all");
   const [showAll, setShowAll] = useState(false);
   const nationById = useMemo(() => new Map(data.nations.map((n) => [n.id, n])), [data.nations]);
@@ -44,6 +45,8 @@ export function TrainingsView({ slug, initial }: { slug: string; initial?: Songw
     })
     .filter((g) => g.trainings.length > 0);
   const hidden = showAll ? 0 : Math.max(0, filtered.length - FIRST_PAGE);
+
+  if (denied) return <NoAccessNote />;
 
   return (
     <div aria-busy={loading || undefined}>

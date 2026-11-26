@@ -1,9 +1,11 @@
 // Shared fetch helper for the Song Library and Songwriting UIs.
 //
-// The backend routes do not exist yet. Reads treat any failure (404 while
-// the routes are missing, network, bad JSON) as "nothing to show", so the
-// pages render their empty states. Writes report a code, never the
-// server's text: only `code` and `fieldErrors` keys are read from a reply.
+// The backend routes do not exist yet. Reads treat a missing route, a
+// network error or bad JSON as "nothing to show", so the pages render
+// their empty states. A 403 or code "forbidden" is not an empty catalogue:
+// readOr flags `denied` and the page shows a no-access state. Writes
+// report a code, never the server's text: only `code` and `fieldErrors`
+// keys are read from a reply.
 
 export type ApiFailure = {
   ok: false;
@@ -59,17 +61,26 @@ export async function requestJson<T>(
     body = null;
   }
   if (!response.ok) {
-    const code = readCode(body) ?? (response.status === 401 ? "unauthenticated" : response.status === 403 ? "forbidden" : response.status === 404 ? "not_found" : null);
+    const code = readCode(body) ?? (response.status === 401 ? "unauthenticated" : response.status === 403 ? "forbidden" : response.status === 404 ? "not_found" : response.status === 413 ? "too_large" : response.status === 415 ? "use_signed_upload" : null);
     return { ok: false, status: response.status, code, fields: readFields(body) };
   }
   return { ok: true, data: body as T };
 }
 
-/** Read with a fallback: any failure becomes the empty value. */
-export async function readOr<T>(url: string, empty: T, signal?: AbortSignal): Promise<{ data: T; missing: boolean }> {
+export type ReadOrResult<T> = { data: T; missing: boolean; denied: boolean };
+
+function isDenied(result: ApiFailure): boolean {
+  return result.status === 403 || result.code === "forbidden" || result.code === "403";
+}
+
+/** Read with a fallback: missing routes become the empty value. A 403 is denied, not empty. */
+export async function readOr<T>(url: string, empty: T, signal?: AbortSignal): Promise<ReadOrResult<T>> {
   const result = await requestJson<T>(url, { signal });
-  if (!result.ok || result.data == null) return { data: empty, missing: true };
-  return { data: result.data, missing: false };
+  if (result.ok) {
+    if (result.data == null) return { data: empty, missing: true, denied: false };
+    return { data: result.data, missing: false, denied: false };
+  }
+  return { data: empty, missing: true, denied: isDenied(result) };
 }
 
 /** Fixed copy for a failed write. The server's own words are never shown. */
@@ -94,6 +105,14 @@ export function errorCopy(code: string | null | undefined): string {
       return "You can't move this song to that stage.";
     case "too_large":
       return "That file is too big. Try a shorter clip or an mp3.";
+    case "song_moved":
+      return "Someone else moved this song first. We'll refresh it.";
+    case "help_closed":
+      return "This help request is no longer open.";
+    case "upload_missing":
+      return "The file didn't finish uploading. Try again.";
+    case "use_signed_upload":
+      return "This file has to be uploaded to a signed URL. Try again.";
     case "rate_limited":
       return "Too many tries. Wait a minute and try again.";
     case "network":

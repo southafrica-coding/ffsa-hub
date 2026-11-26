@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import pw from "./pw.module.css";
 import sl from "./sl.module.css";
 import { songLibraryApi, versionAudioUrl } from "./api";
+import { NoAccessNote } from "./no-access";
 import { errorCopy } from "./client";
 import { describeEvent } from "./events";
 import { duration, eventDay, initials, moverFor, shortDay } from "./format";
@@ -54,18 +55,21 @@ export function SongDetail({
   const paths = libraryPaths(scope);
   const [detail, setDetail] = useState<SongDetailData | null>(initial ?? null);
   const [loading, setLoading] = useState(initial === undefined);
+  const [denied, setDenied] = useState(false);
   useEffect(() => {
     if (initial !== undefined) return;
     const controller = new AbortController();
     songLibraryApi.song(songId, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
       setDetail(result.data);
+      setDenied(result.denied);
       setLoading(false);
     });
     return () => controller.abort();
   }, [songId, initial]);
 
   if (loading) return <p className={pw.hint}>Loading the song…</p>;
+  if (denied) return <NoAccessNote />;
   if (!detail) {
     return (
       <div className={pw.empty}>
@@ -103,35 +107,43 @@ function SongBody({
   const [following, setFollowing] = useState(detail.viewerFollowsLead);
   const [asking, setAsking] = useState(false);
 
-  const mover = moverFor(canManage, detail.viewerIsWriter);
+  const canManageSong = detail.viewer?.canManage ?? canManage;
+  const canTick = detail.viewer?.canTickRefine === true;
+  const mover = moverFor(canManageSong, detail.viewerIsWriter);
   const moves = stageMoveOptions(mover, song.stage);
   const next = nextStage(song.stage);
   const n = stageNumber(song.stage);
   const info = stuckInfo(song.stage, song.last_activity_at, now, detail.status);
   const lead = detail.writers.find((w) => w.is_lead) ?? detail.writers[0];
-  const canTick = canManage || detail.viewerIsWriter;
   const splitCheck = checkSplits(detail.writers);
   const refine = refineProgress(detail.refine);
   const doneSteps = new Set(detail.pathwaySteps.map((s) => s.step));
   const demo = detail.versions.find((v) => v.is_demo);
   const memberWord = ownerName ? `Any ${ownerName} member` : "A team lead";
 
+  async function refetchSong() {
+    const result = await songLibraryApi.song(song.id);
+    if (result.data) setDetail(result.data);
+  }
+
   async function run<T>(action: () => Promise<{ ok: true; data: T } | { ok: false; code: string | null }>, apply: (data: T) => void) {
     if (busy) return;
     setBusy(true);
     setMessage(null);
     const result = await action();
-    setBusy(false);
     if (!result.ok) {
       setMessage(errorCopy(result.code));
+      if (result.code === "song_moved") await refetchSong();
+      setBusy(false);
       return;
     }
+    setBusy(false);
     apply(result.data);
   }
 
   const moveStage = (to: SongStage) =>
     run(
-      () => songLibraryApi.moveStage(song.id, to),
+      () => songLibraryApi.moveStage(song.id, to, song.stage),
       (data) => {
         setStageMenu(false);
         setDetail({ ...detail, song: data?.song ?? { ...song, stage: to, last_activity_at: new Date().toISOString() } });
@@ -139,7 +151,7 @@ function SongBody({
     );
   const movePlacement = (to: SongPlacement) =>
     run(
-      () => songLibraryApi.movePlacement(song.id, to),
+      () => songLibraryApi.movePlacement(song.id, to, song.placement),
       (data) => setDetail({ ...detail, song: data?.song ?? { ...song, placement: to, last_activity_at: new Date().toISOString() } })
     );
   const tick = (q: number, checked: boolean) =>
@@ -215,6 +227,7 @@ function SongBody({
                   {initials(w.name)}
                 </span>
                 {w.name}
+                <span className={`${pw.small} ${pw.muted}`}>No Hub account</span>
               </span>
             )
           )}
@@ -305,42 +318,46 @@ function SongBody({
         </div>
       ) : null}
 
-      <div className={pw.sectionBar}>
-        <h2 className={pw.sectionTitle}>Refine</h2>
-        <span className={pw.sectionMeta}>
-          {refine.done} of 10 · bonus {refine.bonus ? "done" : "open"}
-        </span>
-      </div>
-      {[...REFINE_QUESTIONS.map((q, i) => ({ q_no: i + 1, text: q })), { q_no: REFINE_BONUS_Q_NO, text: REFINE_BONUS_QUESTION }].map((item) => {
-        const row = detail.refine.find((r) => r.q_no === item.q_no);
-        const checked = row?.checked ?? false;
-        const bonus = item.q_no === REFINE_BONUS_Q_NO;
-        return (
-          <button
-            key={item.q_no}
-            type="button"
-            role="checkbox"
-            aria-checked={checked}
-            disabled={!canTick || busy}
-            className={`${sl.ck} ${bonus ? sl.bonus : ""}`}
-            onClick={() => tick(item.q_no, !checked)}
-          >
-            <span className={pw.cbHit}>
-              <span className={`${pw.cb} ${checked ? pw.cbOn : ""}`} />
+      {canTick ? (
+        <>
+          <div className={pw.sectionBar}>
+            <h2 className={pw.sectionTitle}>Refine</h2>
+            <span className={pw.sectionMeta}>
+              {refine.done} of 10 · bonus {refine.bonus ? "done" : "open"}
             </span>
-            <span className={sl.ckQ}>
-              {bonus ? null : <span className={sl.ckN}>{item.q_no}.</span>}
-              {item.text}
-              {row?.note ? <span className={sl.ckA}>{row.note}</span> : null}
-              {bonus ? <span className={sl.ckA}>Bonus question · not required to move on</span> : null}
-            </span>
-          </button>
-        );
-      })}
+          </div>
+          {[...REFINE_QUESTIONS.map((q, i) => ({ q_no: i + 1, text: q })), { q_no: REFINE_BONUS_Q_NO, text: REFINE_BONUS_QUESTION }].map((item) => {
+            const row = detail.refine.find((r) => r.q_no === item.q_no);
+            const checked = row?.checked ?? false;
+            const bonus = item.q_no === REFINE_BONUS_Q_NO;
+            return (
+              <button
+                key={item.q_no}
+                type="button"
+                role="checkbox"
+                aria-checked={checked}
+                disabled={busy}
+                className={`${sl.ck} ${bonus ? sl.bonus : ""}`}
+                onClick={() => tick(item.q_no, !checked)}
+              >
+                <span className={pw.cbHit}>
+                  <span className={`${pw.cb} ${checked ? pw.cbOn : ""}`} />
+                </span>
+                <span className={sl.ckQ}>
+                  {bonus ? null : <span className={sl.ckN}>{item.q_no}.</span>}
+                  {item.text}
+                  {row?.note ? <span className={sl.ckA}>{row.note}</span> : null}
+                  {bonus ? <span className={sl.ckA}>Bonus question · not required to move on</span> : null}
+                </span>
+              </button>
+            );
+          })}
+        </>
+      ) : null}
 
       <div className={pw.sectionBar}>
         <h2 className={pw.sectionTitle}>Placement</h2>
-        <span className={pw.sectionMeta}>{canManage ? `any ${ownerName ?? "team"} member` : "set by the team"}</span>
+        <span className={pw.sectionMeta}>{canManageSong ? `any ${ownerName ?? "team"} member` : "set by the team"}</span>
       </div>
       <div className={sl.placeflow} role="group" aria-label="Placement">
         {PLACEMENT_FLOW.map((p, i) => {

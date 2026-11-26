@@ -1,8 +1,9 @@
 // Song Library client, aimed at the future /api/song-library routes.
-// Nothing here ships data: a missing route reads as empty.
+// Nothing here ships data: a missing route reads as empty. A 403 is denied, not empty.
 
 import { readOr, requestJson } from "./client";
 import type {
+  CoWriterInput,
   HelpersPage,
   LibraryHome,
   SongDetail,
@@ -31,6 +32,8 @@ export const songLibraryRoutes = {
   helperSignup: (category: SongHelpCategory) => `${base}/helpers/${enc(category)}`,
   canHelp: (requestId: string) => `${base}/help-requests/${enc(requestId)}/signups`,
   helpRequests: (songId: string) => `${base}/songs/${enc(songId)}/help-requests`,
+  uploads: (id: string) => `${base}/songs/${enc(id)}/uploads`,
+  versions: (id: string) => `${base}/songs/${enc(id)}/versions`,
   board: `${base}/board`,
   subscriptions: `${base}/subscriptions`,
 } as const;
@@ -45,12 +48,12 @@ export const songLibraryApi = {
   song: (id: string, signal?: AbortSignal) => readOr<SongDetail | null>(songLibraryRoutes.song(id), null, signal),
   writer: (id: string, signal?: AbortSignal) => readOr<WriterProfile | null>(songLibraryRoutes.writer(id), null, signal),
 
-  upload: (input: SongLibrarySongInsert & { co_writers: string[] }) =>
+  upload: (input: SongLibrarySongInsert & { co_writers: CoWriterInput[] }) =>
     requestJson<{ song: SongLibrarySong }>(songLibraryRoutes.songs, { method: "POST", body: input }),
-  moveStage: (id: string, to: SongStage) =>
-    requestJson<{ song: SongLibrarySong }>(songLibraryRoutes.stage(id), { method: "POST", body: { to } }),
-  movePlacement: (id: string, to: SongPlacement) =>
-    requestJson<{ song: SongLibrarySong }>(songLibraryRoutes.placement(id), { method: "POST", body: { to } }),
+  moveStage: (id: string, to: SongStage, from: SongStage) =>
+    requestJson<{ song: SongLibrarySong }>(songLibraryRoutes.stage(id), { method: "POST", body: { to, from } }),
+  movePlacement: (id: string, to: SongPlacement, from: SongPlacement) =>
+    requestJson<{ song: SongLibrarySong }>(songLibraryRoutes.placement(id), { method: "POST", body: { to, from } }),
   tickRefine: (id: string, q: number, checked: boolean) =>
     requestJson<unknown>(songLibraryRoutes.refine(id, q), { method: "PUT", body: { checked } }),
   subscribeAll: (on: boolean) =>
@@ -67,24 +70,74 @@ export const songLibraryApi = {
     requestJson<unknown>(songLibraryRoutes.helpRequests(songId), { method: "POST", body: { categories, body } }),
 };
 
-/** First audio for a new song. multipart, so it skips the JSON helper. */
+/** MIME types the signed-upload API accepts for audio. */
+const AUDIO_CONTENT_TYPES: Record<string, string> = {
+  "audio/mpeg": "mp3",
+  "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "aac",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/wave": "wav",
+  "audio/ogg": "ogg",
+  "audio/webm": "webm",
+  "audio/flac": "flac",
+};
+
+const AUDIO_TYPE_BY_EXT: Record<string, string> = {
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  webm: "audio/webm",
+  flac: "audio/flac",
+};
+
+function audioContentType(file: File): string {
+  const ct = (file.type || "").toLowerCase();
+  if (AUDIO_CONTENT_TYPES[ct]) return ct;
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return AUDIO_TYPE_BY_EXT[ext] ?? ct;
+}
+
+export type SignedUpload = {
+  path: string;
+  signed_url: string;
+  content_type?: string;
+  token?: string;
+  bucket?: string;
+  max_bytes?: number;
+};
+
+/**
+ * First audio for a new song: POST /uploads for a signed URL, PUT the file
+ * to that URL, then POST /versions with { path }. Multipart to /versions
+ * is refused with 415 use_signed_upload.
+ */
 export async function uploadVersion(songId: string, file: File): Promise<{ ok: true } | { ok: false; code: string | null }> {
-  const form = new FormData();
-  form.append("file", file);
+  const content_type = audioContentType(file);
+  const started = await requestJson<SignedUpload>(songLibraryRoutes.uploads(songId), {
+    method: "POST",
+    body: { kind: "audio", filename: file.name || "audio", content_type, size: file.size },
+  });
+  if (!started.ok) return { ok: false, code: started.code };
+  const signedUrl = started.data.signed_url;
+  const path = started.data.path;
+  if (!signedUrl || !path) return { ok: false, code: "invalid_input" };
   try {
-    const response = await fetch(`${base}/songs/${enc(songId)}/versions`, { method: "POST", body: form, credentials: "same-origin" });
-    if (response.ok) return { ok: true };
-    let code: string | null = null;
-    try {
-      const body = (await response.json()) as { code?: unknown };
-      code = typeof body.code === "string" ? body.code : null;
-    } catch {
-      code = null;
-    }
-    return { ok: false, code: code ?? (response.status === 413 ? "too_large" : null) };
+    const put = await fetch(signedUrl, {
+      method: "PUT",
+      headers: { "Content-Type": started.data.content_type || content_type },
+      body: file,
+    });
+    if (!put.ok) return { ok: false, code: "upload_missing" };
   } catch {
     return { ok: false, code: "network" };
   }
+  const created = await requestJson<unknown>(songLibraryRoutes.versions(songId), { method: "POST", body: { path } });
+  if (!created.ok) return { ok: false, code: created.code };
+  return { ok: true };
 }
 
 /** Audio is streamed through a checked route; the bucket path is never a URL. */

@@ -18,12 +18,14 @@ import {
 import { monthLabel } from "./overview";
 import { trainingTitle } from "./trainings";
 import type { SongwritingData, SongwritingLead } from "./types";
+import { NoAccessNote } from "@/components/song-library/no-access";
 import { useSongwriting } from "./use-songwriting";
 
 const TONE_CLASS = { red: pw.pillRed, amber: pw.pillAmber, green: pw.pillGreen, plain: "" } as const;
 
 export function FollowUpView({ slug, uploadHref, initial: seed }: { slug: string; uploadHref: string; initial?: SongwritingData }) {
-  const { loading, data } = useSongwriting(slug, seed);
+  const { loading, data, denied } = useSongwriting(slug, seed);
+  if (denied) return <NoAccessNote />;
   const nationById = new Map(data.nations.map((n) => [n.id, n]));
   const trainingById = new Map(data.trainings.map((t) => [t.id, t]));
   const rows = postSongRows(data.trainings, data.librarySongsByTraining);
