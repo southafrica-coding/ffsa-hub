@@ -443,7 +443,32 @@ export type PwTrainingSource = (typeof PW_TRAINING_SOURCES)[number];
 export const PW_SONG_STATUSES = ["draft", "written", "recorded", "released"] as const;
 export type PwSongStatus = (typeof PW_SONG_STATUSES)[number];
 
-/** pw_nations. slug is unique. */
+/** pw_songwriting_leads.kind (424). */
+export const PW_LEAD_KINDS = ["person", "organisation", "group"] as const;
+export type PwLeadKind = (typeof PW_LEAD_KINDS)[number];
+
+/** pw_songwriting_leads.status (424). Default 'new'. */
+export const PW_LEAD_STATUSES = ["new", "to_contact", "waiting", "connected", "closed"] as const;
+export type PwLeadStatus = (typeof PW_LEAD_STATUSES)[number];
+
+/**
+ * Postgres error message (SQLSTATE 42501) when a signed-in caller changes
+ * pw_songwriting_leads.created_by, or edits a lead event (append-only).
+ */
+export const PW_SONGWRITING_ACTOR_LOCKED = "pw_songwriting_actor_locked" as const;
+
+/**
+ * Postgres error message (SQLSTATE 42501) when anyone sets
+ * pw_songwriting_leads.last_contact_at directly. It is fully derived: a
+ * signed-in caller can never write it; service_role may only write the
+ * derived value (a repair).
+ */
+export const PW_LEAD_LAST_CONTACT_DERIVED = "pw_lead_last_contact_derived" as const;
+
+/** Postgres error message (SQLSTATE 23514) when service_role (or a direct DB write) logs a lead event without by. */
+export const PW_LEAD_EVENT_ACTOR_REQUIRED = "pw_lead_event_actor_required" as const;
+
+/** pw_nations. slug is unique; iso_code is unique where set (424). */
 export interface PwNation {
   id: string;
   name: string;
@@ -451,6 +476,14 @@ export interface PwNation {
   continent: PwContinent | null;
   status: PwNationStatus;
   notes: string | null;
+  /** ISO 3166-1 alpha-2, two capital letters ("ZA"). Null = not set yet (424). */
+  iso_code: string | null;
+  /**
+   * The nation's languages as display strings; [] when none recorded (424).
+   * Entries must be non-blank and trimmed (no leading/trailing whitespace):
+   * trim before sending, or the write fails with 23514.
+   */
+  languages: string[];
   created_at: string;
   updated_at: string;
 }
@@ -461,6 +494,13 @@ export interface PwSongwritingTraining {
   year: number;
   /** 1–12. */
   month: number;
+  /**
+   * Optional day (424): a date column, so send 'YYYY-MM-DD', never a
+   * timestamp (a timestamp is cast in the session time zone and can land
+   * in the next or previous month). Must fall in year/month, which stay
+   * required; null = month only (every imported row).
+   */
+  training_date: string | null;
   location_text: string | null;
   nation_id: string | null;
   audience_label: string | null;
@@ -468,6 +508,7 @@ export interface PwSongwritingTraining {
   songs_workshop: number | null;
   songs_post: number | null;
   notes: string | null;
+  /** Non-blank, trimmed entries, as on PwNation.languages (CHECK added in 424; 23514). */
   languages: string[];
   status: PwTrainingStatus;
   source: PwTrainingSource;
@@ -501,6 +542,59 @@ export interface PwSong {
   /** 'YYYY-MM-DD'. */
   written_on: string | null;
   created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * pw_songwriting_leads (424): people, organisations or groups to follow up,
+ * by nation and/or source training. No contact details (the CRM has them).
+ * The API adds owner_name (from owner_user_id) for #745's SongwritingLead.
+ */
+export interface PwSongwritingLead {
+  id: string;
+  /** What the card shows. Always set, even when contact_user_id is. */
+  label: string;
+  kind: PwLeadKind;
+  /** Hub user, when the lead has an account. */
+  contact_user_id: string | null;
+  source_training_id: string | null;
+  nation_id: string | null;
+  note: string | null;
+  /** Who follows up. Null = unassigned. */
+  owner_user_id: string | null;
+  status: PwLeadStatus;
+  /**
+   * Derived: the latest lead event's `at` (null when there are none),
+   * recomputed by the database under a row lock on every event insert,
+   * delete and edit, so it stays right with concurrent writers. Read-only
+   * for every client (42501 pw_lead_last_contact_derived). Log a contact
+   * instead.
+   */
+  last_contact_at: string | null;
+  /** Set to the signed-in caller on insert (whatever is sent); cannot change (42501 pw_songwriting_actor_locked). */
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * pw_songwriting_lead_events (424): one "Log contact". Append-only for
+ * signed-in callers (no update; 42501). Delete = the author or an admin, and
+ * last_contact_at is recomputed from the remaining events. Deleting the lead deletes these.
+ */
+export interface PwSongwritingLeadEvent {
+  id: string;
+  lead_id: string;
+  /** When the contact happened. Defaults to now(). */
+  at: string;
+  /**
+   * Hub user who logged it: the signed-in caller (whatever is sent).
+   * service_role must name one (23514 pw_lead_event_actor_required).
+   * Null only after that user is deleted.
+   */
+  by: string | null;
+  note: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -12,7 +12,7 @@ import { logSongHref, postSongRows, postSongSummary } from "./followup";
 const STAMP = "2026-11-26T08:00:00.000Z";
 
 function nation(slug: string, name: string, continent: PwContinent, status: PwNation["status"] = "active"): PwNation {
-  return { id: `n-${slug}`, name, slug, continent, status, notes: null, created_at: STAMP, updated_at: STAMP };
+  return { id: `n-${slug}`, name, slug, continent, status, notes: null, iso_code: null, languages: [], created_at: STAMP, updated_at: STAMP };
 }
 
 let seq = 0;
@@ -28,6 +28,7 @@ function training(
     id: `t-${seq}`,
     year,
     month,
+    training_date: null,
     location_text: "Potch",
     nation_id: `n-${nationSlug}`,
     audience_label: `Group ${seq}`,
