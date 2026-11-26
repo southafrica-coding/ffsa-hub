@@ -15,6 +15,7 @@ import {
   NOSLACK,
   OLD_TODO,
   PRODUCTION,
+  PW_ID,
   SINGER,
   makeWorld,
 } from "@/lib/l10/testing/world";
@@ -39,6 +40,7 @@ function endedWorld(opts: { channel?: string | null; ended?: boolean } = {}) {
       {
         id: MEETING,
         team_id: PRODUCTION,
+        department_id: PW_ID,
         started_at: "2026-11-26T17:00:00.000Z",
         ended_at: opts.ended === false ? null : "2026-11-26T18:30:00.000Z",
         facilitator_id: LEAD,

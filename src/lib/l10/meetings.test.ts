@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { advanceSegment, averageRating, currentSegment, endMeeting, nextSegment, startMeeting } from "./meetings";
 import { L10_SEGMENTS } from "./types";
 import { parseItemCreate, parseItemPatch, parseMeetingEnd, parseMeetingStart, parseSegmentAdvance } from "./validate";
-import { LEAD, LIVE_ONLY, NOSLACK, PRODUCTION, SINGER, makeWorld, pwRls } from "./testing/world";
+import { LEAD, LIVE_ONLY, NOSLACK, PRODUCTION, PW_ID, SINGER, makeWorld, pwRls } from "./testing/world";
 
 const TEAM = { id: PRODUCTION, facilitator_id: null };
 
@@ -109,6 +109,9 @@ describe("start", () => {
     expect(db.tables.l10_meeting_attendees.map((a) => a.profile_id).sort()).toEqual([LEAD, SINGER, NOSLACK].sort());
     expect(db.tables.l10_meeting_attendees.every((a) => a.team_id === PRODUCTION)).toBe(true);
     expect(db.tables.l10_meetings[0].facilitator_id).toBe(LEAD);
+    expect(db.tables.l10_meetings[0].department_id).toBe(PW_ID);
+    const inserted = db.log.find((e) => e.table === "l10_meetings" && e.action === "insert");
+    expect(inserted?.payload).not.toHaveProperty("department_id");
     const second = await startMeeting(s, TEAM, LEAD, { attendee_user_ids: null, facilitator_id: null });
     expect(second).toMatchObject({ ok: false, kind: "conflict" });
   });
