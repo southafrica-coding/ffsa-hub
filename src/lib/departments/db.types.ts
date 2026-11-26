@@ -269,6 +269,8 @@ export interface L10TeamMember {
 export interface L10Meeting {
   id: string;
   team_id: string;
+  /** The team's department (staff_ministries.id). Filled from team_id by a trigger (420); don't send it. */
+  department_id: string;
   started_at: string;
   ended_at: string | null;
   facilitator_id: string | null;
@@ -383,6 +385,8 @@ export interface L10Issue {
 export interface L10Headline {
   id: string;
   team_id: string;
+  /** The team's department (staff_ministries.id). Filled from team_id by a trigger (420); don't send it. */
+  department_id: string;
   body: string;
   /** Required unless is_auto. Deleting the user deletes their headlines. */
   author_id: string | null;
@@ -391,6 +395,7 @@ export interface L10Headline {
   is_auto: boolean;
   /**
    * The paired team's ended meeting this auto row recaps. Only on auto rows;
+   * must be in the same department (composite FK, 420: 23503 otherwise);
    * unique per (source_meeting_id, recap_of_meeting_id). Becomes null if
    * that meeting is deleted.
    */
