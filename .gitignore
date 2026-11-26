@@ -53,3 +53,6 @@ supabase/.temp/
 /apps/mobile/dist/
 /apps/mobile/ios/
 /apps/mobile/android/
+
+# local scratch (store screenshots, local PDF test output, working PDFs). Never committed.
+/tmp/
