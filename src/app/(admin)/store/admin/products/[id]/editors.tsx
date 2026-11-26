@@ -185,7 +185,7 @@ export function AudioUpload({ productId, current }: { productId: string; current
           <input
             id={inputId}
             type="file"
-            accept="audio/mpeg,audio/mp3,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/ogg,audio/webm,.mp3,.m4a,.aac,.wav,.ogg,.oga,.webm"
+            accept="audio/mpeg,audio/mp3,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/wave,audio/ogg,audio/webm,.mp3,.m4a,.aac,.wav,.ogg,.oga,.webm"
             className="absolute inset-0 cursor-pointer opacity-0"
             disabled={busy !== "idle"}
             onChange={(e) => {

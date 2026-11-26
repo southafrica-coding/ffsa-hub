@@ -135,13 +135,16 @@ const AUDIO_EXT_TYPES: Record<string, string> = {
 
 /**
  * MIME we'll send to Storage: the browser type if we know it, otherwise
- * the extension. Some browsers (and some MP3s) hand over an empty
- * `file.type`, which used to fail the allow-list before the signed
- * upload even started.
+ * the extension when the type is empty or application/octet-stream.
+ * Some browsers (and some MP3s) hand over an empty file.type, which used
+ * to fail the allow-list before the signed upload even started. A real
+ * non-audio MIME is rejected even if the name ends in .mp3.
  */
 export function resolveAudioContentType(file: { name: string; type?: string | null }): string | null {
   const type = (file.type ?? "").trim().toLowerCase();
   if (AUDIO_TYPES[type]) return storedAudioType(type);
+  const generic = type === "" || type === "application/octet-stream";
+  if (!generic) return null;
   const ext = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "";
   return AUDIO_EXT_TYPES[ext] ?? null;
 }
