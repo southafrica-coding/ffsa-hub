@@ -98,8 +98,48 @@ export async function namesFor(admin: Client, ids: readonly (string | null | und
   );
 }
 
+/** A writer's shown name: their Hub name, else the name typed in for them. */
+export function writerName(w: Pick<SongLibraryWriter, "user_id" | "display_name">, names: Map<string, string>): string {
+  return (w.user_id ? names.get(w.user_id) : null) ?? w.display_name ?? "Writer";
+}
+
+/** Lead writer first, then in the order they were added. */
+export function leadFirst<T extends { is_lead: boolean }>(rows: readonly T[]): T[] {
+  return [...rows].sort((a, b) => Number(b.is_lead) - Number(a.is_lead));
+}
+
+/** Writer rows with `name` (always a string, as Hub UI's SongDetail expects) and numeric split_pct. */
 export function withWriterNames(writers: readonly SongLibraryWriter[], names: Map<string, string>) {
-  return writers.map((w) => ({ ...w, split_pct: w.split_pct === null ? null : Number(w.split_pct), name: w.user_id ? (names.get(w.user_id) ?? w.display_name ?? null) : w.display_name }));
+  return leadFirst(writers).map((w) => ({ ...w, split_pct: w.split_pct === null ? null : Number(w.split_pct), name: writerName(w, names) }));
+}
+
+/** Hub UI's SongPerson. Never an email or phone. */
+export type SongPerson = { userId: string | null; name: string };
+
+/** Hub UI's SongListItem: one row on the library list, writer page and board. */
+export type SongListItem = { song: SongLibrarySong; writers: SongPerson[]; status: Row | null };
+
+/** List items for some songs: writers (lead first) and the status view row. */
+export async function listItems(ctx: SongLibraryContext, songs: readonly SongLibrarySong[]): Promise<{ ok: true; items: SongListItem[] } | { ok: false; response: NextResponse }> {
+  if (!songs.length) return { ok: true, items: [] };
+  const ids = songs.map((s) => s.id);
+  const [status, writers] = await Promise.all([
+    ctx.supabase.from(SL_TABLES.status).select(SL_COLUMNS.status).in("song_id", ids),
+    ctx.supabase.from(SL_TABLES.writers).select("id, song_id, user_id, display_name, is_lead, created_at").in("song_id", ids).order("created_at", { ascending: true }),
+  ]);
+  if (status.error) return { ok: false, response: dbError(status.error) };
+  if (writers.error) return { ok: false, response: dbError(writers.error) };
+  const statusOf = new Map(((status.data ?? []) as Row[]).map((s) => [s.song_id as string, s]));
+  const writerRows = (writers.data ?? []) as Pick<SongLibraryWriter, "id" | "song_id" | "user_id" | "display_name" | "is_lead">[];
+  const names = await namesFor(ctx.admin, writerRows.map((w) => w.user_id));
+  return {
+    ok: true,
+    items: songs.map((song) => ({
+      song,
+      writers: leadFirst(writerRows.filter((w) => w.song_id === song.id)).map((w) => ({ userId: w.user_id, name: writerName(w, names) })),
+      status: statusOf.get(song.id) ?? null,
+    })),
+  };
 }
 
 /** Re-read a song's writers (after a change) and answer with them and the splits state. */

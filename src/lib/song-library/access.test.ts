@@ -14,13 +14,12 @@ import {
 import { SONG_STAGES } from "./types";
 import { checkSplits, parseSplits, splitHundredths } from "./validate";
 
-const viewer = (over: Partial<SongLibraryViewer> = {}): SongLibraryViewer => ({ userId: "me", isAdmin: false, canManage: false, isLead: false, ...over });
+const viewer = (over: Partial<SongLibraryViewer> = {}): SongLibraryViewer => ({ userId: "me", isAdmin: false, canManage: false, ...over });
 const writer = { isWriter: true, isLeadWriter: false };
 const lead = { isWriter: true, isLeadWriter: true };
 const nobody = { isWriter: false, isLeadWriter: false };
 const manager = viewer({ canManage: true });
-const leader = viewer({ canManage: true, isLead: true });
-const admin = viewer({ isAdmin: true, isLead: true });
+const admin = viewer({ isAdmin: true });
 
 describe("stage moves", () => {
   it("lets a writer move through the early stages, skipping ahead or back", () => {
@@ -63,11 +62,10 @@ describe("placement, edits, delete, publishing, celebrate", () => {
     expect(canDeleteSong(viewer(), lead)).toBe(true);
     expect(canDeleteSong(admin, nobody)).toBe(true);
   });
-  it("publishing is for writers and the owning department's leaders, not every manager", () => {
+  it("publishing is for writers, managers and admins (as 419)", () => {
     expect(canEditPublishing(viewer(), writer)).toBe(true);
-    expect(canEditPublishing(leader, nobody)).toBe(true);
+    expect(canEditPublishing(manager, nobody)).toBe(true);
     expect(canEditPublishing(admin, nobody)).toBe(true);
-    expect(canEditPublishing(manager, nobody)).toBe(false);
     expect(canEditPublishing(viewer(), nobody)).toBe(false);
   });
   it("celebrate notes are read by writers and managers only", () => {

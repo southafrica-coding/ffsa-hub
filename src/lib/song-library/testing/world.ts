@@ -5,7 +5,7 @@
 // rows, as in 419: P&W holds the grants in the default world; a test can
 // point them at another ministry to show nothing names P&W.
 
-import { createMemoryDb, type DbErr, type MemoryDb, type Rls, type Row } from "./memory-db";
+import { createMemoryDb, type DbErr, type Hooks, type MemoryDb, type Rls, type Row } from "./memory-db";
 
 export const PW_ID = "00000000-0000-4000-8000-00000000a001";
 export const MEDIA_ID = "00000000-0000-4000-8000-00000000a002";
@@ -183,6 +183,9 @@ export function makeSongWorld(extra: Record<string, Row[]> = {}): SongWorld {
           return a || m || row.created_by === uid || isWriter(uid, row.id);
         case T.versions:
         case T.celebrate:
+        case "song_library_refine_items":
+        case "song_library_pathway_steps":
+        case "song_library_share_steps":
           return a || isWriter(uid, row.song_id);
         case T.writers:
           return a || m || isWriter(uid, row.song_id);
@@ -231,6 +234,9 @@ export function makeSongWorld(extra: Record<string, Row[]> = {}): SongWorld {
       if (table === "song_library_helpers" && all.some((h) => h.user_id === row.user_id && h.category === row.category)) return "song_library_helpers_pkey";
       if (table === "song_library_subscriptions" && all.some((s) => s.user_id === row.user_id && s.target_type === row.target_type && s.target_user_id === row.target_user_id))
         return row.target_type === "writer" ? "song_library_subscriptions_writer_key" : "song_library_subscriptions_all_uploads_key";
+      // 419 primary keys on the progress tables.
+      const pk: Record<string, string> = { song_library_refine_items: "q_no", song_library_pathway_steps: "step", song_library_share_steps: "kind", song_library_checkpoints: "kind" };
+      if (pk[table] && all.some((r) => r.song_id === row.song_id && r[pk[table]] === row[pk[table]])) return `${table}_pkey`;
       if (table === "song_library_notifications") {
         if (row.kind === "new_upload" && all.some((n) => n.kind === "new_upload" && n.user_id === row.user_id && n.song_id === row.song_id)) return "song_library_notifications_new_upload_key";
         if (row.kind === "new_version" && all.some((n) => n.kind === "new_version" && n.user_id === row.user_id && n.stage_event_id === row.stage_event_id)) return "song_library_notifications_new_version_key";
@@ -272,7 +278,7 @@ export function makeSongWorld(extra: Record<string, Row[]> = {}): SongWorld {
             if (row.stage !== old.stage) event(row.id, "stage", uid, { from_stage: old.stage, to_stage: row.stage });
             if (row.placement !== old.placement) event(row.id, "placement", uid, { payload: { from: old.placement, to: row.placement } });
           } else if (op === "delete") {
-            for (const t of [T.writers, T.versions, T.events, T.celebrate, T.checkpoints, "song_library_help_requests"]) {
+            for (const t of [T.writers, T.versions, T.events, T.celebrate, T.checkpoints, "song_library_help_requests", "song_library_refine_items", "song_library_pathway_steps", "song_library_share_steps"]) {
               db.tables[t] = tbl(t).filter((r) => r.song_id !== row.id);
             }
           }
@@ -338,6 +344,36 @@ export function makeSongWorld(extra: Record<string, Row[]> = {}): SongWorld {
           }
         },
       },
+      [T.checkpoints]: {
+        // 419 song_library_checkpoints_guard + _log.
+        before(op, row, old, { uid }) {
+          if (!uid) return;
+          if (op === "insert" && row.kind === "credits_splits_agreed") return refuse("42501", "credits_splits_agreed follows the writers' confirmations; confirm splits instead");
+          if (op === "update" && old!.kind === "credits_splits_agreed" && (row.done_at !== null || row.note !== old!.note)) return refuse("42501", "credits_splits_agreed can only be revoked (unticked) by hand");
+          if (op !== "delete") row.by_user = uid;
+        },
+        after(op, row, old) {
+          const was = old ?? row;
+          if (was.kind !== "credits_splits_agreed" || !old?.done_at) return;
+          if (op === "delete" || !row.done_at) {
+            for (const w of tbl(T.writers)) if (w.song_id === was.song_id) { w.confirmed_at = null; w.confirmed_by = null; }
+            event(was.song_id, "checkpoint", null, { payload: { checkpoint: "credits_splits_agreed", done: false, revoked: true } });
+          }
+        },
+      },
+      ...Object.fromEntries(
+        ["song_library_refine_items", "song_library_pathway_steps", "song_library_share_steps"].map((t) => [
+          t,
+          {
+            // 419 song_library_stamp_actor.
+            before(op, row, _old, { uid }) {
+              if (op === "delete" || !uid) return;
+              row.by_user = uid;
+              if (t === "song_library_refine_items") row.at = "2026-11-26T19:00:00.000Z";
+            },
+          } satisfies Hooks,
+        ])
+      ),
       song_library_help_requests: {
         before(op, row, _old, { uid }) {
           if (op === "insert" && uid) row.asked_by = uid;
@@ -362,6 +398,7 @@ export function makeSongWorld(extra: Record<string, Row[]> = {}): SongWorld {
           song_id: s.id,
           stage: s.stage,
           placement: s.placement,
+          last_activity_at: s.last_activity_at,
           stuck_days: 6,
           stuck_after_days: s.stage === "celebrate" ? null : 14,
           is_stuck: false,

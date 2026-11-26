@@ -23,8 +23,10 @@
 // It has no claim for a LATER version: new_upload allows one row per song
 // and stage_moved is for stage moves. Version DMs therefore go through the
 // SongDmClaims interface, and the 419 store refuses them ("unsupported",
-// logged, nothing sent) until Hub Data adds kind 'new_version' keyed on the
-// version's stage event (see VERSION_CLAIMS_IN_SCHEMA).
+// logged, nothing sent) until Hub Data's migration 422 (PR #751) adds kind
+// 'new_version' keyed on the version's stage event, with the partial unique
+// index song_library_notifications_new_version_key on (user_id,
+// stage_event_id). See VERSION_CLAIMS_IN_SCHEMA.
 //
 // The uploader is never DMed. Someone without a Slack id is skipped and
 // logged, without a claim. Uses the service role: it reads other people's
@@ -35,7 +37,10 @@ import { isBotConfigured } from "@/lib/slack/bots";
 import { canSendL10Followup } from "@/lib/slack/l10-followup";
 import { SL_TABLES, type Client, type SongNotificationReason } from "@/lib/song-library/types";
 
-/** Flip once 419 (or a follow-up) accepts kind 'new_version' with a unique (user_id, stage_event_id) index. */
+/**
+ * Off until migration 422 (PR #751: kind 'new_version' and
+ * song_library_notifications_new_version_key) is merged AND applied.
+ */
 export const VERSION_CLAIMS_IN_SCHEMA = false;
 
 /** The same gate as the L10 follow-up DMs. */
@@ -48,11 +53,17 @@ function appBase(env: NodeJS.ProcessEnv): string {
 }
 
 export function songUrl(songId: string, env: NodeJS.ProcessEnv = process.env): string {
-  return `${appBase(env)}/song-library/${encodeURIComponent(songId)}`;
+  return `${appBase(env)}/song-library/songs/${encodeURIComponent(songId)}`;
 }
 
-export function subscriptionsUrl(env: NodeJS.ProcessEnv = process.env): string {
-  return `${appBase(env)}/song-library/subscriptions`;
+/**
+ * Where to turn a subscription off, on Hub UI's screens (#745): the
+ * writer's page for a writer subscription, the library home (its "all
+ * uploads" switch) otherwise.
+ */
+export function unsubscribeUrl(why: { reason: SongNotificationReason; writer?: string }, env: NodeJS.ProcessEnv = process.env): string {
+  if (why.reason === "writer" && why.writer) return `${appBase(env)}/song-library/writers/${encodeURIComponent(why.writer)}`;
+  return `${appBase(env)}/song-library`;
 }
 
 // ── Claims ─────────────────────────────────────────────────
@@ -266,7 +277,6 @@ export async function runSongUploadDms(
   const byId = new Map<string, Person>(((people.data ?? []) as Person[]).map((p) => [p.id, p]));
   const uploader = nameOf(version.uploaded_by ? byId.get(version.uploaded_by) : undefined);
   const url = songUrl(song.id, env);
-  const unsubscribeUrl = subscriptionsUrl(env);
 
   const results: SongDmRun["results"] = [];
   for (const userId of recipients) {
@@ -283,7 +293,7 @@ export async function runSongUploadDms(
       continue;
     }
     if (claim.outcome === "unsupported") {
-      deps.log(`[song-library-dm] version ${version.id}: no claim column for new versions yet (419), DM to ${userId} not sent`);
+      deps.log(`[song-library-dm] version ${version.id}: no new_version claim in the schema yet (needs migration 422, PR #751), DM to ${userId} not sent`);
       results.push({ user_id: userId, reason: why.reason, outcome: "unsupported" });
       continue;
     }
@@ -306,7 +316,7 @@ export async function runSongUploadDms(
           ? `You get this because you subscribe to ${nameOf(byId.get(why.writer!), "a writer on this song")}.`
           : "You get this because you follow all uploads.",
       url,
-      unsubscribeUrl,
+      unsubscribeUrl: unsubscribeUrl(why, env),
     });
     const sent = await deps
       .sendSlackDm(person.slack_user_id, message)

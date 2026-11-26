@@ -12,19 +12,19 @@
 //   DELETE /api/song-library/songs/:id/celebrate/:promptNo     (writers)
 //
 // Splits lock once every writer has signed off on splits that total 100:
-// every credit change is then 409 song_splits_locked (419 refuses them too).
+// every credit change is then 409 credits_agreed (419 refuses them too).
 
 import "server-only";
 
 import { NextResponse } from "next/server";
 import { isUuid } from "@/lib/departments/validate";
 import { canConfirmWriter, canEditPublishing, canEditSong, canReadCelebrate, canWithdrawConfirmation } from "@/lib/song-library/access";
-import { badRequest, coded, dbError, forbidden, notFound, splitsLocked } from "@/lib/song-library/http";
+import { badRequest, coded, dbError, forbidden, notFound, splitsLocked, invalid } from "@/lib/song-library/http";
 import { checkSplits, parseCelebrate, parsePublishing, parseSplits, parseWriterCreate, parseWriterPatch } from "@/lib/song-library/validate";
-import { SL_CODES, SL_COLUMNS, SL_TABLES, type Row, type SongLibraryWriter } from "@/lib/song-library/types";
+import { SL_CODES, SL_REASONS, SL_COLUMNS, SL_TABLES, type Row, type SongLibraryWriter } from "@/lib/song-library/types";
 import { body, isLoaded, openSong, splitsState, writersAnswer, type LoadedSong } from "./shared";
 
-const notWriter = () => forbidden("Only the song's writers can change its credits", SL_CODES.notWriter);
+const notWriter = () => forbidden("Only the song's writers can change its credits", SL_REASONS.notWriter);
 
 /** Writers only, and not while the splits are agreed. */
 function creditGate(loaded: LoadedSong) {
@@ -45,7 +45,7 @@ export async function addWriter(request: Request, songId: string) {
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parseWriterCreate(b.value);
-  if (!parsed.ok) return badRequest(parsed.error);
+  if (!parsed.ok) return invalid(parsed);
   if (parsed.value.user_id && loaded.writers.some((w) => w.user_id === parsed.value.user_id)) return coded(409, "That person is already a writer on this song", "song_writer_exists");
   if (parsed.value.user_id) {
     const u = await loaded.ctx.admin.from("users").select("id").eq("id", parsed.value.user_id).maybeSingle();
@@ -67,7 +67,7 @@ export async function patchWriter(request: Request, songId: string, writerId: st
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parseWriterPatch(b.value);
-  if (!parsed.ok) return badRequest(parsed.error);
+  if (!parsed.ok) return invalid(parsed);
   if ("display_name" in parsed.value && writer.user_id) return badRequest("A writer with a Hub account shows their Hub name");
   const up = await loaded.ctx.supabase.from(SL_TABLES.writers).update(parsed.value).eq("id", writerId).eq("song_id", songId).select("id");
   if (up.error) return dbError(up.error);
@@ -96,7 +96,7 @@ export async function putSplits(request: Request, songId: string) {
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parseSplits(b.value, loaded.writers.map((w) => w.id));
-  if (!parsed.ok) return coded(400, parsed.error, SL_CODES.splitsIncomplete);
+  if (!parsed.ok) return invalid(parsed);
   for (const s of parsed.value) {
     const current = loaded.writers.find((w) => w.id === s.writer_id)!;
     if (current.split_pct !== null && Number(current.split_pct) === s.split_pct) continue;
@@ -114,7 +114,7 @@ export async function confirmSplit(songId: string, writerId: string) {
   if (!canConfirmWriter(loaded.ctx.viewer, writer)) {
     return forbidden(
       writer.user_id ? "Only that writer can sign off on their split" : "A Song Library manager signs off for a writer without a Hub account",
-      SL_CODES.confirmNotAllowed
+      SL_REASONS.confirmNotAllowed
     );
   }
   if (writer.confirmed_at) return writersAnswer(loaded);
@@ -143,7 +143,7 @@ export async function withdrawSplit(songId: string, writerId: string) {
   if (!writer) return notFound("Writer not found");
   const agreed = splitsState(loaded.writers).agreed;
   if (!canWithdrawConfirmation(loaded.ctx.viewer, writer, agreed)) {
-    return agreed ? splitsLocked() : forbidden("Only that writer or a Song Library manager can withdraw this sign-off", SL_CODES.confirmNotAllowed);
+    return agreed ? splitsLocked() : forbidden("Only that writer or a Song Library manager can withdraw this sign-off", SL_REASONS.confirmNotAllowed);
   }
   if (!writer.confirmed_at) return writersAnswer(loaded);
   const up = await loaded.ctx.supabase.from(SL_TABLES.writers).update({ confirmed_at: null }).eq("id", writerId).eq("song_id", songId).select("id");
@@ -157,12 +157,12 @@ export async function putPublishing(request: Request, songId: string) {
   const loaded = await openSong(songId);
   if (!isLoaded(loaded)) return loaded.response;
   if (!canEditPublishing(loaded.ctx.viewer, loaded.role)) {
-    return forbidden("Only the song's writers and the Song Library's leaders can edit publishing", SL_CODES.publishingNotAllowed);
+    return forbidden("Only the song's writers or a Song Library manager can edit publishing", SL_REASONS.publishingNotAllowed);
   }
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parsePublishing(b.value, loaded.writers.map((w) => w.id));
-  if (!parsed.ok) return badRequest(parsed.error);
+  if (!parsed.ok) return invalid(parsed);
   const s = loaded.ctx.supabase;
   const existing = await s.from(SL_TABLES.publishing).select("song_id").eq("song_id", songId).maybeSingle();
   if (existing.error) return dbError(existing.error);
@@ -183,7 +183,7 @@ function promptNo(raw: string): number | null {
 export async function listCelebrate(songId: string) {
   const loaded = await openSong(songId);
   if (!isLoaded(loaded)) return loaded.response;
-  if (!canReadCelebrate(loaded.ctx.viewer, loaded.role)) return forbidden("Celebrate notes are private to the song's writers", SL_CODES.notWriter);
+  if (!canReadCelebrate(loaded.ctx.viewer, loaded.role)) return forbidden("Celebrate notes are private to the song's writers and the Song Library's managers", SL_REASONS.celebrateHidden);
   const r = await loaded.ctx.supabase.from(SL_TABLES.celebrate).select(SL_COLUMNS.celebrate).eq("song_id", songId).order("prompt_no", { ascending: true });
   if (r.error) return dbError(r.error);
   return NextResponse.json({ celebrate_notes: r.data ?? [] });
@@ -194,11 +194,11 @@ export async function putCelebrate(request: Request, songId: string, rawPrompt: 
   if (!isLoaded(loaded)) return loaded.response;
   const n = promptNo(rawPrompt);
   if (n === null) return notFound("Prompt not found");
-  if (!canEditSong(loaded.ctx.viewer, loaded.role)) return forbidden("Only the song's writers write celebrate notes", SL_CODES.notWriter);
+  if (!canEditSong(loaded.ctx.viewer, loaded.role)) return forbidden("Only the song's writers write celebrate notes", SL_REASONS.notWriter);
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parseCelebrate(b.value);
-  if (!parsed.ok) return badRequest(parsed.error);
+  if (!parsed.ok) return invalid(parsed);
   const s = loaded.ctx.supabase;
   const existing = await s.from(SL_TABLES.celebrate).select("prompt_no").eq("song_id", songId).eq("prompt_no", n).maybeSingle();
   if (existing.error) return dbError(existing.error);
@@ -214,7 +214,7 @@ export async function deleteCelebrate(songId: string, rawPrompt: string) {
   if (!isLoaded(loaded)) return loaded.response;
   const n = promptNo(rawPrompt);
   if (n === null) return notFound("Prompt not found");
-  if (!canEditSong(loaded.ctx.viewer, loaded.role)) return forbidden("Only the song's writers write celebrate notes", SL_CODES.notWriter);
+  if (!canEditSong(loaded.ctx.viewer, loaded.role)) return forbidden("Only the song's writers write celebrate notes", SL_REASONS.notWriter);
   const del = await loaded.ctx.supabase.from(SL_TABLES.celebrate).delete().eq("song_id", songId).eq("prompt_no", n);
   if (del.error) return dbError(del.error);
   return NextResponse.json({ deleted: true });

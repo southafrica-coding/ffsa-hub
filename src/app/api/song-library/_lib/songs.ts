@@ -1,17 +1,22 @@
-// Songs, stage and placement moves, uploads and versions.
+// Songs, the library home and board, stage and placement moves, uploads
+// and versions. Shapes follow Hub UI's client (#745,
+// components/song-library/api.ts and types.ts).
 //
-//   GET    /api/song-library/songs                       list (?stage ?placement ?writer ?bucket=finished|in_process|needs_demo ?stuck=1 ?q)
-//   POST   /api/song-library/songs                       upload a song (caller = lead writer), optional co_writers
-//   GET    /api/song-library/songs/:id                   detail
-//   PATCH  /api/song-library/songs/:id                   edit (writers)
+//   GET    /api/song-library                             LibraryHome { songs: SongListItem[], subscribedAllUploads }
+//   GET    /api/song-library/board                       SongListItem[] (managers)
+//   GET    /api/song-library/songs                       { songs: SongListItem[] } (?stage ?placement ?writer ?bucket=finished|in_process|needs_demo ?stuck=1 ?q)
+//   POST   /api/song-library/songs                       upload a song (caller = lead writer), optional co_writers → 201 { song, writers, splits }
+//   GET    /api/song-library/songs/:id                   SongDetail (+ shareSteps, splits, viewer, celebrateNotes)
+//   PATCH  /api/song-library/songs/:id                   edit (writers) → { song }
 //   DELETE /api/song-library/songs/:id                   delete (lead writer, admin)
-//   POST   /api/song-library/songs/:id/stage             { to, from?, note? }
-//   POST   /api/song-library/songs/:id/placement         { to, from?, note? }
+//   POST   /api/song-library/songs/:id/stage             { to, from?, note? } → { song, changed, event }
+//   POST   /api/song-library/songs/:id/placement         { to, from?, note? } → { song, changed, event }
 //   POST   /api/song-library/songs/:id/uploads           { kind: audio|chart, filename, content_type, size } → signed upload
 //   POST   /api/song-library/songs/:id/versions          { path, label?, is_demo?, duration_s? } after the upload landed; DMs subscribers
 //   PATCH  /api/song-library/songs/:id/versions/:vid     { label?, is_demo?, isrc? }
 //   DELETE /api/song-library/songs/:id/versions/:vid
-//   GET    /api/song-library/songs/:id/versions/:vid/audio  short-lived signed read URL
+//   GET    /api/song-library/songs/:id/versions/:vid/audio  { url, expires_in } short-lived signed read URL
+//   GET    /api/song-library/versions/:vid/audio         302 to that signed URL (an <audio src>)
 //
 // Every stage or placement change writes a song_library_stage_events row
 // (419's trigger); a note in the body is put on that event.
@@ -29,9 +34,12 @@ import {
   canEditSong,
   canMoveStage,
   canReadCelebrate,
+  canSeeBoard,
   canSetPlacement,
+  canTickCheckpoint,
+  canTickProgress,
 } from "@/lib/song-library/access";
-import { badRequest, coded, dbError, forbidden, notFound, serverError } from "@/lib/song-library/http";
+import { badRequest, coded, dbError, forbidden, notFound, serverError, invalid, tooLarge } from "@/lib/song-library/http";
 import {
   SONG_UPLOAD_MAX_BYTES,
   isPlacement,
@@ -45,6 +53,7 @@ import {
 } from "@/lib/song-library/validate";
 import {
   SL_CODES,
+  SL_REASONS,
   SL_COLUMNS,
   SL_TABLES,
   SONG_LIBRARY_BUCKET,
@@ -55,85 +64,108 @@ import {
   type SongLibraryWriter,
 } from "@/lib/song-library/types";
 import { runSongUploadDms } from "@/lib/slack/song-library-notify";
-import { body, isLoaded, isOpen, namesFor, openSong, openSongLibrary, splitsState, withWriterNames, type LoadedSong } from "./shared";
+import type { SongLibraryContext } from "./context";
+import { body, isLoaded, isOpen, listItems, namesFor, openSong, openSongLibrary, splitsState, withWriterNames, type LoadedSong, type SongListItem } from "./shared";
 
-const notWriter = () => forbidden("Only the song's writers can do that", SL_CODES.notWriter);
+const notWriter = () => forbidden("Only the song's writers can do that", SL_REASONS.notWriter);
 
-// ── List and detail ────────────────────────────────────────
+// ── List, home, board and detail ───────────────────────────
 
+type ListFilter = { stage?: string | null; placement?: string | null; writer?: string | null; bucket?: string | null; stuck?: boolean; q?: string | null };
+
+async function songItems(ctx: SongLibraryContext, f: ListFilter = {}) {
+  let query = ctx.supabase.from(SL_TABLES.songs).select(SL_COLUMNS.songs);
+  if (f.stage) query = query.eq("stage", f.stage);
+  if (f.placement) query = query.eq("placement", f.placement);
+  if (f.writer) {
+    const mine = await ctx.supabase.from(SL_TABLES.writers).select("song_id").eq("user_id", f.writer);
+    if (mine.error) return { ok: false as const, response: dbError(mine.error) };
+    const ids = ((mine.data ?? []) as { song_id: string }[]).map((r) => r.song_id);
+    if (!ids.length) return { ok: true as const, items: [] as SongListItem[] };
+    query = query.in("id", ids);
+  }
+  const songs = await query.order("last_activity_at", { ascending: false }).limit(500);
+  if (songs.error) return { ok: false as const, response: dbError(songs.error) };
+  let rows = (songs.data ?? []) as SongLibrarySong[];
+  const q = f.q?.trim().toLowerCase();
+  if (q) rows = rows.filter((s) => s.title.toLowerCase().includes(q));
+  const built = await listItems(ctx, rows);
+  if (!built.ok) return built;
+  let items = built.items;
+  if (f.bucket === "finished") items = items.filter((i) => i.status?.is_finished === true);
+  if (f.bucket === "needs_demo") items = items.filter((i) => i.status?.needs_demo === true);
+  if (f.bucket === "in_process") items = items.filter((i) => i.status && !i.status.is_finished && !i.status.needs_demo);
+  if (f.stuck) items = items.filter((i) => i.status?.is_stuck === true);
+  return { ok: true as const, items };
+}
+
+/** GET /songs: { songs: SongListItem[] }. */
 export async function listSongs(request: Request) {
   const ctx = await openSongLibrary();
   if (!isOpen(ctx)) return ctx.response;
   const p = new URL(request.url).searchParams;
-  const stage = p.get("stage");
-  const placement = p.get("placement");
-  const writer = p.get("writer");
-  const bucket = p.get("bucket");
-  if (stage && !isStage(stage)) return badRequest("Unknown stage");
-  if (placement && !isPlacement(placement)) return badRequest("Unknown placement");
-  if (writer && !isUuid(writer)) return badRequest("writer must be a user id");
-  if (bucket && !["finished", "in_process", "needs_demo"].includes(bucket)) return badRequest("bucket must be finished, in_process or needs_demo");
-
-  let query = ctx.supabase.from(SL_TABLES.songs).select(SL_COLUMNS.songs);
-  if (stage) query = query.eq("stage", stage);
-  if (placement) query = query.eq("placement", placement);
-  if (writer) {
-    const mine = await ctx.supabase.from(SL_TABLES.writers).select("song_id").eq("user_id", writer);
-    if (mine.error) return dbError(mine.error);
-    const ids = ((mine.data ?? []) as { song_id: string }[]).map((r) => r.song_id);
-    if (!ids.length) return NextResponse.json({ songs: [] });
-    query = query.in("id", ids);
-  }
-  const songs = await query.order("last_activity_at", { ascending: false }).limit(500);
-  if (songs.error) return dbError(songs.error);
-  let rows = (songs.data ?? []) as SongLibrarySong[];
-  const q = p.get("q")?.trim().toLowerCase();
-  if (q) rows = rows.filter((s) => s.title.toLowerCase().includes(q));
-  if (!rows.length) return NextResponse.json({ songs: [] });
-
-  const ids = rows.map((s) => s.id);
-  const [status, writers] = await Promise.all([
-    ctx.supabase.from(SL_TABLES.status).select(SL_COLUMNS.status).in("song_id", ids),
-    ctx.supabase.from(SL_TABLES.writers).select("id, song_id, user_id, display_name, is_lead").in("song_id", ids),
-  ]);
-  if (status.error) return dbError(status.error);
-  if (writers.error) return dbError(writers.error);
-  const statusOf = new Map(((status.data ?? []) as Row[]).map((s) => [s.song_id as string, s]));
-  const writerRows = (writers.data ?? []) as Pick<SongLibraryWriter, "id" | "song_id" | "user_id" | "display_name" | "is_lead">[];
-  const names = await namesFor(ctx.admin, writerRows.map((w) => w.user_id));
-
-  let out = rows.map((s) => ({
-    ...s,
-    status: statusOf.get(s.id) ?? null,
-    writers: writerRows
-      .filter((w) => w.song_id === s.id)
-      .map((w) => ({ id: w.id, user_id: w.user_id, is_lead: w.is_lead, name: w.user_id ? (names.get(w.user_id) ?? w.display_name) : w.display_name })),
-  }));
-  if (bucket === "finished") out = out.filter((s) => s.status?.is_finished === true);
-  if (bucket === "needs_demo") out = out.filter((s) => s.status?.needs_demo === true);
-  if (bucket === "in_process") out = out.filter((s) => s.status && !s.status.is_finished);
-  if (p.get("stuck") === "1") out = out.filter((s) => s.status?.is_stuck === true);
-  return NextResponse.json({ songs: out });
+  const f: ListFilter = { stage: p.get("stage"), placement: p.get("placement"), writer: p.get("writer"), bucket: p.get("bucket"), stuck: p.get("stuck") === "1", q: p.get("q") };
+  if (f.stage && !isStage(f.stage)) return badRequest("Unknown stage", "stage");
+  if (f.placement && !isPlacement(f.placement)) return badRequest("Unknown placement", "placement");
+  if (f.writer && !isUuid(f.writer)) return badRequest("writer must be a user id", "writer");
+  if (f.bucket && !["finished", "in_process", "needs_demo"].includes(f.bucket)) return badRequest("bucket must be finished, in_process or needs_demo", "bucket");
+  const r = await songItems(ctx, f);
+  if (!r.ok) return r.response;
+  return NextResponse.json({ songs: r.items });
 }
 
+/** GET /api/song-library: Hub UI's LibraryHome { songs, subscribedAllUploads }. */
+export async function libraryHome() {
+  const ctx = await openSongLibrary();
+  if (!isOpen(ctx)) return ctx.response;
+  const [r, sub] = await Promise.all([
+    songItems(ctx),
+    ctx.supabase.from(SL_TABLES.subscriptions).select("id").eq("user_id", ctx.viewer.userId).eq("target_type", "all_uploads").limit(1),
+  ]);
+  if (!r.ok) return r.response;
+  if (sub.error) return dbError(sub.error);
+  return NextResponse.json({ songs: r.items, subscribedAllUploads: ((sub.data ?? []) as Row[]).length > 0 });
+}
+
+/** GET /board: SongListItem[] (a bare array, as Hub UI's client reads it). Managers and admins. */
+export async function board() {
+  const ctx = await openSongLibrary();
+  if (!isOpen(ctx)) return ctx.response;
+  if (!canSeeBoard(ctx.viewer)) return forbidden("The board is for Song Library managers", SL_REASONS.notManager);
+  const r = await songItems(ctx);
+  if (!r.ok) return r.response;
+  return NextResponse.json(r.items);
+}
+
+/**
+ * GET /songs/:id: Hub UI's SongDetail, plus shareSteps, splits, viewer
+ * (what the caller may do) and, for writers and P&W only, celebrateNotes.
+ */
 export async function getSong(songId: string) {
   const loaded = await openSong(songId);
   if (!isLoaded(loaded)) return loaded.response;
   const { ctx, song, writers, role } = loaded;
   const s = ctx.supabase;
   const seeCelebrate = canReadCelebrate(ctx.viewer, role);
-  const [status, versions, publishing, checkpoints, events, help, celebrate] = await Promise.all([
+  const lead = writers.find((w) => w.is_lead) ?? writers[0];
+  const [status, versions, publishing, checkpoints, events, help, pathway, refine, share, follows, celebrate] = await Promise.all([
     s.from(SL_TABLES.status).select(SL_COLUMNS.status).eq("song_id", song.id).maybeSingle(),
-    s.from(SL_TABLES.versions).select(SL_COLUMNS.versions).eq("song_id", song.id).order("n", { ascending: false }),
+    s.from(SL_TABLES.versions).select(SL_COLUMNS.versions).eq("song_id", song.id).order("n", { ascending: true }),
     s.from(SL_TABLES.publishing).select(SL_COLUMNS.publishing).eq("song_id", song.id).maybeSingle(),
-    s.from(SL_TABLES.checkpoints).select("song_id, kind, done_at, by_user, note").eq("song_id", song.id),
+    s.from(SL_TABLES.checkpoints).select(SL_COLUMNS.checkpoints).eq("song_id", song.id),
     s.from(SL_TABLES.events).select(SL_COLUMNS.events).eq("song_id", song.id).order("at", { ascending: false }).limit(100),
     s.from(SL_TABLES.helpRequests).select(SL_COLUMNS.helpRequests).eq("song_id", song.id).order("created_at", { ascending: false }),
+    s.from(SL_TABLES.pathway).select(SL_COLUMNS.pathway).eq("song_id", song.id),
+    s.from(SL_TABLES.refine).select(SL_COLUMNS.refine).eq("song_id", song.id).order("q_no", { ascending: true }),
+    s.from(SL_TABLES.share).select(SL_COLUMNS.share).eq("song_id", song.id),
+    lead?.user_id && lead.user_id !== ctx.viewer.userId
+      ? s.from(SL_TABLES.subscriptions).select("id").eq("user_id", ctx.viewer.userId).eq("target_type", "writer").eq("target_user_id", lead.user_id).limit(1)
+      : Promise.resolve({ data: [], error: null }),
     seeCelebrate
       ? s.from(SL_TABLES.celebrate).select(SL_COLUMNS.celebrate).eq("song_id", song.id).order("prompt_no", { ascending: true })
       : Promise.resolve({ data: null, error: null }),
   ]);
-  for (const r of [status, versions, publishing, checkpoints, events, help, celebrate]) if (r.error) return dbError(r.error);
+  for (const r of [status, versions, publishing, checkpoints, events, help, pathway, refine, share, follows, celebrate]) if (r.error) return dbError(r.error);
   const helpRows = (help.data ?? []) as Row[];
   const signups = helpRows.length
     ? await s.from(SL_TABLES.helpSignups).select(SL_COLUMNS.helpSignups).in("request_id", helpRows.map((h) => h.id))
@@ -151,34 +183,46 @@ export async function getSong(songId: string) {
 
   const answer: Record<string, unknown> = {
     song,
-    status: status.data,
     versions: versions.data ?? [],
+    pathwaySteps: pathway.data ?? [],
+    events: eventRows.map((e) => ({ ...e, byName: name(e.by_user) })),
+    refine: refine.data ?? [],
     writers: withWriterNames(writers, names),
-    splits: splitsState(writers),
-    publishing: publishing.data,
+    publishing: publishing.data ?? null,
     checkpoints: checkpoints.data ?? [],
-    events: eventRows.map((e) => ({ ...e, by_name: name(e.by_user) })),
-    help_requests: helpRows.map((h) => ({
-      ...h,
-      asked_by_name: name(h.asked_by),
-      helper_name: name(h.helper_user_id),
-      signups: signupRows.filter((x) => x.request_id === h.id).map((x) => ({ ...x, name: name(x.user_id) })),
-    })),
-    my: {
-      is_writer: role.isWriter,
-      is_lead_writer: role.isLeadWriter,
-      can_edit: canEditSong(ctx.viewer, role),
-      can_delete: canDeleteSong(ctx.viewer, role),
-      can_manage: ctx.viewer.isAdmin || ctx.viewer.canManage,
-      can_set_placement: canSetPlacement(ctx.viewer),
-      can_edit_publishing: canEditPublishing(ctx.viewer, role),
-      can_read_celebrate: seeCelebrate,
-      can_ask_for_help: canAskForHelp(ctx.viewer, role),
-      allowed_stages: allowedStages(ctx.viewer, role, song.stage, SONG_STAGES),
+    helpRequests: helpRows.map((h) => {
+      const mine = signupRows.filter((x) => x.request_id === h.id);
+      return {
+        ...h,
+        askedByName: name(h.asked_by),
+        helperName: name(h.helper_user_id),
+        signups: mine.map((x) => ({ ...x, name: name(x.user_id) })),
+        viewerSignedUp: mine.some((x) => x.user_id === ctx.viewer.userId),
+      };
+    }),
+    status: status.data ?? null,
+    viewerIsWriter: role.isWriter,
+    viewerFollowsLead: ((follows.data ?? []) as Row[]).length > 0,
+    // Beyond Hub UI's SongDetail:
+    shareSteps: share.data ?? [],
+    splits: splitsState(writers),
+    viewer: {
+      isWriter: role.isWriter,
+      isLeadWriter: role.isLeadWriter,
+      canManage: ctx.viewer.isAdmin || ctx.viewer.canManage,
+      canEdit: canEditSong(ctx.viewer, role),
+      canDelete: canDeleteSong(ctx.viewer, role),
+      canSetPlacement: canSetPlacement(ctx.viewer),
+      canTickRefine: canTickProgress(ctx.viewer, role),
+      canTickCheckpoints: canTickCheckpoint(ctx.viewer),
+      canEditPublishing: canEditPublishing(ctx.viewer, role),
+      canReadCelebrate: seeCelebrate,
+      canAskForHelp: canAskForHelp(ctx.viewer, role),
+      allowedStages: allowedStages(ctx.viewer, role, song.stage, SONG_STAGES),
     },
   };
   // Celebrate notes are only for the song's writers and P&W: absent for everyone else.
-  if (seeCelebrate) answer.celebrate_notes = celebrate.data ?? [];
+  if (seeCelebrate) answer.celebrateNotes = celebrate.data ?? [];
   return NextResponse.json(answer);
 }
 
@@ -190,7 +234,7 @@ export async function createSong(request: Request) {
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parseSongCreate(b.value, ctx.viewer.userId);
-  if (!parsed.ok) return badRequest(parsed.error);
+  if (!parsed.ok) return invalid(parsed);
 
   // 419 sets created_by, the lead writer row, visibility and the first event.
   const ins = await ctx.supabase
@@ -223,7 +267,7 @@ export async function patchSong(request: Request, songId: string) {
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parseSongPatch(b.value, songId);
-  if (!parsed.ok) return badRequest(parsed.error);
+  if (!parsed.ok) return invalid(parsed);
   if (parsed.value.current_version_id) {
     const v = await loaded.ctx.supabase.from(SL_TABLES.versions).select("id").eq("id", parsed.value.current_version_id).eq("song_id", songId).maybeSingle();
     if (v.error) return dbError(v.error);
@@ -239,12 +283,12 @@ export async function patchSong(request: Request, songId: string) {
 export async function deleteSong(songId: string) {
   const loaded = await openSong(songId);
   if (!isLoaded(loaded)) return loaded.response;
-  if (!canDeleteSong(loaded.ctx.viewer, loaded.role)) return forbidden("Only the song's lead writer can delete it", SL_CODES.notLead);
+  if (!canDeleteSong(loaded.ctx.viewer, loaded.role)) return forbidden("Only the song's lead writer can delete it", SL_REASONS.notLead);
   const versions = await loaded.ctx.supabase.from(SL_TABLES.versions).select("storage_path").eq("song_id", songId);
   if (versions.error) return dbError(versions.error);
   const del = await loaded.ctx.supabase.from(SL_TABLES.songs).delete().eq("id", songId).select("id");
   if (del.error) return dbError(del.error);
-  if (!((del.data ?? []) as Row[]).length) return forbidden("Only the song's lead writer can delete it", SL_CODES.notLead);
+  if (!((del.data ?? []) as Row[]).length) return forbidden("Only the song's lead writer can delete it", SL_REASONS.notLead);
   const paths = [...((versions.data ?? []) as { storage_path: string }[]).map((v) => v.storage_path), ...(loaded.song.chart_path ? [loaded.song.chart_path] : [])];
   if (paths.length) {
     const rm = await loaded.ctx.admin.storage.from(SONG_LIBRARY_BUCKET).remove(paths);
@@ -282,7 +326,7 @@ export async function moveStage(request: Request, songId: string) {
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parseStageMove(b.value);
-  if (!parsed.ok) return badRequest(parsed.error);
+  if (!parsed.ok) return invalid(parsed);
   const { song, ctx, role } = loaded;
   const { to, from, note } = parsed.value;
   if (from && from !== song.stage) return coded(409, "Someone moved this song first", SL_CODES.moved, { song });
@@ -292,7 +336,7 @@ export async function moveStage(request: Request, songId: string) {
       role.isWriter
         ? "Writers can move their song between the early stages. A Song Library manager moves it into or out of Demo ready, Share and Celebrate."
         : "Only the song's writers or a Song Library manager can move its stage",
-      SL_CODES.stageNotAllowed
+      SL_REASONS.stageNotAllowed
     );
   }
   // Compare-and-set on the stage we checked, so two moves cannot cross.
@@ -310,12 +354,12 @@ export async function movePlacement(request: Request, songId: string) {
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parsePlacementMove(b.value);
-  if (!parsed.ok) return badRequest(parsed.error);
+  if (!parsed.ok) return invalid(parsed);
   const { song, ctx } = loaded;
   const { to, from, note } = parsed.value;
   if (from && from !== song.placement) return coded(409, "Someone changed the placement first", SL_CODES.moved, { song });
   if (to === song.placement) return NextResponse.json({ song, changed: false });
-  if (!canSetPlacement(ctx.viewer)) return forbidden("Only a Song Library manager can change placement", SL_CODES.placementNotAllowed);
+  if (!canSetPlacement(ctx.viewer)) return forbidden("Only a Song Library manager can change placement", SL_REASONS.placementNotAllowed);
   const up = await ctx.supabase.from(SL_TABLES.songs).update({ placement: to }).eq("id", song.id).eq("placement", song.placement).select(SL_COLUMNS.songs);
   if (up.error) return dbError(up.error);
   const row = ((up.data ?? []) as SongLibrarySong[])[0];
@@ -348,7 +392,7 @@ export async function requestUpload(request: Request, songId: string) {
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parseUploadRequest(b.value);
-  if (!parsed.ok) return badRequest(parsed.error);
+  if (!parsed.ok) return invalid(parsed);
   const path = `${songId}/${parsed.value.kind === "audio" ? "v" : "chart"}-${randomUUID()}.${parsed.value.ext}`;
   const signed = await loaded.ctx.admin.storage.from(SONG_LIBRARY_BUCKET).createSignedUploadUrl(path, { upsert: false });
   if (signed.error || !signed.data) return serverError(signed.error ?? "no signed upload");
@@ -368,10 +412,14 @@ export async function createVersion(request: Request, songId: string) {
   const loaded = await openSong(songId);
   if (!isLoaded(loaded)) return loaded.response;
   if (!canEditSong(loaded.ctx.viewer, loaded.role)) return notWriter();
+  // Audio never passes through a function (Vercel's body cap); see requestUpload.
+  if ((request.headers.get("content-type") ?? "").toLowerCase().startsWith("multipart/")) {
+    return coded(415, "Upload the file to the signed URL from POST …/uploads, then send { path } here", SL_CODES.useSignedUpload);
+  }
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parseVersionCreate(b.value, songId);
-  if (!parsed.ok) return badRequest(parsed.error);
+  if (!parsed.ok) return invalid(parsed);
   const path = parsed.value.path as string;
 
   const store = loaded.ctx.admin.storage.from(SONG_LIBRARY_BUCKET);
@@ -380,7 +428,7 @@ export async function createVersion(request: Request, songId: string) {
   if (typeof size !== "number") return coded(400, "The file didn't finish uploading. Upload it again.", SL_CODES.uploadMissing);
   if (size > SONG_UPLOAD_MAX_BYTES) {
     await store.remove([path]);
-    return badRequest("That file is over 200 MB");
+    return tooLarge();
   }
   const ext = path.split(".").pop() ?? "";
   const ins = await loaded.ctx.supabase
@@ -430,7 +478,7 @@ export async function patchVersion(request: Request, songId: string, versionId: 
   const b = await body(request);
   if (!b.ok) return b.response;
   const parsed = parseVersionPatch(b.value);
-  if (!parsed.ok) return badRequest(parsed.error);
+  if (!parsed.ok) return invalid(parsed);
   const up = await loaded.ctx.supabase.from(SL_TABLES.versions).update(parsed.value).eq("id", versionId).eq("song_id", songId).select(SL_COLUMNS.versions);
   if (up.error) return dbError(up.error);
   return NextResponse.json({ version: ((up.data ?? []) as Row[])[0] ?? null });
@@ -459,4 +507,23 @@ export async function versionAudio(songId: string, versionId: string) {
   const signed = await loaded.ctx.supabase.storage.from(SONG_LIBRARY_BUCKET).createSignedUrl(v.version.storage_path, 600);
   if (signed.error || !signed.data) return notFound("The audio file is missing");
   return NextResponse.json({ url: signed.data.signedUrl, expires_in: 600 });
+}
+
+/**
+ * GET /versions/:vid/audio, Hub UI's versionAudioUrl: a 302 to a 10-minute
+ * signed URL, so it works as an <audio src>. The version is read with the
+ * caller's session, so only Song Library readers get one.
+ */
+export async function versionAudioRedirect(versionId: string) {
+  const ctx = await openSongLibrary();
+  if (!isOpen(ctx)) return ctx.response;
+  if (!isUuid(versionId)) return notFound("Version not found");
+  const v = await ctx.supabase.from(SL_TABLES.versions).select("id, storage_path").eq("id", versionId).maybeSingle();
+  if (v.error) return dbError(v.error);
+  if (!v.data) return notFound("Version not found");
+  const signed = await ctx.supabase.storage.from(SONG_LIBRARY_BUCKET).createSignedUrl((v.data as { storage_path: string }).storage_path, 600);
+  if (signed.error || !signed.data) return notFound("The audio file is missing");
+  const res = NextResponse.redirect(signed.data.signedUrl, 302);
+  res.headers.set("Cache-Control", "private, no-store");
+  return res;
 }

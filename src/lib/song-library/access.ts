@@ -8,9 +8,6 @@
 //            open_to_all use row on the song_library service)
 //   manager  song_library_can_manage(): an active member of a ministry
 //            holding a manage grant on song_library (today: every P&W member)
-//   lead     a leader of a ministry holding an own or manage grant
-//            (dept_is_ministry_leader on that ministry), or an admin.
-//            The "department leaders and overseers" of the owning department.
 //   writer   a song_library_writers row with the caller's user_id on that song
 //   admin    song_library_is_admin()
 
@@ -21,8 +18,6 @@ export type SongLibraryViewer = {
   isAdmin: boolean;
   /** song_library_can_manage(). */
   canManage: boolean;
-  /** Leader of an owning/managing ministry (or admin). */
-  isLead: boolean;
 };
 
 export type SongRole = { isWriter: boolean; isLeadWriter: boolean };
@@ -61,12 +56,12 @@ export function canDeleteSong(v: SongLibraryViewer, r: SongRole): boolean {
 }
 
 /**
- * Publishing: the song's writers and the owning department's leaders and
- * overseers. STRICTER than 419, whose policy lets every manager (every P&W
- * member) write publishing.
+ * Publishing: the song's writers, managers (every P&W member) and admins,
+ * the same as 419's policy (Hub Data and Lead, 26 Nov: the lead manages
+ * shares and publishing).
  */
 export function canEditPublishing(v: SongLibraryViewer, r: SongRole): boolean {
-  return v.isAdmin || v.isLead || r.isWriter;
+  return manager(v) || r.isWriter;
 }
 
 /** Celebrate notes: read by the song's writers, managers (P&W members) and admins only. */
@@ -102,4 +97,22 @@ export function canConfirmWriter(v: SongLibraryViewer, writer: { user_id: string
 export function canWithdrawConfirmation(v: SongLibraryViewer, writer: { user_id: string | null }, agreed: boolean): boolean {
   if (manager(v)) return true;
   return !agreed && !!writer.user_id && writer.user_id === v.userId;
+}
+
+/** Refine answers, pathway steps and share steps: the song's writers and admins (419's writer-table policy). */
+export function canTickProgress(v: SongLibraryViewer, r: SongRole): boolean {
+  return canEditSong(v, r);
+}
+
+/**
+ * Placement checkpoints: managers and admins (419). credits_splits_agreed
+ * is never ticked by hand; a manager may only revoke it.
+ */
+export function canTickCheckpoint(v: SongLibraryViewer): boolean {
+  return manager(v);
+}
+
+/** The lead board: managers and admins. */
+export function canSeeBoard(v: SongLibraryViewer): boolean {
+  return manager(v);
 }

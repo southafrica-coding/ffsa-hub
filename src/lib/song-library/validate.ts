@@ -17,10 +17,11 @@ import {
   type SongStage,
 } from "./types";
 
-export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
+/** A failure names the field it is about (for fieldErrors) and, rarely, its own error code. */
+export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string; field?: string; code?: string };
 
 const ok = <T>(value: T): Parsed<T> => ({ ok: true, value });
-const bad = (error: string): Parsed<never> => ({ ok: false, error });
+const bad = (error: string, field?: string, code?: string): Parsed<never> => ({ ok: false, error, ...(field ? { field } : {}), ...(code ? { code } : {}) });
 
 function isObject(v: unknown): v is Row {
   return !!v && typeof v === "object" && !Array.isArray(v);
@@ -29,6 +30,10 @@ function isObject(v: unknown): v is Row {
 function unknownKeys(body: Row, allowed: readonly string[]): string | null {
   const extra = Object.keys(body).filter((k) => !allowed.includes(k));
   return extra.length ? `Unknown field: ${extra[0]}` : null;
+}
+
+function unknownKey(body: Row, allowed: readonly string[]): string | undefined {
+  return Object.keys(body).find((k) => !allowed.includes(k));
 }
 
 type FieldRule = (v: unknown) => Parsed<unknown>;
@@ -52,14 +57,14 @@ const uuid = (nullable = false): FieldRule => (v) => (v === null && nullable ? o
 
 function parseFields(body: unknown, rules: Record<string, FieldRule>, required: readonly string[] = [], opts: { nonEmpty?: boolean } = {}): Parsed<Row> {
   if (!isObject(body)) return bad("Send a JSON object");
-  const extra = unknownKeys(body, Object.keys(rules));
-  if (extra) return bad(extra);
+  const extra = unknownKey(body, Object.keys(rules));
+  if (extra) return bad(`Unknown field: ${extra}`, extra);
   const out: Row = {};
-  for (const key of required) if (!(key in body)) return bad(`${key} is required`);
+  for (const key of required) if (!(key in body)) return bad(`${key} is required`, key);
   for (const [key, rule] of Object.entries(rules)) {
     if (!(key in body) || body[key] === undefined) continue;
     const r = rule(body[key]);
-    if (!r.ok) return bad(`${key} ${r.error}`);
+    if (!r.ok) return bad(`${key} ${r.error}`, key);
     out[key] = r.value;
   }
   if (opts.nonEmpty && !Object.keys(out).length) return bad("Nothing to change");
@@ -110,16 +115,16 @@ export function parseSplits(body: unknown, writerIds: readonly string[]): Parsed
   const seen = new Set<string>();
   const out: SplitsInput = [];
   for (const s of body.splits as unknown[]) {
-    if (!isObject(s) || !isUuid(s.writer_id)) return bad("Each split needs a writer_id");
-    if (!writerIds.includes(s.writer_id)) return bad("Splits can only be given to this song's writers");
-    if (seen.has(s.writer_id)) return bad("Each writer appears once");
+    if (!isObject(s) || !isUuid(s.writer_id)) return bad("Each split needs a writer_id", "writer_id");
+    if (!writerIds.includes(s.writer_id)) return bad("Splits can only be given to this song's writers", "writer_id");
+    if (seen.has(s.writer_id)) return bad("Each writer appears once", "writer_id");
     seen.add(s.writer_id);
-    if (splitHundredths(s.split_pct) === null) return bad("split_pct must be a percentage from 0 to 100 with at most two decimals");
+    if (splitHundredths(s.split_pct) === null) return bad("split_pct must be a percentage from 0 to 100 with at most two decimals", "split_pct");
     out.push({ writer_id: s.writer_id, split_pct: s.split_pct as number });
   }
-  if (writerIds.some((id) => !seen.has(id))) return bad("Give every writer on the song a split");
+  if (writerIds.some((id) => !seen.has(id))) return bad("Give every writer on the song a split", "split_pct", "splits_not_100");
   const check = checkSplits(out.map((s) => ({ id: s.writer_id, split_pct: s.split_pct })));
-  if (!check.ok) return bad(`Splits must total 100% (they total ${check.totalPct}%)`);
+  if (!check.ok) return bad(`Splits must total 100% (they total ${check.totalPct}%)`, "split_pct", "splits_not_100");
   return ok(out);
 }
 
@@ -138,11 +143,17 @@ const SONG_FIELDS: Record<string, FieldRule> = {
 
 export type CoWriterInput = { user_id: string | null; display_name: string | null; role: string | null };
 
+/** A co-writer: { user_id } for a Hub user, { display_name } for anyone else, or a bare name (Hub UI's upload form). */
 function parseCoWriter(v: unknown): Parsed<CoWriterInput> {
+  if (typeof v === "string") {
+    const name = v.trim();
+    if (!name || name.length > 120) return bad("Each co-writer name is 1 to 120 characters", "co_writers");
+    return ok({ user_id: null, display_name: name, role: null });
+  }
   const r = parseFields(v, { user_id: uuid(true), display_name: text(120, { nullable: true }), role: text(120, { nullable: true }) });
   if (!r.ok) return r;
   const w = { user_id: (r.value.user_id as string) ?? null, display_name: (r.value.display_name as string) ?? null, role: (r.value.role as string) ?? null };
-  if (!w.user_id && !w.display_name) return bad("Each co-writer needs a user_id or a display_name");
+  if (!w.user_id && !w.display_name) return bad("Each co-writer needs a user_id or a display_name", "co_writers");
   return ok(w);
 }
 
@@ -153,12 +164,13 @@ export function parseSongCreate(body: unknown, creatorId: string): Parsed<{ song
   if (!song.ok) return song;
   const coWriters: CoWriterInput[] = [];
   if (co_writers !== undefined) {
-    if (!Array.isArray(co_writers) || co_writers.length > 20) return bad("co_writers must be a list of up to 20");
+    if (!Array.isArray(co_writers) || co_writers.length > 20) return bad("co_writers must be a list of up to 20", "co_writers");
     for (const c of co_writers) {
       const w = parseCoWriter(c);
-      if (!w.ok) return w;
+      if (!w.ok) return { ...w, field: "co_writers" };
       if (w.value.user_id === creatorId) continue; // the uploader is the lead writer already
       if (w.value.user_id && coWriters.some((x) => x.user_id === w.value.user_id)) continue;
+      if (!w.value.user_id && coWriters.some((x) => !x.user_id && x.display_name === w.value.display_name)) continue;
       coWriters.push(w.value);
     }
   }
@@ -167,7 +179,7 @@ export function parseSongCreate(body: unknown, creatorId: string): Parsed<{ song
 
 export function parseSongPatch(body: unknown, songId: string): Parsed<Row> {
   if (isObject(body) && ("stage" in body || "placement" in body)) {
-    return bad("Move a song with POST …/stage or …/placement");
+    return bad("Move a song with POST …/stage or …/placement", "stage" in body ? "stage" : "placement");
   }
   const r = parseFields(
     body,
@@ -187,10 +199,10 @@ export function parseMove<T extends string>(body: unknown, isValue: (v: unknown)
   if (!isObject(body)) return bad("Send { to }");
   const extra = unknownKeys(body, ["to", "from", "note"]);
   if (extra) return bad(extra);
-  if (!isValue(body.to)) return bad("to is not a known value");
-  if (body.from !== undefined && body.from !== null && !isValue(body.from)) return bad("from is not a known value");
+  if (!isValue(body.to)) return bad("to is not a known value", "to");
+  if (body.from !== undefined && body.from !== null && !isValue(body.from)) return bad("from is not a known value", "from");
   const note = body.note === undefined || body.note === null ? null : typeof body.note === "string" && body.note.length <= 1000 ? body.note.trim() || null : undefined;
-  if (note === undefined) return bad("note must be text up to 1000 characters");
+  if (note === undefined) return bad("note must be text up to 1000 characters", "note");
   return ok({ to: body.to as T, from: (body.from as T) ?? null, note });
 }
 
@@ -225,11 +237,11 @@ export function parseUploadRequest(body: unknown): Parsed<UploadRequest> {
   if (kind !== "audio" && kind !== "chart") return bad("kind must be audio or chart");
   const types = kind === "audio" ? AUDIO_TYPES : CHART_TYPES;
   const ct = typeof body.content_type === "string" ? body.content_type.toLowerCase() : "";
-  if (!types[ct]) return bad(kind === "audio" ? "Choose an audio file (MP3, M4A, WAV, AAC, OGG, WEBM or FLAC)" : "Choose a PDF or an image");
-  if (!Number.isInteger(body.size) || (body.size as number) <= 0) return bad("size must be the file size in bytes");
-  if ((body.size as number) > SONG_UPLOAD_MAX_BYTES) return bad("That file is over 200 MB");
+  if (!types[ct]) return bad(kind === "audio" ? "Choose an audio file (MP3, M4A, WAV, AAC, OGG, WEBM or FLAC)" : "Choose a PDF or an image", "content_type");
+  if (!Number.isInteger(body.size) || (body.size as number) <= 0) return bad("size must be the file size in bytes", "size");
+  if ((body.size as number) > SONG_UPLOAD_MAX_BYTES) return bad("That file is over 200 MB", "size", "too_large");
   const filename = typeof body.filename === "string" ? body.filename.trim().slice(0, 200) : "";
-  if (!filename) return bad("filename is required");
+  if (!filename) return bad("filename is required", "filename");
   return ok({ kind, content_type: ct, size: body.size as number, ext: types[ct], filename });
 }
 
@@ -355,8 +367,28 @@ export function parseSubscription(body: unknown, me: string): Parsed<{ target_ty
   if (!r.ok) return r;
   const type = r.value.target_type as "all_uploads" | "writer";
   const target = (r.value.target_user_id as string | null | undefined) ?? null;
-  if (type === "writer" && !target) return bad("A writer subscription needs target_user_id");
-  if (type === "all_uploads" && target) return bad("all_uploads takes no target_user_id");
-  if (target === me) return bad("You cannot subscribe to yourself");
+  if (type === "writer" && !target) return bad("A writer subscription needs target_user_id", "target_user_id");
+  if (type === "all_uploads" && target) return bad("all_uploads takes no target_user_id", "target_user_id");
+  if (target === me) return bad("You cannot subscribe to yourself", "target_user_id");
   return ok({ target_type: type, target_user_id: target });
+}
+
+// ── Refine, checkpoints ────────────────────────────────────
+
+export function parseRefine(body: unknown): Parsed<{ checked: boolean; note?: string | null }> {
+  const r = parseFields(body, { checked: bool, note: text(2000, { nullable: true }) }, ["checked"]);
+  if (!r.ok) return r;
+  return ok({ checked: r.value.checked as boolean, ...("note" in r.value ? { note: r.value.note as string | null } : {}) });
+}
+
+export function parseCheckpoint(body: unknown): Parsed<{ done: boolean; note?: string | null }> {
+  const r = parseFields(body, { done: bool, note: text(500, { nullable: true }) }, ["done"]);
+  if (!r.ok) return r;
+  return ok({ done: r.value.done as boolean, ...("note" in r.value ? { note: r.value.note as string | null } : {}) });
+}
+
+export function parseHelperNote(body: unknown): Parsed<{ note: string | null }> {
+  if (body === null || body === undefined) return ok({ note: null });
+  const r = parseFields(body, { note: text(300, { nullable: true }) });
+  return r.ok ? ok({ note: (r.value.note as string) ?? null }) : r;
 }

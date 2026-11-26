@@ -1,4 +1,4 @@
-import { listSubscriptions, subscribe } from "../_lib/help";
+import { listSubscriptions, subscribe, unsubscribeByTarget } from "../_lib/help";
 
 // /api/song-library/subscriptions. Handlers and the full route list: app/api/song-library/_lib/help.ts.
 
@@ -10,4 +10,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return subscribe(request);
+}
+
+export async function DELETE(request: Request) {
+  return unsubscribeByTarget(request);
 }

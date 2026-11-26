@@ -85,8 +85,10 @@ describe("new song DMs", () => {
     expect(byWho.U_SUB_ALL).toContain("Dani Blood");
     expect(byWho.U_SUB_ALL).toContain("uploaded a new song “Harbour &lt;Lights&gt; &amp; co”");
     expect(byWho.U_SUB_ALL).toContain("started with Melody · Writing");
-    expect(byWho.U_SUB_ALL).toContain(`https://hub.test/song-library/${SONG}`);
-    expect(byWho.U_SUB_ALL).toContain("https://hub.test/song-library/subscriptions");
+    expect(byWho.U_SUB_ALL).toContain(`https://hub.test/song-library/songs/${SONG}`);
+    // Unsubscribe goes where Hub UI's toggle lives: the home switch, or the writer's page.
+    expect(byWho.U_SUB_ALL).toContain('"url":"https://hub.test/song-library"');
+    expect(byWho.U_SUB_WRITER).toContain(`https://hub.test/song-library/writers/${COWRITER}`);
   });
 });
 

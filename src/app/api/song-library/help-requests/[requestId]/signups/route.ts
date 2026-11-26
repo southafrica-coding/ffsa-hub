@@ -1,6 +1,6 @@
 import { signUpToHelp, withdrawSignup } from "../../../_lib/help";
 
-// /api/song-library/help-requests/[requestId]/signup. Handlers and the full route list: app/api/song-library/_lib/help.ts.
+// /api/song-library/help-requests/[requestId]/signups. Handlers and the full route list: app/api/song-library/_lib/help.ts.
 
 export const dynamic = "force-dynamic";
 

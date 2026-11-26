@@ -62,11 +62,20 @@ const celebrateOne = await import("./songs/[songId]/celebrate/[promptNo]/route")
 const songHelp = await import("./songs/[songId]/help-requests/route");
 const help = await import("./help-requests/route");
 const helpOne = await import("./help-requests/[requestId]/route");
-const signup = await import("./help-requests/[requestId]/signup/route");
+const signup = await import("./help-requests/[requestId]/signups/route");
 const helpersMe = await import("./helpers/me/route");
 const subs = await import("./subscriptions/route");
 const subOne = await import("./subscriptions/[subscriptionId]/route");
 const writerProfile = await import("./writers/[userId]/route");
+const home = await import("./route");
+const boardRoute = await import("./board/route");
+const refineRoute = await import("./songs/[songId]/refine/[q]/route");
+const pathwayRoute = await import("./songs/[songId]/pathway/[step]/route");
+const shareRoute = await import("./songs/[songId]/share/[kind]/route");
+const checkpointRoute = await import("./songs/[songId]/checkpoints/[kind]/route");
+const helpers = await import("./helpers/route");
+const helperOne = await import("./helpers/[category]/route");
+const audioById = await import("./versions/[versionId]/audio/route");
 
 const req = (body?: unknown, method = "POST") =>
   new Request("http://localhost/x", { method, ...(body === undefined ? {} : { body: JSON.stringify(body), headers: { "content-type": "application/json" } }) });
@@ -80,6 +89,11 @@ const as = (uid: string | null) => {
 const songRow = (id = SONG) => h.db.raw("song_library_songs").find((s) => s.id === id)!;
 const songUpdatesBy = (uid: string) => h.db.log.filter((l) => l.table === "song_library_songs" && l.action === "update" && l.uid === uid);
 const code = async (r: Response) => ((await r.json()) as { code?: string }).code;
+/** [code, reason] of a refusal. */
+const why = async (r: Response) => {
+  const b = (await r.json()) as { code?: string; reason?: string };
+  return [b.code, b.reason];
+};
 
 beforeEach(() => {
   h.db = makeSongWorld();
@@ -91,7 +105,9 @@ afterEach(() => vi.unstubAllEnvs());
 describe("who gets in", () => {
   it("refuses someone signed out (401) or inactive (403)", async () => {
     as(null);
-    expect((await songs.GET(get())).status).toBe(401);
+    const out = await songs.GET(get());
+    expect(out.status).toBe(401);
+    expect(await code(out)).toBe("unauthenticated");
     as(INACTIVE);
     expect((await songs.GET(get())).status).toBe(403);
     expect((await song.GET(get(), S())).status).toBe(403);
@@ -99,15 +115,19 @@ describe("who gets in", () => {
 
   it("shows every song to anyone on the base", async () => {
     const list = await (await songs.GET(get())).json();
-    expect(list.songs.map((s: { title: string }) => s.title).sort()).toEqual(["Harbour Lights", "Mercy Like Morning"]);
-    expect(list.songs.find((s: { id: string }) => s.id === SONG).writers.map((w: { name: string }) => w.name)).toEqual(["Dani Blood", "Noah Lind", "Guest Writer"]);
+    type Item = { song: { id: string; title: string }; writers: { userId: string | null; name: string }[]; status: { splits_agreed: boolean } | null };
+    expect(list.songs.map((s: Item) => s.song.title).sort()).toEqual(["Harbour Lights", "Mercy Like Morning"]);
+    const item = list.songs.find((s: Item) => s.song.id === SONG) as Item;
+    expect(item.writers).toEqual([{ userId: WRITER, name: "Dani Blood" }, { userId: COWRITER, name: "Noah Lind" }, { userId: null, name: "Guest Writer" }]);
+    expect(item.status).toMatchObject({ splits_agreed: false });
     const finished = await (await songs.GET(get("?bucket=finished"))).json();
-    expect(finished.songs.map((s: { id: string }) => s.id)).toEqual([DEMO_SONG]);
+    expect(finished.songs.map((s: Item) => s.song.id)).toEqual([DEMO_SONG]);
     const detail = await song.GET(get(), S());
     expect(detail.status).toBe(200);
     const body = await detail.json();
     expect(body.song.title).toBe("Harbour Lights");
-    expect(body.my).toMatchObject({ is_writer: false, can_edit: false, can_set_placement: false, can_edit_publishing: false, allowed_stages: [] });
+    expect(body).toMatchObject({ viewerIsWriter: false, viewerFollowsLead: false });
+    expect(body.viewer).toMatchObject({ isWriter: false, canEdit: false, canSetPlacement: false, canEditPublishing: false, canTickRefine: false, allowedStages: [] });
   });
 });
 
@@ -116,7 +136,7 @@ describe("celebrate notes", () => {
     for (const uid of [BASE, MEDIA_LEAD, SUB_ALL]) {
       as(uid);
       const body = await (await song.GET(get(), S())).json();
-      expect(body).not.toHaveProperty("celebrate_notes");
+      expect(body).not.toHaveProperty("celebrateNotes");
       expect(JSON.stringify(body)).not.toContain("prayer night");
       expect((await celebrate.GET(get(), S())).status).toBe(403);
     }
@@ -126,7 +146,7 @@ describe("celebrate notes", () => {
     for (const uid of [WRITER, COWRITER, PW_MEMBER, PW_LEADER, ADMIN]) {
       as(uid);
       const body = await (await song.GET(get(), S())).json();
-      expect(body.celebrate_notes).toHaveLength(1);
+      expect(body.celebrateNotes).toHaveLength(1);
       expect((await celebrate.GET(get(), S())).status).toBe(200);
     }
   });
@@ -135,7 +155,7 @@ describe("celebrate notes", () => {
     as(COWRITER);
     expect((await celebrateOne.PUT(req({ body: "Sung at the noon set" }, "PUT"), S({ promptNo: "2" }))).status).toBe(200);
     as(PW_MEMBER);
-    expect(await code(await celebrateOne.PUT(req({ body: "x" }, "PUT"), S({ promptNo: "3" })))).toBe("song_not_writer");
+    expect(await why(await celebrateOne.PUT(req({ body: "x" }, "PUT"), S({ promptNo: "3" })))).toEqual(["forbidden", "not_writer"]);
     as(BASE);
     expect((await celebrateOne.DELETE(get(), S({ promptNo: "1" }))).status).toBe(403);
     expect(h.db.raw("song_library_celebrate_notes")).toHaveLength(2);
@@ -177,7 +197,7 @@ describe("stage moves", () => {
     songRow().stage = "written_needs_demo";
     const r = await stage.POST(req({ to: "demo_ready" }), S());
     expect(r.status).toBe(403);
-    expect(await code(r)).toBe("song_stage_not_allowed");
+    expect(await code(r)).toBe("stage_not_allowed");
     expect((await stage.POST(req({ to: "writing" }), p({ songId: DEMO_SONG }))).status).toBe(403);
     expect((await stage.POST(req({ to: "celebrate" }), p({ songId: DEMO_SONG }))).status).toBe(403);
     expect(songUpdatesBy(WRITER)).toHaveLength(0);
@@ -187,7 +207,7 @@ describe("stage moves", () => {
   it("refuses someone who neither writes the song nor is in P&W", async () => {
     for (const uid of [BASE, MEDIA_LEAD]) {
       as(uid);
-      expect(await code(await stage.POST(req({ to: "set_down" }), S()))).toBe("song_stage_not_allowed");
+      expect(await code(await stage.POST(req({ to: "set_down" }), S()))).toBe("stage_not_allowed");
     }
     expect(songRow().stage).toBe("writing");
   });
@@ -215,7 +235,7 @@ describe("placement", () => {
     as(WRITER);
     const r = await placement.POST(req({ to: "prayer_sets" }), S());
     expect(r.status).toBe(403);
-    expect(await code(r)).toBe("song_placement_not_allowed");
+    expect(await why(r)).toEqual(["forbidden", "placement_not_allowed"]);
     as(BASE);
     expect((await placement.POST(req({ to: "prayer_sets" }), S())).status).toBe(403);
     as(PW_MEMBER);
@@ -232,7 +252,7 @@ describe("editing and deleting", () => {
     expect((await song.PATCH(req({ title: "Harbour Lights (v2)", bpm: 72 }, "PATCH"), S())).status).toBe(200);
     expect(songRow().title).toBe("Harbour Lights (v2)");
     as(PW_MEMBER);
-    expect(await code(await song.PATCH(req({ title: "x" }, "PATCH"), S()))).toBe("song_not_writer");
+    expect(await why(await song.PATCH(req({ title: "x" }, "PATCH"), S()))).toEqual(["forbidden", "not_writer"]);
     as(BASE);
     expect((await song.PATCH(req({ title: "x" }, "PATCH"), S())).status).toBe(403);
     as(WRITER);
@@ -241,7 +261,7 @@ describe("editing and deleting", () => {
 
   it("lets only the lead writer (or an admin) delete", async () => {
     as(COWRITER);
-    expect(await code(await song.DELETE(get(), S()))).toBe("song_not_lead_writer");
+    expect(await why(await song.DELETE(get(), S()))).toEqual(["forbidden", "not_lead_writer"]);
     as(PW_LEADER);
     expect((await song.DELETE(get(), S())).status).toBe(403);
     as(WRITER);
@@ -252,14 +272,14 @@ describe("editing and deleting", () => {
 
 describe("publishing", () => {
   const pub = { ccli_no: "7654321", publisher: "FFSA Music", pro_by_writer: { [W_LEAD]: { pro: "SAMRO", member_no: "123" } } };
-  it("is edited by writers and the owning department's leaders, not every P&W member", async () => {
-    for (const uid of [WRITER, COWRITER, PW_LEADER, ADMIN]) {
+  it("is edited by the song's writers, any P&W member and admins (as 419)", async () => {
+    for (const uid of [WRITER, COWRITER, PW_MEMBER, PW_LEADER, ADMIN]) {
       as(uid);
       expect((await publishing.PUT(req(pub, "PUT"), S())).status).toBe(200);
     }
-    for (const uid of [PW_MEMBER, BASE, MEDIA_LEAD]) {
+    for (const uid of [BASE, MEDIA_LEAD, SUB_ALL]) {
       as(uid);
-      expect(await code(await publishing.PUT(req(pub, "PUT"), S()))).toBe("song_publishing_not_allowed");
+      expect(await why(await publishing.PUT(req(pub, "PUT"), S()))).toEqual(["forbidden", "publishing_not_allowed"]);
     }
     expect(h.db.raw("song_library_publishing")).toHaveLength(1);
   });
@@ -288,7 +308,7 @@ describe("splits", () => {
     as(WRITER);
     const r = await splits.PUT(req(set(50, 40, 5), "PUT"), S());
     expect(r.status).toBe(400);
-    expect(await code(r)).toBe("song_splits_incomplete");
+    expect(await code(r)).toBe("splits_not_100");
     expect((await splits.PUT(req({ splits: [{ writer_id: W_LEAD, split_pct: 60 }, { writer_id: W_CO, split_pct: 40 }] }, "PUT"), S())).status).toBe(400);
     expect((await splits.PUT(req({ splits: [...set(50, 40, 10).splits, { writer_id: W_DEMO_OTHER, split_pct: 0 }] }, "PUT"), S())).status).toBe(400);
     const ok = await splits.PUT(req(set(45.5, 44.5, 10), "PUT"), S());
@@ -299,7 +319,7 @@ describe("splits", () => {
   it("are set by writers only", async () => {
     for (const uid of [PW_MEMBER, BASE]) {
       as(uid);
-      expect(await code(await splits.PUT(req(set(50, 40, 10), "PUT"), S()))).toBe("song_not_writer");
+      expect(await why(await splits.PUT(req(set(50, 40, 10), "PUT"), S()))).toEqual(["forbidden", "not_writer"]);
       expect((await writers.POST(req({ display_name: "Someone" }), S())).status).toBe(403);
     }
   });
@@ -309,16 +329,16 @@ describe("splits", () => {
     as(WRITER);
     const r = await confirm.POST(req(), S({ writerId: W_LEAD }));
     expect(r.status).toBe(400);
-    expect(await code(r)).toBe("song_splits_incomplete");
+    expect(await code(r)).toBe("splits_not_100");
   });
 
   it("each writer signs off their own; P&W signs for a writer with no account; then they lock", async () => {
     as(WRITER);
-    expect(await code(await confirm.POST(req(), S({ writerId: W_CO })))).toBe("song_confirm_not_allowed");
-    expect(await code(await confirm.POST(req(), S({ writerId: W_GUEST })))).toBe("song_confirm_not_allowed");
+    expect(await why(await confirm.POST(req(), S({ writerId: W_CO })))).toEqual(["forbidden", "confirm_not_allowed"]);
+    expect(await why(await confirm.POST(req(), S({ writerId: W_GUEST })))).toEqual(["forbidden", "confirm_not_allowed"]);
     expect((await confirm.POST(req(), S({ writerId: W_LEAD }))).status).toBe(200);
     as(PW_MEMBER);
-    expect(await code(await confirm.POST(req(), S({ writerId: W_CO })))).toBe("song_confirm_not_allowed");
+    expect(await why(await confirm.POST(req(), S({ writerId: W_CO })))).toEqual(["forbidden", "confirm_not_allowed"]);
     expect((await confirm.POST(req(), S({ writerId: W_GUEST }))).status).toBe(200);
     as(COWRITER);
     const last = await (await confirm.POST(req(), S({ writerId: W_CO }))).json();
@@ -336,7 +356,7 @@ describe("splits", () => {
       await confirm.DELETE(get(), S({ writerId: W_LEAD })),
     ]) {
       expect(r.status).toBe(409);
-      expect(await code(r)).toBe("song_splits_locked");
+      expect(await code(r)).toBe("credits_agreed");
     }
     expect(h.db.raw("song_library_writers").find((w) => w.id === W_LEAD)!.split_pct).toBe(50);
 
@@ -380,14 +400,14 @@ describe("help", () => {
     expect(again.status).toBe(200);
     expect((await again.json()).already).toBe(true);
     const list = await (await help.GET(get())).json();
-    expect(list.help_requests[0]).toMatchObject({ i_signed_up: true, song: { title: "Harbour Lights" } });
+    expect(list.helpRequests[0]).toMatchObject({ viewerSignedUp: true, songTitle: "Harbour Lights", askedByName: "Dani Blood" });
     expect((await helpOne.PATCH(req({ status: "closed" }, "PATCH"), p({ requestId: HELP }))).status).toBe(403);
     as(WRITER);
     expect((await helpOne.PATCH(req({ status: "filled", helper_user_id: BASE }, "PATCH"), p({ requestId: HELP }))).status).toBe(200);
     as(SUB_ALL);
     const closed = await signup.POST(req(), p({ requestId: HELP }));
     expect(closed.status).toBe(409);
-    expect(await code(closed)).toBe("song_help_closed");
+    expect(await code(closed)).toBe("help_closed");
     as(PW_MEMBER);
     expect((await helpOne.DELETE(get(), p({ requestId: HELP }))).status).toBe(200);
   });
@@ -407,7 +427,7 @@ describe("subscriptions", () => {
     as(SUB_WRITER);
     const mine = await (await subs.GET()).json();
     expect(mine.subscriptions.map((s: { user_id: string }) => s.user_id)).toEqual([SUB_WRITER, SUB_WRITER]);
-    expect(mine.all_uploads).toBe(true);
+    expect(mine.subscribedAllUploads).toBe(true);
     const r = await subs.POST(req({ target_type: "writer", target_user_id: WRITER }));
     expect(r.status).toBe(201);
     const again = await subs.POST(req({ target_type: "writer", target_user_id: WRITER }));
@@ -415,8 +435,10 @@ describe("subscriptions", () => {
     expect((await subs.POST(req({ target_type: "writer", target_user_id: SUB_WRITER }))).status).toBe(400);
     expect((await subOne.DELETE(get(), p({ subscriptionId: "00000000-0000-4000-8000-0000000000aa" }))).status).toBe(404);
     const profile = await (await writerProfile.GET(get(), p({ userId: WRITER }))).json();
-    expect(profile).toMatchObject({ subscriber_count: 1, writer: { name: "Dani Blood" } });
-    expect(profile.subscription_id).toBeTruthy();
+    expect(profile).toMatchObject({ subscriberCount: 1, person: { userId: WRITER, name: "Dani Blood" }, viewerSubscribed: true, isSelf: false });
+    expect(profile.written.map((i: { song: { id: string } }) => i.song.id)).toContain(SONG);
+    expect(profile.coWritten).toEqual([]);
+    expect(profile.subscriptionId).toBeTruthy();
   });
 });
 
@@ -439,14 +461,14 @@ describe("audio upload and subscriber DMs", () => {
     }
     as(WRITER);
     expect((await uploads.POST(req({ filename: "a.exe", content_type: "application/x-msdownload", size: 10 }), S())).status).toBe(400);
-    expect((await uploads.POST(req({ filename: "a.wav", content_type: "audio/wav", size: 300 * 1024 * 1024 }), S())).status).toBe(400);
+    expect((await uploads.POST(req({ filename: "a.wav", content_type: "audio/wav", size: 300 * 1024 * 1024 }), S())).status).toBe(413);
   });
 
   it("records a version only once the file is there, and refuses paths for another song", async () => {
     as(WRITER);
     const path = await upload(SONG);
     const missing = await versions.POST(req({ path }), S());
-    expect(await code(missing)).toBe("song_upload_missing");
+    expect(await code(missing)).toBe("upload_missing");
     expect((await versions.POST(req({ path: path.replace(SONG, DEMO_SONG) }), S())).status).toBe(400);
     h.db.objects.set(path, 1234);
     const r = await versions.POST(req({ path, label: "Bridge idea" }), S());
@@ -464,7 +486,7 @@ describe("audio upload and subscriber DMs", () => {
     const r = await (await versions.POST(req({ path }), p({ songId: id }))).json();
     expect(r.notified).toMatchObject({ outcome: "done", kind: "new_upload", sent: 3 });
     expect(h.dms.map((d) => d.to).sort()).toEqual(["D_U_SUB_ALL", "D_U_SUB_WRITER", "D_U_WRITER"]);
-    expect(h.dms[0].text).toContain(`/song-library/${id}`);
+    expect(h.dms[0].text).toContain(`/song-library/songs/${id}`);
   });
 
   it("sends nothing off production", async () => {
@@ -484,5 +506,140 @@ describe("audio upload and subscriber DMs", () => {
     const r = await audio.GET(get(), S({ versionId: V1 }));
     expect(r.status).toBe(200);
     expect((await r.json()).expires_in).toBe(600);
+  });
+});
+
+describe("Hub UI's client contract (#745)", () => {
+  it("GET /api/song-library is LibraryHome", async () => {
+    as(SUB_ALL);
+    const r = await (await home.GET()).json();
+    expect(r.subscribedAllUploads).toBe(true);
+    expect(r.songs).toHaveLength(2);
+    expect(r.songs[0]).toHaveProperty("song.id");
+    as(BASE);
+    expect((await (await home.GET()).json()).subscribedAllUploads).toBe(false);
+  });
+
+  it("GET /board is a bare SongListItem[] for managers only", async () => {
+    as(PW_MEMBER);
+    const r = await boardRoute.GET();
+    expect(r.status).toBe(200);
+    const items = await r.json();
+    expect(Array.isArray(items)).toBe(true);
+    expect(items.map((i: { song: { id: string } }) => i.song.id).sort()).toEqual([SONG, DEMO_SONG].sort());
+    as(BASE);
+    expect(await why(await boardRoute.GET())).toEqual(["forbidden", "not_manager"]);
+  });
+
+  it("GET /songs/:id is SongDetail", async () => {
+    as(SUB_WRITER);
+    const d = await (await song.GET(get(), S())).json();
+    for (const k of ["song", "versions", "pathwaySteps", "events", "refine", "writers", "publishing", "checkpoints", "helpRequests", "status", "viewerIsWriter", "viewerFollowsLead"]) expect(d).toHaveProperty(k);
+    expect(d.viewerFollowsLead).toBe(false);
+    expect(d.writers[0]).toMatchObject({ is_lead: true, name: "Dani Blood" });
+    as(PW_MEMBER);
+    await placement.POST(req({ to: "prayer_sets" }), S());
+    as(SUB_WRITER);
+    const moved = await (await song.GET(get(), S())).json();
+    expect(moved.events.find((e: { kind: string }) => e.kind === "placement")).toMatchObject({ byName: expect.any(String) });
+    expect(d.helpRequests[0]).toMatchObject({ askedByName: "Dani Blood", helperName: null });
+    await subs.POST(req({ target_type: "writer", target_user_id: WRITER }));
+    expect((await (await song.GET(get(), S())).json()).viewerFollowsLead).toBe(true);
+    as(WRITER);
+    expect((await (await song.GET(get(), S())).json()).viewerIsWriter).toBe(true);
+  });
+
+  it("takes co-writers as plain names, once each", async () => {
+    const r = await songs.POST(req({ title: "Names", entry_point: "lyric", pathway: "b1", holy_spirit_interrupt: false, lyrics_md: null, source_training_id: null, co_writers: ["Gran", "Gran", "Sipho"] }));
+    expect(r.status).toBe(201);
+    const names = (await r.json()).writers.map((w: { name: string; user_id: string | null }) => [w.user_id, w.name]);
+    expect(names.slice(1)).toEqual([[null, "Gran"], [null, "Sipho"]]);
+    expect(names[0][0]).toBe(BASE);
+  });
+
+  it("answers invalid_input with fieldErrors the form can highlight", async () => {
+    const r = await songs.POST(req({ entry_point: "lyric" }));
+    expect(r.status).toBe(400);
+    const b = await r.json();
+    expect(b.code).toBe("invalid_input");
+    expect(Object.keys(b.fieldErrors)).toEqual(["title"]);
+  });
+
+  it("refuses multipart audio: upload to the signed URL instead", async () => {
+    as(WRITER);
+    const form = new FormData();
+    form.append("file", new Blob(["x"], { type: "audio/mpeg" }), "a.mp3");
+    const r = await versions.POST(new Request("http://localhost/x", { method: "POST", body: form }), S());
+    expect(r.status).toBe(415);
+    expect(await code(r)).toBe("use_signed_upload");
+    const big = await uploads.POST(req({ filename: "a.wav", content_type: "audio/wav", size: 300 * 1024 * 1024 }), S());
+    expect(big.status).toBe(413);
+    expect(await code(big)).toBe("too_large");
+  });
+
+  it("GET /versions/:vid/audio redirects to a short-lived signed URL", async () => {
+    h.db.objects.set(h.db.raw("song_library_versions").find((v) => v.id === V1)!.storage_path as string, 1000);
+    const r = await audioById.GET(get(), p({ versionId: V1 }));
+    expect(r.status).toBe(302);
+    expect(r.headers.get("location")).toContain("https://storage.test/read/song-library/");
+    as(null);
+    expect((await audioById.GET(get(), p({ versionId: V1 }))).status).toBe(401);
+  });
+
+  it("PUT /refine/:q is for the song's writers (419), not P&W members", async () => {
+    as(WRITER);
+    const r = await refineRoute.PUT(req({ checked: true, note: "Flows" }, "PUT"), S({ q: "3" }));
+    expect(r.status).toBe(200);
+    expect((await r.json()).item).toMatchObject({ q_no: 3, checked: true, note: "Flows", by_user: WRITER });
+    expect((await refineRoute.PUT(req({ checked: false }, "PUT"), S({ q: "3" }))).status).toBe(200);
+    expect(h.db.raw("song_library_refine_items")).toHaveLength(1);
+    expect((await refineRoute.PUT(req({ checked: true }, "PUT"), S({ q: "12" }))).status).toBe(400);
+    as(PW_MEMBER);
+    expect(await why(await refineRoute.PUT(req({ checked: true }, "PUT"), S({ q: "11" })))).toEqual(["forbidden", "not_writer"]);
+  });
+
+  it("pathway and share steps are ticked by writers, idempotently", async () => {
+    as(COWRITER);
+    await pathwayRoute.PUT(get(), S({ step: "melody" }));
+    const again = await (await pathwayRoute.PUT(get(), S({ step: "melody" }))).json();
+    expect(again.pathwaySteps).toHaveLength(1);
+    expect((await (await pathwayRoute.DELETE(get(), S({ step: "melody" }))).json()).pathwaySteps).toHaveLength(0);
+    expect((await pathwayRoute.PUT(get(), S({ step: "drums" }))).status).toBe(400);
+    expect((await (await shareRoute.PUT(get(), S({ kind: "close_friend" }))).json()).shareSteps).toHaveLength(1);
+    as(BASE);
+    expect((await shareRoute.PUT(get(), S({ kind: "social" }))).status).toBe(403);
+  });
+
+  it("checkpoints are ticked by P&W; credits only follow sign-offs and can only be revoked", async () => {
+    as(PW_MEMBER);
+    const r = await (await checkpointRoute.PUT(req({ done: true, note: "Tuesday" }, "PUT"), S({ kind: "prayer_room_test" }))).json();
+    expect(r.checkpoints.find((c: { kind: string }) => c.kind === "prayer_room_test")).toMatchObject({ note: "Tuesday", by_user: PW_MEMBER });
+    expect(await why(await checkpointRoute.PUT(req({ done: true }, "PUT"), S({ kind: "credits_splits_agreed" })))).toEqual(["forbidden", "credits_follow_confirmations"]);
+    as(WRITER);
+    expect(await why(await checkpointRoute.PUT(req({ done: true }, "PUT"), S({ kind: "recording" })))).toEqual(["forbidden", "not_manager"]);
+    agreeAll(h.db, SONG);
+    as(PW_MEMBER);
+    expect((await checkpointRoute.DELETE(get(), S({ kind: "credits_splits_agreed" }))).status).toBe(200);
+    expect(h.db.raw("song_library_writers").filter((w) => w.song_id === SONG).every((w) => !w.confirmed_at)).toBe(true);
+  });
+
+  it("GET /helpers is HelpersPage; PUT/DELETE /helpers/:category toggles mine", async () => {
+    as(SUB_ALL);
+    expect((await (await helperOne.PUT(get(), p({ category: "keys" }))).json()).mySignups).toEqual(["keys"]);
+    const page = await (await helpers.GET()).json();
+    expect(page.mySignups).toEqual(["keys"]);
+    expect(page.categoryCounts.keys).toBeGreaterThanOrEqual(1);
+    expect(page.openRequests[0]).toMatchObject({ songTitle: "Harbour Lights", askedByName: "Dani Blood" });
+    expect((await (await helperOne.DELETE(get(), p({ category: "keys" }))).json()).mySignups).toEqual([]);
+    expect((await helperOne.PUT(get(), p({ category: "tuba" }))).status).toBe(400);
+  });
+
+  it("DELETE /subscriptions with the same body turns a subscription off", async () => {
+    as(SUB_WRITER);
+    await subs.POST(req({ target_type: "writer", target_user_id: WRITER }));
+    expect((await (await subs.DELETE(req({ target_type: "writer", target_user_id: WRITER }, "DELETE"))).json()).deleted).toBe(1);
+    expect((await (await subs.DELETE(req({ target_type: "writer", target_user_id: WRITER }, "DELETE"))).json()).deleted).toBe(0);
+    expect((await (await subs.DELETE(req({ target_type: "all_uploads" }, "DELETE"))).json()).deleted).toBe(1);
+    expect(h.db.raw("song_library_subscriptions").filter((x) => x.user_id === SUB_WRITER)).toHaveLength(1);
   });
 });

@@ -20,6 +20,9 @@ export const SL_TABLES = {
   subscriptions: "song_library_subscriptions",
   notifications: "song_library_notifications",
   status: "song_library_song_status",
+  refine: "song_library_refine_items",
+  pathway: "song_library_pathway_steps",
+  share: "song_library_share_steps",
 } as const;
 
 export const SL_COLUMNS = {
@@ -35,23 +38,48 @@ export const SL_COLUMNS = {
   helpers: "user_id, category, note, created_at",
   subscriptions: "id, user_id, target_type, target_user_id, created_at",
   status:
-    "song_id, stuck_days, stuck_after_days, is_stuck, is_finished, needs_demo, splits_agreed, splits_total_pct, writers_count, writers_confirmed",
+    "song_id, stage, placement, last_activity_at, stuck_days, stuck_after_days, is_stuck, is_finished, needs_demo, splits_agreed, splits_total_pct, writers_count, writers_confirmed",
+  checkpoints: "song_id, kind, done_at, by_user, note, created_at, updated_at",
+  refine: "song_id, q_no, checked, note, by_user, at",
+  pathway: "song_id, step, done_at, by_user",
+  share: "song_id, kind, done_at, by_user",
   people: "id, first_name, last_name, preferred_name",
 } as const;
 
-/** Machine-readable error codes the API answers with ({ error, code }). */
+/**
+ * Error codes the API answers with ({ error, code }). The first block is
+ * Hub UI's vocabulary (#745 client.ts errorCopy); `reason` values on a 403
+ * say which rule refused.
+ */
 export const SL_CODES = {
-  stageNotAllowed: "song_stage_not_allowed",
-  placementNotAllowed: "song_placement_not_allowed",
-  notWriter: "song_not_writer",
-  notLead: "song_not_lead_writer",
-  publishingNotAllowed: "song_publishing_not_allowed",
-  splitsLocked: "song_splits_locked",
-  splitsIncomplete: "song_splits_incomplete",
-  confirmNotAllowed: "song_confirm_not_allowed",
+  unauthenticated: "unauthenticated",
+  forbidden: "forbidden",
+  notFound: "not_found",
+  invalidInput: "invalid_input",
+  checkFailed: "check_failed",
+  duplicate: "duplicate",
+  splitsIncomplete: "splits_not_100",
+  creditsAgreed: "credits_agreed",
+  stageNotAllowed: "stage_not_allowed",
+  tooLarge: "too_large",
+  // Ours (Hub UI falls back to its default copy until it adds these).
   moved: "song_moved",
-  helpClosed: "song_help_closed",
-  uploadMissing: "song_upload_missing",
+  helpClosed: "help_closed",
+  uploadMissing: "upload_missing",
+  useSignedUpload: "use_signed_upload",
+} as const;
+
+/** `reason` on a 403 forbidden. */
+export const SL_REASONS = {
+  stageNotAllowed: "stage_not_allowed",
+  placementNotAllowed: "placement_not_allowed",
+  notWriter: "not_writer",
+  notLead: "not_lead_writer",
+  notManager: "not_manager",
+  publishingNotAllowed: "publishing_not_allowed",
+  confirmNotAllowed: "confirm_not_allowed",
+  celebrateHidden: "celebrate_hidden",
+  creditsDerived: "credits_follow_confirmations",
 } as const;
 
 export function isStage(v: unknown): v is SongStage {
