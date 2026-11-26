@@ -443,7 +443,15 @@ export type PwTrainingSource = (typeof PW_TRAINING_SOURCES)[number];
 export const PW_SONG_STATUSES = ["draft", "written", "recorded", "released"] as const;
 export type PwSongStatus = (typeof PW_SONG_STATUSES)[number];
 
-/** pw_nations. slug is unique. */
+/** pw_songwriting_leads.kind (424). */
+export const PW_LEAD_KINDS = ["person", "organisation", "group"] as const;
+export type PwLeadKind = (typeof PW_LEAD_KINDS)[number];
+
+/** pw_songwriting_leads.status (424). Default 'new'. */
+export const PW_LEAD_STATUSES = ["new", "to_contact", "waiting", "connected", "closed"] as const;
+export type PwLeadStatus = (typeof PW_LEAD_STATUSES)[number];
+
+/** pw_nations. slug is unique; iso_code is unique where set (424). */
 export interface PwNation {
   id: string;
   name: string;
@@ -451,6 +459,10 @@ export interface PwNation {
   continent: PwContinent | null;
   status: PwNationStatus;
   notes: string | null;
+  /** ISO 3166-1 alpha-2, two capital letters ("ZA"). Null = not set yet (424). */
+  iso_code: string | null;
+  /** The nation's languages as display strings; [] when none recorded (424). */
+  languages: string[];
   created_at: string;
   updated_at: string;
 }
@@ -461,6 +473,11 @@ export interface PwSongwritingTraining {
   year: number;
   /** 1–12. */
   month: number;
+  /**
+   * Optional day, 'YYYY-MM-DD' (424). Must fall in year/month, which stay
+   * required; null = month only (every imported row).
+   */
+  training_date: string | null;
   location_text: string | null;
   nation_id: string | null;
   audience_label: string | null;
@@ -501,6 +518,44 @@ export interface PwSong {
   /** 'YYYY-MM-DD'. */
   written_on: string | null;
   created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * pw_songwriting_leads (424): people, organisations or groups to follow up,
+ * by nation and/or source training. No contact details (the CRM has them).
+ * The API adds owner_name (from owner_user_id) for #745's SongwritingLead.
+ */
+export interface PwSongwritingLead {
+  id: string;
+  /** What the card shows. Always set, even when contact_user_id is. */
+  label: string;
+  kind: PwLeadKind;
+  /** Hub user, when the lead has an account. */
+  contact_user_id: string | null;
+  source_training_id: string | null;
+  nation_id: string | null;
+  note: string | null;
+  /** Who follows up. Null = unassigned. */
+  owner_user_id: string | null;
+  status: PwLeadStatus;
+  /** Moved forward by each lead event insert; never moved back by one. */
+  last_contact_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** pw_songwriting_lead_events (424): one "Log contact". Deleting the lead deletes these. */
+export interface PwSongwritingLeadEvent {
+  id: string;
+  lead_id: string;
+  /** When the contact happened. Defaults to now(). */
+  at: string;
+  /** Hub user who logged it. */
+  by: string | null;
+  note: string | null;
   created_at: string;
   updated_at: string;
 }
