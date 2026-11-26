@@ -14,18 +14,36 @@ import { SONG_ENTRY_POINTS, SONG_PATHWAYS, type SongEntryPoint, type SongPathway
 const ENTRY_ICON: Record<SongEntryPoint, string> = { lyric: "✎", melody: "♪", instrumental: "♫" };
 const ENTRY_HINT: Record<SongEntryPoint, string> = { lyric: "Words first", melody: "A tune first", instrumental: "Playing first" };
 
-export function UploadForm({ scope, sourceTrainingId }: { scope: LibraryScope; sourceTrainingId: string | null }) {
+export type UploadPreset = {
+  title?: string;
+  file?: File | null;
+  entry?: SongEntryPoint;
+  pathway?: SongPathway;
+  holySpirit?: boolean;
+  coWriters?: string[];
+  lyrics?: string;
+};
+
+export function UploadForm({
+  scope,
+  sourceTrainingId,
+  preset,
+}: {
+  scope: LibraryScope;
+  sourceTrainingId: string | null;
+  preset?: UploadPreset;
+}) {
   const paths = libraryPaths(scope);
   const router = useRouter();
   const id = useId();
-  const [title, setTitle] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [entry, setEntry] = useState<SongEntryPoint>("melody");
-  const [pathway, setPathway] = useState<SongPathway>("b1");
-  const [holySpirit, setHolySpirit] = useState(false);
-  const [coWriters, setCoWriters] = useState<string[]>([]);
+  const [title, setTitle] = useState(preset?.title ?? "");
+  const [file, setFile] = useState<File | null>(preset?.file ?? null);
+  const [entry, setEntry] = useState<SongEntryPoint>(preset?.entry ?? "melody");
+  const [pathway, setPathway] = useState<SongPathway>(preset?.pathway ?? "b1");
+  const [holySpirit, setHolySpirit] = useState(preset?.holySpirit ?? false);
+  const [coWriters, setCoWriters] = useState<string[]>(preset?.coWriters ?? []);
   const [coText, setCoText] = useState("");
-  const [lyrics, setLyrics] = useState("");
+  const [lyrics, setLyrics] = useState(preset?.lyrics ?? "");
   const [fields, setFields] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
