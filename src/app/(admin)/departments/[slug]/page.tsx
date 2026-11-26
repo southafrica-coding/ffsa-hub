@@ -5,6 +5,7 @@ import { redirectToCanonicalDepartment, sessionClient, settleViewerResult } from
 import { requireSignedIn } from "@/lib/departments/session";
 import { DepartmentView } from "./department-view";
 import { departmentHasL10Teams } from "./l10/has-l10-teams";
+import { departmentHasSongwriting } from "./songwriting/has-songwriting";
 
 export const metadata: Metadata = { title: "Department" };
 export const dynamic = "force-dynamic";
@@ -43,7 +44,22 @@ export default async function DepartmentPage({
   const keys = visibleTabs(model);
   const tab = isDepartmentTab(requested) && keys.includes(requested) ? requested : (keys[0] ?? "overview");
   const tabs = keys.map((key) => ({ key, label: tabLabel(key), href: tabHref(model.department.slug, key) }));
-  const hasL10Teams = tab === "overview" ? await departmentHasL10Teams(supabase, model.department.slug) : false;
+  const [hasL10Teams, hasSongwriting] =
+    tab === "overview"
+      ? await Promise.all([
+          departmentHasL10Teams(supabase, model.department.slug),
+          departmentHasSongwriting(supabase, model.department.slug),
+        ])
+      : [false, false];
 
-  return <DepartmentView model={model} tab={tab} tabs={tabs} services={services} hasL10Teams={hasL10Teams} />;
+  return (
+    <DepartmentView
+      model={model}
+      tab={tab}
+      tabs={tabs}
+      services={services}
+      hasL10Teams={hasL10Teams}
+      hasSongwriting={hasSongwriting}
+    />
+  );
 }
