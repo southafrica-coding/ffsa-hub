@@ -22,32 +22,53 @@
 -- user_can_use_service('song_library'), which the open_to_all row makes
 -- every active account.
 --
--- Who does what (RLS; admin = active is_admin(), full access everywhere):
+-- Who does what (RLS; admin = active is_admin(), full access except
+-- where noted):
 --   read      every row, every table, for an active user who can use the
---             service. Exceptions: celebrate notes (writers only),
+--             service (celebrate notes included). Exceptions:
 --             subscriptions and notifications (own rows only).
 --   writers   (song_library_writers rows with their user_id, lead or
 --             co-writer) edit their song and its versions, writers and
---             splits, pathway, refine, share steps, celebrate notes,
---             publishing, and the credits_splits_agreed checkpoint.
---   managers  (manage grant: every active P&W member) change stage and
---             placement, all checkpoints, help requests and stuck
---             thresholds. A trigger stops anyone else from changing
---             stage or placement, and stops a manager who is not a
---             writer from changing anything else on the song.
+--             splits, pathway, refine, share steps, celebrate notes and
+--             publishing. They may move their song between the early
+--             stages (idea_entry, writing, set_down, refine,
+--             written_needs_demo), but not into or out of demo_ready,
+--             share or celebrate. They confirm their own split.
+--   managers  (manage grant: every active P&W member) move any stage,
+--             set placement, tick every checkpoint except
+--             credits_splits_agreed (derived, see Splits; they may
+--             untick or delete it to revoke), edit publishing, confirm
+--             splits for writers with no Hub account, withdraw any
+--             confirmation, and manage help requests and stuck thresholds. A
+--             trigger stops a manager who is not a writer from changing
+--             anything else on the song.
 --   anyone    uploads a song (becomes its lead writer), manages their own
 --             helper categories, help sign-ups and subscriptions.
 --   anon      nothing. No grants.
 --
--- Splits. When credits_splits_agreed is ticked (done_at set), every
--- writer needs a split and the splits must total exactly 100.00. This is
--- a DEFERRABLE INITIALLY DEFERRED constraint trigger on both the writers
--- and checkpoints tables, so it holds for every path (PostgREST, service
--- role, SQL editor) and a single transaction may untick, re-split and
--- re-tick. While agreed, adding or removing a writer or changing a split
--- is refused (untick first), so an agreed split can't drift.
+-- Splits: per-writer sign-off. Each song_library_writers row carries
+-- confirmed_at / confirmed_by. A writer with a Hub account confirms only
+-- their own row; a row with no account is confirmed by a manager or an
+-- admin (or the service role). Splits are agreed exactly when the song has
+-- at least one writer, every writer has a split, the splits total 100.00
+-- and every row is confirmed.
+-- Credit fields are user_id, display_name, role, is_lead and split_pct,
+-- plus adding or removing a writer. While not agreed, any credit change
+-- clears every confirmation on the song. While agreed, credit changes are
+-- refused (23514) on every path; the agreement has to be revoked first.
+-- Revoking = un-confirming any row (that writer, a manager or an admin),
+-- or a manager/admin unticking or deleting the credits_splits_agreed
+-- checkpoint. A revocation clears every confirmation and writes a
+-- stage_events row (kind checkpoint, payload revoked/deleted/
+-- cleared_confirmations, by_user, at).
+-- The credits_splits_agreed checkpoint is derived: a trigger ticks it
+-- when the song becomes agreed and unticks it when it stops being agreed.
+-- Nobody ticks it by hand. A DEFERRABLE INITIALLY DEFERRED constraint
+-- trigger on writers and checkpoints (INSERT, UPDATE and DELETE) checks
+-- at commit that it is ticked if and only if the splits are agreed.
+-- song_library_song_status.splits_agreed exposes it.
 --
--- Storage. Private bucket 'song-library', 50 MB, audio + PDF + images.
+-- Storage. Private bucket 'song-library', 200 MB, audio + PDF + images.
 -- Object path: {song_id}/{anything}, e.g. {song_id}/v3-<uuid>.mp3 or
 -- {song_id}/chart-<uuid>.pdf. storage.objects policies mirror the table
 -- RLS: read = can read the library and the song exists; upload and
@@ -301,7 +322,7 @@ CREATE TABLE IF NOT EXISTS public.song_library_celebrate_notes (
   PRIMARY KEY (song_id, prompt_no)
 );
 CREATE INDEX IF NOT EXISTS song_library_celebrate_notes_by_user_idx ON public.song_library_celebrate_notes (by_user);
-COMMENT ON TABLE public.song_library_celebrate_notes IS 'Optional Celebrate reflections. Private to the song''s writers (and admins).';
+COMMENT ON TABLE public.song_library_celebrate_notes IS 'Optional Celebrate reflections. Read by every active user like the rest of the song; written by the song''s writers (and admins).';
 
 CREATE TABLE IF NOT EXISTS public.song_library_writers (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -312,6 +333,8 @@ CREATE TABLE IF NOT EXISTS public.song_library_writers (
   is_lead       boolean NOT NULL DEFAULT false,
   split_pct     numeric(5, 2) CHECK (split_pct IS NULL OR (split_pct >= 0 AND split_pct <= 100)),
   added_by      uuid REFERENCES public.users (id) ON DELETE SET NULL,
+  confirmed_at  timestamptz,
+  confirmed_by  uuid REFERENCES public.users (id) ON DELETE SET NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT song_library_writers_song_user_key UNIQUE (song_id, user_id),
@@ -321,8 +344,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS song_library_writers_one_lead
   ON public.song_library_writers (song_id) WHERE is_lead;
 CREATE INDEX IF NOT EXISTS song_library_writers_user_id_idx ON public.song_library_writers (user_id);
 CREATE INDEX IF NOT EXISTS song_library_writers_added_by_idx ON public.song_library_writers (added_by);
+CREATE INDEX IF NOT EXISTS song_library_writers_confirmed_by_idx ON public.song_library_writers (confirmed_by);
 COMMENT ON TABLE public.song_library_writers IS
-  'Writers and co-writers with splits. The uploader becomes the lead writer automatically. user_id null = someone without a Hub account (display_name required). Splits must total 100.00 while credits_splits_agreed is ticked, and are locked while it stays ticked.';
+  'Writers and co-writers with splits. The uploader becomes the lead writer automatically. user_id null = someone without a Hub account (display_name required). Agreed = total 100.00 and every row confirmed; any split change or writer add/remove clears all confirmations.';
+COMMENT ON COLUMN public.song_library_writers.confirmed_at IS
+  'This writer''s sign-off on the current splits. Set by the writer themself (account rows) or by a manager/admin (no-account rows); confirmed_by and the time are stamped by trigger. Needs a split.';
 COMMENT ON COLUMN public.song_library_writers.role IS 'Free-text credit, for example "Melody, music" or "Bridge lyric".';
 
 CREATE TABLE IF NOT EXISTS public.song_library_publishing (
@@ -352,7 +378,7 @@ CREATE TABLE IF NOT EXISTS public.song_library_checkpoints (
 );
 CREATE INDEX IF NOT EXISTS song_library_checkpoints_by_user_idx ON public.song_library_checkpoints (by_user);
 COMMENT ON TABLE public.song_library_checkpoints IS
-  'Placement checkpoints. Ticked = done_at not null. credits_splits_agreed: writers or managers, and only with splits totalling 100. The rest: managers.';
+  'Placement checkpoints. Ticked = done_at not null. credits_splits_agreed is derived from the writers'' confirmations and is never written directly; the rest are ticked by managers.';
 
 CREATE TABLE IF NOT EXISTS public.song_library_helpers (
   user_id     uuid NOT NULL REFERENCES public.users (id) ON DELETE CASCADE,
@@ -662,11 +688,13 @@ END;
 $$;
 
 -- Who may change which columns. Admins and the service role: anything.
--- stage, placement: managers only. Every other column a user may set
--- (title, entry_point, pathway, holy_spirit_interrupt, music_key, bpm,
--- lyrics_md, chart_path, current_version_id, source_training_id):
--- writers only. id, created_by, created_at, visibility and
--- last_activity_at: nobody but admins and triggers.
+-- placement: managers only. stage: managers any move; writers only from
+-- an early stage to another early stage (idea_entry, writing, set_down,
+-- refine, written_needs_demo). Every other column a user may set (title,
+-- entry_point, pathway, holy_spirit_interrupt, music_key, bpm, lyrics_md,
+-- chart_path, current_version_id, source_training_id): writers only. id,
+-- created_by, created_at, visibility and last_activity_at: nobody but
+-- admins and triggers.
 CREATE OR REPLACE FUNCTION public.song_library_songs_guard()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -674,10 +702,13 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_stage_moved boolean := NEW.stage IS DISTINCT FROM OLD.stage
-                        OR NEW.placement IS DISTINCT FROM OLD.placement;
+  v_early text[] := ARRAY['idea_entry', 'writing', 'set_down', 'refine', 'written_needs_demo'];
+  v_stage_moved boolean := NEW.stage IS DISTINCT FROM OLD.stage;
+  v_place_moved boolean := NEW.placement IS DISTINCT FROM OLD.placement;
   v_skip text[] := ARRAY['stage', 'placement', 'updated_at', 'last_activity_at'];
   v_system text[] := ARRAY['id', 'created_by', 'created_at', 'visibility', 'last_activity_at'];
+  v_manager boolean;
+  v_writer boolean;
   col text;
 BEGIN
   IF pg_trigger_depth() > 1 THEN
@@ -690,19 +721,29 @@ BEGIN
         RAISE EXCEPTION 'song_library_songs.% is set by the Hub', col USING ERRCODE = '42501';
       END IF;
     END LOOP;
-    IF v_stage_moved AND NOT public.song_library_can_manage() THEN
-      RAISE EXCEPTION 'Only Song Library managers can change stage or placement' USING ERRCODE = '42501';
+    v_manager := public.song_library_can_manage();
+    v_writer := EXISTS (
+      SELECT 1 FROM public.song_library_writers w
+       WHERE w.song_id = OLD.id AND w.user_id = auth.uid()
+    );
+    IF v_place_moved AND NOT v_manager THEN
+      RAISE EXCEPTION 'Only Song Library managers can change placement' USING ERRCODE = '42501';
     END IF;
-    IF (to_jsonb(NEW) - v_skip) IS DISTINCT FROM (to_jsonb(OLD) - v_skip)
-       AND NOT EXISTS (
-         SELECT 1 FROM public.song_library_writers w
-          WHERE w.song_id = OLD.id AND w.user_id = auth.uid()
-       ) THEN
+    IF v_stage_moved AND NOT v_manager THEN
+      IF NOT v_writer THEN
+        RAISE EXCEPTION 'Only the song''s writers or Song Library managers can move its stage' USING ERRCODE = '42501';
+      END IF;
+      IF NOT (OLD.stage = ANY (v_early) AND NEW.stage = ANY (v_early)) THEN
+        RAISE EXCEPTION 'Only Song Library managers can move a song into or out of demo_ready, share or celebrate'
+          USING ERRCODE = '42501';
+      END IF;
+    END IF;
+    IF (to_jsonb(NEW) - v_skip) IS DISTINCT FROM (to_jsonb(OLD) - v_skip) AND NOT v_writer THEN
       RAISE EXCEPTION 'Only the song''s writers can edit it' USING ERRCODE = '42501';
     END IF;
   END IF;
 
-  IF v_stage_moved THEN
+  IF v_stage_moved OR v_place_moved THEN
     NEW.last_activity_at := now();
   END IF;
   RETURN NEW;
@@ -816,7 +857,10 @@ BEGIN
 END;
 $$;
 
--- 4f. Checkpoints: log ticks and unticks.
+-- 4f. Checkpoints: log ticks and unticks. Unticking or deleting a ticked
+-- credits_splits_agreed is a revocation: it clears every writer
+-- confirmation on the song, and the event records who did it, when, and
+-- how many confirmations were cleared.
 CREATE OR REPLACE FUNCTION public.song_library_checkpoints_log()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -825,6 +869,8 @@ SET search_path = ''
 AS $$
 DECLARE
   r public.song_library_checkpoints;
+  v_revoked boolean := false;
+  v_cleared integer := 0;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     r := OLD;
@@ -839,18 +885,43 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.song_library_songs s WHERE s.id = r.song_id) THEN
     RETURN NULL;  -- the song itself is being deleted
   END IF;
+
+  IF r.kind = 'credits_splits_agreed'
+     AND TG_OP <> 'INSERT'
+     AND OLD.done_at IS NOT NULL
+     AND (TG_OP = 'DELETE' OR NEW.done_at IS NULL) THEN
+    v_revoked := true;
+    UPDATE public.song_library_writers w
+       SET confirmed_at = NULL, confirmed_by = NULL
+     WHERE w.song_id = r.song_id
+       AND w.confirmed_at IS NOT NULL;
+    GET DIAGNOSTICS v_cleared = ROW_COUNT;
+  END IF;
+
   INSERT INTO public.song_library_stage_events (song_id, kind, payload, by_user)
   VALUES (r.song_id, 'checkpoint',
           jsonb_build_object('checkpoint', r.kind,
                              'done', TG_OP <> 'DELETE' AND r.done_at IS NOT NULL,
-                             'note', r.note),
+                             'note', r.note)
+          || CASE WHEN v_revoked
+                  THEN jsonb_build_object('revoked', true, 'deleted', TG_OP = 'DELETE',
+                                          'cleared_confirmations', v_cleared)
+                  ELSE '{}'::jsonb END,
           auth.uid());
   RETURN NULL;
 END;
 $$;
 
--- 4g. Writers: stamp added_by, keep user_id fixed, lock agreed splits,
--- log joins and removals.
+-- 4g. Writers: stamp added_by, keep song/person fixed, lock credits while
+-- agreed, per-writer confirmation rules, and what a manager who is not a
+-- writer may touch.
+--
+-- Credit fields: user_id, display_name, role, is_lead, split_pct, plus
+-- adding or removing a row. While credits_splits_agreed is ticked, none of
+-- them can change (23514): revoke first, by un-confirming a row (the
+-- writer themself, a manager or an admin) or by a manager/admin unticking
+-- or deleting the checkpoint. Revoking clears every confirmation and is
+-- logged. While not agreed, a credit change clears every confirmation.
 CREATE OR REPLACE FUNCTION public.song_library_writers_before()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -858,38 +929,166 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
+  v_uid uuid := auth.uid();
   v_song uuid := CASE WHEN TG_OP = 'DELETE' THEN OLD.song_id ELSE NEW.song_id END;
+  v_credit text[] := ARRAY['user_id', 'display_name', 'role', 'is_lead', 'split_pct'];
+  v_conf text[] := ARRAY['confirmed_at', 'confirmed_by', 'updated_at'];
+  v_credit_change boolean := false;
+  col text;
 BEGIN
-  IF TG_OP = 'UPDATE' THEN
-    IF NEW.song_id IS DISTINCT FROM OLD.song_id
-       OR (NEW.user_id IS DISTINCT FROM OLD.user_id AND NEW.user_id IS NOT NULL) THEN
-      RAISE EXCEPTION 'A writer row''s song and person cannot change; remove and add instead'
-        USING ERRCODE = '42501';
-    END IF;
-  ELSIF TG_OP = 'INSERT' AND auth.uid() IS NOT NULL THEN
-    NEW.added_by := auth.uid();
+  IF TG_OP = 'UPDATE' AND (
+       NEW.song_id IS DISTINCT FROM OLD.song_id
+       OR (NEW.user_id IS DISTINCT FROM OLD.user_id AND NEW.user_id IS NOT NULL)) THEN
+    RAISE EXCEPTION 'A writer row''s song and person cannot change; remove and add instead'
+      USING ERRCODE = '42501';
   END IF;
 
-  -- Cascades (song deleted, user deleted) are not edits to an agreement.
+  -- Triggers (clearing confirmations, the uploader's own row) and FK
+  -- cascades (song or user deleted) pass straight through.
   IF pg_trigger_depth() > 1 THEN
+    IF TG_OP = 'INSERT' THEN
+      NEW.confirmed_at := NULL;
+      NEW.confirmed_by := NULL;
+    END IF;
     RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
   END IF;
 
-  IF (TG_OP <> 'UPDATE' OR NEW.split_pct IS DISTINCT FROM OLD.split_pct)
-     AND EXISTS (
+  IF TG_OP = 'UPDATE' THEN
+    FOREACH col IN ARRAY v_credit LOOP
+      IF (to_jsonb(NEW) -> col) IS DISTINCT FROM (to_jsonb(OLD) -> col) THEN
+        v_credit_change := true;
+      END IF;
+    END LOOP;
+  ELSE
+    v_credit_change := true;
+  END IF;
+
+  IF v_credit_change AND EXISTS (
        SELECT 1 FROM public.song_library_checkpoints c
         WHERE c.song_id = v_song
           AND c.kind = 'credits_splits_agreed'
           AND c.done_at IS NOT NULL
      ) THEN
-    RAISE EXCEPTION 'Splits are agreed for this song; untick credits_splits_agreed before changing writers or splits'
+    RAISE EXCEPTION 'Credits are agreed for this song; revoke the agreement (un-confirm) before changing writers or splits'
       USING ERRCODE = '23514';
   END IF;
-  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF v_uid IS NOT NULL THEN
+      NEW.added_by := v_uid;
+    END IF;
+    -- A new row starts unconfirmed; adding it clears the others too.
+    NEW.confirmed_at := NULL;
+    NEW.confirmed_by := NULL;
+    RETURN NEW;
+  END IF;
+
+  IF v_uid IS NOT NULL
+     AND NOT public.song_library_is_admin()
+     AND NOT EXISTS (
+       SELECT 1 FROM public.song_library_writers w
+        WHERE w.song_id = OLD.song_id AND w.user_id = v_uid
+     )
+     AND (to_jsonb(NEW) - v_conf) IS DISTINCT FROM (to_jsonb(OLD) - v_conf) THEN
+    RAISE EXCEPTION 'Managers who are not writers can only confirm splits for writers without a Hub account'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_credit_change THEN
+    NEW.confirmed_at := NULL;
+    NEW.confirmed_by := NULL;
+    RETURN NEW;
+  END IF;
+
+  IF NEW.confirmed_at IS DISTINCT FROM OLD.confirmed_at THEN
+    IF NEW.confirmed_at IS NOT NULL THEN
+      IF NEW.split_pct IS NULL THEN
+        RAISE EXCEPTION 'Give this writer a split before confirming it' USING ERRCODE = '23514';
+      END IF;
+      IF v_uid IS NOT NULL THEN
+        IF OLD.user_id IS NOT NULL AND OLD.user_id <> v_uid THEN
+          RAISE EXCEPTION 'Only that writer can confirm their own split' USING ERRCODE = '42501';
+        END IF;
+        IF OLD.user_id IS NULL
+           AND NOT (public.song_library_is_admin() OR public.song_library_can_manage()) THEN
+          RAISE EXCEPTION 'A writer without a Hub account is confirmed by a Song Library manager or an admin'
+            USING ERRCODE = '42501';
+        END IF;
+      END IF;
+      NEW.confirmed_at := now();
+      NEW.confirmed_by := COALESCE(v_uid, NEW.confirmed_by);
+    ELSE
+      -- Un-confirming: the writer themself, a manager or an admin.
+      IF v_uid IS NOT NULL
+         AND OLD.user_id IS DISTINCT FROM v_uid
+         AND NOT (public.song_library_is_admin() OR public.song_library_can_manage()) THEN
+        RAISE EXCEPTION 'Only that writer, a Song Library manager or an admin can withdraw this confirmation'
+          USING ERRCODE = '42501';
+      END IF;
+      NEW.confirmed_by := NULL;
+    END IF;
+  ELSIF NEW.confirmed_by IS DISTINCT FROM OLD.confirmed_by
+        AND NEW.confirmed_by IS NOT NULL THEN
+    RAISE EXCEPTION 'confirmed_by is set by the Hub' USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.song_library_writers_log()
+-- Agreed = at least one writer, every writer has a split, total 100.00,
+-- every row confirmed.
+CREATE OR REPLACE FUNCTION public.song_library_splits_agreed(p_song_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT count(*) > 0
+     AND count(*) FILTER (WHERE w.split_pct IS NULL) = 0
+     AND COALESCE(sum(w.split_pct), 0) = 100
+     AND count(*) FILTER (WHERE w.confirmed_at IS NULL) = 0
+    FROM public.song_library_writers w
+   WHERE w.song_id = p_song_id;
+$$;
+
+-- Tick or untick the derived credits_splits_agreed checkpoint.
+CREATE OR REPLACE FUNCTION public.song_library_sync_splits_agreed(p_song_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.song_library_songs s WHERE s.id = p_song_id) THEN
+    RETURN;
+  END IF;
+  IF public.song_library_splits_agreed(p_song_id) THEN
+    INSERT INTO public.song_library_checkpoints (song_id, kind, done_at)
+    VALUES (p_song_id, 'credits_splits_agreed', now())
+    ON CONFLICT (song_id, kind) DO UPDATE
+      SET done_at = now()
+      WHERE public.song_library_checkpoints.done_at IS NULL;
+  ELSE
+    UPDATE public.song_library_checkpoints c
+       SET done_at = NULL
+     WHERE c.song_id = p_song_id
+       AND c.kind = 'credits_splits_agreed'
+       AND c.done_at IS NOT NULL;
+  END IF;
+END;
+$$;
+
+-- After any writer change: a credit change (add, remove, or any credit
+-- field) by a user clears every confirmation on the song; log joins,
+-- removals, confirmations, withdrawals and clears; then re-derive the
+-- checkpoint. If that unticks a ticked checkpoint, song_library_checkpoints_log
+-- records the revocation.
+CREATE OR REPLACE FUNCTION public.song_library_writers_after()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -897,6 +1096,10 @@ SET search_path = ''
 AS $$
 DECLARE
   r public.song_library_writers;
+  v_credit text[] := ARRAY['user_id', 'display_name', 'role', 'is_lead', 'split_pct'];
+  v_credit_change boolean := TG_OP <> 'UPDATE';
+  v_cleared integer := 0;
+  col text;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     r := OLD;
@@ -904,21 +1107,93 @@ BEGIN
     r := NEW;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.song_library_songs s WHERE s.id = r.song_id) THEN
-    RETURN NULL;
+    RETURN NULL;  -- the song itself is being deleted
   END IF;
-  INSERT INTO public.song_library_stage_events (song_id, kind, payload, by_user)
-  VALUES (r.song_id, 'writer',
-          jsonb_build_object('action', CASE WHEN TG_OP = 'DELETE' THEN 'removed' ELSE 'added' END,
-                             'writer_id', r.id, 'user_id', r.user_id,
-                             'display_name', r.display_name, 'is_lead', r.is_lead),
-          auth.uid());
+
+  IF TG_OP = 'UPDATE' THEN
+    FOREACH col IN ARRAY v_credit LOOP
+      IF (to_jsonb(NEW) -> col) IS DISTINCT FROM (to_jsonb(OLD) -> col) THEN
+        v_credit_change := true;
+      END IF;
+    END LOOP;
+  END IF;
+
+  IF v_credit_change AND pg_trigger_depth() = 1 THEN
+    UPDATE public.song_library_writers w
+       SET confirmed_at = NULL, confirmed_by = NULL
+     WHERE w.song_id = r.song_id
+       AND w.confirmed_at IS NOT NULL;
+    GET DIAGNOSTICS v_cleared = ROW_COUNT;
+    -- writers_before already cleared this row's own confirmation.
+    IF TG_OP = 'UPDATE' AND OLD.confirmed_at IS NOT NULL THEN
+      v_cleared := v_cleared + 1;
+    END IF;
+  END IF;
+
+  IF TG_OP <> 'UPDATE' THEN
+    INSERT INTO public.song_library_stage_events (song_id, kind, payload, by_user)
+    VALUES (r.song_id, 'writer',
+            jsonb_build_object('action', CASE WHEN TG_OP = 'DELETE' THEN 'removed' ELSE 'added' END,
+                               'writer_id', r.id, 'user_id', r.user_id,
+                               'display_name', r.display_name, 'is_lead', r.is_lead),
+            auth.uid());
+  ELSIF pg_trigger_depth() = 1 AND OLD.confirmed_at IS NULL AND NEW.confirmed_at IS NOT NULL THEN
+    INSERT INTO public.song_library_stage_events (song_id, kind, payload, by_user)
+    VALUES (r.song_id, 'writer',
+            jsonb_build_object('action', 'confirmed', 'writer_id', r.id, 'user_id', r.user_id,
+                               'display_name', r.display_name, 'split_pct', r.split_pct),
+            auth.uid());
+  ELSIF pg_trigger_depth() = 1 AND OLD.confirmed_at IS NOT NULL AND NEW.confirmed_at IS NULL
+        AND NOT v_credit_change THEN
+    INSERT INTO public.song_library_stage_events (song_id, kind, payload, by_user)
+    VALUES (r.song_id, 'writer',
+            jsonb_build_object('action', 'unconfirmed', 'writer_id', r.id, 'user_id', r.user_id,
+                               'display_name', r.display_name),
+            auth.uid());
+  END IF;
+  IF v_cleared > 0 THEN
+    INSERT INTO public.song_library_stage_events (song_id, kind, payload, by_user)
+    VALUES (r.song_id, 'writer',
+            jsonb_build_object('action', 'confirmations_cleared', 'writer_id', r.id,
+                               'cleared_confirmations', v_cleared),
+            auth.uid());
+  END IF;
+
+  PERFORM public.song_library_sync_splits_agreed(r.song_id);
   RETURN NULL;
 END;
 $$;
 
--- 4h. Splits rule, checked at commit. While credits_splits_agreed is
--- ticked, the song has at least one writer, every writer has a split,
--- and the splits total exactly 100.00.
+-- credits_splits_agreed is derived: users (admins included) cannot tick
+-- it or edit it. Managers and admins (RLS) may untick or delete it, which
+-- revokes the agreement (see song_library_checkpoints_log). Triggers and
+-- the service role can write it, and the deferred check below still holds
+-- them to the rule.
+CREATE OR REPLACE FUNCTION public.song_library_checkpoints_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF pg_trigger_depth() = 1 AND auth.uid() IS NOT NULL THEN
+    IF TG_OP = 'INSERT' AND NEW.kind = 'credits_splits_agreed' THEN
+      RAISE EXCEPTION 'credits_splits_agreed follows the writers'' confirmations; confirm splits instead'
+        USING ERRCODE = '42501';
+    END IF;
+    IF TG_OP = 'UPDATE' AND OLD.kind = 'credits_splits_agreed'
+       AND (NEW.done_at IS NOT NULL
+            OR NEW.note IS DISTINCT FROM OLD.note) THEN
+      RAISE EXCEPTION 'credits_splits_agreed can only be revoked (unticked) by hand'
+        USING ERRCODE = '42501';
+    END IF;
+  END IF;
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+-- 4h. Splits rule, checked at commit: credits_splits_agreed is ticked if
+-- and only if the splits are agreed.
 CREATE OR REPLACE FUNCTION public.song_library_check_splits()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -927,25 +1202,24 @@ SET search_path = ''
 AS $$
 DECLARE
   v_song uuid := CASE WHEN TG_OP = 'DELETE' THEN OLD.song_id ELSE NEW.song_id END;
-  v_n integer;
-  v_missing integer;
-  v_total numeric;
+  v_ticked boolean;
+  v_agreed boolean;
 BEGIN
-  IF NOT EXISTS (
+  IF NOT EXISTS (SELECT 1 FROM public.song_library_songs s WHERE s.id = v_song) THEN
+    RETURN NULL;
+  END IF;
+  v_ticked := EXISTS (
     SELECT 1 FROM public.song_library_checkpoints c
      WHERE c.song_id = v_song
        AND c.kind = 'credits_splits_agreed'
        AND c.done_at IS NOT NULL
-  ) THEN
-    RETURN NULL;
-  END IF;
-  SELECT count(*), count(*) FILTER (WHERE w.split_pct IS NULL), COALESCE(sum(w.split_pct), 0)
-    INTO v_n, v_missing, v_total
-    FROM public.song_library_writers w
-   WHERE w.song_id = v_song;
-  IF v_n = 0 OR v_missing > 0 OR v_total <> 100 THEN
-    RAISE EXCEPTION 'Splits must total 100%% before credits can be agreed (song %: % writer(s), % without a split, total %)',
-      v_song, v_n, v_missing, v_total
+  );
+  v_agreed := public.song_library_splits_agreed(v_song);
+  IF v_ticked AND NOT v_agreed THEN
+    RAISE EXCEPTION 'Splits must total 100%% and every writer must confirm before credits are agreed (song %)', v_song
+      USING ERRCODE = '23514';
+  ELSIF v_agreed AND NOT v_ticked THEN
+    RAISE EXCEPTION 'Splits for song % are agreed but credits_splits_agreed is not ticked', v_song
       USING ERRCODE = '23514';
   END IF;
   RETURN NULL;
@@ -1004,7 +1278,8 @@ BEGIN
     'song_library_songs_after_insert()', 'song_library_songs_after_update()',
     'song_library_versions_before()', 'song_library_versions_after_insert()',
     'song_library_touch_song()', 'song_library_checkpoints_log()',
-    'song_library_writers_before()', 'song_library_writers_log()',
+    'song_library_writers_before()', 'song_library_writers_after()',
+    'song_library_checkpoints_guard()', 'song_library_sync_splits_agreed(uuid)',
     'song_library_check_splits()', 'song_library_help_requests_before()',
     'song_library_help_signups_before_insert()'
   ] LOOP
@@ -1141,8 +1416,16 @@ DROP TRIGGER IF EXISTS song_library_writers_before ON public.song_library_writer
 CREATE TRIGGER song_library_writers_before BEFORE INSERT OR UPDATE OR DELETE ON public.song_library_writers
   FOR EACH ROW EXECUTE FUNCTION public.song_library_writers_before();
 DROP TRIGGER IF EXISTS song_library_writers_log ON public.song_library_writers;
-CREATE TRIGGER song_library_writers_log AFTER INSERT OR DELETE ON public.song_library_writers
-  FOR EACH ROW EXECUTE FUNCTION public.song_library_writers_log();
+DROP TRIGGER IF EXISTS song_library_writers_after ON public.song_library_writers;
+CREATE TRIGGER song_library_writers_after AFTER INSERT OR UPDATE OR DELETE ON public.song_library_writers
+  FOR EACH ROW EXECUTE FUNCTION public.song_library_writers_after();
+DROP TRIGGER IF EXISTS song_library_checkpoints_guard ON public.song_library_checkpoints;
+CREATE TRIGGER song_library_checkpoints_guard BEFORE INSERT OR UPDATE OR DELETE ON public.song_library_checkpoints
+  FOR EACH ROW EXECUTE FUNCTION public.song_library_checkpoints_guard();
+DROP FUNCTION IF EXISTS public.song_library_writers_log();
+
+REVOKE ALL ON FUNCTION public.song_library_splits_agreed(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.song_library_splits_agreed(uuid) TO authenticated, service_role;
 
 -- splits rule (deferred to commit)
 DROP TRIGGER IF EXISTS song_library_writers_splits_agreed ON public.song_library_writers;
@@ -1152,7 +1435,7 @@ CREATE CONSTRAINT TRIGGER song_library_writers_splits_agreed
   FOR EACH ROW EXECUTE FUNCTION public.song_library_check_splits();
 DROP TRIGGER IF EXISTS song_library_checkpoints_splits_agreed ON public.song_library_checkpoints;
 CREATE CONSTRAINT TRIGGER song_library_checkpoints_splits_agreed
-  AFTER INSERT OR UPDATE ON public.song_library_checkpoints
+  AFTER INSERT OR UPDATE OR DELETE ON public.song_library_checkpoints
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION public.song_library_check_splits();
 
@@ -1183,12 +1466,27 @@ SELECT
   (st.stuck_after_days IS NOT NULL
    AND floor(extract(epoch FROM (now() - s.last_activity_at)) / 86400) >= st.stuck_after_days) AS is_stuck,
   s.stage IN ('demo_ready', 'share', 'celebrate') AS is_finished,
-  s.stage = 'written_needs_demo' AS needs_demo
+  s.stage = 'written_needs_demo' AS needs_demo,
+  COALESCE(sp.agreed, false) AS splits_agreed,
+  COALESCE(sp.total_pct, 0)::numeric(6, 2) AS splits_total_pct,
+  COALESCE(sp.writers, 0)::integer AS writers_count,
+  COALESCE(sp.confirmed, 0)::integer AS writers_confirmed
 FROM public.song_library_songs s
-LEFT JOIN public.song_library_stage_settings st ON st.stage = s.stage;
+LEFT JOIN public.song_library_stage_settings st ON st.stage = s.stage
+LEFT JOIN LATERAL (
+  SELECT count(*) AS writers,
+         count(*) FILTER (WHERE w.confirmed_at IS NOT NULL) AS confirmed,
+         sum(w.split_pct) AS total_pct,
+         (count(*) > 0
+          AND count(*) FILTER (WHERE w.split_pct IS NULL) = 0
+          AND COALESCE(sum(w.split_pct), 0) = 100
+          AND count(*) FILTER (WHERE w.confirmed_at IS NULL) = 0) AS agreed
+    FROM public.song_library_writers w
+   WHERE w.song_id = s.id
+) sp ON true;
 
 COMMENT ON VIEW public.song_library_song_status IS
-  'Per song: stuck_days, is_stuck (against song_library_stage_settings), is_finished (demo_ready or later), needs_demo. security_invoker.';
+  'Per song: stuck_days, is_stuck (against song_library_stage_settings), is_finished (demo_ready or later), needs_demo, and splits: splits_agreed (total 100 and every writer confirmed), splits_total_pct, writers_count, writers_confirmed. security_invoker.';
 
 -- ────────────────────────────────────────────────────────────
 -- 6. Grants and RLS
@@ -1266,7 +1564,7 @@ DECLARE
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'song_library_versions', 'song_library_pathway_steps', 'song_library_refine_items',
-    'song_library_share_steps', 'song_library_writers', 'song_library_publishing'
+    'song_library_share_steps', 'song_library_writers', 'song_library_celebrate_notes'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS "Song library: read" ON public.%I', t);
     EXECUTE format($p$CREATE POLICY "Song library: read" ON public.%I
@@ -1293,12 +1591,36 @@ BEGIN
 END
 $writer_tables$;
 
--- celebrate notes: writers (and admins) only, including reads.
+-- Earlier draft of 419 made celebrate notes writers-only; they are now
+-- read like the rest of the song (policies from the loop above).
 DROP POLICY IF EXISTS "Song library: writers only" ON public.song_library_celebrate_notes;
-CREATE POLICY "Song library: writers only" ON public.song_library_celebrate_notes
+
+-- writers: managers may also update (to confirm splits for writers with
+-- no Hub account). song_library_writers_before limits a manager who is
+-- not a writer to the confirmation columns.
+DROP POLICY IF EXISTS "Song library: writers update" ON public.song_library_writers;
+CREATE POLICY "Song library: writers update" ON public.song_library_writers
+  FOR UPDATE TO authenticated
+  USING ((SELECT public.song_library_is_admin()) OR (SELECT public.song_library_can_manage())
+         OR song_id IN (SELECT public.song_library_my_song_ids()))
+  WITH CHECK ((SELECT public.song_library_is_admin()) OR (SELECT public.song_library_can_manage())
+              OR song_id IN (SELECT public.song_library_my_song_ids()));
+
+-- publishing: writers, managers and admins. Everyone reads.
+DROP POLICY IF EXISTS "Song library: read" ON public.song_library_publishing;
+CREATE POLICY "Song library: read" ON public.song_library_publishing
+  FOR SELECT TO authenticated
+  USING ((SELECT public.song_library_can_read()));
+DROP POLICY IF EXISTS "Song library: writers insert" ON public.song_library_publishing;
+DROP POLICY IF EXISTS "Song library: writers update" ON public.song_library_publishing;
+DROP POLICY IF EXISTS "Song library: writers delete" ON public.song_library_publishing;
+DROP POLICY IF EXISTS "Song library: writers and managers write publishing" ON public.song_library_publishing;
+CREATE POLICY "Song library: writers and managers write publishing" ON public.song_library_publishing
   FOR ALL TO authenticated
-  USING ((SELECT public.song_library_is_admin()) OR song_id IN (SELECT public.song_library_my_song_ids()))
-  WITH CHECK ((SELECT public.song_library_is_admin()) OR song_id IN (SELECT public.song_library_my_song_ids()));
+  USING ((SELECT public.song_library_is_admin()) OR (SELECT public.song_library_can_manage())
+         OR song_id IN (SELECT public.song_library_my_song_ids()))
+  WITH CHECK ((SELECT public.song_library_is_admin()) OR (SELECT public.song_library_can_manage())
+              OR song_id IN (SELECT public.song_library_my_song_ids()));
 
 -- stage events: everyone reads; the actor (or an admin) edits the note.
 DROP POLICY IF EXISTS "Song library: read events" ON public.song_library_stage_events;
@@ -1313,7 +1635,9 @@ CREATE POLICY "Song library: actor edits event note" ON public.song_library_stag
   WITH CHECK ((SELECT public.song_library_is_admin())
               OR ((SELECT public.song_library_can_read()) AND by_user = (SELECT auth.uid())));
 
--- checkpoints: managers any kind; writers credits_splits_agreed only.
+-- checkpoints: managers (and admins) tick every kind except
+-- credits_splits_agreed, which only triggers tick (song_library_checkpoints_guard);
+-- managers may untick or delete it, which revokes the agreement.
 DROP POLICY IF EXISTS "Song library: read checkpoints" ON public.song_library_checkpoints;
 CREATE POLICY "Song library: read checkpoints" ON public.song_library_checkpoints
   FOR SELECT TO authenticated
@@ -1321,10 +1645,8 @@ CREATE POLICY "Song library: read checkpoints" ON public.song_library_checkpoint
 DROP POLICY IF EXISTS "Song library: write checkpoints" ON public.song_library_checkpoints;
 CREATE POLICY "Song library: write checkpoints" ON public.song_library_checkpoints
   FOR ALL TO authenticated
-  USING ((SELECT public.song_library_is_admin()) OR (SELECT public.song_library_can_manage())
-         OR (kind = 'credits_splits_agreed' AND song_id IN (SELECT public.song_library_my_song_ids())))
-  WITH CHECK ((SELECT public.song_library_is_admin()) OR (SELECT public.song_library_can_manage())
-              OR (kind = 'credits_splits_agreed' AND song_id IN (SELECT public.song_library_my_song_ids())));
+  USING ((SELECT public.song_library_is_admin()) OR (SELECT public.song_library_can_manage()))
+  WITH CHECK ((SELECT public.song_library_is_admin()) OR (SELECT public.song_library_can_manage()));
 -- FOR ALL includes SELECT; the read policy above already covers readers.
 
 -- helpers: everyone reads; each person writes their own.
@@ -1421,7 +1743,8 @@ CREATE POLICY "Song library: managers set thresholds" ON public.song_library_sta
 -- ────────────────────────────────────────────────────────────
 -- 7. Storage: private 'song-library' bucket
 -- ────────────────────────────────────────────────────────────
--- 50 MB per object. Audio for versions, PDF and images for charts.
+-- 200 MB per object (uncompressed WAV demos). Audio for versions, PDF and
+-- images for charts.
 -- The app should serve reads as short-lived signed URLs; these policies
 -- are the gate for any direct storage call.
 
@@ -1430,7 +1753,7 @@ VALUES (
   'song-library',
   'song-library',
   false,
-  52428800,
+  209715200,
   ARRAY[
     'audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/wav', 'audio/x-wav',
     'audio/wave', 'audio/ogg', 'audio/webm', 'audio/flac',

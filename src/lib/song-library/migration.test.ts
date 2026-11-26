@@ -114,17 +114,56 @@ describe("migration 419 song library", () => {
     expect(code).not.toMatch(/GRANT[^;]*\bTO\b[^;]*\banon\b/);
   });
 
-  it("keeps the bucket private with no overwrite policy", () => {
+  it("keeps the bucket private (200 MB) with no overwrite policy", () => {
     expect(migration).toMatch(/'song-library',\s+'song-library',\s+false/);
+    expect(code).toMatch(/\b209715200\b/);
     expect(migration).not.toMatch(/ON storage\.objects FOR (UPDATE|ALL)/);
   });
 
-  it("enforces splits with a deferred constraint trigger", () => {
-    expect(migration).toMatch(
-      /CREATE CONSTRAINT TRIGGER song_library_writers_splits_agreed[\s\S]*?DEFERRABLE INITIALLY DEFERRED/,
+  it("enforces splits with deferred constraint triggers covering DELETE", () => {
+    for (const t of ["writers", "checkpoints"]) {
+      expect(code).toMatch(
+        new RegExp(
+          `CREATE CONSTRAINT TRIGGER song_library_${t}_splits_agreed\\s+AFTER INSERT OR UPDATE OR DELETE ON public\\.song_library_${t}\\s+DEFERRABLE INITIALLY DEFERRED`,
+        ),
+      );
+    }
+  });
+
+  it("derives credits_splits_agreed from per-writer confirmations", () => {
+    expect(code).toMatch(/confirmed_at\s+timestamptz/);
+    expect(code).toMatch(/confirmed_by\s+uuid REFERENCES public\.users/);
+    for (const fn of [
+      "song_library_writers_before",
+      "song_library_writers_after",
+      "song_library_checkpoints_guard",
+      "song_library_checkpoints_log",
+    ]) {
+      expect(code).toMatch(
+        new RegExp(
+          `CREATE TRIGGER ${fn} (BEFORE|AFTER) INSERT OR UPDATE OR DELETE`,
+        ),
+      );
+    }
+    expect(code).not.toMatch(/CREATE TRIGGER song_library_writers_log\b/);
+    // Every credit field is locked while agreed.
+    expect(code).toContain(
+      "ARRAY['user_id', 'display_name', 'role', 'is_lead', 'split_pct']",
     );
-    expect(migration).toMatch(
-      /CREATE CONSTRAINT TRIGGER song_library_checkpoints_splits_agreed[\s\S]*?DEFERRABLE INITIALLY DEFERRED/,
+    expect(code).toMatch(/AS splits_agreed\b/);
+  });
+
+  it("leaves checkpoint writes to managers and admins", () => {
+    const policy = code
+      .split('CREATE POLICY "Song library: write checkpoints"')[1]
+      .split(";")[0];
+    expect(policy).toMatch(/song_library_can_manage/);
+    expect(policy).not.toMatch(/song_library_my_song_ids/);
+  });
+
+  it("lets every active user read celebrate notes", () => {
+    expect(code).not.toMatch(
+      /CREATE POLICY "[^"]*writers only[^"]*" ON public\.song_library_celebrate_notes/,
     );
   });
 

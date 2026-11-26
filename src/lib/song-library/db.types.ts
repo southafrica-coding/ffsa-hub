@@ -113,7 +113,23 @@ export type SongNotificationReason = (typeof SONG_NOTIFICATION_REASONS)[number];
 /** Refine: 1–10 are the handbook questions (text in code), 11 is the bonus. */
 export const REFINE_BONUS_Q_NO = 11 as const;
 
-/** song_library_songs. stage/placement: managers only (trigger-enforced). */
+/**
+ * Writers may move a song only between these stages; moves into or out of
+ * demo_ready, share or celebrate are managers' (trigger-enforced).
+ */
+export const SONG_EARLY_STAGES = [
+  "idea_entry",
+  "writing",
+  "set_down",
+  "refine",
+  "written_needs_demo",
+] as const satisfies readonly SongStage[];
+
+/**
+ * song_library_songs. placement: managers only. stage: managers make any
+ * move, writers early moves only (SONG_EARLY_STAGES). Every move is logged
+ * with who made it.
+ */
 export interface SongLibrarySong {
   id: string;
   title: string;
@@ -201,9 +217,14 @@ export interface SongLibraryStageEvent {
   /**
    * stage (creation): { created: true, entry_point, holy_spirit_interrupt }
    * placement: { from, to }
-   * checkpoint: { checkpoint, done, note }
+   * checkpoint: { checkpoint, done, note }, plus { revoked: true, deleted,
+   *   cleared_confirmations } when a ticked credits_splits_agreed is
+   *   unticked or deleted (by_user = who revoked; null = service role)
    * version: { version_id, n, label, is_demo }
    * writer: { action: 'added' | 'removed', writer_id, user_id, display_name, is_lead }
+   *   | { action: 'confirmed', writer_id, user_id, display_name, split_pct }
+   *   | { action: 'unconfirmed', writer_id, user_id, display_name }
+   *   | { action: 'confirmations_cleared', writer_id, cleared_confirmations }
    */
   payload: Record<string, unknown>;
   by_user: string | null;
@@ -230,7 +251,7 @@ export interface SongLibraryShareStep {
   by_user: string | null;
 }
 
-/** Private to the song's writers (and admins). */
+/** Read by every active user; written by the song's writers (and admins). */
 export interface SongLibraryCelebrateNote {
   song_id: string;
   /** 1–5 */
@@ -244,8 +265,18 @@ export interface SongLibraryCelebrateNote {
 /**
  * song_library_writers. One is_lead per song (the uploader by default).
  * user_id null = no Hub account; display_name is then required.
- * Splits total 100.00 while credits_splits_agreed is ticked, and are
- * locked (no add/remove/split change) until it is unticked.
+ *
+ * Per-writer sign-off: an account writer confirms only their own row
+ * (send any non-null confirmed_at; the Hub stamps now() and
+ * confirmed_by). A no-account row is confirmed by a manager or admin.
+ * Agreed = splits total 100.00 and every row confirmed.
+ *
+ * Credit fields: user_id, display_name, role, is_lead, split_pct, plus
+ * adding/removing a row. Not agreed: a credit change clears every
+ * confirmation. Agreed: credit changes are refused (23514) until the
+ * agreement is revoked, by un-confirming a row (that writer, a manager or
+ * an admin) or a manager/admin unticking/deleting the checkpoint.
+ * Revoking clears every confirmation and is logged.
  */
 export interface SongLibraryWriter {
   id: string;
@@ -256,6 +287,10 @@ export interface SongLibraryWriter {
   is_lead: boolean;
   /** 0–100, two decimals. */
   split_pct: number | null;
+  /** Set by the Hub when confirmed; null = not confirmed. */
+  confirmed_at: string | null;
+  /** Who confirmed (the writer, or a manager/admin for no-account rows). */
+  confirmed_by: string | null;
   added_by: string | null;
   created_at: string;
   updated_at: string;
@@ -267,7 +302,10 @@ export interface SongLibraryProEntry {
   member_no?: string | null;
 }
 
-/** song_library_publishing. One row per song. ISRC is per version. */
+/**
+ * song_library_publishing. One row per song. ISRC is per version.
+ * Edited by the song's writers, managers and admins.
+ */
 export interface SongLibraryPublishing {
   song_id: string;
   /** Digits only, up to 10. */
@@ -280,7 +318,11 @@ export interface SongLibraryPublishing {
   updated_at: string;
 }
 
-/** Ticked = done_at not null. Writers may set credits_splits_agreed only. */
+/**
+ * Ticked = done_at not null. Managers (and admins) tick every kind except
+ * credits_splits_agreed, which is derived from the writers' confirmations
+ * (nobody ticks it by hand). Managers may untick or delete it to revoke.
+ */
 export interface SongLibraryCheckpoint {
   song_id: string;
   kind: SongCheckpointKind;
@@ -371,4 +413,10 @@ export interface SongLibrarySongStatus {
   is_stuck: boolean;
   is_finished: boolean;
   needs_demo: boolean;
+  /** Splits total 100.00 and every writer has confirmed. */
+  splits_agreed: boolean;
+  /** Sum of split_pct (0 when no splits). */
+  splits_total_pct: number;
+  writers_count: number;
+  writers_confirmed: number;
 }
