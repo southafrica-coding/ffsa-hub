@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["pdfjs-dist", "@napi-rs/canvas"],
   outputFileTracingIncludes: {
     "/api/store/admin/assets/[id]/render": ["./node_modules/pdfjs-dist/standard_fonts/**/*"],
+    "/api/store/admin/assets/[id]/complete": ["./node_modules/pdfjs-dist/standard_fonts/**/*"],
     "/api/store/page": ["./public/brand/fonts/RobotoCondensed-Bold.ttf"],
     "/api/store/library/[productId]/pdf": ["./public/brand/fonts/RobotoCondensed-Bold.ttf"],
   },

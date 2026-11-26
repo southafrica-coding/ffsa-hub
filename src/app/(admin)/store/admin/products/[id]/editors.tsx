@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { parseRandsToCents } from "@/lib/store/money";
-import { AUDIO_TYPES, formatMb, MAX_AUDIO_BYTES, MAX_PDF_BYTES } from "@/lib/store/upload";
+import { formatMb, MAX_AUDIO_BYTES, MAX_PDF_BYTES, resolveAudioContentType } from "@/lib/store/upload";
 import type { StoreVariant } from "@/lib/store/types";
 import { cn } from "@/lib/utils/cn";
 
@@ -113,35 +113,45 @@ export function PdfUpload({ productId }: { productId: string }) {
 
 export function AudioUpload({ productId, current }: { productId: string; current: { url: string } | null }) {
   const router = useRouter();
+  const inputId = useId();
   const [busy, setBusy] = useState<"idle" | "uploading" | "removing">("idle");
+  const [error, setError] = useState<string | null>(null);
 
   // Like the PDF: straight from this browser to the private store-audio
   // bucket on a signed URL, never through a Hub route.
-  async function upload(file: File) {
-    const type = file.type.toLowerCase();
-    if (!AUDIO_TYPES[type]) return toast.error("That isn't an audio file. Use MP3, M4A, WAV or OGG.");
-    if (file.size > MAX_AUDIO_BYTES) return toast.error(`That file is ${formatMb(file.size)}. The limit is ${formatMb(MAX_AUDIO_BYTES)}.`);
+  function fail(message: string) {
+    setError(message);
+    toast.error(message);
+  }
+
+  async function upload(file: File | undefined) {
+    if (!file) return fail("Choose an audio file to upload.");
+    // Some browsers leave file.type empty for an MP3; use the name too.
+    const type = resolveAudioContentType(file);
+    if (!type) return fail("That isn't an audio file. Use MP3, M4A, WAV or OGG.");
+    if (file.size > MAX_AUDIO_BYTES) return fail(`That file is ${formatMb(file.size)}. The limit is ${formatMb(MAX_AUDIO_BYTES)}.`);
     setBusy("uploading");
+    setError(null);
     try {
       const start = await fetch(`/api/store/admin/products/${productId}/audio`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filename: file.name, contentType: type, size: file.size }),
-      });
-      const s = await start.json();
-      if (!start.ok) throw new Error(s.error ?? "Couldn't start the upload");
-      const { error } = await createClient().storage.from(s.bucket).uploadToSignedUrl(s.path, s.token, file, { contentType: type === "audio/mp3" ? "audio/mpeg" : type });
-      if (error) throw new Error(error.message);
+      }).catch(() => null);
+      const s = await start?.json().catch(() => ({}));
+      if (!start?.ok) throw new Error(s?.error ?? "Couldn't start the upload");
+      const { error: upError } = await createClient().storage.from(s.bucket).uploadToSignedUrl(s.path, s.token, file, { contentType: type });
+      if (upError) throw new Error(upError.message);
       const done = await fetch(`/api/store/admin/products/${productId}/audio`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: s.path }),
-      });
-      const d = await done.json().catch(() => ({}));
-      if (!done.ok) throw new Error(d.error ?? "Couldn't save the music");
+      }).catch(() => null);
+      const d = await done?.json().catch(() => ({}));
+      if (!done?.ok) throw new Error(d?.error ?? "Couldn't save the music");
       toast.success("Music saved");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Upload failed");
+      fail(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setBusy("idle");
       router.refresh();
@@ -150,10 +160,11 @@ export function AudioUpload({ productId, current }: { productId: string; current
 
   async function remove() {
     setBusy("removing");
+    setError(null);
     const res = await fetch(`/api/store/admin/products/${productId}/audio`, { method: "DELETE" }).catch(() => null);
     const body = await res?.json().catch(() => ({}));
     setBusy("idle");
-    if (!res?.ok) return toast.error(body?.error ?? "Couldn't remove the music");
+    if (!res?.ok) return fail(body?.error ?? "Couldn't remove the music");
     toast.success("Music removed");
     router.refresh();
   }
@@ -167,9 +178,22 @@ export function AudioUpload({ productId, current }: { productId: string; current
         <audio controls preload="none" src={current.url} className="w-full max-w-[420px]" />
       )}
       <div className="flex flex-wrap items-center gap-3">
-        <label className={cn("inline-flex min-h-11 cursor-pointer items-center border border-ink px-4 font-mono text-[10px] font-bold uppercase tracking-[0.14em] hover:bg-bone", busy !== "idle" && "pointer-events-none opacity-60")}>
+        {/* The input covers the label so a click always hits the control
+            (sr-only + implicit label association can fail to fire onChange). */}
+        <label htmlFor={inputId} className={cn("relative inline-flex min-h-11 cursor-pointer items-center overflow-hidden border border-ink px-4 font-mono text-[10px] font-bold uppercase tracking-[0.14em] hover:bg-bone", busy !== "idle" && "pointer-events-none opacity-60")}>
           {busy === "uploading" ? "Uploading…" : current ? "Replace music" : "Upload music"}
-          <input type="file" accept="audio/*" className="sr-only" disabled={busy !== "idle"} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          <input
+            id={inputId}
+            type="file"
+            accept="audio/mpeg,audio/mp3,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/ogg,audio/webm,.mp3,.m4a,.aac,.wav,.ogg,.oga,.webm"
+            className="absolute inset-0 cursor-pointer opacity-0"
+            disabled={busy !== "idle"}
+            onChange={(e) => {
+              const chosen = e.target.files?.[0];
+              e.target.value = "";
+              void upload(chosen);
+            }}
+          />
         </label>
         {current && (
           <button type="button" onClick={remove} disabled={busy !== "idle"} className="inline-flex min-h-11 items-center px-2 font-mono text-[10px] font-bold uppercase tracking-[0.14em] underline decoration-2 underline-offset-4 disabled:opacity-60">
@@ -177,6 +201,9 @@ export function AudioUpload({ productId, current }: { productId: string; current
           </button>
         )}
       </div>
+      {error && (
+        <p role="alert" className="text-[13px] text-destructive">{error}</p>
+      )}
       <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-tertiary)]">MP3, M4A, WAV or OGG · up to {formatMb(MAX_AUDIO_BYTES)}</p>
     </div>
   );

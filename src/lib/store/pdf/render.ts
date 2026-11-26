@@ -47,7 +47,19 @@ function standardFontDataUrl(): string {
 async function loadPdfJs(): Promise<PdfJs> {
   // Dynamic import: pdfjs is ESM-only and heavy; only the render route
   // and the admin upload pay for it.
-  return import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  // In Node, pdfjs disables Web Workers and sets up a "fake worker" that
+  // still does `import(GlobalWorkerOptions.workerSrc)`, defaulting to
+  // "./pdf.worker.mjs". nft does not follow that string, so the file was
+  // missing from the Vercel function at /var/task/.../pdf.worker.mjs
+  // ("Setting up fake worker failed"). An explicit import traces the
+  // worker into the bundle, and assigning globalThis.pdfjsWorker lets
+  // the fake-worker path use it without a second lookup.
+  // The worker entry ships no types; the runtime export is the module itself.
+  // @ts-expect-error pdfjs has no declaration for the worker entry.
+  const worker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = worker;
+  return pdfjs;
 }
 
 export async function countPdfPages(pdf: Uint8Array): Promise<number> {

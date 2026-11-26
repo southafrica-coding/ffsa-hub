@@ -123,6 +123,29 @@ export const AUDIO_TYPES: Record<string, string> = {
 /** The type Storage is told (its allowed list has no audio/mp3). */
 export const storedAudioType = (contentType: string) => (contentType === "audio/mp3" ? "audio/mpeg" : contentType);
 
+const AUDIO_EXT_TYPES: Record<string, string> = {
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  webm: "audio/webm",
+};
+
+/**
+ * MIME we'll send to Storage: the browser type if we know it, otherwise
+ * the extension. Some browsers (and some MP3s) hand over an empty
+ * `file.type`, which used to fail the allow-list before the signed
+ * upload even started.
+ */
+export function resolveAudioContentType(file: { name: string; type?: string | null }): string | null {
+  const type = (file.type ?? "").trim().toLowerCase();
+  if (AUDIO_TYPES[type]) return storedAudioType(type);
+  const ext = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "";
+  return AUDIO_EXT_TYPES[ext] ?? null;
+}
+
 export type AudioUploadRequest = { filename: string; contentType: string; size: number; ext: string };
 
 /** Check the metadata the browser sends before it gets a music upload URL. */
@@ -131,11 +154,14 @@ export function validateAudioUpload(
 ): { ok: true; value: AudioUploadRequest } | { ok: false; error: string; status: 400 | 413 } {
   const b = (body ?? {}) as Record<string, unknown>;
   const filename = typeof b.filename === "string" ? b.filename.trim() : "";
-  const contentType = typeof b.contentType === "string" ? b.contentType.trim().toLowerCase() : "";
   const size = typeof b.size === "number" ? b.size : NaN;
   if (!filename || filename.length > 200) return { ok: false, error: "Give the file a name (up to 200 characters).", status: 400 };
+  const contentType = resolveAudioContentType({
+    name: filename,
+    type: typeof b.contentType === "string" ? b.contentType : "",
+  });
+  if (!contentType) return { ok: false, error: "That isn't an audio file. Use MP3, M4A, WAV or OGG.", status: 400 };
   const ext = AUDIO_TYPES[contentType];
-  if (!ext) return { ok: false, error: "That isn't an audio file. Use MP3, M4A, WAV or OGG.", status: 400 };
   if (!Number.isInteger(size) || size <= 0) return { ok: false, error: "That file is empty.", status: 400 };
   if (size > MAX_AUDIO_BYTES) {
     return { ok: false, error: `That file is ${formatMb(size)}. The limit is ${formatMb(MAX_AUDIO_BYTES)}; export it smaller and try again.`, status: 413 };
