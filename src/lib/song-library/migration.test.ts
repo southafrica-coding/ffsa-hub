@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   SONG_CHECKPOINT_KINDS,
   SONG_HELP_CATEGORIES,
+  SONG_NOTIFICATION_KINDS,
   SONG_PLACEMENTS,
   SONG_SHARE_KINDS,
   SONG_STAGES,
@@ -200,6 +201,72 @@ describe("migration 419 song library", () => {
     );
     expect(rollback).toMatch(
       /DELETE FROM public\.services WHERE service_key = 'song_library'/,
+    );
+  });
+});
+
+describe("migration 422 song library new_version DMs", () => {
+  const m422 = readFileSync(
+    path.join(ROOT, "supabase/migrations/422_song_library_new_version_dm.sql"),
+    "utf8",
+  );
+  const r422 = readFileSync(
+    path.join(
+      ROOT,
+      "supabase/rollbacks/422_song_library_new_version_dm_rollback.sql",
+    ),
+    "utf8",
+  );
+  const code422 = m422.replace(/--.*$/gm, "");
+  const rcode422 = r422.replace(/--.*$/gm, "");
+
+  it("keeps SONG_NOTIFICATION_KINDS in step with the kind CHECK", () => {
+    expect(squash(code422)).toContain(
+      `CHECK (kind IN (${quoted(SONG_NOTIFICATION_KINDS)}))`,
+    );
+    // 419's original CHECK is the list without new_version.
+    expect(squash(code)).toContain(
+      `kind IN (${quoted(SONG_NOTIFICATION_KINDS.filter((k) => k !== "new_version"))})`,
+    );
+  });
+
+  it("requires stage_event_id for new_version and keeps the other rules", () => {
+    expect(squash(code422)).toContain(
+      "((kind IN ('stage_moved', 'new_version')) = (stage_event_id IS NOT NULL)) AND ((kind = 'help_asked') = (help_request_id IS NOT NULL))",
+    );
+  });
+
+  it("is idempotent: CHECKs dropped and re-added by name, index IF NOT EXISTS", () => {
+    for (const name of [
+      "song_library_notifications_kind_check",
+      "song_library_notifications_refs",
+    ]) {
+      expect(code422).toContain(`DROP CONSTRAINT IF EXISTS ${name};`);
+      expect(code422).toContain(`ADD CONSTRAINT ${name}`);
+    }
+    expect(squash(code422)).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS song_library_notifications_new_version_key ON public.song_library_notifications (user_id, stage_event_id) WHERE kind = 'new_version';",
+    );
+  });
+
+  it("changes no policies, grants or helpers", () => {
+    expect(code422).not.toMatch(/\b(POLICY|GRANT|REVOKE|FUNCTION|TRIGGER)\b/i);
+    expect(code422 + rcode422).not.toMatch(/song_library_can_lead|publishing/);
+  });
+
+  it("rollback refuses while new_version rows exist unless flagged", () => {
+    expect(rcode422).toMatch(/422 rollback refused/);
+    expect(rcode422).toMatch(
+      /current_setting\('song_library\.rollback_drops_new_version', true\)/,
+    );
+    expect(rcode422).toContain(
+      "DELETE FROM public.song_library_notifications WHERE kind = 'new_version'",
+    );
+    expect(rcode422).toContain(
+      "DROP INDEX IF EXISTS public.song_library_notifications_new_version_key;",
+    );
+    expect(squash(rcode422)).toContain(
+      "((kind = 'stage_moved') = (stage_event_id IS NOT NULL)) AND ((kind = 'help_asked') = (help_request_id IS NOT NULL))",
     );
   });
 });
