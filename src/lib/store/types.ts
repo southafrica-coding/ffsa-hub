@@ -9,7 +9,8 @@
 export type ProductKind = "digital" | "subscription" | "physical" | "bundle";
 export type ProductStatus = "draft" | "published" | "archived";
 export type OrderStatus = "pending" | "paid" | "cancelled" | "refunded";
-export type PaymentMethod = "payfast" | "eft" | "stripe";
+/** "free": a coupon took the order to R0 (413). Never sent to a provider. */
+export type PaymentMethod = "payfast" | "eft" | "stripe" | "free";
 export type FulfilmentMethod = "none" | "delivery" | "collect";
 export type ItemPurpose = "self" | "gift" | "code_pack";
 export type FulfilmentStatus = "preorder" | "to_pack" | "ready_to_collect" | "shipped" | "collected" | "delivered";
@@ -95,6 +96,9 @@ export type StoreOrder = {
   payment_method: PaymentMethod;
   subtotal_cents: number;
   delivery_cents: number;
+  /** Coupon taken off the merchandise (413). total = subtotal + delivery − discount. */
+  discount_cents: number;
+  coupon_id: string | null;
   total_cents: number;
   fulfilment_method: FulfilmentMethod;
   delivery_address: DeliveryAddress | null;
