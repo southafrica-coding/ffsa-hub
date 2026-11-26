@@ -1,0 +1,4 @@
+360px light: clientWidth=360 scrollWidth=360 NO overflow
+390px light: clientWidth=390 scrollWidth=390 NO overflow
+430px light: clientWidth=430 scrollWidth=430 NO overflow
+390px dark: clientWidth=390 scrollWidth=390 NO overflow
