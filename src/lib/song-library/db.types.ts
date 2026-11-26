@@ -277,12 +277,17 @@ export interface SongLibraryCelebrateNote {
  * confirmed_by). A no-account row is confirmed by a manager or admin.
  * Agreed = splits total 100.00 and every row confirmed.
  *
+ * Withdrawing (confirmed_at -> null): while sign-off is partial, the
+ * writer themself, a manager or an admin. Once agreed, only a manager or
+ * an admin (or the service role); a writer gets 42501
+ * insufficient_privilege (migration 423).
+ *
  * Credit fields: user_id, display_name, role, is_lead, split_pct, plus
  * adding/removing a row. Not agreed: a credit change clears every
- * confirmation. Agreed: credit changes are refused (23514) until the
- * agreement is revoked, by un-confirming a row (that writer, a manager or
- * an admin) or a manager/admin unticking/deleting the checkpoint.
- * Revoking clears every confirmation and is logged.
+ * confirmation. Agreed: credit changes are refused (23514) until a
+ * manager or admin revokes the agreement, by un-confirming a row or by
+ * unticking/deleting the checkpoint. Revoking clears every confirmation
+ * and is logged.
  */
 export interface SongLibraryWriter {
   id: string;
@@ -327,7 +332,8 @@ export interface SongLibraryPublishing {
 /**
  * Ticked = done_at not null. Managers (and admins) tick every kind except
  * credits_splits_agreed, which is derived from the writers' confirmations
- * (nobody ticks it by hand). Managers may untick or delete it to revoke.
+ * (nobody ticks it by hand). Only managers and admins may untick or delete
+ * it, which revokes the agreement; writers cannot.
  */
 export interface SongLibraryCheckpoint {
   song_id: string;

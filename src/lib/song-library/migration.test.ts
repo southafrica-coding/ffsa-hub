@@ -270,3 +270,48 @@ describe("migration 422 song library new_version DMs", () => {
     );
   });
 });
+
+describe("migration 423 song library agreed revoke", () => {
+  const m423 = readFileSync(
+    path.join(ROOT, "supabase/migrations/423_song_library_agreed_revoke.sql"),
+    "utf8",
+  );
+  const r423 = readFileSync(
+    path.join(
+      ROOT,
+      "supabase/rollbacks/423_song_library_agreed_revoke_rollback.sql",
+    ),
+    "utf8",
+  );
+  const code423 = m423.replace(/--.*$/gm, "");
+  const fnOf = (sql: string): string => {
+    const start = sql.indexOf(
+      "CREATE OR REPLACE FUNCTION public.song_library_writers_before()",
+    );
+    expect(start).toBeGreaterThanOrEqual(0);
+    return sql.slice(start, sql.indexOf("\n$$;\n", start) + 5);
+  };
+
+  it("only replaces song_library_writers_before, idempotently", () => {
+    const fns = [
+      ...code423.matchAll(/CREATE (?:OR REPLACE )?FUNCTION public\.(\w+)/g),
+    ].map((m) => m[1]);
+    expect(fns).toEqual(["song_library_writers_before"]);
+    expect(code423).not.toMatch(
+      /\b(CREATE POLICY|DROP POLICY|GRANT|REVOKE|CREATE TRIGGER|DROP TRIGGER|ALTER TABLE)\b/,
+    );
+    expect(code423).not.toMatch(/song_library_notifications/);
+  });
+
+  it("refuses a non-manager revoke while agreed with 42501", () => {
+    const body = fnOf(m423);
+    expect(body).toMatch(
+      /NOT \(public\.song_library_is_admin\(\) OR public\.song_library_can_manage\(\)\)[\s\S]*?c\.kind = 'credits_splits_agreed'[\s\S]*?c\.done_at IS NOT NULL[\s\S]*?only a Song Library manager or an admin can revoke the agreement'\s+USING ERRCODE = '42501'/,
+    );
+  });
+
+  it("rollback restores 419's song_library_writers_before exactly", () => {
+    expect(fnOf(r423)).toBe(fnOf(migration));
+    expect(fnOf(m423)).not.toBe(fnOf(migration));
+  });
+});
