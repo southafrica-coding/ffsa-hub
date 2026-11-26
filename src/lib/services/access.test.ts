@@ -48,7 +48,7 @@ function client(world: DepartmentWorld, userId = MEMBER) {
 describe("service owner seed", () => {
   it("gives owners own and manage, and opens gear_hire to everyone", () => {
     const open = SERVICE_OWNER_SEED.filter((row) => row.open_to_all).map((row) => row.service_key).sort();
-    expect(open).toEqual(["evangelism", "gear_hire", "prayer_room", "spaces", "vehicles"]);
+    expect(open).toEqual(["evangelism", "gear_hire", "prayer_room", "song_library", "spaces", "vehicles"]);
     const gearOpen = SERVICE_OWNER_SEED.find((row) => row.service_key === "gear_hire" && row.open_to_all);
     expect(gearOpen?.admin_href).toBe("/hire");
     expect(
@@ -57,6 +57,12 @@ describe("service owner seed", () => {
       )
     ).toBe(true);
     expect(SERVICE_OWNER_SEED.some((row) => row.service_key === "brand_kit" && row.open_to_all)).toBe(false);
+    const songLibrary = SERVICE_OWNER_SEED.filter((row) => row.service_key === "song_library");
+    expect(songLibrary).toEqual([
+      expect.objectContaining({ ministry_slug: "prayer_and_worship", capability: "own", member_role: "member", admin_href: "/song-library" }),
+      expect.objectContaining({ ministry_slug: "prayer_and_worship", capability: "manage", member_role: "member", admin_href: "/song-library" }),
+      expect.objectContaining({ ministry_slug: null, capability: "use", open_to_all: true, admin_href: "/song-library" }),
+    ]);
     expect(SERVICE_OWNER_SEED.some((row) => row.service_key === "evangelism" && row.capability === "moderate")).toBe(false);
     expect(SERVICE_OWNER_SEED.find((row) => row.any_point_leader)).toMatchObject({
       service_key: "contacts",
