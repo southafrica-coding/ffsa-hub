@@ -55,6 +55,9 @@
 -- l10_teams:          read = access, write = oversee
 -- l10_team_members:   read = access, write = manage
 -- all other L10 rows: read/write = access
+-- attendee identity:  trigger l10_meeting_attendees_identity_guard;
+--                     meeting_id / profile_id / team_id fixed for
+--                     signed-in callers (42501 l10_attendee_immutable)
 -- attendee rating:    trigger l10_meeting_attendees_rating_guard; only
 --                     the attendee, team leaders, overseers or the
 --                     meeting facilitator may set it (42501
@@ -203,27 +206,75 @@ GRANT EXECUTE ON FUNCTION public.l10_can_manage_team(uuid) TO authenticated, ser
 
 -- Segment timings shape check (used by l10_meetings below).
 -- An object whose keys are L10 segments and whose values are objects
--- with only started_at / ended_at (ISO timestamp strings or null).
+-- with only started_at / ended_at. Each is null or a strict ISO-8601
+-- timestamp WITH an offset (Z or ±HH:MM / ±HHMM), e.g. JS toISOString():
+--   2026-11-26T09:00:00.000Z, 2026-11-26T09:00+02:00
+-- The value must also cast to timestamptz (so 2026-02-30 is refused),
+-- and ended_at >= started_at when both are set.
+-- IMMUTABLE is honest: the regex requires an explicit offset and a fixed
+-- YYYY-MM-DDTHH:MM layout, so the cast does not depend on the session's
+-- TimeZone or DateStyle. A failed cast is caught (data_exception) and
+-- reported as false, so the CHECK fails with 23514 and never 22xxx.
 CREATE OR REPLACE FUNCTION public.l10_segment_timings_valid(p jsonb)
 RETURNS boolean
-LANGUAGE sql
+LANGUAGE plpgsql
 IMMUTABLE
 SET search_path = ''
 AS $$
-  SELECT jsonb_typeof(p) = 'object'
-     AND NOT EXISTS (
-       SELECT 1
-         FROM jsonb_each(p) e
-        WHERE e.key NOT IN ('segue', 'scorecard', 'rock_review', 'headlines',
-                            'todo_list', 'ids', 'conclude')
-           OR jsonb_typeof(e.value) <> 'object'
-           OR EXISTS (
-             SELECT 1
-               FROM jsonb_each(e.value) f
-              WHERE f.key NOT IN ('started_at', 'ended_at')
-                 OR jsonb_typeof(f.value) NOT IN ('string', 'null')
-           )
-     );
+DECLARE
+  seg   record;
+  fld   record;
+  txt   text;
+  ts    timestamptz;
+  s_at  timestamptz;
+  e_at  timestamptz;
+BEGIN
+  IF p IS NULL OR jsonb_typeof(p) <> 'object' THEN
+    RETURN false;
+  END IF;
+
+  FOR seg IN SELECT key, value FROM jsonb_each(p) LOOP
+    IF seg.key NOT IN ('segue', 'scorecard', 'rock_review', 'headlines',
+                       'todo_list', 'ids', 'conclude')
+       OR jsonb_typeof(seg.value) <> 'object' THEN
+      RETURN false;
+    END IF;
+
+    s_at := NULL;
+    e_at := NULL;
+    FOR fld IN SELECT key, value FROM jsonb_each(seg.value) LOOP
+      IF fld.key NOT IN ('started_at', 'ended_at') THEN
+        RETURN false;
+      END IF;
+      CONTINUE WHEN jsonb_typeof(fld.value) = 'null';
+      IF jsonb_typeof(fld.value) <> 'string' THEN
+        RETURN false;
+      END IF;
+
+      txt := fld.value #>> '{}';
+      IF txt !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.[0-9]{1,6})?)?(Z|[+-]([01][0-9]|2[0-3]):?[0-5][0-9])$' THEN
+        RETURN false;
+      END IF;
+      BEGIN
+        ts := txt::timestamptz;
+      EXCEPTION WHEN data_exception THEN
+        RETURN false;
+      END;
+
+      IF fld.key = 'started_at' THEN
+        s_at := ts;
+      ELSE
+        e_at := ts;
+      END IF;
+    END LOOP;
+
+    IF s_at IS NOT NULL AND e_at IS NOT NULL AND e_at < s_at THEN
+      RETURN false;
+    END IF;
+  END LOOP;
+
+  RETURN true;
+END;
 $$;
 
 REVOKE ALL ON FUNCTION public.l10_segment_timings_valid(jsonb) FROM PUBLIC, anon;
@@ -264,7 +315,7 @@ CREATE INDEX IF NOT EXISTS l10_meetings_facilitator_id_idx ON public.l10_meeting
 CREATE INDEX IF NOT EXISTS l10_meetings_created_by_idx ON public.l10_meetings (created_by);
 
 COMMENT ON COLUMN public.l10_meetings.segment_timings IS
-  'Keys: segue, scorecard, rock_review, headlines, todo_list, ids, conclude. Each value: {"started_at": ISO|null, "ended_at": ISO|null}.';
+  'Keys: segue, scorecard, rock_review, headlines, todo_list, ids, conclude. Each value: {"started_at": ISO-8601 with offset|null, "ended_at": same|null}; ended_at >= started_at.';
 COMMENT ON COLUMN public.l10_meetings.recap_posted_at IS
   'Idempotency claim for the recap posted to l10_teams.slack_channel_id. Set once; null = not posted.';
 COMMENT ON COLUMN public.l10_meetings.followup_sent_at IS
@@ -372,6 +423,41 @@ DROP TRIGGER IF EXISTS l10_meeting_attendees_rating_guard ON public.l10_meeting_
 CREATE TRIGGER l10_meeting_attendees_rating_guard
   BEFORE INSERT OR UPDATE ON public.l10_meeting_attendees
   FOR EACH ROW EXECUTE FUNCTION public.l10_meeting_attendees_rating_guard();
+
+-- Attendee identity. An attendee row's meeting_id, profile_id and
+-- team_id never change for signed-in callers, overseers and admins
+-- included: otherwise a member could move their rated row to another
+-- meeting. To fix a wrong row, delete it and insert a new one (RLS
+-- allows that for anyone who manages the team). Only service_role and
+-- the table owner may change these columns. Raises 42501
+-- l10_attendee_immutable. SECURITY INVOKER for the same reason as the
+-- rating guard; it sorts before it, so it fires first.
+CREATE OR REPLACE FUNCTION public.l10_meeting_attendees_identity_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF current_user NOT IN ('authenticated', 'anon') THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.meeting_id IS DISTINCT FROM OLD.meeting_id
+     OR NEW.profile_id IS DISTINCT FROM OLD.profile_id
+     OR NEW.team_id IS DISTINCT FROM OLD.team_id THEN
+    RAISE EXCEPTION 'l10_attendee_immutable'
+      USING ERRCODE = '42501',
+            DETAIL = 'meeting_id, profile_id and team_id cannot change on an attendee row. Delete it and insert a new one.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.l10_meeting_attendees_identity_guard() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS l10_meeting_attendees_identity_guard ON public.l10_meeting_attendees;
+CREATE TRIGGER l10_meeting_attendees_identity_guard
+  BEFORE UPDATE OF meeting_id, profile_id, team_id ON public.l10_meeting_attendees
+  FOR EACH ROW EXECUTE FUNCTION public.l10_meeting_attendees_identity_guard();
 
 -- ────────────────────────────────────────────────────────────
 -- 4. Rocks — extend 320
