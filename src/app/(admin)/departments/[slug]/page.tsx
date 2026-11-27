@@ -6,6 +6,7 @@ import { requireSignedIn } from "@/lib/departments/session";
 import { DepartmentView } from "./department-view";
 import { departmentHasL10Teams } from "./l10/has-l10-teams";
 import { departmentHasSongwriting } from "./songwriting/has-songwriting";
+import { NO_PEOPLE_MANAGER, peopleManagerAccess } from "./people-manager/_lib/access";
 
 export const metadata: Metadata = { title: "Department" };
 export const dynamic = "force-dynamic";
@@ -51,6 +52,8 @@ export default async function DepartmentPage({
           departmentHasSongwriting(supabase, model.department.slug),
         ])
       : [false, false];
+  const peopleManager =
+    tab === "overview" || tab === "people" ? await peopleManagerAccess(supabase, model) : NO_PEOPLE_MANAGER;
 
   return (
     <DepartmentView
@@ -60,6 +63,7 @@ export default async function DepartmentPage({
       services={services}
       hasL10Teams={hasL10Teams}
       hasSongwriting={hasSongwriting}
+      peopleManager={peopleManager}
     />
   );
 }

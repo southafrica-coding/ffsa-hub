@@ -12,6 +12,8 @@ import { StatusPill } from "@/components/ffsa";
 import { DataTable, EmptyNote, LocalTabs, PageHeading, SectionHeading, StackLink } from "../local-ui";
 import { l10Pages } from "@/components/departments/l10/api";
 import { songwritingHref } from "@/components/departments/songwriting/header";
+import { pmPaths } from "@/components/departments/people-manager/client";
+import { PeopleSubnav } from "@/components/departments/people-manager/header";
 
 const ROCK_LABEL: Record<RockStatus, string> = {
   on_track: "On track",
@@ -26,6 +28,7 @@ export function DepartmentView({
   services,
   hasL10Teams,
   hasSongwriting,
+  peopleManager,
 }: {
   model: DepartmentHome;
   tab: DepartmentTab;
@@ -35,6 +38,8 @@ export function DepartmentView({
   hasL10Teams?: boolean;
   /** From the page loader: this department has songwriting data the viewer can see. */
   hasSongwriting?: boolean;
+  /** From the page loader: the viewer can use this department's People Manager (member, leader or admin). */
+  peopleManager?: { canUse: boolean; canRequest: boolean; canManage: boolean };
 }) {
   const { department, access } = model;
   const leaders = (model.people ?? []).filter((person) => person.capacity === "leader");
@@ -66,8 +71,17 @@ export function DepartmentView({
           </dl>
           {hasL10Teams ? <L10HomeLinkView slug={department.slug} /> : null}
           {hasSongwriting ? <SongwritingHomeLinkView slug={department.slug} /> : null}
+          {peopleManager?.canUse ? <PeopleManagerHomeLinkView slug={department.slug} canManage={peopleManager.canManage} /> : null}
         </>
       )}
+      {tab === "people" && access.canSeeDepartmentDetail && peopleManager?.canUse ? (
+        <PeopleSubnav
+          slug={department.slug}
+          active="roster"
+          canRequest={peopleManager.canRequest}
+          canManage={peopleManager.canManage}
+        />
+      ) : null}
       {tab === "people" && access.canSeeDepartmentDetail && <PeopleTab model={model} />}
       {tab === "okrs" && access.canSeeDepartmentDetail && <OkrsTab model={model} />}
       {tab === "rocks" && access.canSeeDepartmentDetail && <RocksTab model={model} />}
@@ -287,3 +301,9 @@ export function SongwritingHomeLinkView({ slug }: { slug: string }) {
   return <StackLink href={songwritingHref(slug)} title="Songwriting" meta="Nations, trainings and the Song Library" />;
 }
 
+export function PeopleManagerHomeLinkView({ slug, canManage }: { slug: string; canManage: boolean }) {
+  const paths = pmPaths(slug);
+  return (
+    <StackLink href={canManage ? paths.home : paths.mine} title="People Manager" meta="Time off, who's away, and block-outs" />
+  );
+}
