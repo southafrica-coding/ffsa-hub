@@ -5,7 +5,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import pw from "@/components/song-library/pw.module.css";
 import { addDays, daysBetween, saHolidayName } from "@/lib/people-manager/days";
 import { errorCopy, pmApi, pmPaths } from "./client";
-import { dayLabel, isWeekend, monthTitle, rangeLabel } from "./format";
+import { blockoutReasonLabel, dayLabel, isWeekend, monthTitle, rangeLabel } from "./format";
 import pm from "./pm.module.css";
 import type { PmAway, PmBlockout, PmOverview, PmRequestList } from "./types";
 import { BlockTag, Loading, SectionBar } from "./ui";
@@ -252,17 +252,20 @@ export function BlockoutsEditor({ slug }: { slug: string }) {
 
       <SectionBar title="Coming up" meta={`${upcoming.length} block-out${upcoming.length === 1 ? "" : "s"}`} />
       {upcoming.length ? (
-        upcoming.map((b) => (
-          <button key={b.id} type="button" className={pm.rowBtn} aria-pressed={b.id === editingId} onClick={() => edit(b)}>
-            <div className={pm.reqTop}>
-              <div className={pm.reqWhat}>
-                <div className={pm.reqK}>{rangeLabel(b.start_date, b.end_date)}</div>
-                <div className={pm.reqS}>{b.reason ?? "No reason given"}</div>
+        upcoming.map((b) => {
+          const reason = blockoutReasonLabel(b.reason, true);
+          return (
+            <button key={b.id} type="button" className={pm.rowBtn} aria-pressed={b.id === editingId} onClick={() => edit(b)}>
+              <div className={pm.reqTop}>
+                <div className={pm.reqWhat}>
+                  <div className={pm.reqK}>{rangeLabel(b.start_date, b.end_date)}</div>
+                  {reason ? <div className={pm.reqS}>{reason}</div> : null}
+                </div>
+                <BlockTag />
               </div>
-              <BlockTag />
-            </div>
-          </button>
-        ))
+            </button>
+          );
+        })
       ) : blockouts.loading ? (
         <Loading />
       ) : (

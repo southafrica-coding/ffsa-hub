@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import pw from "@/components/song-library/pw.module.css";
 import { errorCopy, pmApi, pmPaths } from "./client";
-import { fmtDays, rangeLabel, shortTypeLabel } from "./format";
+import { blockoutReasonLabel, fmtDays, rangeLabel, shortTypeLabel } from "./format";
 import pm from "./pm.module.css";
 import { RequestCard } from "./request-card";
 import { RequestDetail } from "./request-detail";
@@ -37,13 +37,21 @@ export function YearTotals({ usage }: { usage: PmUsage[] }) {
   );
 }
 
-export function BlockoutRow({ b }: { b: Pick<PmBlockout, "start_date" | "end_date" | "reason"> }) {
+export function BlockoutRow({
+  b,
+  own,
+}: {
+  b: Pick<PmBlockout, "start_date" | "end_date" | "reason">;
+  /** The viewer's own block-out (empty reason may say "No reason given"). */
+  own: boolean;
+}) {
+  const reason = blockoutReasonLabel(b.reason, own);
   return (
     <div className={pm.req}>
       <div className={pm.reqTop}>
         <div className={pm.reqWhat}>
           <div className={pm.reqK}>{rangeLabel(b.start_date, b.end_date)}</div>
-          <div className={pm.reqS}>{b.reason ?? "No reason given"}</div>
+          {reason ? <div className={pm.reqS}>{reason}</div> : null}
         </div>
         <BlockTag />
       </div>
@@ -118,7 +126,7 @@ export function MyTimeOff({ slug, focusRequestId }: { slug: string; focusRequest
       <SectionBar title="My block-outs" meta="not leave · no approval" />
       {blockouts.data ? (
         blockouts.data.blockouts.length ? (
-          blockouts.data.blockouts.map((b) => <BlockoutRow key={b.id} b={b} />)
+          blockouts.data.blockouts.map((b) => <BlockoutRow key={b.id} b={b} own />)
         ) : (
           <p className={pm.loading}>No block-outs coming up.</p>
         )

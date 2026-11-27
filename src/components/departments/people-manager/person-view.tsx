@@ -180,7 +180,7 @@ export function PersonView({ slug, userId }: { slug: string; userId: string }) {
       <SectionBar title="Block-outs" meta={`${blockouts.data?.blockouts.length ?? 0} this year`} />
       {blockouts.data ? (
         blockouts.data.blockouts.length ? (
-          blockouts.data.blockouts.map((b) => <BlockoutRow key={b.id} b={b} />)
+          blockouts.data.blockouts.map((b) => <BlockoutRow key={b.id} b={b} own={self} />)
         ) : (
           <p className={pm.loading}>No block-outs in {year}.</p>
         )
