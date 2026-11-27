@@ -186,7 +186,7 @@ export function parseSongPatch(body: unknown, songId: string): Parsed<Row> {
     {
       ...SONG_FIELDS,
       chart_path: (v) =>
-        v === null ? ok(null) : typeof v === "string" && v.startsWith(`${songId}/chart-`) && !v.includes("..") ? ok(v) : bad("must be a chart uploaded to this song"),
+        v === null ? ok(null) : isChartPathFor(songId, v) ? ok(v) : bad("must be a chart uploaded to this song"),
       current_version_id: uuid(true),
     },
     [],
@@ -251,6 +251,17 @@ const UPLOAD_PATH_RE = /^([0-9a-f-]{36})\/(v|chart)-[0-9a-f-]{36}\.[a-z0-9]{2,5}
 export function isVersionPathFor(songId: string, path: unknown): path is string {
   const m = typeof path === "string" ? UPLOAD_PATH_RE.exec(path) : null;
   return !!m && m[1] === songId && m[2] === "v";
+}
+
+/**
+ * Only chart paths this API handed out: {song_id}/chart-{uuid}.{ext}, in
+ * this song's own prefix of the song-library bucket. The pattern is anchored,
+ * so a leading slash, "..", another song's prefix or a nested folder never
+ * match.
+ */
+export function isChartPathFor(songId: string, path: unknown): path is string {
+  const m = typeof path === "string" ? UPLOAD_PATH_RE.exec(path) : null;
+  return !!m && m[1] === songId && m[2] === "chart";
 }
 
 export function parseVersionCreate(body: unknown, songId: string): Parsed<Row> {

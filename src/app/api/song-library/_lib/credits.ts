@@ -46,7 +46,7 @@ export async function addWriter(request: Request, songId: string) {
   if (!b.ok) return b.response;
   const parsed = parseWriterCreate(b.value);
   if (!parsed.ok) return invalid(parsed);
-  if (parsed.value.user_id && loaded.writers.some((w) => w.user_id === parsed.value.user_id)) return coded(409, "That person is already a writer on this song", "song_writer_exists");
+  if (parsed.value.user_id && loaded.writers.some((w) => w.user_id === parsed.value.user_id)) return coded(409, "That person is already a writer on this song", SL_CODES.duplicate);
   if (parsed.value.user_id) {
     const u = await loaded.ctx.admin.from("users").select("id").eq("id", parsed.value.user_id).maybeSingle();
     if (u.error) return dbError(u.error);

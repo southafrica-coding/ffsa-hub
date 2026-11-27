@@ -12,6 +12,16 @@
 // "already sent". The DM goes out only after the claim; if Slack fails the
 // claim is released so a retry can send it. Production only, the same
 // gate as the new-song DMs (canSendSongLibraryDm).
+//
+// Repeat limit: a helper who already has a help_asked claim for the SAME
+// song, from another help request, made within HELP_DM_REPEAT_WINDOW_MS,
+// covering every category they would be DMed about now, is skipped
+// ("recently-sent", no claim). So opening several help requests for the
+// same song and category does not re-DM the same helpers. A new category,
+// another song, or the window passing DMs them again. Uses 419's claims
+// (song_library_notifications); no new table. Residual: two requests
+// created at the same instant can both pass the check before either has
+// claimed (at most one extra DM each).
 
 import { SL_TABLES, type Client } from "@/lib/song-library/types";
 import { canSendSongLibraryDm, realSongDmDeps, songUrl, type ClaimResult, type SongDmDeps, type SongDmMessage } from "./song-library-notify";
@@ -89,9 +99,46 @@ export function buildHelpAskedDm(input: { asker: string; title: string; categori
   return { text: `${input.asker} is asking for help on “${input.title}” (${needs}). ${input.url}`, blocks };
 }
 
+// ── Repeat limit ───────────────────────────────────────────
+
+/** How long a help DM for a song and category stops another one to the same helper. */
+export const HELP_DM_REPEAT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Per helper, the categories they were already DMed (or are being DMed)
+ * about for this song by another help request since `since`.
+ */
+export async function recentHelpCategories(
+  admin: Client,
+  input: { songId: string; helpRequestId: string; userIds: string[]; since: string }
+): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>();
+  if (!input.userIds.length) return out;
+  const recent = await admin
+    .from(SL_TABLES.notifications)
+    .select("user_id, help_request_id")
+    .eq("kind", "help_asked")
+    .eq("song_id", input.songId)
+    .in("user_id", input.userIds)
+    .neq("help_request_id", input.helpRequestId)
+    .gte("created_at", input.since);
+  if (recent.error) throw new Error(recent.error.message);
+  const rows = (recent.data ?? []) as { user_id: string; help_request_id: string }[];
+  if (!rows.length) return out;
+  const reqs = await admin.from(SL_TABLES.helpRequests).select("id, categories").in("id", [...new Set(rows.map((r) => r.help_request_id))]);
+  if (reqs.error) throw new Error(reqs.error.message);
+  const cats = new Map(((reqs.data ?? []) as { id: string; categories: string[] }[]).map((r) => [r.id, r.categories ?? []]));
+  for (const r of rows) {
+    const set = out.get(r.user_id) ?? new Set<string>();
+    for (const c of cats.get(r.help_request_id) ?? []) set.add(c);
+    out.set(r.user_id, set);
+  }
+  return out;
+}
+
 // ── Sending ────────────────────────────────────────────────
 
-export type HelperOutcome = "sent" | "already-sent" | "no-slack" | "error";
+export type HelperOutcome = "sent" | "already-sent" | "recently-sent" | "no-slack" | "error";
 
 export type HelpDmRun = {
   outcome: "off" | "not-found" | "closed" | "done";
@@ -148,6 +195,8 @@ export async function runHelpAskedDms(
   const asker = nameOf(request.asked_by ? byId.get(request.asked_by) : undefined);
   const url = songUrl(song.id, env);
   const helpers = helpersUrl(env);
+  const since = new Date(deps.now().getTime() - HELP_DM_REPEAT_WINDOW_MS).toISOString();
+  const recent = await recentHelpCategories(admin, { songId: song.id, helpRequestId: request.id, userIds: recipients, since });
 
   const results: HelpDmRun["results"] = [];
   for (const userId of recipients) {
@@ -156,6 +205,11 @@ export async function runHelpAskedDms(
     if (!person?.slack_user_id) {
       deps.log(`[song-library-dm] help ${request.id}: user ${userId} has no Slack id, skipped`);
       results.push({ user_id: userId, outcome: "no-slack", categories: cats });
+      continue;
+    }
+    const already = recent.get(userId);
+    if (already && cats.every((c) => already.has(c))) {
+      results.push({ user_id: userId, outcome: "recently-sent", categories: cats });
       continue;
     }
     const claim = await claims.claim({ userId, songId: song.id, helpRequestId: request.id });
