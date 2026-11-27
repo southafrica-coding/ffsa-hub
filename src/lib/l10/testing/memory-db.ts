@@ -44,11 +44,35 @@ function valueOf(row: Row, col: string): unknown {
   return v ?? null;
 }
 
+/** JSON with sorted keys and undefined dropped, so two values compare like jsonb. */
+function canonicalJson(v: unknown): string {
+  const norm = (x: unknown): unknown =>
+    Array.isArray(x)
+      ? x.map(norm)
+      : x && typeof x === "object"
+        ? Object.fromEntries(Object.keys(x as Row).sort().map((k) => [k, norm((x as Row)[k])]))
+        : x;
+  return JSON.stringify(norm(JSON.parse(JSON.stringify(v))));
+}
+
+/** eq: plain values by identity; a jsonb column against a JSON string (PostgREST eq.<json>) by value. */
+function equalTo(v: unknown, val: unknown): boolean {
+  if (v === val) return true;
+  if (v !== null && typeof v === "object" && typeof val === "string") {
+    try {
+      return canonicalJson(v) === canonicalJson(JSON.parse(val));
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 function matches(row: Row, filters: Filter[]): boolean {
   for (const f of filters) {
     const [col, val, val2] = f.args as [string, unknown, unknown];
     const v = typeof col === "string" ? valueOf(row, col) : null;
-    if (f.op === "eq" && v !== val) return false;
+    if (f.op === "eq" && !equalTo(v, val)) return false;
     if (f.op === "neq" && v === val) return false;
     if (f.op === "is" && v !== val) return false;
     if (f.op === "not" && val === "is" && v === val2) return false;

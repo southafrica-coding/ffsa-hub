@@ -25,15 +25,24 @@ import {
 } from "@/lib/people-manager/testing/world";
 import type { LeaveSlackDeps } from "@/lib/slack/leave-approval";
 
-const h = vi.hoisted(() => ({ userId: null as string | null, db: null as unknown as MemoryDb }));
+const h = vi.hoisted(() => ({
+  userId: null as string | null,
+  db: null as unknown as MemoryDb,
+  /** Every `need` the handlers asked openDepartment for. */
+  needs: [] as string[],
+  /** Can open the home for its budget only (no detail), like a budget-only viewer. */
+  budgetOnly: new Set<string>(),
+}));
 
 vi.mock("@/lib/departments/internal/open", () => ({
   isOpened: (r: object) => !("response" in r),
   // Stands in for the department routes' gate: the department comes from the slug.
-  openDepartment: async (slug: string) => {
+  openDepartment: async (slug: string, need: string) => {
+    h.needs.push(need);
     if (!h.userId) return { response: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
     const dept = h.db.tables.staff_ministries.find((d) => d.slug === slug);
     if (h.userId === OUTSIDER || !dept) return { response: NextResponse.json({ error: "Department not found" }, { status: 404 }) };
+    if (need === "detail" && h.budgetOnly.has(h.userId)) return { response: NextResponse.json({ error: "Department not found" }, { status: 404 }) };
     return {
       supabase: sessionClient(h.db, h.userId),
       admin: serviceClient(h.db),
@@ -69,6 +78,8 @@ const row = (id: unknown) => h.db.tables.leave_requests.find((r) => r.id === id)
 
 beforeEach(() => {
   h.db = makeWorld();
+  h.needs = [];
+  h.budgetOnly = new Set();
   dms = [];
   as(SIPHO);
 });
@@ -118,6 +129,26 @@ describe("permissions", () => {
     as(SIPHO);
     expect((await H.decideRequest(json({ decision: "approved" }), PW_SLUG, String(mine.id), deps)).status).toBe(404); // not visible to staff
     expect(row(r.id).status).toBe("pending");
+  });
+
+  it("opens every leave route with need detail, so a budget-only viewer gets 404", async () => {
+    const r = seedRequest(h.db, { requester_id: SIPHO, department_id: PW_ID, leave_type_id: T_SICK, start_date: "2026-12-14", end_date: "2026-12-14" });
+    const calls = [
+      () => H.getOverview(get(), PW_SLUG, deps),
+      () => H.previewRequest(json({ leave_type_id: T_ANNUAL, start_date: "2026-12-14", end_date: "2026-12-14" }), PW_SLUG),
+      () => H.listRequests(get("?scope=mine"), PW_SLUG, deps),
+      () => H.getRequest(get(), PW_SLUG, String(r.id), deps),
+      () => H.getUsage(get(), PW_SLUG, deps),
+      () => H.getAway(get("?from=2026-12-14&to=2026-12-18"), PW_SLUG),
+      () => H.listBlockouts(get(), PW_SLUG),
+    ];
+    for (const call of calls) expect((await call()).status).toBe(200);
+    expect(new Set(h.needs)).toEqual(new Set(["detail"]));
+    h.budgetOnly.add(GINA);
+    as(GINA);
+    for (const call of calls) expect((await call()).status).toBe(404);
+    expect((await H.notifyRequest(get(), PW_SLUG, String(r.id), deps)).status).toBe(404);
+    expect((await H.createBlockout(json({ start_date: "2026-12-12", end_date: "2026-12-12" }), PW_SLUG)).status).toBe(404);
   });
 
   it("lets only the requester cancel", async () => {
@@ -249,6 +280,74 @@ describe("deciding in the Hub: the first decision wins", () => {
   });
 });
 
+describe("notify: retry after a crash", () => {
+  const minutesAgo = (m: number) => new Date(Date.parse(tick()) - m * 60_000).toISOString();
+
+  it("re-sends a claim left 'claimed' past the stale window, and never a sent one", async () => {
+    const r = seedRequest(h.db, {
+      requester_id: SIPHO,
+      department_id: PW_ID,
+      leave_type_id: T_SICK,
+      start_date: "2026-12-14",
+      end_date: "2026-12-14",
+      slack_notify: [
+        // Ben's sender died after claiming, 11 minutes ago.
+        { kind: "approval", recipient_id: BEN, leader_id: BEN, state: "claimed", claimed_at: minutesAgo(11), claim_token: "dead" },
+        // Mia's card went out long ago.
+        { kind: "approval", recipient_id: MIA, leader_id: MIA, state: "sent", ok: true, channel_id: "D_U_MIA", ts: "1.1", claimed_at: minutesAgo(600), sent_at: minutesAgo(600) },
+      ],
+    });
+    const res = await H.notifyRequest(get(), PW_SLUG, String(r.id), deps);
+    expect(res.status).toBe(200);
+    expect((await res.json()).slack.results).toEqual([
+      { user_id: BEN, outcome: "sent" },
+      { user_id: MIA, outcome: "already-sent" },
+    ]);
+    expect(dms).toEqual(["U_BEN"]);
+    const log = row(r.id).slack_notify as Record<string, unknown>[];
+    expect(log.find((n) => n.recipient_id === BEN)).toMatchObject({ state: "sent", ok: true });
+    expect(log.find((n) => n.recipient_id === BEN)!.claim_token).not.toBe("dead");
+    expect(log.find((n) => n.recipient_id === MIA)).toMatchObject({ state: "sent", ts: "1.1" });
+    // Again: nothing more goes out.
+    await H.notifyRequest(get(), PW_SLUG, String(r.id), deps);
+    expect(dms).toEqual(["U_BEN"]);
+  });
+
+  it("leaves a claim younger than the window alone", async () => {
+    const r = seedRequest(h.db, {
+      requester_id: SIPHO,
+      department_id: PW_ID,
+      leave_type_id: T_SICK,
+      start_date: "2026-12-14",
+      end_date: "2026-12-14",
+      slack_notify: [{ kind: "approval", recipient_id: BEN, leader_id: BEN, state: "claimed", claimed_at: minutesAgo(2), claim_token: "live" }],
+    });
+    const body = await (await H.notifyRequest(get(), PW_SLUG, String(r.id), deps)).json();
+    expect(body.slack.results).toEqual([
+      { user_id: BEN, outcome: "already-sent" },
+      { user_id: MIA, outcome: "sent" },
+    ]);
+    expect(dms).toEqual(["U_MIA"]);
+  });
+
+  it("re-sends a decided request's stale requester DM through notify", async () => {
+    const r = seedRequest(h.db, {
+      requester_id: SIPHO,
+      department_id: PW_ID,
+      leave_type_id: T_SICK,
+      start_date: "2026-12-14",
+      end_date: "2026-12-14",
+      status: "approved",
+      decided_by: BEN,
+      decided_at: "2026-11-26T05:00:00.000Z",
+      slack_notify: [{ kind: "decision", recipient_id: SIPHO, state: "claimed", claimed_at: minutesAgo(30), claim_token: "dead" }],
+    });
+    const body = await (await H.notifyRequest(get(), PW_SLUG, String(r.id), deps)).json();
+    expect(body.slack.results).toEqual([{ user_id: SIPHO, outcome: "sent" }]);
+    expect(dms).toEqual(["U_SIPHO"]);
+  });
+});
+
 describe("cancel", () => {
   it("cancels approved leave only before its first day", async () => {
     const started = seedRequest(h.db, { requester_id: SIPHO, department_id: PW_ID, leave_type_id: T_SICK, start_date: "2026-11-26", end_date: "2026-11-27", status: "approved", decided_by: BEN, decided_at: "x" });
@@ -291,6 +390,28 @@ describe("usage, away and block-outs", () => {
     ]);
     expect(body.holidays).toEqual([{ day: "2026-12-16", name: "Day of Reconciliation" }]);
     expect(body.rows.every((r: Record<string, unknown>) => !("reason" in r) && !("leave_type_id" in r))).toBe(true);
+  });
+
+  it("shows a block-out's reason only to its owner and admins", async () => {
+    h.db.tables.leave_blockouts.push({ id: "b2", user_id: SIPHO, department_id: PW_ID, start_date: "2026-12-21", end_date: "2026-12-21", reason: "Hospital visit" });
+    const reasons = async () =>
+      ((await (await H.listBlockouts(get(`?person=${SIPHO}`), PW_SLUG)).json()).blockouts as Record<string, unknown>[]).map((b) => [b.start_date, b.reason]);
+    expect(await reasons()).toEqual([["2026-12-21", "Hospital visit"]]); // Sipho, the owner
+    as(BEN); // a P&W leader: RLS lets him read the row, not the reason
+    expect(await reasons()).toEqual([["2026-12-21", null]]);
+    as(ADA);
+    expect(await reasons()).toEqual([["2026-12-21", "Hospital visit"]]);
+    // Nowhere else carries it: the away list and the request's also-away.
+    as(BEN);
+    const away = await (await H.getAway(get("?from=2026-12-21&to=2026-12-21"), PW_SLUG)).json();
+    expect(JSON.stringify(away)).not.toContain("Hospital");
+    const r = seedRequest(h.db, { requester_id: ZOE, department_id: PW_ID, leave_type_id: T_ANNUAL, start_date: "2026-12-21", end_date: "2026-12-21" });
+    const one = await (await H.getRequest(get(), PW_SLUG, String(r.id), deps)).json();
+    expect(one.also_away.map((a: { user_id: string }) => a.user_id)).toEqual([SIPHO]);
+    expect(JSON.stringify(one)).not.toContain("Hospital");
+    as(ZOE);
+    const preview = await (await H.previewRequest(json({ leave_type_id: T_ANNUAL, start_date: "2026-12-21", end_date: "2026-12-21" }), PW_SLUG)).json();
+    expect(JSON.stringify(preview)).not.toContain("Hospital");
   });
 
   it("adds, edits and removes my own block-outs only", async () => {

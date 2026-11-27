@@ -12,7 +12,7 @@
 //   POST   /people-manager/requests/:id/notify     retry the approval DMs anyone missed (safe to repeat)
 //   GET    /people-manager/usage                   ?year= &person=  used / pending per type vs guideline
 //   GET    /people-manager/away                    ?from= &to=  who is away (dates and status only), per-weekday headcount, holidays
-//   GET    /people-manager/blockouts               ?person= &from= &to=
+//   GET    /people-manager/blockouts               ?person= &from= &to=  (reason only for the owner and admins)
 //   POST   /people-manager/blockouts               { start_date, end_date, reason? }
 //   PATCH  /people-manager/blockouts/:id           same fields
 //   DELETE /people-manager/blockouts/:id
@@ -61,8 +61,13 @@ type Ctx = OpenedDepartment & { isLeader: boolean; isAdmin: boolean; isMember: b
 
 const todaySA = (deps: PmDeps) => deps.today ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(new Date());
 
+/**
+ * "detail", like people/OKRs/rocks: members, leaders and admins of the
+ * department. A budget-only viewer gets 404 and never reaches the leave
+ * routes (nor the service-role names in goesTo).
+ */
 async function open(slug: string): Promise<{ response: NextResponse } | Ctx> {
-  const opened = await openDepartment(slug, "any");
+  const opened = await openDepartment(slug, "detail");
   if (!isOpened(opened)) return opened;
   const [leader, admin, member] = await Promise.all([
     rpcFlag(opened.supabase, "dept_is_ministry_leader", { p_ministry_id: opened.department.id }),
@@ -542,7 +547,17 @@ export async function listBlockouts(request: Request, slug: string) {
   if (from) query = query.gte("end_date", from);
   const r = await query.order("start_date", { ascending: true }).limit(500);
   if (r.error) return dbError(r.error);
-  return NextResponse.json({ blockouts: r.data ?? [] });
+  return NextResponse.json({ blockouts: ((r.data ?? []) as Row[]).map((b) => blockoutForViewer(ctx, b)) });
+}
+
+/**
+ * A block-out's reason is for its owner and admins only. RLS lets a leader of
+ * any department the owner is in read the row; they get the dates, and
+ * reason null.
+ */
+function blockoutForViewer(ctx: Pick<Ctx, "userId" | "isAdmin">, row: Row): Row {
+  if (row.user_id === ctx.userId || ctx.isAdmin) return row;
+  return { ...row, reason: null };
 }
 
 export async function createBlockout(request: Request, slug: string) {
