@@ -2,52 +2,27 @@ import type { PwNation, PwSongwritingTraining } from "@/lib/departments/db.types
 import { isCompleted, monthKey, newestFirst } from "./overview";
 
 /**
- * Two-letter display codes for the flag tile. Display only: 417 has no
- * iso_code column and this does not add one. Keyed by pw_nations.slug.
- * An unknown slug falls back to the first two letters of the name.
+ * Two-letter code for the flag tile: pw_nations.iso_code (424) when set,
+ * else the first two letters of the name.
  */
-const DISPLAY_CODES: Record<string, string> = {
-  "south-africa": "ZA",
-  tanzania: "TZ",
-  england: "GB",
-  "united-kingdom": "GB",
-  indonesia: "ID",
-  madagascar: "MG",
-  burundi: "BI",
-  canada: "CA",
-  "ivory-coast": "CI",
-  "cote-d-ivoire": "CI",
-  kenya: "KE",
-  nepal: "NP",
-  netherlands: "NL",
-  paraguay: "PY",
-  italy: "IT",
-  mozambique: "MZ",
-  zimbabwe: "ZW",
-  namibia: "NA",
-  botswana: "BW",
-  uganda: "UG",
-  rwanda: "RW",
-  malawi: "MW",
-  zambia: "ZM",
-  ethiopia: "ET",
-  nigeria: "NG",
-  ghana: "GH",
-  india: "IN",
-  "united-states": "US",
-  usa: "US",
-  brazil: "BR",
-  germany: "DE",
-  france: "FR",
-  australia: "AU",
-  "new-zealand": "NZ",
-};
-
-export function nationCode(nation: Pick<PwNation, "slug" | "name">): string {
-  const known = DISPLAY_CODES[nation.slug];
-  if (known) return known;
+export function nationCode(nation: Pick<PwNation, "name"> & { iso_code?: string | null }): string {
+  const iso = nation.iso_code?.trim().toUpperCase();
+  if (iso) return iso;
   const letters = nation.name.replace(/[^A-Za-z]/g, "").toUpperCase();
   return letters.slice(0, 2) || "··";
+}
+
+/**
+ * A nation's languages: the ones stored on the nation (424) when there are
+ * any, else the union of its trainings' languages.
+ */
+export function languagesForNation(
+  nation: Pick<PwNation, "id"> & { languages?: string[] | null },
+  trainings: readonly PwSongwritingTraining[]
+): string[] {
+  const stored = (nation.languages ?? []).map((l) => l.trim()).filter(Boolean);
+  if (stored.length) return stored;
+  return nationLanguages(trainings.filter((t) => t.nation_id === nation.id));
 }
 
 export interface NationSummary {
@@ -59,11 +34,11 @@ export interface NationSummary {
   songs: number;
   first: PwSongwritingTraining | null;
   latest: PwSongwritingTraining | null;
-  /** Union of the trainings' languages, case-insensitive, sorted. */
+  /** The nation's stored languages, or (none stored) the union of its trainings' languages. */
   languages: string[];
 }
 
-/** Languages a nation's trainings recorded. 417 keeps languages on trainings only. */
+/** Languages a nation's trainings recorded: case-insensitive union, sorted. */
 export function nationLanguages(trainings: readonly PwSongwritingTraining[]): string[] {
   const seen = new Map<string, string>();
   for (const t of trainings) {
@@ -91,7 +66,7 @@ export function summariseNations(
         songs: done.reduce((acc, t) => acc + (t.songs_workshop ?? 0) + (t.songs_post ?? 0), 0),
         first: done[done.length - 1] ?? null,
         latest: done[0] ?? null,
-        languages: nationLanguages(all),
+        languages: languagesForNation(nation, all),
       };
     })
     .sort(

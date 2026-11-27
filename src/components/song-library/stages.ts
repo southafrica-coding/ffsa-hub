@@ -128,9 +128,14 @@ export function canMoveStage(mover: StageMover, from: SongStage, to: SongStage):
   return false;
 }
 
-/** The stages offered in the "Move stage" menu, in board order. */
-export function stageMoveOptions(mover: StageMover, from: SongStage): SongStage[] {
-  return SONG_STAGES.filter((to) => canMoveStage(mover, from, to));
+/** The stages offered in the "Move stage" menu, in board order.
+ * When the API sent viewer.allowedStages, the menu is limited to that list
+ * (an empty list means no moves). A missing list keeps the client rule only.
+ */
+export function stageMoveOptions(mover: StageMover, from: SongStage, allowed?: readonly string[] | null): SongStage[] {
+  const legal = SONG_STAGES.filter((to) => canMoveStage(mover, from, to));
+  if (allowed == null) return legal;
+  return legal.filter((to) => allowed.includes(to));
 }
 
 /** Placement is for managers only. */

@@ -9,6 +9,7 @@ import { countText, trainingTitle } from "./trainings";
 import type { SongwritingData } from "./types";
 import { NoAccessNote } from "@/components/song-library/no-access";
 import { useSongwriting } from "./use-songwriting";
+import { canEdit } from "./permissions";
 
 export function OverviewView({
   slug,
@@ -126,7 +127,14 @@ export function OverviewView({
             <h2 className={pw.sectionTitle}>Latest training</h2>
             <span className={pw.sectionMeta}>{monthLabel(latest)}</span>
           </div>
-          <Link className={pw.row} href={trainingHref(slug, latest.id)}>
+          <Link
+            className={pw.row}
+            href={
+              canEdit(data.viewer, { kind: "training", created_by: latest.created_by })
+                ? trainingHref(slug, latest.id)
+                : songwritingHref(slug, "trainings")
+            }
+          >
             <div className={pw.what}>
               <div className={pw.k}>{[trainingTitle(latest), latest.location_text].filter(Boolean).join(" · ")}</div>
               <div className={pw.s}>

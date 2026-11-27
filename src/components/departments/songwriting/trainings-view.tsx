@@ -7,6 +7,7 @@ import pw from "@/components/song-library/pw.module.css";
 import sw from "./sw.module.css";
 import { trainingHref } from "./header";
 import { PenIcon } from "./icons";
+import { canEdit } from "./permissions";
 import {
   applyFilter,
   countText,
@@ -85,7 +86,13 @@ export function TrainingsView({ slug, initial }: { slug: string; initial?: Songw
         <section key={group.key} aria-label={group.label}>
           <div className={pw.mgroup}>{group.label}</div>
           {group.trainings.map((t) => (
-            <TrainingCard key={t.id} slug={slug} training={t} nation={t.nation_id ? nationById.get(t.nation_id) : undefined} />
+            <TrainingCard
+              key={t.id}
+              slug={slug}
+              training={t}
+              nation={t.nation_id ? nationById.get(t.nation_id) : undefined}
+              editable={canEdit(data.viewer, { kind: "training", created_by: t.created_by })}
+            />
           ))}
         </section>
       ))}
@@ -106,10 +113,13 @@ export function TrainingCard({
   slug,
   training,
   nation,
+  editable,
 }: {
   slug: string;
   training: PwSongwritingTraining;
   nation: PwNation | undefined;
+  /** From canEdit(viewer, …). False until the API says who is looking. */
+  editable: boolean;
 }) {
   const tentative = isTentativeTraining(training, nation);
   const title = trainingTitle(training);
@@ -121,9 +131,11 @@ export function TrainingCard({
           <div className={sw.cardSub}>{trainingSubline(training, nation)}</div>
         </div>
         {tentative ? <span className={`${pw.pill} ${pw.pillDash}`}>Tentative</span> : null}
-        <Link className={sw.editbtn} href={trainingHref(slug, training.id)} aria-label={`Edit ${title}`}>
-          <PenIcon />
-        </Link>
+        {editable ? (
+          <Link className={sw.editbtn} href={trainingHref(slug, training.id)} aria-label={`Edit ${title}`}>
+            <PenIcon />
+          </Link>
+        ) : null}
       </div>
       <div className={sw.nums}>
         <div>

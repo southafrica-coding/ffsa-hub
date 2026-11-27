@@ -188,8 +188,10 @@ describe("nations, trainings and follow-up helpers", () => {
     expect(trainedText(burundi)).toBe("?");
     expect(summaries.find((s) => s.nation.slug === "indonesia")!.languages).toEqual(["Indo", "wana"]);
     expect(nationLanguages([])).toEqual([]);
-    expect(nationCode(NATIONS[0])).toBe("ZA");
-    expect(nationCode({ slug: "atlantis", name: "Atlantis" })).toBe("AT");
+    // The tile reads pw_nations.iso_code (424); no code stored falls back to the name.
+    expect(nationCode({ ...NATIONS[0], iso_code: "ZA" })).toBe("ZA");
+    expect(nationCode(NATIONS[0])).toBe("SO");
+    expect(nationCode({ name: "Atlantis" })).toBe("AT");
   });
 
   it("never titles a card with a person's name", () => {

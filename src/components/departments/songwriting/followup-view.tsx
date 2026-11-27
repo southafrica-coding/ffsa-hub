@@ -15,7 +15,9 @@ import {
   postSongSummary,
   sortLeads,
 } from "./followup";
+import { leadHref } from "./header";
 import { monthLabel } from "./overview";
+import { canEdit } from "./permissions";
 import { trainingTitle } from "./trainings";
 import type { SongwritingData, SongwritingLead } from "./types";
 import { NoAccessNote } from "@/components/song-library/no-access";
@@ -24,7 +26,7 @@ import { useSongwriting } from "./use-songwriting";
 const TONE_CLASS = { red: pw.pillRed, amber: pw.pillAmber, green: pw.pillGreen, plain: "" } as const;
 
 export function FollowUpView({ slug, uploadHref, initial: seed }: { slug: string; uploadHref: string; initial?: SongwritingData }) {
-  const { loading, data, denied } = useSongwriting(slug, seed);
+  const { loading, data, denied, patchLead } = useSongwriting(slug, seed);
   if (denied) return <NoAccessNote />;
   const nationById = new Map(data.nations.map((n) => [n.id, n]));
   const trainingById = new Map(data.trainings.map((t) => [t.id, t]));
@@ -75,6 +77,11 @@ export function FollowUpView({ slug, uploadHref, initial: seed }: { slug: string
           {leads.length} · {toContact} to contact
         </span>
       </div>
+      <div className={pw.pad}>
+        <Link className={`${pw.btn} ${pw.block}`} href={leadHref(slug, "new")}>
+          + Add a lead
+        </Link>
+      </div>
       {leads.length === 0 ? (
         <p className={pw.hint}>{loading ? "Loading…" : "No leads yet. People and groups to follow up with will show here."}</p>
       ) : (
@@ -84,6 +91,8 @@ export function FollowUpView({ slug, uploadHref, initial: seed }: { slug: string
             slug={slug}
             lead={lead}
             source={lead.source_training_id ? trainingById.get(lead.source_training_id) : undefined}
+            editable={canEdit(data.viewer, { kind: "lead", created_by: lead.created_by })}
+            onLogged={patchLead}
           />
         ))
       )}
@@ -95,10 +104,15 @@ function LeadCard({
   slug,
   lead,
   source,
+  editable,
+  onLogged,
 }: {
   slug: string;
   lead: SongwritingLead;
   source: SongwritingData["trainings"][number] | undefined;
+  /** From canEdit(viewer, …). False until the API says who is looking. */
+  editable: boolean;
+  onLogged: (lead: SongwritingLead) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
@@ -109,7 +123,8 @@ function LeadCard({
   async function logContact() {
     if (busy || !note.trim()) return;
     setBusy(true);
-    const result = await songwritingApi(slug).logContact(lead.id, note.trim());
+    // { note } only: by and last_contact_at are the database's.
+    const result = await songwritingApi(slug).logContact(lead.id, { note: note.trim() });
     setBusy(false);
     if (!result.ok) {
       setMessage(errorCopy(result.code));
@@ -118,6 +133,7 @@ function LeadCard({
     setMessage("Contact logged.");
     setNote("");
     setOpen(false);
+    if (result.data.lead) onLogged(result.data.lead);
   }
 
   return (
@@ -125,7 +141,9 @@ function LeadCard({
       <div className={pw.btnrow} style={{ flexWrap: "nowrap", alignItems: "flex-start" }}>
         <div className={pw.what}>
           <h3 className={pw.k} style={{ margin: 0 }}>
-            {lead.label}
+            <Link href={leadHref(slug, lead.id)} style={{ color: "inherit", textDecoration: "none" }}>
+              {lead.label} <span aria-hidden="true">→</span>
+            </Link>
           </h3>
           {source ? (
             <div className={pw.s}>{[trainingTitle(source), source.location_text, monthLabel(source)].filter(Boolean).join(" · ")}</div>
@@ -160,6 +178,11 @@ function LeadCard({
           <button type="button" className={`${pw.btn} ${pw.grow}`} onClick={() => setOpen(true)}>
             Log contact
           </button>
+          {editable ? (
+            <Link className={`${pw.btn} ${pw.grow}`} href={leadHref(slug, lead.id, true)} aria-label={`Edit ${lead.label}`}>
+              Edit
+            </Link>
+          ) : null}
         </div>
       )}
       {message ? (

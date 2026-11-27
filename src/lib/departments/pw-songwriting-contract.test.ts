@@ -25,16 +25,14 @@ describe("424 songwriting contract", () => {
     expect([...PW_LEAD_STATUSES]).toEqual([...LEAD_STATUSES]);
   });
 
+  // The UI reads created_by / by for edit gating (never writes them), so
+  // its shapes are the API's answers: the row plus owner_name / by_name.
   it("a lead row plus owner_name is the UI SongwritingLead", () => {
-    expectTypeOf<Flat<Omit<PwSongwritingLead, "created_by"> & { owner_name: string | null }>>().toEqualTypeOf<
-      Flat<SongwritingLead>
-    >();
+    expectTypeOf<Flat<PwSongwritingLead & { owner_name: string | null }>>().toEqualTypeOf<Flat<SongwritingLead>>();
   });
 
-  it("a lead event row covers the UI SongwritingLeadEvent", () => {
-    expectTypeOf<Pick<PwSongwritingLeadEvent, "id" | "lead_id" | "at" | "by" | "note">>().toEqualTypeOf<
-      Flat<SongwritingLeadEvent>
-    >();
+  it("a lead event row plus by_name is the UI SongwritingLeadEvent", () => {
+    expectTypeOf<Flat<PwSongwritingLeadEvent & { by_name: string | null }>>().toEqualTypeOf<Flat<SongwritingLeadEvent>>();
   });
 
   it("nations and trainings carry the 424 columns", () => {

@@ -1,6 +1,6 @@
 import type { PwSongwritingTraining } from "@/lib/departments/db.types";
 import { isCompleted, newestFirst } from "./overview";
-import type { LeadStatus, SongwritingLead } from "./types";
+import type { LeadStatus, SongwritingLead, SongwritingLeadEvent } from "./types";
 
 export interface PostSongRow {
   training: PwSongwritingTraining;
@@ -63,3 +63,27 @@ export function initial(name: string | null): string {
   const letter = name?.trim().charAt(0);
   return letter ? letter.toUpperCase() : "?";
 }
+
+
+/** Apply POST /leads/:id/events `{ lead, event }` (newest first). */
+export function applyLoggedContact(
+  events: readonly SongwritingLeadEvent[],
+  reply: { lead: SongwritingLead; event: SongwritingLeadEvent }
+): { lead: SongwritingLead; events: SongwritingLeadEvent[] } {
+  return {
+    lead: reply.lead,
+    events: [reply.event, ...events.filter((e) => e.id !== reply.event.id)],
+  };
+}
+
+/** Apply DELETE /leads/:id/events/:eventId `{ lead, deleted }`. */
+export function applyDeletedContact(
+  events: readonly SongwritingLeadEvent[],
+  reply: { lead: SongwritingLead; deleted: string }
+): { lead: SongwritingLead; events: SongwritingLeadEvent[] } {
+  return {
+    lead: reply.lead,
+    events: events.filter((e) => e.id !== reply.deleted),
+  };
+}
+

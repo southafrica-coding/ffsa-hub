@@ -49,6 +49,7 @@ describe("errorCopy", () => {
     expect(errorCopy("help_closed")).toBe("This help request is no longer open.");
     expect(errorCopy("upload_missing")).toBe("The file didn't finish uploading. Try again.");
     expect(errorCopy("use_signed_upload")).toBe("This file has to be uploaded to a signed URL. Try again.");
+    expect(errorCopy("song_writer_exists")).toBe("That writer is already on this song.");
     expect(errorCopy("Someone moved this song first")).toBe("That didn't save. Please try again.");
   });
 });

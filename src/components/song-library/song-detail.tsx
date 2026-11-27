@@ -110,7 +110,7 @@ function SongBody({
   const canManageSong = detail.viewer?.canManage ?? canManage;
   const canTick = detail.viewer?.canTickRefine === true;
   const mover = moverFor(canManageSong, detail.viewerIsWriter);
-  const moves = stageMoveOptions(mover, song.stage);
+  const moves = stageMoveOptions(mover, song.stage, detail.viewer?.allowedStages);
   const next = nextStage(song.stage);
   const n = stageNumber(song.stage);
   const info = stuckInfo(song.stage, song.last_activity_at, now, detail.status);

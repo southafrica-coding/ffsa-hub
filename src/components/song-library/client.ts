@@ -1,11 +1,10 @@
 // Shared fetch helper for the Song Library and Songwriting UIs.
 //
-// The backend routes do not exist yet. Reads treat a missing route, a
-// network error or bad JSON as "nothing to show", so the pages render
-// their empty states. A 403 or code "forbidden" is not an empty catalogue:
-// readOr flags `denied` and the page shows a no-access state. Writes
-// report a code, never the server's text: only `code` and `fieldErrors`
-// keys are read from a reply.
+// Reads treat a missing route, a network error or bad JSON as "nothing
+// to show", so the pages render their empty states. A 403 or code
+// "forbidden" is not an empty catalogue: readOr flags `denied` and the
+// page shows a no-access state. Writes report a code, never the server's
+// text: only `code` and `fieldErrors` keys are read from a reply.
 
 export type ApiFailure = {
   ok: false;
@@ -107,6 +106,8 @@ export function errorCopy(code: string | null | undefined): string {
       return "That file is too big. Try a shorter clip or an mp3.";
     case "song_moved":
       return "Someone else moved this song first. We'll refresh it.";
+    case "song_writer_exists":
+      return "That writer is already on this song.";
     case "help_closed":
       return "This help request is no longer open.";
     case "upload_missing":
@@ -117,14 +118,67 @@ export function errorCopy(code: string | null | undefined): string {
       return "Too many tries. Wait a minute and try again.";
     case "network":
       return "No connection. Check your internet and try again.";
+    // Songwriting (#756).
+    case "training_date_outside_month":
+      return "The date has to fall in the training's month. Change the date, or clear it.";
+    case "nation_has_leads":
+      return "This nation still has leads. Move or delete them first.";
+    case "nation_has_trainings":
+      return "This nation still has trainings. Move or delete them first.";
+    case "nation_in_use":
+      return "This nation is still used by a lead, training or song. Move those first.";
+    case "read_only_field":
+      return "Part of this can't be changed here. Refresh and try again.";
     default:
       return "That didn't save. Please try again.";
   }
 }
 
-/** Friendly copy per form field, for fieldErrors keys. */
-export function fieldCopy(field: string): string {
+/**
+ * Friendly copy per form field, for fieldErrors keys. Pass the reply's code
+ * when there is one: a duplicate reads differently from a bad format.
+ */
+export function fieldCopy(field: string, code?: string | null): string {
+  if (code === "duplicate") {
+    switch (field) {
+      case "iso_code":
+        return "Another nation already has that code.";
+      case "slug":
+        return "Another nation already uses that slug.";
+      case "facilitators":
+        return "List each trainer once.";
+      default:
+        return "That already exists.";
+    }
+  }
   switch (field) {
+    // Songwriting (#756).
+    case "training_date":
+      return "Pick a date in the training's month, or leave it blank.";
+    case "name":
+      return "Give the nation a name.";
+    case "slug":
+      return "Use lower-case letters, numbers and dashes, like south-africa.";
+    case "iso_code":
+      return "Use the two-letter country code, like ZA, or leave it blank.";
+    case "languages":
+      return "Each language needs a name of 60 letters or fewer.";
+    case "label":
+      return "Give the lead a name or a short label.";
+    case "contact_user_id":
+      return "Paste a Hub account id, or leave it blank.";
+    case "kind":
+    case "status":
+    case "continent":
+    case "nation_id":
+    case "source_training_id":
+    case "owner_user_id":
+      return "Pick one from the list.";
+    case "note":
+    case "notes":
+      return "Keep it under 4,000 characters.";
+    case "facilitators":
+      return "Check the trainers' names.";
     case "title":
       return "Give the song a working title.";
     case "audience_label":

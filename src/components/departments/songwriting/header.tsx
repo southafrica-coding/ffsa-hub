@@ -1,5 +1,6 @@
 import Link from "next/link";
 import pw from "@/components/song-library/pw.module.css";
+import { EditBand } from "./edit-band";
 
 export const SONGWRITING_TABS = ["overview", "trainings", "nations", "follow-up", "library"] as const;
 export type SongwritingTab = (typeof SONGWRITING_TABS)[number];
@@ -24,10 +25,22 @@ export function trainingHref(slug: string, id: string | "new"): string {
   return `${songwritingHref(slug, "trainings")}/${encodeURIComponent(id)}`;
 }
 
+/** /nations/new, /nations/:id (the nation page) and /nations/:id/edit. */
+export function nationHref(slug: string, id: string | "new", edit = false): string {
+  const base = `${songwritingHref(slug, "nations")}/${encodeURIComponent(id)}`;
+  return edit && id !== "new" ? `${base}/edit` : base;
+}
+
+/** /follow-up/new, /follow-up/:id (the lead and its logged contacts) and /follow-up/:id/edit. */
+export function leadHref(slug: string, id: string | "new", edit = false): string {
+  const base = `${songwritingHref(slug, "follow-up")}/${encodeURIComponent(id)}`;
+  return edit && id !== "new" ? `${base}/edit` : base;
+}
+
 /**
  * Back link, masthead, the five-tab subnav, and one band under it:
- * "edit" (anyone in the department can add and edit) or "service"
- * (the Library is a Hub Service open to the whole base).
+ * "edit" (who can add and edit, from the API's viewer.edit_rule) or
+ * "service" (the Library is a Hub Service open to the whole base).
  */
 export function SongwritingHeader({
   slug,
@@ -60,12 +73,7 @@ export function SongwritingHeader({
         ))}
       </nav>
       {band === "edit" ? (
-        <div className={pw.band}>
-          <span>Anyone in {departmentName} can add and edit.</span>
-          <span className={pw.bandPen} aria-hidden="true">
-            ✎ Edit on
-          </span>
-        </div>
+        <EditBand slug={slug} departmentName={departmentName} />
       ) : (
         <ServiceBand ownerName={departmentName} />
       )}
