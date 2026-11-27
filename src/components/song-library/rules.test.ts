@@ -131,6 +131,12 @@ describe("stage transitions", () => {
     expect(stageMoveOptions("writer", "writing")).toEqual(["idea_entry", "set_down", "refine", "written_needs_demo"]);
   });
 
+  it("limits the move menu to viewer.allowedStages when the API sent a list", () => {
+    expect(stageMoveOptions("writer", "writing", ["set_down", "refine"])).toEqual(["set_down", "refine"]);
+    expect(stageMoveOptions("writer", "writing", [])).toEqual([]);
+    expect(stageMoveOptions("writer", "writing", undefined)).toEqual(["idea_entry", "set_down", "refine", "written_needs_demo"]);
+  });
+
   it("does not need the bonus Refine question to move on", () => {
     const progress = refineProgress([{ q_no: 1, checked: true }, { q_no: 11, checked: false }]);
     expect(progress).toEqual({ done: 1, bonus: false });

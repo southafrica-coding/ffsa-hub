@@ -128,7 +128,10 @@ export async function uploadVersion(songId: string, file: File): Promise<{ ok: t
   try {
     const put = await fetch(signedUrl, {
       method: "PUT",
-      headers: { "Content-Type": started.data.content_type || content_type },
+      headers: {
+        "Content-Type": started.data.content_type || content_type,
+        "x-upsert": "false",
+      },
       body: file,
     });
     if (!put.ok) return { ok: false, code: "upload_missing" };

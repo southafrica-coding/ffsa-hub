@@ -47,6 +47,7 @@ describe("uploadVersion", () => {
     expect(putInit?.method).toBe("PUT");
     expect(putInit?.body).toBe(file);
     expect(new Headers(putInit?.headers).get("Content-Type")).toBe("audio/mpeg");
+    expect(new Headers(putInit?.headers).get("x-upsert")).toBe("false");
     const [versionUrl, versionInit] = fetchMock.mock.calls[2]!;
     expect(String(versionUrl)).toBe("/api/song-library/songs/song-1/versions");
     expect(versionInit?.method).toBe("POST");

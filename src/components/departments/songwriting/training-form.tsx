@@ -1,89 +1,22 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useId, useState, type FormEvent } from "react";
 import type { PwSongwritingTraining, PwTrainingFacilitator } from "@/lib/departments/db.types";
 import pw from "@/components/song-library/pw.module.css";
 import { errorCopy, fieldCopy } from "@/components/song-library/client";
 import { formatSaDate } from "@/lib/format/sa-time";
 import { songwritingApi } from "./api";
+import { CannotEditNote, ChipListField, NotFoundNote } from "./fields";
 import { songwritingHref } from "./header";
-import type { SongwritingData, TrainingInput } from "./types";
+import { canEdit, cannotEditCopy } from "./permissions";
+import { monthOfDate, toDraft, toInput, type TrainingDraft } from "./training-draft";
+import type { SongwritingData } from "./types";
 import { NoAccessNote } from "@/components/song-library/no-access";
 import { useSongwriting } from "./use-songwriting";
 
-type Draft = {
-  audience_label: string;
-  month: string; // YYYY-MM
-  day: string; // YYYY-MM-DD, optional, not stored
-  location_text: string;
-  nation_id: string;
-  facilitators: string[];
-  people_trained: string;
-  songs_workshop: string;
-  songs_post: string;
-  languages: string[];
-  notes: string;
-  tentative: boolean;
-};
-
-function toDraft(t: PwSongwritingTraining | null, facilitators: PwTrainingFacilitator[]): Draft {
-  return {
-    audience_label: t?.audience_label ?? "",
-    month: t ? `${t.year}-${String(t.month).padStart(2, "0")}` : "",
-    day: "",
-    location_text: t?.location_text ?? "",
-    nation_id: t?.nation_id ?? "",
-    facilitators: facilitators.map((f) => f.display_name),
-    people_trained: t?.people_trained == null ? "" : String(t.people_trained),
-    songs_workshop: t?.songs_workshop == null ? "" : String(t.songs_workshop),
-    songs_post: t?.songs_post == null ? "" : String(t.songs_post),
-    languages: t?.languages ?? [],
-    notes: t?.notes ?? "",
-    tentative: t?.status === "draft",
-  };
-}
-
-/** Blank = unknown (null). Otherwise a whole number 0 or more. */
-export function parseCount(value: string): number | null | "invalid" {
-  const v = value.trim();
-  if (v === "") return null;
-  if (!/^\d+$/.test(v)) return "invalid";
-  return Number(v);
-}
-
-export function toInput(d: Draft): { input: TrainingInput } | { fields: string[] } {
-  const fields: string[] = [];
-  const m = /^(\d{4})-(\d{2})$/.exec(d.month);
-  const year = m ? Number(m[1]) : NaN;
-  const month = m ? Number(m[2]) : NaN;
-  if (!d.audience_label.trim()) fields.push("audience_label");
-  if (!m || month < 1 || month > 12) fields.push("month");
-  const trained = parseCount(d.people_trained);
-  const workshop = parseCount(d.songs_workshop);
-  const post = parseCount(d.songs_post);
-  if (trained === "invalid") fields.push("people_trained");
-  if (workshop === "invalid") fields.push("songs_workshop");
-  if (post === "invalid") fields.push("songs_post");
-  if (fields.length) return { fields };
-  return {
-    input: {
-      audience_label: d.audience_label.trim(),
-      year,
-      month,
-      location_text: d.location_text.trim() || null,
-      nation_id: d.nation_id || null,
-      people_trained: trained as number | null,
-      songs_workshop: workshop as number | null,
-      songs_post: post as number | null,
-      languages: d.languages,
-      notes: d.notes.trim() || null,
-      status: d.tentative ? "draft" : "completed",
-      facilitators: d.facilitators,
-    },
-  };
-}
+export { parseCount, toInput, toDraft, checkTrainingDate } from "./training-draft";
 
 export function TrainingForm({
   slug,
@@ -98,17 +31,11 @@ export function TrainingForm({
   const { loading, data, denied } = useSongwriting(slug, initial);
   if (denied) return <NoAccessNote />;
   if (trainingId && loading) return <p className={pw.hint}>Loading the training…</p>;
+  const back = songwritingHref(slug, "trainings");
   const training = trainingId ? (data.trainings.find((t) => t.id === trainingId) ?? null) : null;
-  if (trainingId && !training) {
-    return (
-      <div className={pw.empty}>
-        <div className={pw.emptyTitle}>Training not found</div>
-        <p className={pw.emptyText}>It may have been deleted.</p>
-        <Link className={`${pw.btn} ${pw.block}`} href={songwritingHref(slug, "trainings")} style={{ marginTop: 18 }}>
-          Back to trainings
-        </Link>
-      </div>
-    );
+  if (trainingId && !training) return <NotFoundNote title="Training not found" backHref={back} backLabel="Back to trainings" />;
+  if (training && !canEdit(data.viewer, { kind: "training", created_by: training.created_by })) {
+    return <CannotEditNote text={cannotEditCopy("training")} backHref={back} backLabel="Back to trainings" />;
   }
   const facilitators = training ? data.facilitators.filter((f) => f.training_id === training.id) : [];
   return <TrainingFormBody key={training?.id ?? "new"} slug={slug} training={training} facilitators={facilitators} data={data} />;
@@ -127,13 +54,14 @@ function TrainingFormBody({
 }) {
   const router = useRouter();
   const id = useId();
-  const [draft, setDraft] = useState<Draft>(() => toDraft(training, facilitators));
+  const [draft, setDraft] = useState<TrainingDraft>(() => toDraft(training, facilitators));
   const [fields, setFields] = useState<string[]>([]);
+  const [fieldCode, setFieldCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const back = songwritingHref(slug, "trainings");
-  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
+  const set = <K extends keyof TrainingDraft>(key: K, value: TrainingDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -141,6 +69,7 @@ function TrainingFormBody({
     const parsed = toInput(draft);
     if ("fields" in parsed) {
       setFields(parsed.fields);
+      setFieldCode(null);
       setError("Check the highlighted fields.");
       return;
     }
@@ -152,6 +81,7 @@ function TrainingFormBody({
     setBusy(false);
     if (!result.ok) {
       setFields(result.fields);
+      setFieldCode(result.code);
       setError(errorCopy(result.code));
       return;
     }
@@ -179,10 +109,11 @@ function TrainingFormBody({
   const fieldError = (name: string) =>
     fields.includes(name) ? (
       <p className={pw.error} id={`${id}-${name}-err`}>
-        {fieldCopy(name)}
+        {fieldCopy(name, fieldCode)}
       </p>
     ) : null;
-  const describedBy = (name: string) => (fields.includes(name) ? `${id}-${name}-err` : undefined);
+  const describedBy = (name: string, hint?: string) =>
+    [fields.includes(name) ? `${id}-${name}-err` : null, hint].filter(Boolean).join(" ") || undefined;
 
   return (
     <form onSubmit={onSubmit} noValidate>
@@ -202,7 +133,7 @@ function TrainingFormBody({
           onChange={(e) => set("audience_label", e.target.value)}
           placeholder="e.g. DMM Leaders & DTS"
           aria-invalid={fields.includes("audience_label") || undefined}
-          aria-describedby={describedBy("audience_label") ?? `${id}-name-hint`}
+          aria-describedby={describedBy("audience_label", `${id}-name-hint`)}
         />
         <p className={`${pw.small} ${pw.muted}`} id={`${id}-name-hint`} style={{ marginTop: 6 }}>
           For one person, write “1:1 training”, never their name.
@@ -227,20 +158,25 @@ function TrainingFormBody({
           {fieldError("month")}
         </div>
         <div>
-          <label className={pw.label} htmlFor={`${id}-day`}>
+          <label className={pw.label} htmlFor={`${id}-date`}>
             Date (optional)
           </label>
           <input
-            id={`${id}-day`}
+            id={`${id}-date`}
             type="date"
             className={pw.input}
-            value={draft.day}
-            onChange={(e) => set("day", e.target.value)}
-            aria-describedby={`${id}-day-hint`}
+            value={draft.training_date}
+            onChange={(e) => {
+              const value = e.target.value;
+              setDraft((d) => ({ ...d, training_date: value, month: d.month || monthOfDate(value) }));
+            }}
+            aria-invalid={fields.includes("training_date") || undefined}
+            aria-describedby={describedBy("training_date", `${id}-date-hint`)}
           />
-          <p className={`${pw.small} ${pw.quiet}`} id={`${id}-day-hint`} style={{ marginTop: 6 }}>
-            Not saved yet: trainings keep the month only.
+          <p className={`${pw.small} ${pw.quiet}`} id={`${id}-date-hint`} style={{ marginTop: 6 }}>
+            Saved with the training. It has to fall in the month above. Leave it blank to keep the month only.
           </p>
+          {fieldError("training_date")}
         </div>
       </div>
 
@@ -261,7 +197,14 @@ function TrainingFormBody({
           <label className={pw.label} htmlFor={`${id}-nation`}>
             Nation
           </label>
-          <select id={`${id}-nation`} className={pw.input} value={draft.nation_id} onChange={(e) => set("nation_id", e.target.value)}>
+          <select
+            id={`${id}-nation`}
+            className={pw.input}
+            value={draft.nation_id}
+            onChange={(e) => set("nation_id", e.target.value)}
+            aria-invalid={fields.includes("nation_id") || undefined}
+            aria-describedby={describedBy("nation_id")}
+          >
             <option value="">Not set</option>
             {data.nations.map((n) => (
               <option key={n.id} value={n.id}>
@@ -270,6 +213,7 @@ function TrainingFormBody({
               </option>
             ))}
           </select>
+          {fieldError("nation_id")}
         </div>
       </div>
 
@@ -279,6 +223,7 @@ function TrainingFormBody({
         onChange={(v) => set("facilitators", v)}
         addLabel="Add a trainer"
         placeholder="Trainer's name"
+        error={fieldError("facilitators")}
       />
 
       <fieldset className={pw.field} style={{ border: 0, margin: 0 }}>
@@ -318,13 +263,22 @@ function TrainingFormBody({
         onChange={(v) => set("languages", v)}
         addLabel="Add a language"
         placeholder="e.g. Wana"
+        error={fieldError("languages")}
       />
 
       <div className={pw.field}>
         <label className={pw.label} htmlFor={`${id}-notes`}>
           Notes
         </label>
-        <textarea id={`${id}-notes`} className={pw.input} value={draft.notes} onChange={(e) => set("notes", e.target.value)} />
+        <textarea
+          id={`${id}-notes`}
+          className={pw.input}
+          value={draft.notes}
+          onChange={(e) => set("notes", e.target.value)}
+          aria-invalid={fields.includes("notes") || undefined}
+          aria-describedby={describedBy("notes")}
+        />
+        {fieldError("notes")}
       </div>
 
       <div className={pw.field}>
@@ -351,7 +305,7 @@ function TrainingFormBody({
         </div>
       </div>
 
-      {training ? (
+      {training && canEdit(data.viewer, { kind: "training", created_by: training.created_by }) ? (
         <div className={pw.field}>
           <button type="button" className={`${pw.btn} ${pw.ghost} ${pw.danger} ${pw.block}`} onClick={onDelete} disabled={busy}>
             {confirmDelete ? "Tap again to delete" : "Delete training"}
@@ -374,69 +328,5 @@ function TrainingFormBody({
         </button>
       </div>
     </form>
-  );
-}
-
-function ChipListField({
-  label,
-  values,
-  onChange,
-  addLabel,
-  placeholder,
-}: {
-  label: string;
-  values: string[];
-  onChange: (values: string[]) => void;
-  addLabel: string;
-  placeholder: string;
-}) {
-  const id = useId();
-  const [text, setText] = useState("");
-  const add = () => {
-    const value = text.trim();
-    if (!value) return;
-    if (!values.some((v) => v.toLowerCase() === value.toLowerCase())) onChange([...values, value]);
-    setText("");
-  };
-  return (
-    <div className={pw.field}>
-      <span className={pw.label} id={`${id}-label`}>
-        {label}
-      </span>
-      {values.length ? (
-        <ul className={pw.chips} aria-labelledby={`${id}-label`} style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {values.map((v) => (
-            <li key={v}>
-              <button
-                type="button"
-                className={`${pw.chipBtn} ${pw.chipBtnOn}`}
-                onClick={() => onChange(values.filter((x) => x !== v))}
-                aria-label={`Remove ${v}`}
-              >
-                {v} <span aria-hidden="true">×</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <div className={pw.addRow}>
-        <input
-          className={pw.input}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              add();
-            }
-          }}
-          placeholder={placeholder}
-          aria-label={addLabel}
-        />
-        <button type="button" className={pw.btn} onClick={add}>
-          + Add
-        </button>
-      </div>
-    </div>
   );
 }
