@@ -16,20 +16,23 @@
 //
 // Exactly once per request, recipient and kind. Before a DM goes out the
 // sender claims it in leave_requests.slack_notify (421's server-written
-// Slack log) with a compare-and-set on the row's updated_at: read the log,
-// append { kind, recipient_id, state: "claimed" }, and UPDATE … WHERE id =
-// $1 AND updated_at = <what we read>. 421's guard sets updated_at = now()
-// on every write, so only one writer per version gets a row back; the
-// loser re-reads and sees the claim. Only the caller that holds the claim
-// sends. A refused send marks the entry failed (ok false, error), which
-// releases it for a later run; a sent one records channel_id and ts so the
-// card can be rewritten after the decision. A dedicated claim table would
-// be simpler (see the PR: leave_request_notices); the code talks to the
-// LeaveNoticeClaims interface so it can move without touching the senders.
+// Slack log): read the log, append { kind, recipient_id, state: "claimed",
+// claim_token: <random uuid> }, and UPDATE … WHERE id = $1 AND updated_at =
+// <what we read> AND slack_notify = <what we read>. Only one writer per
+// version gets a row back, even when two versions share an updated_at to
+// the microsecond, because the log itself differs. The winner reads the
+// entry back and sends only while it still carries its token; sent/release
+// only touch an entry that is still the caller's. A refused send marks the
+// entry failed (ok false, error), which releases it for a later run; a sent
+// one records channel_id and ts so the card can be rewritten after the
+// decision. A dedicated claim table would be simpler (see the PR:
+// leave_request_notices); the code talks to the LeaveNoticeClaims interface
+// so it can move without touching the senders.
 //
-// Same residual as lib/slack/l10-followup: a process that dies between a
-// claim and the send leaves a "claimed" entry nobody retries (a missed DM
-// is safer than a double one).
+// A process that dies between a claim and the send leaves a "claimed"
+// entry. Once it is older than LEAVE_CLAIM_STALE_MS (10 minutes, well past
+// the routes' 60s maxDuration) the next run or POST /requests/:id/notify
+// claims it again with a new token. A "sent" entry is never sent again.
 //
 // Off everywhere except the Hub's real deployment (VERCEL_ENV=production and
 // preview writes not disabled): previews share the real database and must
@@ -39,6 +42,7 @@
 // Uses the service role: it reads other people's Slack ids and leave and
 // writes slack_notify, which 421 keeps server-only.
 
+import { randomUUID } from "node:crypto";
 import { previewWritesDisabled } from "@/lib/preview-writes";
 import * as slack from "@/lib/slack/client";
 import { isBotConfigured } from "@/lib/slack/bots";
@@ -76,6 +80,16 @@ export function leaveRequestUrl(departmentSlug: string, requestId: string, env: 
 
 export type LeaveNoticeKind = "approval" | "decision";
 
+/**
+ * A "claimed" entry older than this belongs to a sender that died between
+ * the claim and the send. Every leave route and /api/slack/interactions stop
+ * at maxDuration 60s, so a live sender never holds a claim this long. The
+ * next run (a new request, a decision, a cancel) or POST
+ * /requests/:id/notify may then claim it again. A "sent" entry is never
+ * claimed again.
+ */
+export const LEAVE_CLAIM_STALE_MS = 10 * 60 * 1000;
+
 /** One slack_notify entry. leader_id/channel_id/ts/ok/error are 421's documented keys. */
 export type LeaveNotice = LeaveSlackNotice & {
   kind?: LeaveNoticeKind;
@@ -83,6 +97,8 @@ export type LeaveNotice = LeaveSlackNotice & {
   state?: "claimed" | "sent" | "failed";
   claimed_at?: string;
   sent_at?: string;
+  /** Random per claim: which caller holds it. sent/release only touch the entry while it is still theirs. */
+  claim_token?: string;
 };
 
 export interface LeaveNoticeClaims {
@@ -96,8 +112,43 @@ export interface LeaveNoticeClaims {
 
 const sameNotice = (n: LeaveNotice, kind: LeaveNoticeKind, recipientId: string) => n.kind === kind && n.recipient_id === recipientId;
 
-/** Claims kept in leave_requests.slack_notify, compare-and-set on updated_at. */
-export function slackNotifyClaims(admin: Client, now: () => Date = () => new Date(), attempts = 5): LeaveNoticeClaims {
+/** A "claimed" entry nobody finished: no readable claimed_at, or older than LEAVE_CLAIM_STALE_MS. */
+export function isStaleClaim(n: LeaveNotice, nowMs: number): boolean {
+  if (n.state !== "claimed") return false;
+  const at = n.claimed_at ? Date.parse(n.claimed_at) : NaN;
+  return !(nowMs - at < LEAVE_CLAIM_STALE_MS);
+}
+
+/** Free to claim: no entry yet, a failed send, or a stale claim. Never a sent one. */
+function claimable(n: LeaveNotice | undefined, nowMs: number): boolean {
+  if (!n) return true;
+  if (n.state === "failed") return true;
+  return isStaleClaim(n, nowMs);
+}
+
+/**
+ * Claims kept in leave_requests.slack_notify.
+ *
+ * Every write is a compare-and-set on both updated_at and the log itself:
+ * UPDATE … SET slack_notify = <next> WHERE id = $1 AND updated_at = <read>
+ * AND slack_notify = <read>. Postgres re-checks that WHERE against the row a
+ * concurrent writer just committed, so of two writers that read the same
+ * version only the first gets a row back, even when 421's guard gives both
+ * versions the same updated_at (two writes in the same microsecond): every
+ * write changes the log (a fresh claim_token, or a new state), so the second
+ * writer's slack_notify = <read> no longer holds. A claim then reads the
+ * entry back and sends only while it still carries its own token.
+ */
+export function slackNotifyClaims(
+  admin: Client,
+  now: () => Date = () => new Date(),
+  attempts = 5,
+  newToken: () => string = () => randomUUID()
+): LeaveNoticeClaims {
+  /** Tokens this caller holds, by request:kind:recipient. */
+  const held = new Map<string, string>();
+  const key = (requestId: string, kind: LeaveNoticeKind, recipientId: string) => `${requestId}:${kind}:${recipientId}`;
+
   async function read(requestId: string): Promise<{ list: LeaveNotice[]; version: string } | null> {
     const r = await admin.from(LEAVE_TABLES.requests).select("id, slack_notify, updated_at").eq("id", requestId).maybeSingle();
     if (r.error || !r.data) return null;
@@ -121,6 +172,9 @@ export function slackNotifyClaims(admin: Client, now: () => Date = () => new Dat
         .update({ slack_notify: next, updated_at: now().toISOString() })
         .eq("id", requestId)
         .eq("updated_at", cur.version)
+        // jsonb equality: a writer in between changed the log, even if its
+        // updated_at matches ours to the microsecond.
+        .eq("slack_notify", JSON.stringify(cur.list))
         .select("id");
       if (w.error) return "error";
       if ((w.data ?? []).length) return "written";
@@ -129,32 +183,54 @@ export function slackNotifyClaims(admin: Client, now: () => Date = () => new Dat
     return "error";
   }
 
+  /** Change the entry only while it is still this caller's live claim. */
+  const whileMine = (requestId: string, kind: LeaveNoticeKind, recipientId: string, to: (n: LeaveNotice) => LeaveNotice) => {
+    const token = held.get(key(requestId, kind, recipientId));
+    return (list: LeaveNotice[]) => {
+      const mine = list.find((n) => sameNotice(n, kind, recipientId));
+      if (!token || !mine || mine.state !== "claimed" || mine.claim_token !== token) return null;
+      return list.map((n) => (sameNotice(n, kind, recipientId) ? to(n) : n));
+    };
+  };
+
   return {
     async claim(requestId, kind, recipientId) {
+      const token = newToken();
       const r = await mutate(requestId, (list) => {
-        const held = list.find((n) => sameNotice(n, kind, recipientId) && n.state !== "failed");
-        if (held) return null;
-        const entry: LeaveNotice = { kind, recipient_id: recipientId, state: "claimed", claimed_at: now().toISOString() };
+        const current = list.find((n) => sameNotice(n, kind, recipientId));
+        if (!claimable(current, now().getTime())) return null;
+        const entry: LeaveNotice = { kind, recipient_id: recipientId, state: "claimed", claimed_at: now().toISOString(), claim_token: token };
         if (kind === "approval") entry.leader_id = recipientId;
         return [...list.filter((n) => !sameNotice(n, kind, recipientId)), entry];
       });
-      return r === "written" ? "claimed" : r === "unchanged" ? "taken" : "error";
+      if (r === "unchanged") return "taken";
+      if (r === "error") return "error";
+      // Read back: send only if the stored entry is still ours.
+      const back = await read(requestId);
+      if (!back) return "error";
+      const stored = back.list.find((n) => sameNotice(n, kind, recipientId));
+      if (!stored || stored.state !== "claimed" || stored.claim_token !== token) return "taken";
+      held.set(key(requestId, kind, recipientId), token);
+      return "claimed";
     },
     async sent(requestId, kind, recipientId, info) {
-      await mutate(requestId, (list) =>
-        list.map((n) =>
-          sameNotice(n, kind, recipientId)
-            ? { ...n, state: "sent" as const, ok: true, error: undefined, channel_id: info.channel_id, ts: info.ts, sent_at: now().toISOString() }
-            : n
-        )
+      await mutate(
+        requestId,
+        whileMine(requestId, kind, recipientId, (n) => ({
+          ...n,
+          state: "sent" as const,
+          ok: true,
+          error: undefined,
+          channel_id: info.channel_id,
+          ts: info.ts,
+          sent_at: now().toISOString(),
+        }))
       );
+      held.delete(key(requestId, kind, recipientId));
     },
     async release(requestId, kind, recipientId, error) {
-      await mutate(requestId, (list) => {
-        const mine = list.find((n) => sameNotice(n, kind, recipientId));
-        if (!mine || mine.state !== "claimed") return null;
-        return list.map((n) => (sameNotice(n, kind, recipientId) ? { ...n, state: "failed" as const, ok: false, error } : n));
-      });
+      await mutate(requestId, whileMine(requestId, kind, recipientId, (n) => ({ ...n, state: "failed" as const, ok: false, error })));
+      held.delete(key(requestId, kind, recipientId));
     },
     async list(requestId) {
       return (await read(requestId))?.list ?? [];

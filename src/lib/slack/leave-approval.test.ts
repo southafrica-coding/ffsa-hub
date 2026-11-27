@@ -23,6 +23,8 @@ import type { MemoryDb } from "@/lib/l10/testing/memory-db";
 import {
   buildDecisionDm,
   canSendLeaveSlack,
+  isStaleClaim,
+  LEAVE_CLAIM_STALE_MS,
   loadLeaveContext,
   runLeaveApprovalRequests,
   runLeaveCancelled,
@@ -55,6 +57,7 @@ function fakeDeps(over: Partial<LeaveSlackDeps> = {}) {
   return { deps, sent, updated, logs };
 }
 
+const row = (db: MemoryDb, id: unknown) => db.tables.leave_requests.find((r) => r.id === id)!;
 const notices = (db: MemoryDb, id: string) => db.tables.leave_requests.find((r) => r.id === id)!.slack_notify as LeaveNotice[];
 const sickRequest = (db: MemoryDb, extra: Record<string, unknown> = {}) =>
   seedRequest(db, {
@@ -211,6 +214,88 @@ describe("idempotent DMs", () => {
     const b = slackNotifyClaims(serviceClient(db));
     const got = await Promise.all([a.claim(String(r.id), "decision", SIPHO), b.claim(String(r.id), "decision", SIPHO)]);
     expect(got.sort()).toEqual(["claimed", "taken"]);
+  });
+
+  it("gives one claim when two writers land on the same updated_at (same microsecond)", async () => {
+    const db = makeWorld();
+    const r = sickRequest(db);
+    // 421's guard stamps now(); here both writes get the version they read,
+    // the collision an updated_at-only compare-and-set cannot see.
+    const sameStamp = () => new Date(String(db.tables.leave_requests.find((x) => x.id === r.id)!.updated_at));
+    let token = 0;
+    const a = slackNotifyClaims(serviceClient(db), sameStamp, 5, () => `token-a-${++token}`);
+    const b = slackNotifyClaims(serviceClient(db), sameStamp, 5, () => `token-b-${++token}`);
+    const got = await Promise.all([a.claim(String(r.id), "decision", SIPHO), b.claim(String(r.id), "decision", SIPHO)]);
+    expect(got.sort()).toEqual(["claimed", "taken"]);
+    const log = notices(db, String(r.id));
+    expect(log).toHaveLength(1);
+    expect(log[0]).toMatchObject({ kind: "decision", recipient_id: SIPHO, state: "claimed" });
+    expect(row(db, r.id).updated_at).toBe(r.updated_at); // the collision really happened
+    // The loser cannot record or release the winner's claim.
+    const loser = got[0] === "claimed" ? b : a;
+    await loser.release(String(r.id), "decision", SIPHO, "nope");
+    await loser.sent(String(r.id), "decision", SIPHO, { channel_id: "D_X", ts: "9" });
+    expect(notices(db, String(r.id))[0]).toMatchObject({ state: "claimed", claim_token: log[0].claim_token });
+  });
+
+  it("sends one DM per approver when overlapping runs share every timestamp", async () => {
+    const db = makeWorld();
+    const r = sickRequest(db);
+    const frozen = new Date(String(r.updated_at));
+    const { deps, sent } = fakeDeps({ now: () => frozen });
+    await Promise.all([1, 2, 3].map(() => runLeaveApprovalRequests(serviceClient(db), String(r.id), { deps, env: PROD_ENV })));
+    expect(sent.map((s) => s.to).sort()).toEqual(["U_BEN", "U_MIA"]);
+    expect(notices(db, String(r.id)).map((n) => n.state)).toEqual(["sent", "sent"]);
+  });
+
+  it("claims a 'claimed' entry again once it is older than the stale window", async () => {
+    const db = makeWorld();
+    const r = sickRequest(db);
+    let clock = Date.parse("2026-11-26T08:00:00.000Z");
+    const now = () => new Date(clock);
+    const crashed = slackNotifyClaims(serviceClient(db), now);
+    expect(await crashed.claim(String(r.id), "decision", SIPHO)).toBe("claimed"); // …and the process dies here
+    const next = slackNotifyClaims(serviceClient(db), now);
+    clock += LEAVE_CLAIM_STALE_MS - 1;
+    expect(await next.claim(String(r.id), "decision", SIPHO)).toBe("taken");
+    clock += 1;
+    expect(await next.claim(String(r.id), "decision", SIPHO)).toBe("claimed");
+    // The crashed holder, if it ever wakes, cannot overwrite the new claim.
+    await crashed.release(String(r.id), "decision", SIPHO, "late");
+    await crashed.sent(String(r.id), "decision", SIPHO, { channel_id: "D_OLD", ts: "1" });
+    expect(notices(db, String(r.id))).toMatchObject([{ state: "claimed" }]);
+    await next.sent(String(r.id), "decision", SIPHO, { channel_id: "D_NEW", ts: "2" });
+    expect(notices(db, String(r.id))).toMatchObject([{ state: "sent", channel_id: "D_NEW", ts: "2" }]);
+    // A sent entry is never claimed again, however old.
+    clock += 365 * 24 * 60 * 60 * 1000;
+    expect(await slackNotifyClaims(serviceClient(db), now).claim(String(r.id), "decision", SIPHO)).toBe("taken");
+  });
+
+  it("re-sends a stale claim on the next run and leaves sent cards alone", async () => {
+    const db = makeWorld();
+    const base = Date.parse(tick());
+    const r = sickRequest(db, {
+      slack_notify: [
+        { kind: "approval", recipient_id: BEN, leader_id: BEN, state: "claimed", claimed_at: new Date(base - 11 * 60_000).toISOString(), claim_token: "dead" },
+        { kind: "approval", recipient_id: MIA, leader_id: MIA, state: "sent", ok: true, channel_id: "D_U_MIA", ts: "1.1", claimed_at: new Date(base - 11 * 60_000).toISOString() },
+      ],
+    });
+    const { deps, sent } = fakeDeps();
+    const run = await runLeaveApprovalRequests(serviceClient(db), String(r.id), { deps, env: PROD_ENV });
+    expect(run.results).toEqual([
+      { user_id: BEN, outcome: "sent" },
+      { user_id: MIA, outcome: "already-sent" },
+    ]);
+    expect(sent.map((s) => s.to)).toEqual(["U_BEN"]);
+  });
+
+  it("treats a claimed entry with no readable claimed_at as stale, and never a sent one", () => {
+    const now = Date.parse("2026-11-26T08:00:00.000Z");
+    expect(isStaleClaim({ state: "claimed" }, now)).toBe(true);
+    expect(isStaleClaim({ state: "claimed", claimed_at: "garbage" }, now)).toBe(true);
+    expect(isStaleClaim({ state: "claimed", claimed_at: "2026-11-26T07:55:00.000Z" }, now)).toBe(false);
+    expect(isStaleClaim({ state: "sent", claimed_at: "2020-01-01T00:00:00.000Z" }, now)).toBe(false);
+    expect(LEAVE_CLAIM_STALE_MS).toBe(10 * 60 * 1000);
   });
 
   it("does not DM approvers once the request is no longer pending", async () => {
