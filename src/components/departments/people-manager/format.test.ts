@@ -2,8 +2,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import { crowdedRuns } from "./dashboard";
-import { calendarCopy, holidayCopy, projectionCopy, rangeLabel, statusLabel } from "./format";
+import { blockoutReasonLabel, calendarCopy, holidayCopy, projectionCopy, rangeLabel, statusLabel } from "./format";
 import { nextSelection } from "./blockouts-editor";
+import { BlockoutRow } from "./my-time-off";
 import { monthlyDays } from "./person-view";
 import { draftBody, PreviewCount } from "./request-form";
 import type { PmPreview } from "./types";
@@ -120,5 +121,39 @@ describe("block-out selection", () => {
     expect(a).toEqual({ sel: { start: "2026-12-12", end: "2026-12-12" }, awaitingEnd: true });
     expect(nextSelection(a.sel, true, "2026-12-13")).toEqual({ sel: { start: "2026-12-12", end: "2026-12-13" }, awaitingEnd: false });
     expect(nextSelection(a.sel, true, "2026-12-10")).toEqual({ sel: { start: "2026-12-10", end: "2026-12-12" }, awaitingEnd: false });
+  });
+});
+
+describe("block-out reason", () => {
+  it("hides a redacted reason on someone else's row", () => {
+    expect(blockoutReasonLabel(null, false)).toBeNull();
+    expect(blockoutReasonLabel("", false)).toBeNull();
+    expect(blockoutReasonLabel("   ", false)).toBeNull();
+  });
+
+  it("says 'No reason given' only on the owner's empty reason", () => {
+    expect(blockoutReasonLabel(null, true)).toBe("No reason given");
+    expect(blockoutReasonLabel("", true)).toBe("No reason given");
+    expect(blockoutReasonLabel("  ", true)).toBe("No reason given");
+  });
+
+  it("shows a written reason for the owner and for a leader", () => {
+    expect(blockoutReasonLabel("Family in town", true)).toBe("Family in town");
+    expect(blockoutReasonLabel("Family in town", false)).toBe("Family in town");
+    expect(blockoutReasonLabel("  Travel day  ", false)).toBe("Travel day");
+  });
+
+  it("omits the subtitle when a leader sees a redacted reason", () => {
+    const row = { start_date: "2026-12-21", end_date: "2026-12-23", reason: null };
+    const html = renderToStaticMarkup(createElement(BlockoutRow, { b: row, own: false }));
+    expect(html).not.toMatch(/No reason given/i);
+    expect(html).toMatch(/Mon 21 – Wed 23 Dec/);
+  });
+
+  it("shows 'No reason given' on the owner's own empty reason", () => {
+    const row = { start_date: "2026-12-21", end_date: "2026-12-23", reason: null };
+    const html = renderToStaticMarkup(createElement(BlockoutRow, { b: row, own: true }));
+    expect(html).toMatch(/No reason given/);
+    expect(html).toMatch(/Mon 21 – Wed 23 Dec/);
   });
 });

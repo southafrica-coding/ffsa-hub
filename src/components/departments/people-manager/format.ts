@@ -192,3 +192,15 @@ export function requestMeta(r: PmRequest, mine: boolean): string {
       return `${mine ? "you cancelled" : "cancelled"}${r.cancelled_at ? ` on ${shortDate(r.cancelled_at)}` : ""}`;
   }
 }
+
+/**
+ * Subtitle for a block-out reason. Null means hide the line.
+ * After #758, `reason` is null for everyone except the owner and admins.
+ * A leader looking at someone else's row must not see "No reason given"
+ * for a redacted reason. That copy is only for the owner's own empty reason.
+ */
+export function blockoutReasonLabel(reason: string | null | undefined, own: boolean): string | null {
+  const text = (reason ?? "").trim();
+  if (text) return text;
+  return own ? "No reason given" : null;
+}
