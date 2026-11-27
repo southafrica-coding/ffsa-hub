@@ -359,3 +359,61 @@ describe("edit and delete go through canEditSongwritingRecord", () => {
     vi.doUnmock("@/lib/songwriting/access");
   });
 });
+
+describe("424 owns created_by, by and last_contact_at (Hub Data's rules)", () => {
+  const payloads = (table: string, action: string) => h.db.log.filter((l) => l.table === table && l.action === action).map((l) => l.payload as Record<string, unknown>);
+
+  it("never sends created_by on a lead, by on a logged contact, or last_contact_at anywhere", async () => {
+    await createLead(send({ label: "New lead" }), p());
+    await patchLead(send({ status: "closed" }, "PATCH"), p({ leadId: L_OPEN }));
+    await addEvent(send({ note: "x" }), p({ leadId: L_OPEN }));
+    for (const body of payloads("pw_songwriting_leads", "insert")) expect(body).not.toHaveProperty("created_by");
+    for (const body of [...payloads("pw_songwriting_leads", "insert"), ...payloads("pw_songwriting_leads", "update")]) expect(body).not.toHaveProperty("last_contact_at");
+    for (const body of payloads("pw_songwriting_lead_events", "insert")) expect(body).not.toHaveProperty("by");
+    // ...and the database still stamps them.
+    expect(rows("pw_songwriting_leads").find((l) => l.label === "New lead")!.created_by).toBe(MEMBER);
+  });
+
+  it("refuses them in a body with 400 read_only_field", async () => {
+    for (const [r, field] of [
+      [await createLead(send({ label: "x", created_by: MEMBER2 }), p()), "created_by"],
+      [await patchLead(send({ last_contact_at: "2026-11-20T00:00:00Z" }, "PATCH"), p({ leadId: L_OPEN })), "last_contact_at"],
+      [await addEvent(send({ note: "x", by: MEMBER2 }), p({ leadId: L_OPEN })), "by"],
+    ] as const) {
+      expect(r.status).toBe(400);
+      expect(await r.json()).toMatchObject({ code: "read_only_field", fieldErrors: { [field]: expect.any(String) } });
+    }
+  });
+
+  it("maps the database's own refusals: actor locked / derived to 400 read_only_field, actor required to a logged 500", async () => {
+    const { dbError } = await import("@/lib/songwriting/http");
+    const locked = dbError({ code: "42501", message: "pw_songwriting_actor_locked" });
+    expect(locked.status).toBe(400);
+    expect(await locked.json()).toMatchObject({ code: "read_only_field", fieldErrors: { created_by: expect.any(String) } });
+    const derived = dbError({ code: "42501", message: "pw_lead_last_contact_derived" });
+    expect(derived.status).toBe(400);
+    expect(await derived.json()).toMatchObject({ code: "read_only_field", fieldErrors: { last_contact_at: expect.any(String) } });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(dbError({ code: "23514", message: "pw_lead_event_actor_required" }).status).toBe(500);
+    spy.mockRestore();
+    expect(dbError({ code: "42501", message: "new row violates row-level security policy" }).status).toBe(403);
+  });
+
+  it("logged contacts are append-only: no PATCH or PUT route", async () => {
+    const events = await import("./leads/[leadId]/events/route");
+    const one = await import("./leads/[leadId]/events/[eventId]/route");
+    expect(Object.keys(events).filter((k) => /^(PATCH|PUT)$/.test(k))).toEqual([]);
+    expect(Object.keys(one).filter((k) => /^(PATCH|PUT)$/.test(k))).toEqual([]);
+  });
+
+  it("a delete the database skips (0 rows, not the author) is 403, never a silent 200", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/songwriting/access", async (orig) => ({ ...(await orig<typeof import("@/lib/songwriting/access")>()), canEditSongwritingRecord: () => true }));
+    const loose = await import("./leads/[leadId]/events/[eventId]/route");
+    as(MEMBER2);
+    const r = await loose.DELETE(del(), p({ leadId: L_OPEN, eventId: E_FIRST }));
+    expect(r.status).toBe(403);
+    expect(rows("pw_songwriting_lead_events").some((e) => e.id === E_FIRST)).toBe(true);
+    vi.doUnmock("@/lib/songwriting/access");
+  });
+});

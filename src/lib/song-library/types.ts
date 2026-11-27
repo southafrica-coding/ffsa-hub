@@ -69,6 +69,13 @@ export const SL_CODES = {
   useSignedUpload: "use_signed_upload",
 } as const;
 
+/**
+ * Migration 423's guard message (SQLSTATE 42501, no hint) when a writer
+ * who is not a manager or admin withdraws a sign-off after the splits are
+ * agreed. The API answers 409 credits_agreed, not 403.
+ */
+export const SL_AGREED_REVOKE_GUARD = "Splits are agreed for this song; only a Song Library manager or an admin can revoke the agreement";
+
 /** `reason` on a 403 forbidden. */
 export const SL_REASONS = {
   stageNotAllowed: "stage_not_allowed",

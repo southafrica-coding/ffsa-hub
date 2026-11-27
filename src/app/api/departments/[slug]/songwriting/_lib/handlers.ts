@@ -19,7 +19,15 @@
 //   DELETE /songwriting/leads/:id                (its logged contacts go with it)
 //   GET    /songwriting/leads/:id/events         logged contacts, newest first
 //   POST   /songwriting/leads/:id/events         { note, at? } → { lead, event } (last_contact_at moves forward)
-//   DELETE /songwriting/leads/:id/events/:eid    the person who logged it, or an admin
+//   DELETE /songwriting/leads/:id/events/:eid    the person who logged it, or an admin (else 403; 0 rows deleted is 403, never a silent 200)
+//
+// 424 owns three columns: pw_songwriting_leads.created_by and
+// pw_songwriting_lead_events.by (stamped with auth.uid()) and
+// last_contact_at (derived from events). The API never sends them and
+// refuses them in a body (400 read_only_field); if the database refuses
+// one anyway (42501 pw_songwriting_actor_locked / pw_lead_last_contact_derived)
+// that is 400 read_only_field too. Trainings have no such trigger (417), so
+// the API sets their created_by.
 //
 // Training date rule (424): training_date is optional, a YYYY-MM-DD date in
 // the row's year and month. A PATCH that moves year/month must also move
@@ -414,8 +422,9 @@ export async function createLead(request: Request, slug: string) {
   if (!b.ok) return b.response;
   const parsed = parseLeadCreate(b.value);
   if (!parsed.ok) return fail(parsed);
-  // created_by is stamped by 424's trigger (auth.uid()); sent anyway for clarity.
-  const ins = await ctx.supabase.from(SW_TABLES.leads).insert({ ...parsed.value, created_by: ctx.userId }).select(SW_COLUMNS.leads).single();
+  // Never send created_by or last_contact_at: 424 stamps created_by with
+  // auth.uid() for signed-in callers and derives last_contact_at from events.
+  const ins = await ctx.supabase.from(SW_TABLES.leads).insert(parsed.value).select(SW_COLUMNS.leads).single();
   if (ins.error) return dbError(ins.error);
   await audit(ctx, "create", "pw_songwriting_lead", ins.data.id, parsed.value);
   return NextResponse.json({ lead: (await withOwnerNames(ctx, [ins.data as PwSongwritingLead]))[0] }, { status: 201 });
@@ -489,7 +498,8 @@ export async function addLeadEvent(request: Request, slug: string, leadId: strin
   if (!b.ok) return b.response;
   const parsed = parseEventCreate(b.value, (deps.now ?? (() => new Date()))());
   if (!parsed.ok) return fail(parsed);
-  // by is stamped by 424's trigger (auth.uid()); last_contact_at follows.
+  // Never send by: 424 stamps it with auth.uid(). last_contact_at follows in
+  // the database. There is no UPDATE route: logged contacts are append-only.
   const ins = await ctx.supabase.from(SW_TABLES.events).insert({ lead_id: leadId, ...parsed.value }).select(SW_COLUMNS.events).single();
   if (ins.error) return dbError(ins.error);
   const lead = await leadOut(ctx, leadId);

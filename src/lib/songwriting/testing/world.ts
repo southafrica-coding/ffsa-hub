@@ -15,6 +15,7 @@
 //     and delete recomputes the lead's last_contact_at
 // Names are made up. No real people, nations or leads.
 
+import { PW_LEAD_EVENT_ACTOR_REQUIRED, PW_LEAD_LAST_CONTACT_DERIVED, PW_SONGWRITING_ACTOR_LOCKED } from "@/lib/departments/db.types";
 import { createMemoryDb, type DbErr, type MemoryDb, type Row, type Rls } from "@/lib/song-library/testing/memory-db";
 
 export const PW_ID = "00000000-0000-4000-8000-0000000005a1";
@@ -216,10 +217,10 @@ export function makeWorld(): MemoryDb {
           if (op === "delete") return;
           if (op === "insert") {
             if (signedIn(ctx.uid)) row.created_by = ctx.uid;
-            if (row.last_contact_at !== null) return { code: "42501", message: "pw_lead_last_contact_derived" };
+            if (row.last_contact_at !== null) return { code: "42501", message: PW_LEAD_LAST_CONTACT_DERIVED };
           } else {
-            if (signedIn(ctx.uid) && row.created_by !== old!.created_by) return { code: "42501", message: "pw_songwriting_actor_locked" };
-            if (row.last_contact_at !== old!.last_contact_at) return { code: "42501", message: "pw_lead_last_contact_derived" };
+            if (signedIn(ctx.uid) && row.created_by !== old!.created_by) return { code: "42501", message: PW_SONGWRITING_ACTOR_LOCKED };
+            if (row.last_contact_at !== old!.last_contact_at) return { code: "42501", message: PW_LEAD_LAST_CONTACT_DERIVED };
           }
           for (const [col, table] of [["nation_id", "pw_nations"], ["source_training_id", "pw_songwriting_trainings"], ["owner_user_id", "users"], ["contact_user_id", "users"]] as const) {
             if (row[col] && !tbl(table).some((r) => r.id === row[col])) return { code: "23503", message: `${col} fkey` };
@@ -233,9 +234,10 @@ export function makeWorld(): MemoryDb {
       },
       pw_songwriting_lead_events: {
         before: (op, row, _old, ctx) => {
-          if (op === "update" && signedIn(ctx.uid)) return { code: "42501", message: "pw_songwriting_actor_locked" };
+          if (op === "update" && signedIn(ctx.uid)) return { code: "42501", message: PW_SONGWRITING_ACTOR_LOCKED };
           if (op === "insert") {
             if (signedIn(ctx.uid)) row.by = ctx.uid;
+            else if (!row.by) return { code: "23514", message: PW_LEAD_EVENT_ACTOR_REQUIRED };
             if (!row.at) row.at = tick();
             if (!tbl("pw_songwriting_leads").some((l) => l.id === row.lead_id)) return { code: "23503", message: "lead_id fkey" };
             row.updated_at = row.created_at;

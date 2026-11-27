@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { serverError } from "@/lib/departments/http";
-import { SL_CODES } from "./types";
+import { SL_AGREED_REVOKE_GUARD, SL_CODES } from "./types";
 
 export { serverError };
 
@@ -51,7 +51,8 @@ export const splitsLocked = () =>
 export const tooLarge = () => coded(413, "That file is over 200 MB", SL_CODES.tooLarge);
 
 /**
- * A PostgREST error as an HTTP answer. 419's named refusals first:
+ * A PostgREST error as an HTTP answer. 419/423's named refusals first:
+ *   42501 "Splits are agreed … only a … manager or an admin can revoke" (423) → 409 credits_agreed
  *   23514 "Credits are agreed …"                → 409 credits_agreed
  *   23514 "This help request is no longer open" → 409 help_closed
  *   23514 "Give this writer a split …"          → 400 splits_not_100
@@ -62,6 +63,7 @@ export const tooLarge = () => coded(413, "That file is over 200 MB", SL_CODES.to
  */
 export function dbError(error: DbError) {
   const msg = error?.message ?? "";
+  if (error?.code === "42501" && msg.includes(SL_AGREED_REVOKE_GUARD)) return splitsLocked();
   if (error?.code === "23514" && msg.includes("Credits are agreed")) return splitsLocked();
   if (error?.code === "23514" && msg.includes("no longer open")) return conflict("This help request is no longer open", SL_CODES.helpClosed);
   if (error?.code === "23514" && (msg.includes("Give this writer a split") || msg.includes("Splits must total"))) {
