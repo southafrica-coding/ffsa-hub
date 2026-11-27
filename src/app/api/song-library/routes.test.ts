@@ -324,6 +324,13 @@ describe("splits", () => {
     }
   });
 
+  it("adding someone who is already a writer is 409 duplicate", async () => {
+    as(WRITER);
+    const r = await writers.POST(req({ user_id: COWRITER }), S());
+    expect(r.status).toBe(409);
+    expect(await code(r)).toBe("duplicate");
+  });
+
   it("cannot be signed off until they total 100", async () => {
     h.db.raw("song_library_writers").find((w) => w.id === W_CO)!.split_pct = 35;
     as(WRITER);

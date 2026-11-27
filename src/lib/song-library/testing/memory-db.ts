@@ -43,6 +43,19 @@ function valueOf(row: Row, col: string): unknown {
   return v ?? null;
 }
 
+/** A PostgREST ilike pattern (% and _, backslash escapes) as a case-insensitive RegExp. */
+function likeRegex(pattern: string): RegExp {
+  let out = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "\\" && i + 1 < pattern.length) out += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    else if (c === "%") out += ".*";
+    else if (c === "_") out += ".";
+    else out += c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+  return new RegExp(`^${out}$`, "is");
+}
+
 function matches(row: Row, filters: Filter[]): boolean {
   for (const f of filters) {
     const [col, val, val2] = f.args as [string, unknown, unknown];
@@ -54,6 +67,7 @@ function matches(row: Row, filters: Filter[]): boolean {
     if (f.op === "in" && !(val as unknown[]).includes(v)) return false;
     if (f.op === "gte" && !((v as string) >= (val as string))) return false;
     if (f.op === "lte" && !((v as string) <= (val as string))) return false;
+    if (f.op === "ilike" && !(typeof v === "string" && likeRegex(val as string).test(v))) return false;
   }
   return true;
 }
@@ -182,7 +196,7 @@ export function createMemoryDb(
           return b;
         };
       }
-      for (const op of ["eq", "neq", "is", "not", "in", "gte", "lte", "order", "limit"]) {
+      for (const op of ["eq", "neq", "is", "not", "in", "gte", "lte", "ilike", "order", "limit"]) {
         b[op] = (...args: unknown[]) => {
           q.filters.push({ op, args });
           return b;
