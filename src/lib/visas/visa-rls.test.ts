@@ -44,4 +44,24 @@ describe.skipIf(!postgresUp())("visa RLS", () => {
       { stdio: "pipe", cwd: process.cwd() }
     );
   }, 60_000);
+
+  it("embassies and FFSA's standing documents: who keeps them, who picks the embassy, what students download", () => {
+    execFileSync("sudo", ["-u", "postgres", "dropdb", "--if-exists", "visa_embassies"], { stdio: "pipe" });
+    execFileSync("sudo", ["-u", "postgres", "createdb", "visa_embassies"], { stdio: "pipe" });
+    execFileSync(
+      "sudo",
+      ["-u", "postgres", "psql", "-v", "ON_ERROR_STOP=1", "-d", "visa_embassies", "-f", "supabase/tests/visa_embassies.sql"],
+      { stdio: "pipe", cwd: process.cwd() }
+    );
+  }, 60_000);
+
+  it("review follow-ups: passport numbers however typed, templates, every open of FFSA's documents recorded", () => {
+    execFileSync("sudo", ["-u", "postgres", "dropdb", "--if-exists", "visa_review_fixes"], { stdio: "pipe" });
+    execFileSync("sudo", ["-u", "postgres", "createdb", "visa_review_fixes"], { stdio: "pipe" });
+    execFileSync(
+      "sudo",
+      ["-u", "postgres", "psql", "-v", "ON_ERROR_STOP=1", "-d", "visa_review_fixes", "-f", "supabase/tests/visa_review_fixes.sql"],
+      { stdio: "pipe", cwd: process.cwd() }
+    );
+  }, 60_000);
 });

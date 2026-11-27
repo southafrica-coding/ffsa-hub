@@ -5,12 +5,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Kpi, KpiStrip, Masthead, NeedsYou, SectionBar } from "@/components/ffsa";
 import { ChecklistPanel } from "@/components/visas/checklist-panel";
 import { StaffLettersPanel, type IssuableTemplate, type LetterRow } from "@/components/visas/letters-panel";
+import { EmbassyPanel, type EmbassyOption } from "@/components/visas/embassy-panel";
 import { canFollowUp, getVisaAccess, isLegalFor } from "@/lib/visas/access";
 import { buildChecklist, toReview, type ChecklistDocument, type ChecklistType } from "@/lib/visas/checklist";
 import { WAITING_LABEL, formatDay, personName } from "@/lib/visas/display";
 import { VISA_STATUS_LABEL, type VisaStatus, type VisaWaitingOn } from "@/lib/visas/status";
 import { daysInclusive } from "@/lib/visas/stay";
 import { issueFields, type LetterKind } from "@/lib/visas/letters";
+import { embassyLetterDefaults, type Embassy } from "@/lib/visas/embassies";
 import {
   getProgramNames,
   getVisaApprovalRequests,
@@ -20,6 +22,8 @@ import {
   getVisaCaseQuestions,
   getVisaCaseSchools,
   getVisaDocumentTypes,
+  getVisaEmbassies,
+  getVisaEmbassyById,
   getVisaLetterTemplates,
   getVisaLetters,
   getVisaMissingDocuments,
@@ -57,7 +61,12 @@ const EVENT_LABEL: Record<string, string> = {
   letter_signed: "Signed letter uploaded",
   letter_scan_downloaded: "Signed letter opened",
   letter_withdrawn: "Letter withdrawn",
+  embassy_set: "Embassy chosen",
+  standing_document_downloaded: "FFSA document downloaded",
 };
+
+// Legal for the case can change the embassy until the case is lodged (500).
+const EMBASSY_STATUSES: VisaStatus[] = ["collecting_documents", "sent_back", "awaiting_legal", "approved"];
 
 // Letters can be issued once legal has approved the case; an exempt
 // student may ask for one for the airport.
@@ -79,6 +88,7 @@ type CaseRow = {
   refusal_reason: string | null;
   arrived_on: string | null;
   entry_stamp_ok: boolean | null;
+  embassy_id: string | null;
 };
 
 export default async function VisaCasePage({ params }: { params: Promise<{ caseId: string }> }) {
@@ -97,7 +107,7 @@ export default async function VisaCasePage({ params }: { params: Promise<{ caseI
   if (!caseData) notFound();
   const c = caseData as CaseRow;
 
-  const [schoolsRes, typesRes, docsRes, missingRes, requestsRes, questionsRes, eventsRes, lettersRes] = await Promise.all([
+  const [schoolsRes, typesRes, docsRes, missingRes, requestsRes, questionsRes, eventsRes, lettersRes, embassyRes] = await Promise.all([
     getVisaCaseSchools(supabase, caseId),
     getVisaDocumentTypes(supabase),
     getVisaCaseDocuments(supabase, caseId),
@@ -106,7 +116,9 @@ export default async function VisaCasePage({ params }: { params: Promise<{ caseI
     getVisaCaseQuestions(supabase, caseId),
     getVisaCaseEvents(supabase, caseId),
     getVisaLetters(supabase, caseId),
+    c.embassy_id ? getVisaEmbassyById(supabase, c.embassy_id) : Promise.resolve({ data: null }),
   ]);
+  const embassy = (embassyRes.data ?? null) as Embassy | null;
   const schools = (schoolsRes.data ?? []) as Array<{
     id: string;
     program_id: string;
@@ -186,6 +198,10 @@ export default async function VisaCasePage({ params }: { params: Promise<{ caseI
         ...issueFields(t.body),
       }));
   }
+  const canChangeEmbassy = isLegal && EMBASSY_STATUSES.includes(c.status);
+  const embassyOptions: EmbassyOption[] = canChangeEmbassy
+    ? (((await getVisaEmbassies(supabase, { activeOnly: true })).data ?? []) as EmbassyOption[])
+    : [];
   const toSign = letters.filter((l) => l.status === "confirmed").length;
   const toFix = letters.filter((l) => l.status === "needs_fix").length;
 
@@ -233,6 +249,7 @@ export default async function VisaCasePage({ params }: { params: Promise<{ caseI
               canIssue={canIssue}
               stayFrom={c.stay_from}
               stayTo={c.stay_to}
+              defaults={embassyLetterDefaults(embassy)}
             />
           )}
           <ChecklistPanel caseId={caseId} items={items} canChange={collecting && canFollow} reviewAs={reviewAs} audience="staff" />
@@ -255,6 +272,9 @@ export default async function VisaCasePage({ params }: { params: Promise<{ caseI
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">
+          {(canFollow || isLegal) && (
+            <EmbassyPanel caseId={caseId} embassy={embassy} options={embassyOptions} canChange={canChangeEmbassy} audience="staff" />
+          )}
           <div className="border border-ink">
             <SectionBar title="Stay" meta={stayDays != null && stayDays > 90 ? "Over 90 days" : undefined} />
             <ul>

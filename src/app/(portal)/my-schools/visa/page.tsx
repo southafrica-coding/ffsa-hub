@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Masthead, NeedsYou, SectionBar, StatusPill } from "@/components/ffsa";
 import { ChecklistPanel } from "@/components/visas/checklist-panel";
 import { StudentLettersPanel, type LetterRow } from "@/components/visas/letters-panel";
+import { EmbassyPanel, StudentFfsaDocuments, type EmbassyOption } from "@/components/visas/embassy-panel";
+import type { Embassy } from "@/lib/visas/embassies";
 import { buildChecklist, studentToDo, type ChecklistDocument, type ChecklistType } from "@/lib/visas/checklist";
 import { formatDay, statusTone } from "@/lib/visas/display";
 import { VISA_STATUS_LABEL, type VisaStatus } from "@/lib/visas/status";
@@ -12,9 +14,15 @@ import {
   getOpenVisaCaseForUser,
   getVisaCaseDocuments,
   getVisaCaseSchools,
+  getVisaCaseStandingDocuments,
   getVisaDocumentTypes,
+  getVisaEmbassies,
+  getVisaEmbassyById,
   getVisaLetters,
 } from "@/services/visas";
+
+// The student chooses the embassy until legal has approved (500).
+const CHOOSE_EMBASSY: VisaStatus[] = ["collecting_documents", "sent_back", "awaiting_legal"];
 
 // The student's own visa case: what to send, what came back for a redo,
 // and where the case is. RLS shows only their own case, schools and
@@ -54,14 +62,20 @@ export default async function MyVisaPage() {
       </div>
     );
   }
-  const c = caseData as { id: string; status: VisaStatus; stay_from: string | null; stay_to: string | null; lodge_by: string | null; visa_valid_to: string | null };
+  const c = caseData as { id: string; status: VisaStatus; stay_from: string | null; stay_to: string | null; lodge_by: string | null; visa_valid_to: string | null; embassy_id: string | null };
 
-  const [{ data: schools }, { data: types }, { data: docs }, { data: letterData }] = await Promise.all([
-    getVisaCaseSchools(supabase, c.id),
-    getVisaDocumentTypes(supabase),
-    getVisaCaseDocuments(supabase, c.id),
-    getVisaLetters(supabase, c.id),
-  ]);
+  const canChooseEmbassy = CHOOSE_EMBASSY.includes(c.status);
+  const [{ data: schools }, { data: types }, { data: docs }, { data: letterData }, { data: embassyData }, { data: optionData }, { data: ffsaDocs }] =
+    await Promise.all([
+      getVisaCaseSchools(supabase, c.id),
+      getVisaDocumentTypes(supabase),
+      getVisaCaseDocuments(supabase, c.id),
+      getVisaLetters(supabase, c.id),
+      c.embassy_id ? getVisaEmbassyById(supabase, c.embassy_id) : Promise.resolve({ data: null }),
+      canChooseEmbassy ? getVisaEmbassies(supabase, { activeOnly: true }) : Promise.resolve({ data: [] }),
+      c.status === "approved" || c.status === "lodged" ? getVisaCaseStandingDocuments(supabase, c.id) : Promise.resolve({ data: [] }),
+    ]);
+  const embassy = (embassyData ?? null) as Embassy | null;
   const schoolName = new Map(
     ((schools ?? []) as Array<{ program_id: string; programs: { name: string } | null }>).map((s) => [s.program_id, s.programs?.name ?? "School"])
   );
@@ -119,7 +133,22 @@ export default async function MyVisaPage() {
           </div>
         </div>
 
+        {(embassy || canChooseEmbassy) && (
+          <EmbassyPanel
+            caseId={c.id}
+            embassy={embassy}
+            options={(optionData ?? []) as EmbassyOption[]}
+            canChange={canChooseEmbassy}
+            audience="student"
+          />
+        )}
+
         <StudentLettersPanel letters={letters} />
+
+        <StudentFfsaDocuments
+          caseId={c.id}
+          documents={(ffsaDocs ?? []) as Array<{ id: string; label: string; description: string | null }>}
+        />
 
         <ChecklistPanel caseId={c.id} items={items} canChange={collecting} audience="student" />
 

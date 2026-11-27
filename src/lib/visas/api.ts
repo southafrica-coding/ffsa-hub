@@ -96,3 +96,21 @@ export const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 export const VISA_BUCKET = "visa-documents";
 /** Signed download links last this long (seconds). */
 export const SIGNED_URL_TTL = 300;
+
+/**
+ * Errors from a plain table write (embassies, standing documents): RLS
+ * refusing (42501), a duplicate (23505, with the caller's words) or a
+ * CHECK (23514). Anything else is a server error whose text we don't pass on.
+ */
+export function tableErrorResponse(error: DbError, duplicate: string): NextResponse {
+  switch (error.code) {
+    case "42501":
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    case "23505":
+      return NextResponse.json({ error: duplicate }, { status: 409 });
+    case "23514":
+      return NextResponse.json({ error: "Some of the details aren't allowed. Check them and try again." }, { status: 400 });
+    default:
+      return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+  }
+}

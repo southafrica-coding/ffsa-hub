@@ -6,7 +6,8 @@ import { Chip, Kpi, KpiStrip, Masthead, MastheadAction, NeedsYou, SectionBar, St
 import { getVisaAccess, isLegalFor, canFollowUp } from "@/lib/visas/access";
 import { VISA_OPEN_STATUSES, VISA_STATUS_LABEL, type VisaStatus, type VisaWaitingOn } from "@/lib/visas/status";
 import { WAITING_LABEL, daysUntil, formatDay, personName, statusTone } from "@/lib/visas/display";
-import { getProgramNames, getVisaCases, getVisaPeopleNames } from "@/services/visas";
+import { standingNeedingAttention, type StandingDocument } from "@/lib/visas/standing";
+import { getProgramNames, getVisaCases, getVisaPeopleNames, getVisaStandingDocuments } from "@/services/visas";
 
 // Visas under Training: every case the user may see (RLS decides: legal
 // sees all, scoped legal and school leaders see their schools' cases).
@@ -66,6 +67,11 @@ export default async function VisasPage({ searchParams }: { searchParams: Promis
     (c) => c.lodge_by && ["collecting_documents", "sent_back", "awaiting_legal", "approved"].includes(c.status) && daysUntil(c.lodge_by) <= SOON_DAYS
   ).length;
 
+  // Legal's own documents that need a new file: shown on the link, not as a band.
+  const standingDue = access.globalLegal
+    ? standingNeedingAttention(((await getVisaStandingDocuments(supabase)).data ?? []) as StandingDocument[]).length
+    : 0;
+
   const admin = createAdminClient();
   const [{ data: people }, { data: programs }] = await Promise.all([
     getVisaPeopleNames(admin, shown.map((c) => c.user_id)),
@@ -79,7 +85,17 @@ export default async function VisasPage({ searchParams }: { searchParams: Promis
       <Masthead
         context={`Training · ${open.length} open ${open.length === 1 ? "case" : "cases"}`}
         title="Visas"
-        actions={access.globalLegal ? <MastheadAction href="/schools/visas/letters">Letter templates</MastheadAction> : undefined}
+        actions={
+          access.globalLegal ? (
+            <>
+              <MastheadAction href="/schools/visas/letters">Letter templates</MastheadAction>
+              <MastheadAction href="/schools/visas/embassies">Embassies</MastheadAction>
+              <MastheadAction href="/schools/visas/ffsa-documents">
+                {standingDue > 0 ? `FFSA documents (${standingDue} due)` : "FFSA documents"}
+              </MastheadAction>
+            </>
+          ) : undefined
+        }
       />
 
       {/* The page's one yellow band. */}

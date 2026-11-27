@@ -88,6 +88,7 @@ export function StaffLettersPanel({
   canIssue,
   stayFrom,
   stayTo,
+  defaults = {},
 }: {
   caseId: string;
   letters: LetterRow[];
@@ -98,6 +99,8 @@ export function StaffLettersPanel({
   canIssue: boolean;
   stayFrom: string | null;
   stayTo: string | null;
+  /** Fields filled in for legal from the case's embassy (addressee, city); legal can change them. */
+  defaults?: Record<string, string>;
 }) {
   const [issuing, setIssuing] = useState<string | null>(null);
   const current = letters.filter(live);
@@ -134,6 +137,7 @@ export function StaffLettersPanel({
                 templates={templates}
                 initial={issuing}
                 stayFrom={stayFrom}
+                defaults={defaults}
                 stayTo={stayTo}
                 onDone={() => setIssuing(null)}
               />
@@ -270,6 +274,7 @@ function IssueForm({
   initial,
   stayFrom,
   stayTo,
+  defaults,
   onDone,
 }: {
   caseId: string;
@@ -277,6 +282,7 @@ function IssueForm({
   initial: string;
   stayFrom: string | null;
   stayTo: string | null;
+  defaults: Record<string, string>;
   onDone: () => void;
 }) {
   const { post, busy, error, setError } = useVisaPost();
@@ -288,7 +294,8 @@ function IssueForm({
   const [previewing, setPreviewing] = useState(false);
   const t = templates.find((x) => x.id === templateId) ?? templates[0];
 
-  const valueOf = (key: string) => values[key] ?? (key === "visa_from" ? stayFrom ?? "" : key === "visa_to" ? stayTo ?? "" : "");
+  const valueOf = (key: string) =>
+    values[key] ?? (key === "visa_from" ? stayFrom ?? "" : key === "visa_to" ? stayTo ?? "" : defaults[key] ?? "");
   const inputs = () => {
     const out: Record<string, string | boolean> = {};
     for (const f of t.fields) if (valueOf(f.key).trim()) out[f.key] = valueOf(f.key).trim();

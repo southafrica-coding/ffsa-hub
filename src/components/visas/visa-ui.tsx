@@ -122,3 +122,20 @@ export async function openVisaLetterScan(letterId: string) {
     alert(json.error ?? "That file isn't available.");
   }
 }
+
+/**
+ * Opens one of FFSA's standing documents through the checked route
+ * (signed, 5 minutes). A student names their case; the download is logged on it.
+ */
+export async function openStandingDocument(documentId: string, caseId?: string) {
+  const win = window.open("", "_blank");
+  const res = await fetch(`/api/visas/standing-documents/${documentId}/file${caseId ? `?case=${caseId}` : ""}`);
+  const json = await res.json().catch(() => ({}));
+  if (res.ok && json.url) {
+    if (win) win.location.href = json.url;
+    else window.location.href = json.url;
+  } else {
+    win?.close();
+    alert(json.error ?? "That file isn't available.");
+  }
+}
