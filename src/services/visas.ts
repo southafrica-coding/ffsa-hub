@@ -1,4 +1,4 @@
-// Visa applications: pure data access (see migrations 360–366).
+// Visa applications: pure data access (see migrations 360–366 and 500).
 // Business rules (working out the stay, which visa, deadlines) live in
 // src/lib/visas/. RLS decides who sees which rows: pass the caller's
 // server client, not the admin client, unless the caller is a system job.
@@ -11,7 +11,7 @@ type Client = any;
 const CASE_COLUMNS =
   "id, user_id, visa_type, status, waiting_on, stay_from, stay_to, stay_override_reason, " +
   "lodge_by, start_documents_by, is_standard, lodged_on, lodged_where, embassy_reference, " +
-  "decided_on, visa_valid_to, refusal_reason, arrived_on, entry_stamp_ok, closed_at, " +
+  "decided_on, visa_valid_to, refusal_reason, arrived_on, entry_stamp_ok, closed_at, embassy_id, " +
   "created_at, updated_at";
 
 const DOCUMENT_COLUMNS =
@@ -437,6 +437,113 @@ export async function attachVisaLetterScan(supabase: Client, letterId: string, s
 
 export async function withdrawVisaLetter(supabase: Client, letterId: string, note: string) {
   return supabase.rpc("visa_withdraw_letter", { p_letter_id: letterId, p_note: note });
+}
+
+// ────────────────────────────────────────────────────────────
+// EMBASSIES AND FFSA'S STANDING DOCUMENTS (500) — embassies are read by
+// everyone signed in and kept by global legal; standing documents are
+// global legal's only, and students reach the ones for them through
+// visa_case_standing_documents / visa_standing_document_path.
+// ────────────────────────────────────────────────────────────
+
+const EMBASSY_COLUMNS =
+  "id, country_iso, name, city, addressee, accepts_scan, needs_original, blank_pages, " +
+  "processing_weeks, appointment_weeks, website_url, notes, is_active, updated_at";
+
+const STANDING_COLUMNS =
+  "id, label, description, certified_on, renew_months, expires_on, for_students, sort_order, " +
+  "is_active, storage_path, mime_type, file_uploaded_at, updated_at";
+
+export async function getVisaEmbassies(supabase: Client, options?: { activeOnly?: boolean }) {
+  let query = supabase
+    .from("visa_embassies")
+    .select(EMBASSY_COLUMNS)
+    .order("country_iso", { ascending: true })
+    .order("city", { ascending: true });
+  if (options?.activeOnly) query = query.eq("is_active", true);
+  return query;
+}
+
+export async function getVisaEmbassyById(supabase: Client, id: string) {
+  return supabase.from("visa_embassies").select(EMBASSY_COLUMNS).eq("id", id).maybeSingle();
+}
+
+export async function createVisaEmbassy(supabase: Client, input: Record<string, unknown>, userId: string) {
+  return supabase
+    .from("visa_embassies")
+    .insert({ ...input, updated_by: userId })
+    .select("id")
+    .single();
+}
+
+export async function updateVisaEmbassy(supabase: Client, id: string, input: Record<string, unknown>, userId: string) {
+  return supabase
+    .from("visa_embassies")
+    .update({ ...input, updated_by: userId })
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+}
+
+export async function setVisaCaseEmbassy(supabase: Client, caseId: string, embassyId: string | null) {
+  return supabase.rpc("visa_set_case_embassy", { p_case_id: caseId, p_embassy_id: embassyId });
+}
+
+export async function getVisaStandingDocuments(supabase: Client) {
+  return supabase
+    .from("visa_standing_documents")
+    .select(STANDING_COLUMNS)
+    .order("sort_order", { ascending: true })
+    .order("label", { ascending: true });
+}
+
+export async function getVisaStandingDocumentById(supabase: Client, id: string) {
+  return supabase.from("visa_standing_documents").select(STANDING_COLUMNS).eq("id", id).maybeSingle();
+}
+
+export async function createVisaStandingDocument(supabase: Client, input: Record<string, unknown>, userId: string) {
+  return supabase
+    .from("visa_standing_documents")
+    .insert({ ...input, updated_by: userId })
+    .select("id")
+    .single();
+}
+
+export async function updateVisaStandingDocument(
+  supabase: Client,
+  id: string,
+  input: Record<string, unknown>,
+  userId: string
+) {
+  return supabase
+    .from("visa_standing_documents")
+    .update({ ...input, updated_by: userId })
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+}
+
+export async function setVisaStandingDocumentFile(
+  supabase: Client,
+  id: string,
+  file: { storage_path: string; mime_type: string },
+  userId: string
+) {
+  return supabase
+    .from("visa_standing_documents")
+    .update({ ...file, file_uploaded_by: userId, file_uploaded_at: new Date().toISOString(), updated_by: userId })
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+}
+
+export async function getVisaCaseStandingDocuments(supabase: Client, caseId: string) {
+  return supabase.rpc("visa_case_standing_documents", { p_case_id: caseId });
+}
+
+/** The file's path for a signed link. With a case: the student, logged. Without: global legal. */
+export async function getVisaStandingDocumentPath(supabase: Client, documentId: string, caseId?: string | null) {
+  return supabase.rpc("visa_standing_document_path", { p_document_id: documentId, p_case_id: caseId ?? null });
 }
 
 // ────────────────────────────────────────────────────────────
